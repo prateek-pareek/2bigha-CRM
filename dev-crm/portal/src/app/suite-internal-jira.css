@@ -1,0 +1,592 @@
+/* Internal suite pages — CRM / HRMS / Vault / Executive / Social / PM lists
+ *
+ * Light-mode ink (#172b4d / #5e6c84) is scoped to html:not(.dark) so dark
+ * mode tokens and remaps are not crushed by this file (loaded after pm.css).
+ */
+
+/* Beat HubSpot serif page titles inside authenticated suite */
+[data-pm-jira] .theme-crm-hubspot .crm-app-main h1 {
+  font-family: var(--pm-jira-font) !important;
+  font-size: 1.5rem !important;
+  line-height: 1.333 !important;
+  font-weight: 600 !important;
+  letter-spacing: normal !important;
+}
+
+html:not(.dark) [data-pm-jira] .theme-crm-hubspot .crm-app-main h1 {
+  color: #172b4d !important;
+}
+
+[data-pm-jira] .crm-app-main.pm-jira-internal {
+  font-family: var(--pm-jira-font) !important;
+  font-size: 14px;
+  line-height: 1.42857143;
+  -webkit-font-smoothing: antialiased;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main.pm-jira-internal {
+  color: #172b4d;
+}
+
+[data-pm-jira] .theme-crm-hubspot .crm-app-main h1,
+[data-pm-jira] .theme-crm-hubspot .crm-app-main h2,
+[data-pm-jira] .theme-crm-hubspot .crm-app-main h3,
+[data-pm-jira] .theme-crm-hubspot .crm-app-main h4 {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main table th {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #5e6c84 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  border-color: #dfe1e6 !important;
+  background-color: #fafbfc !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main table td {
+  font-size: 14px !important;
+  color: #172b4d !important;
+  border-color: #dfe1e6 !important;
+}
+
+[data-pm-jira] .crm-app-main [role="tablist"] {
+  height: auto !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  box-shadow: none !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main [role="tablist"] {
+  border-bottom: 1px solid #dfe1e6 !important;
+}
+
+[data-pm-jira] .crm-app-main [role="tab"] {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  margin-bottom: -1px;
+  padding: 0.5rem 0.75rem !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-style: normal !important;
+  box-shadow: none !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main [role="tab"] {
+  color: #42526e !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main [role="tab"][data-state="active"] {
+  color: #0052cc !important;
+  border-bottom-color: #0052cc !important;
+  font-weight: 500 !important;
+  background: transparent !important;
+}
+
+[data-pm-jira] .crm-app-main label {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main label {
+  color: #5e6c84 !important;
+}
+
+[data-pm-jira] .crm-app-main .shadow-lg,
+[data-pm-jira] .crm-app-main .shadow-xl,
+[data-pm-jira] .crm-app-main .shadow-2xl {
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.13) !important;
+}
+
+[data-pm-jira] .crm-app-main .rounded-\[24px\],
+[data-pm-jira] .crm-app-main .rounded-\[22px\],
+[data-pm-jira] .crm-app-main .rounded-\[32px\] {
+  border-radius: 3px !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main .crm-jira-record .text-primary {
+  color: #0c66e4 !important;
+}
+
+[data-pm-jira] .crm-app-main .italic {
+  font-style: normal !important;
+}
+
+[data-pm-jira] .crm-app-main h3.text-xs.font-bold,
+[data-pm-jira] .crm-app-main .text-xs.font-bold.text-text-muted,
+[data-pm-jira] .crm-app-main .text-xs.font-black.text-text-muted {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main h3.text-xs.font-bold,
+html:not(.dark) [data-pm-jira] .crm-app-main .text-xs.font-bold.text-text-muted,
+html:not(.dark) [data-pm-jira] .crm-app-main .text-xs.font-black.text-text-muted {
+  color: #5e6c84 !important;
+}
+
+/* =============================================================================
+ * Dark mode — must win over light Jira ink (this file loads after pm.css).
+ * Force high-contrast text / icons / tables across CRM, HRMS, board, social.
+ * ============================================================================= */
+
+.dark [data-pm-jira],
+.dark [data-pm-jira] .theme-crm-hubspot,
+.dark [data-pm-jira] .theme-collab-slack,
+.dark [data-pm-jira] .theme-hrms,
+.dark [data-pm-jira] .crm-app-main,
+.dark [data-pm-jira] .crm-app-main.pm-jira-internal {
+  /* Blackish canvas — keep surfaces close so pages don’t look black+grey patched */
+  --background: #0a0a0a !important;
+  --foreground: #ffffff !important;
+  --text-main: #ffffff !important;
+  --text-muted: #e4e4e7 !important;
+  --color-text-main: #ffffff !important;
+  --color-text-muted: #e4e4e7 !important;
+  --color-foreground: #ffffff !important;
+  --card-bg: #121212 !important;
+  --border-color: #2a2a2a !important;
+  --surface-dim: #141414 !important;
+  --surface-hover: #1a1a1a !important;
+  --color-input: #141414 !important;
+  --primary: #ffffff !important;
+  --primary-foreground: #0a0a0a !important;
+  --primary-dark: #f4f4f5 !important;
+  --primary-muted: #d4d4d8 !important;
+  --suite-sidebar-bg: #0f0f0f !important;
+  --suite-sidebar-fg: #ffffff !important;
+  --suite-sidebar-border: #2a2a2a !important;
+  --suite-sidebar-hover: #1a1a1a !important;
+  --shell-main-bg: #0a0a0a !important;
+  --shell-header-bg: #0f0f0f !important;
+  --shell-sidebar-bg: #0f0f0f !important;
+  --crm-shell-bg: #0a0a0a !important;
+  --crm-header-bg: #0f0f0f !important;
+  color: #ffffff !important;
+  background-color: #0a0a0a !important;
+}
+
+.dark [data-pm-jira] .crm-app-main h1,
+.dark [data-pm-jira] .crm-app-main h2,
+.dark [data-pm-jira] .crm-app-main h3,
+.dark [data-pm-jira] .crm-app-main h4,
+.dark [data-pm-jira] .crm-app-main h5,
+.dark [data-pm-jira] .crm-app-main h6,
+.dark [data-pm-jira] .theme-crm-hubspot h1,
+.dark [data-pm-jira] .theme-crm-hubspot h2,
+.dark [data-pm-jira] .theme-crm-hubspot h3,
+.dark [data-pm-jira] .theme-crm-hubspot h4,
+.dark [data-pm-jira] .theme-hrms h1,
+.dark [data-pm-jira] .theme-hrms h2,
+.dark [data-pm-jira] .theme-hrms h3,
+.dark [data-pm-jira] .theme-hrms h4,
+.dark [data-pm-jira] label,
+.dark [data-pm-jira] legend,
+.dark [data-pm-jira] th,
+.dark [data-pm-jira] td,
+.dark [data-pm-jira] .text-text-main,
+.dark [data-pm-jira] .text-foreground,
+.dark [data-pm-jira] .text-\[var\(--text-main\)\],
+.dark [data-pm-jira] [class*="text-[var(--text-main)]"],
+.dark [data-pm-jira] .text-primary:not(a):not([href]):not(.text-hs-link) {
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .crm-app-main .text-text-muted,
+.dark [data-pm-jira] .text-text-muted,
+.dark [data-pm-jira] .text-muted-foreground,
+.dark [data-pm-jira] .text-\[var\(--text-muted\)\],
+.dark [data-pm-jira] [class*="text-[var(--text-muted)]"] {
+  color: #e4e4e7 !important;
+}
+
+.dark [data-pm-jira] .crm-app-main [role="tablist"] {
+  border-bottom-color: #3f3f46 !important;
+  background: transparent !important;
+}
+
+.dark [data-pm-jira] .crm-app-main [role="tab"],
+.dark [data-pm-jira] .crm-app-main [role="tablist"] button,
+.dark [data-pm-jira] [role="tab"] {
+  color: #d4d4d8 !important;
+  background: transparent !important;
+}
+
+.dark [data-pm-jira] .crm-app-main [role="tab"][data-state="active"],
+.dark [data-pm-jira] .crm-app-main [role="tab"][aria-selected="true"],
+.dark [data-pm-jira] [role="tab"][data-state="active"],
+.dark [data-pm-jira] [role="tab"][aria-selected="true"] {
+  color: #ffffff !important;
+  border-bottom-color: var(--hs-link, #c4b5fd) !important;
+  background: transparent !important;
+  font-weight: 500 !important;
+}
+
+.dark [data-pm-jira] .crm-app-main [role="tab"] svg,
+.dark [data-pm-jira] [role="tab"] svg,
+.dark [data-pm-jira] .crm-app-main svg:not([class*="text-success"]):not([class*="text-error"]):not([class*="text-warning"]) {
+  color: inherit !important;
+  stroke: currentColor;
+}
+
+.dark [data-pm-jira] .crm-app-main table th,
+.dark [data-pm-jira] .crm-app-main thead,
+.dark [data-pm-jira] .crm-app-main thead tr,
+.dark [data-pm-jira] .crm-app-main thead th,
+.dark [data-pm-jira] table th,
+.dark [data-pm-jira] thead,
+.dark [data-pm-jira] thead th {
+  color: #ffffff !important;
+  background-color: #1f1f23 !important;
+  border-color: #3f3f46 !important;
+}
+
+.dark [data-pm-jira] .crm-app-main table td,
+.dark [data-pm-jira] table td {
+  color: #ffffff !important;
+  border-color: #3f3f46 !important;
+  background-color: transparent !important;
+}
+
+.dark [data-pm-jira] .crm-app-main label,
+.dark [data-pm-jira] .crm-app-main h3.text-xs.font-bold,
+.dark [data-pm-jira] .crm-app-main .text-xs.font-bold.text-text-muted,
+.dark [data-pm-jira] .crm-app-main .text-xs.font-black.text-text-muted {
+  color: #e4e4e7 !important;
+}
+
+/* Charts (Recharts) — axis / legend text */
+.dark [data-pm-jira] .recharts-cartesian-axis-tick text,
+.dark [data-pm-jira] .recharts-text,
+.dark [data-pm-jira] .recharts-legend-item-text,
+.dark [data-pm-jira] .recharts-label,
+.dark [data-pm-jira] .recharts-pie-label-text {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .recharts-default-tooltip,
+.dark [data-pm-jira] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #1a1a1e !important;
+  border-color: #3f3f46 !important;
+  color: #ffffff !important;
+}
+
+/* Filter / chip buttons that were ink-on-dark */
+.dark [data-pm-jira] button.border:not(.bg-primary):not([class*="bg-[var(--hs-link)"]) {
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .bg-white,
+.dark [data-pm-jira] .\!bg-white,
+.dark [data-pm-jira] [class*="bg-[#ffffff]"],
+.dark [data-pm-jira] [class*="bg-[#fafbfc]"],
+.dark [data-pm-jira] [class*="bg-[#f8fafc]"],
+.dark [data-pm-jira] [class*="bg-[#f7f8f9]"],
+.dark [data-pm-jira] [class*="bg-[#f4f5f7]"],
+.dark [data-pm-jira] [class*="bg-[#f5fcfd]"],
+.dark [data-pm-jira] [class*="bg-[#ebecf0]"],
+.dark [data-pm-jira] [class*="bg-[#ede9e3]"] {
+  background-color: #121212 !important;
+  color: #ffffff !important;
+}
+
+/* Social / analytics forms — keep inputs & controls readable on dark canvas */
+.dark [data-pm-jira] {
+  color-scheme: dark;
+}
+
+.dark [data-pm-jira] input,
+.dark [data-pm-jira] textarea,
+.dark [data-pm-jira] select {
+  background-color: #1c1c1e !important;
+  border-color: #52525b !important;
+  color: #fafafa !important;
+  color-scheme: dark;
+}
+
+.dark [data-pm-jira] input::placeholder,
+.dark [data-pm-jira] textarea::placeholder {
+  color: #a1a1aa !important;
+  opacity: 1;
+}
+
+.dark [data-pm-jira] input[type="date"],
+.dark [data-pm-jira] input[type="datetime-local"],
+.dark [data-pm-jira] input[type="time"] {
+  color-scheme: dark;
+}
+
+.dark [data-pm-jira] label,
+.dark [data-pm-jira] [class*="text-[var(--primary-muted)]"] {
+  color: #d4d4d8 !important;
+}
+
+.dark [data-pm-jira] .bg-blue-50,
+.dark [data-pm-jira] .bg-blue-50\/40,
+.dark [data-pm-jira] .bg-blue-50\/50,
+.dark [data-pm-jira] [class*="from-blue-50"] {
+  background-color: rgba(71, 145, 255, 0.14) !important;
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .bg-amber-50,
+.dark [data-pm-jira] .bg-amber-50\/50,
+.dark [data-pm-jira] .bg-amber-50\/80,
+.dark [data-pm-jira] .hover\:bg-amber-100:hover {
+  background-color: rgba(251, 191, 36, 0.14) !important;
+}
+
+.dark [data-pm-jira] .text-amber-800,
+.dark [data-pm-jira] .text-amber-900,
+.dark [data-pm-jira] .text-amber-950 {
+  color: #fde68a !important;
+}
+
+.dark [data-pm-jira] .border-amber-100,
+.dark [data-pm-jira] .border-amber-200,
+.dark [data-pm-jira] .border-amber-300 {
+  border-color: rgba(251, 191, 36, 0.4) !important;
+}
+
+.dark [data-pm-jira] .bg-emerald-50,
+.dark [data-pm-jira] .text-emerald-700 {
+  background-color: rgba(34, 197, 94, 0.14) !important;
+}
+
+.dark [data-pm-jira] .text-emerald-700 {
+  color: #86efac !important;
+}
+
+.dark [data-pm-jira] .bg-red-50,
+.dark [data-pm-jira] .hover\:bg-red-50:hover,
+.dark [data-pm-jira] .hover\:bg-red-100:hover {
+  background-color: rgba(248, 113, 113, 0.14) !important;
+}
+
+.dark [data-pm-jira] .text-red-700,
+.dark [data-pm-jira] .text-red-800 {
+  color: #fca5a5 !important;
+}
+
+.dark [data-pm-jira] .border-red-200,
+.dark [data-pm-jira] .border-red-300 {
+  border-color: rgba(248, 113, 113, 0.45) !important;
+}
+
+/* Active pills that used white-on-white (text-main bg + text-white) */
+.dark [data-pm-jira] button.bg-\[var\(--text-main\)\],
+.dark [data-pm-jira] [class*="bg-[var(--text-main)]"] {
+  background-color: var(--hs-link, #4791ff) !important;
+  color: #ffffff !important;
+}
+
+/* Shell / main canvas — blackish, not mid-grey */
+.dark [data-pm-jira] .crm-app-shell,
+.dark [data-pm-jira] .slack-app-shell,
+.dark [data-pm-jira] .crm-app-main,
+.dark [data-pm-jira] .slack-app-main,
+.dark [data-pm-jira] .pm-boards,
+.dark [data-pm-jira] .pm-wiki {
+  background-color: #0a0a0a !important;
+}
+
+.dark [data-pm-jira] .crm-app-header,
+.dark [data-pm-jira] .slack-app-header,
+.dark [data-pm-jira] .pm-jira-app-header,
+.dark [data-pm-jira] .crm-suite-sidebar,
+.dark [data-pm-jira] .suite-jira-sidebar {
+  background-color: #0f0f0f !important;
+  border-color: #2a2a2a !important;
+  color: #ffffff !important;
+}
+
+/* Suite sidebar — bright labels / nav (loads last; beats dull #a1a1aa remaps) */
+.dark [data-pm-jira] .crm-suite-sidebar [class*="text-[#5e6c84]"],
+.dark [data-pm-jira] .crm-suite-sidebar [class*="text-[#42526e]"],
+.dark [data-pm-jira] .crm-suite-sidebar .text-\[\#5e6c84\],
+.dark [data-pm-jira] .crm-suite-sidebar .text-\[\#42526e\] {
+  color: #e4e4e7 !important;
+}
+
+/* Product / section headers stay brightest */
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-section-label,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-product-label,
+.dark [data-pm-jira] .crm-suite-sidebar p.suite-sidebar-section-label,
+.dark [data-pm-jira] .crm-suite-sidebar p.suite-sidebar-product-label {
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item,
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item span,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item span {
+  color: #f4f4f5 !important;
+}
+
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item svg,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item svg {
+  color: #e4e4e7 !important;
+}
+
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item.font-semibold,
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item.font-semibold span,
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item.font-semibold svg,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item.font-semibold,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item.text-\[\#0c66e4\] {
+  color: #82b4ff !important;
+}
+
+/* Social desk — kill pale icon chips (“white from inside”) */
+.dark [data-pm-jira] [class*="bg-[#e6f4f7]"],
+.dark [data-pm-jira] [class*="bg-[#e0f4f7]"],
+.dark [data-pm-jira] .bg-violet-50,
+.dark [data-pm-jira] [class*="bg-violet-50"] {
+  background-color: #1a1a1a !important;
+  color: var(--hs-link, #f9a8d4) !important;
+}
+
+.dark [data-pm-jira] [class*="bg-[#e6f4f7]"] svg,
+.dark [data-pm-jira] [class*="bg-[#e0f4f7]"] svg,
+.dark [data-pm-jira] .bg-violet-50 svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
+/* Keep status / link accents readable */
+.dark [data-pm-jira] .text-hs-link,
+.dark [data-pm-jira] a.text-hs-link,
+.dark [data-pm-jira] .crm-app-main .crm-jira-record .text-primary {
+  color: var(--hs-link, #c4b5fd) !important;
+}
+
+.dark [data-pm-jira] .text-success,
+.dark [data-pm-jira] [class*="text-success"] {
+  color: #4ade80 !important;
+}
+
+.dark [data-pm-jira] .text-error,
+.dark [data-pm-jira] [class*="text-error"] {
+  color: #f87171 !important;
+}
+
+.dark [data-pm-jira] .text-warning,
+.dark [data-pm-jira] [class*="text-warning"] {
+  color: #fbbf24 !important;
+}
+
+/* Modals / create issue — beat remaining light #172b4d !important in pm.css */
+.dark [data-pm-jira] .crm-jira-modal,
+.dark [data-pm-jira] .crm-jira-modal h1,
+.dark [data-pm-jira] .crm-jira-modal h2,
+.dark [data-pm-jira] .crm-jira-modal h3,
+.dark [data-pm-jira] .crm-jira-modal h4,
+.dark [data-pm-jira] .crm-jira-modal label,
+.dark [data-pm-jira] .crm-jira-modal p,
+.dark [data-pm-jira] .crm-jira-modal span,
+.dark [data-pm-jira] .pm-create-issue label,
+.dark [data-pm-jira] .pm-create-issue-dialog label,
+.dark [data-pm-jira] .pm-create-issue-title,
+.dark .theme-crm-hubspot[data-pm-jira] .pm-summary h3,
+.dark .theme-crm-hubspot[data-pm-jira] .pm-issue-detail h3,
+.dark .theme-crm-hubspot[data-pm-jira] .pm-boards h2,
+.dark .theme-crm-hubspot[data-pm-jira] .crm-app-main h1,
+.dark .theme-crm-hubspot[data-pm-jira] .crm-app-main h2,
+.dark .theme-crm-hubspot[data-pm-jira] .crm-app-main h3,
+.dark .theme-crm-hubspot[data-pm-jira] .crm-app-main h4 {
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .crm-jira-modal h3,
+.dark [data-pm-jira] .crm-jira-modal h4,
+.dark [data-pm-jira] .crm-jira-modal label,
+.dark [data-pm-jira] .pm-create-issue label,
+.dark [data-pm-jira] .pm-create-issue-dialog label {
+  color: #e4e4e7 !important;
+}
+
+/* Report KPI / chart card icons */
+.dark [data-pm-jira] .text-primary svg,
+.dark [data-pm-jira] .bg-primary\/10,
+.dark [data-pm-jira] .bg-primary\/10 svg {
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .bg-primary\/10 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Backlog / sprint planning panels — no leftover light fills */
+.dark [data-pm-jira] .bg-\[\#f8fafc\],
+.dark [data-pm-jira] .bg-\[\#f7f8f9\],
+.dark [data-pm-jira] .bg-\[\#f5fcfd\]\/60,
+.dark [data-pm-jira] .bg-\[\#f5fcfd\]\/80,
+.dark [data-pm-jira] .hover\:bg-\[\#f5fcfd\]\/80:hover {
+  background-color: #0a0a0a !important;
+}
+
+.dark [data-pm-jira] .bg-\[\#f4f5f7\] {
+  background-color: #141414 !important;
+}
+
+.dark [data-pm-jira] input.bg-white,
+.dark [data-pm-jira] select.bg-white,
+.dark [data-pm-jira] [role="combobox"].bg-white,
+.dark [data-pm-jira] button.bg-white {
+  background-color: #141414 !important;
+  color: #ffffff !important;
+  border-color: #2a2a2a !important;
+}
+
+/* =============================================================================
+ * Suite-wide Jira density — CRM / HRMS / Social / Vault / Executive
+ * Remap leftover HubSpot chrome when shells use data-pm-jira.
+ * ============================================================================= */
+
+html:not(.dark) [data-pm-jira] .crm-app-main .border-slate-50,
+html:not(.dark) [data-pm-jira] .crm-app-main .border-slate-100,
+html:not(.dark) [data-pm-jira] .crm-app-main .border-slate-200,
+html:not(.dark) [data-pm-jira] .crm-app-main .border-slate-300 {
+  border-color: #dfe1e6 !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-main .bg-slate-50,
+html:not(.dark) [data-pm-jira] .crm-app-main .bg-slate-100 {
+  background-color: #f4f5f7 !important;
+}
+
+/* HubSpot orange active chips / nav → Jira blue */
+html:not(.dark) [data-pm-jira] .bg-\[\#fff3ef\],
+html:not(.dark) [data-pm-jira] .bg-\[\#ffece6\] {
+  background-color: #deebff !important;
+}
+
+html:not(.dark) [data-pm-jira] .text-\[\#b94b36\],
+html:not(.dark) [data-pm-jira] .text-\[\#ff7a59\] {
+  color: #0c66e4 !important;
+}
+
+/* Soft panels / cards density */
+[data-pm-jira] .crm-app-main .shadow-xl,
+[data-pm-jira] .crm-app-main .shadow-2xl {
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.13) !important;
+}
+
+[data-pm-jira] .crm-app-main .backdrop-blur,
+[data-pm-jira] .crm-app-main .backdrop-blur-sm,
+[data-pm-jira] .crm-app-main .backdrop-blur-md {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

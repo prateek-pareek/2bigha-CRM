@@ -1,0 +1,1745 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (next-themes sets `class="dark"` on <html>). Default Tailwind v4 uses prefers-color-scheme only. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Inter — body and headings */
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Editorial / mysite palette (warm cream, ink primary, coral emphasis) */
+  --color-primary: #121212;
+  --color-primary-foreground: #f7f5f2;
+  --color-primary-light: #ebe8e3;
+  --color-primary-dark: #0a0a0a;
+  --color-primary-muted: #a8a29e;
+  --color-secondary: #ede9e3;
+  --color-secondary-foreground: #121212;
+  --color-accent: #fce7e0;
+  --color-accent-foreground: #121212;
+  --color-muted: #e8e4de;
+  --color-muted-foreground: #666666;
+  --color-background: #faf8f5;
+  --color-foreground: #121212;
+  --color-card-foreground: #121212;
+  --color-input: #ddd8d0;
+  --color-ring: #8b5cf6;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #ddd8d0;
+  --color-card: #ffffff;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #121212;
+  --color-text-main: #121212;
+  --color-text-muted: #666666;
+  --color-surface-dim: #ede9e3;
+  --color-surface-hover: #e5e0d8;
+  --color-success: #16a34a;
+  --color-error: #dc2626;
+  --color-warning: #d97706;
+  --color-info: #c2410c;
+}
+
+/* 
+ * ==========================================
+ * THEME ARCHITECTURE: TOKENS
+ * ==========================================
+ */
+
+@layer base {
+  :root {
+    --font-inter: "Inter", sans-serif;
+    --font-inter-tight: "Inter Tight", sans-serif;
+    --font-suite-serif: "Cormorant Garamond", serif;
+    --font-app: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-display: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.8125rem;
+    --font-size-base: 0.875rem;
+    --font-size-lg: 1rem;
+    --line-height-base: 1.5;
+
+    --background: #faf8f5;
+    --foreground: #121212;
+    --primary: #121212;
+    --primary-foreground: #f7f5f2;
+    --primary-light: #ebe8e3;
+    --primary-dark: #0a0a0a;
+    --primary-muted: #a8a29e;
+    --secondary: #ede9e3;
+    --secondary-foreground: #121212;
+    --accent: #fce7e0;
+    --accent-foreground: #121212;
+    --muted: #e8e4de;
+    --muted-foreground: #666666;
+    --ring: #8b5cf6;
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+    --border: #ddd8d0;
+    --card-bg: #ffffff;
+    --popover: #ffffff;
+    --popover-foreground: #121212;
+    --text-main: #121212;
+    --text-muted: #666666;
+    --surface-dim: #ede9e3;
+    --surface-hover: #e5e0d8;
+    --color-input: #ffffff;
+    --input-bg: #ffffff;
+    --glass: rgba(255, 255, 255, 0.82);
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+
+    /* Status Colors */
+    --success: #16a34a;
+    --error: #dc2626;
+    --warning: #d97706;
+    --info: #c2410c;
+
+    /* Slate variables for compatibility */
+    --slate-500: #64748b;
+    --slate-600: #475569;
+  }
+
+  /* Dark mode: `html.dark` from next-themes. Keep inside @layer base so the build preserves these overrides (plain `.dark {}` was dropped). Suite tokens: crm-hubspot.css (`.dark .theme-crm-hubspot`). */
+  .dark {
+    --background: #0a0a0a;
+    --foreground: #ffffff;
+    /* Raw semantic vars used by `var(--accent)` / `bg-secondary` / popovers — must not inherit light cream */
+    --secondary: #141414;
+    --secondary-foreground: #ffffff;
+    --accent: #1a1a1a;
+    --accent-foreground: #ffffff;
+    --popover: #121212;
+    --popover-foreground: #ffffff;
+    --input: #141414;
+    --primary-light: #1a1a1a;
+    --primary-dark: #f4f4f5;
+    --primary-muted: #c4c4c8;
+    --destructive-foreground: #ffffff;
+    /* High-contrast text — never leave dark-on-dark */
+    --text-main: #ffffff;
+    --text-muted: #e4e4e7;
+    --border-color: #2a2a2a;
+    --card-bg: #121212;
+    --color-background: #0a0a0a;
+    --color-foreground: #ffffff;
+    --color-card: #121212;
+    --color-card-foreground: #ffffff;
+    --color-border: #2a2a2a;
+    --color-muted: #141414;
+    --color-muted-foreground: #e4e4e7;
+    --color-secondary: #141414;
+    --color-secondary-foreground: #ffffff;
+    --color-accent: #1a1a1a;
+    --color-accent-foreground: #ffffff;
+    --color-popover: #121212;
+    --color-popover-foreground: #ffffff;
+    --color-input: #141414;
+    --input-bg: #141414;
+    --color-text-main: #ffffff;
+    --color-text-muted: #e4e4e7;
+    --color-surface-dim: #141414;
+    --color-surface-hover: #1a1a1a;
+    --surface-dim: #141414;
+    --surface-hover: #1a1a1a;
+    --primary: #ffffff;
+    --primary-foreground: #0a0a0a;
+    --color-primary: #ffffff;
+    --color-primary-foreground: #0a0a0a;
+    --color-primary-light: #1a1a1a;
+    --border: #2a2a2a;
+    --muted: #141414;
+    --muted-foreground: #e4e4e7;
+    --glass: rgba(18, 18, 18, 0.88);
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 10px 40px -10px rgba(0, 0, 0, 0.4);
+    /* Violet links — slightly brighter on dark surfaces */
+    --hs-link: #c4b5fd;
+    --hs-link-hover: #ddd6fe;
+  }
+
+  .dark body {
+    background: var(--background);
+    color: var(--foreground);
+  }
+}
+
+/*
+ * ==========================================
+ * BASE STYLE RESET
+ * ==========================================
+ */
+
+html {
+  font-size: 16px;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-app);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  margin: 0;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Display headings — Inter cadence (Atlassian / Jira style) */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: clamp(1.25rem, 1.15rem + 0.35vw, 1.5rem);
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: clamp(1.125rem, 1.05rem + 0.25vw, 1.25rem);
+  line-height: 1.22;
+}
+
+h3 {
+  font-size: clamp(1rem, 0.96rem + 0.15vw, 1.125rem);
+  line-height: 1.25;
+}
+
+h4 {
+  font-size: clamp(0.9375rem, 0.92rem + 0.1vw, 1.0625rem);
+  line-height: 1.3;
+}
+
+/*
+ * ==========================================
+ * COMPONENT VARIANTS (GLASS/NEON)
+ * ==========================================
+ */
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--border);
+  box-shadow: var(--card-shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .glass {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.neon-border {
+  border: 1px solid var(--primary);
+  box-shadow: 0 0 10px rgba(var(--primary), 0.2);
+}
+
+.shadow-glow {
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+}
+
+.transition-hover {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/*
+ * ==========================================
+ * SCROLLBAR STYLING
+ * ==========================================
+ */
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--slate-500);
+}
+
+/* Global Form Visibility Fix */
+input,
+select,
+textarea {
+  color: var(--foreground) !important;
+  background-color: var(--input-bg, var(--color-input));
+  font-family: var(--font-app);
+  font-size: var(--font-size-sm);
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  color: var(--foreground) !important;
+  background-color: var(--input-bg, var(--color-input));
+}
+
+/* If the input is specifically designed for dark mode, it should override this */
+.dark .dark-input {
+  color: var(--dark-input-foreground, #ffffff) !important;
+  background-color: var(--dark-input-bg, #1e293b);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  outline: none;
+}
+
+/* TipTap Editor Styling */
+.ProseMirror {
+  outline: none !important;
+}
+
+.ProseMirror ul {
+  list-style-type: disc !important;
+  margin-left: 1.5rem !important;
+  padding-left: 0.5rem !important;
+  margin-top: 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal !important;
+  margin-left: 1.5rem !important;
+  padding-left: 0.5rem !important;
+  margin-top: 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.ProseMirror li {
+  display: list-item !important;
+}
+
+/* Tiptap Table Styles */
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+  margin: 1.5rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #ddd8d0);
+}
+
+.ProseMirror table td,
+.ProseMirror table th {
+  min-width: 1em;
+  border: 1px solid var(--border-color, #ddd8d0);
+  padding: 10px 12px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+  color: var(--text-main, #121212);
+}
+
+.ProseMirror table th {
+  font-weight: 600;
+  text-align: left;
+  background-color: var(--surface-dim, #ede9e3);
+  color: var(--text-main, #121212);
+}
+
+.ProseMirror table .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(139, 92, 246, 0.1);
+  pointer-events: none;
+}
+
+.ProseMirror table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: #8b5cf6;
+  pointer-events: none;
+}
+
+.ProseMirror table p {
+  margin: 0 !important;
+}
+
+/* Document specific root for CVs/Proposals */
+.cv-root table,
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 20px 0;
+  border: 1px solid #ddd8d0;
+  /* Ensure border is visible in Word */
+}
+
+.cv-root table td,
+.cv-root table th,
+.prose table td,
+.prose table th {
+  border: 1px solid #ddd8d0;
+  padding: 8px 12px;
+  word-break: break-word;
+  /* Prevent text overflow in narrow cells */
+}
+
+.cv-root table th,
+.prose table th {
+  background-color: #ede9e3;
+  text-align: left;
+  font-weight: bold;
+  color: #121212;
+}
+
+/* Word specific compatibility fixes */
+.ProseMirror {
+  line-height: 1.5;
+  word-spacing: normal;
+}
+
+.ProseMirror blockquote {
+  border-left: 4px solid #8b5cf6 !important;
+  padding-left: 1rem !important;
+  margin: 1.5rem 0 !important;
+  font-style: italic !important;
+  background: #fff5f2 !important;
+  opacity: 0.7;
+}
+
+.dark .ProseMirror blockquote {
+  background: rgba(251, 146, 60, 0.12) !important;
+  border-left-color: var(--hs-link, #fb923c) !important;
+  color: var(--muted-foreground, #a1a1aa) !important;
+  opacity: 1;
+}
+
+/* Wiki-specific visual cadence (Confluence-like in PM, Docmost elsewhere) */
+.wiki-docmost {
+  --wiki-font: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --wiki-content-max: min(100%, 1120px);
+  --wiki-content-gutter: clamp(0.75rem, 2.5vw, 2.5rem);
+  font-family: var(--wiki-font);
+  letter-spacing: -0.01em;
+}
+
+.pm-wiki.wiki-conf-page {
+  --wiki-content-max: min(100%, 1048px);
+  --wiki-content-gutter: 1.5rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  letter-spacing: normal;
+}
+
+@media (min-width: 1280px) {
+  .wiki-docmost {
+    --wiki-content-max: min(100%, 1200px);
+  }
+}
+
+@media (min-width: 1536px) {
+  .wiki-docmost {
+    --wiki-content-max: min(100%, 1280px);
+  }
+}
+
+/* Shared horizontal rhythm for toolbar + prose.
+   Restore max-width so text paragraphs stay at a readable line-length.
+   Wide tables scroll horizontally inside the ProseMirror canvas below. */
+.wiki-editor-inner {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--wiki-content-gutter);
+}
+
+.wiki-docmost .wiki-muted {
+  color: #64748b;
+}
+
+.wiki-docmost .wiki-surface {
+  border-color: #e2e8f0;
+  border-radius: 8px;
+}
+
+/* Notion-like wiki editor canvas */
+.wiki-notion-editor .wiki-notion-proseMirror {
+  outline: none;
+}
+
+/* Cross-portal shell — classic light chrome (sidebar matches suite rail, not dark Slack) */
+.theme-collab-slack {
+  --shell-sidebar-bg: #ffffff;
+  --shell-header-bg: #ffffff;
+  --shell-main-bg: #faf8f5;
+  --shell-border: #e8e4dc;
+}
+
+.dark .theme-collab-slack {
+  --shell-sidebar-bg: #141416;
+  --shell-header-bg: #141416;
+  --shell-main-bg: #0f0f10;
+  --shell-border: #3f3f46;
+}
+
+/* Page chrome behind sidebar + column; sidebar panel uses --suite-sidebar-bg */
+:root {
+  --suite-sidebar-width: 15rem;
+}
+
+.slack-app-shell {
+  background: var(--shell-main-bg);
+}
+
+.slack-app-header {
+  background: var(--shell-header-bg);
+  border-bottom-color: var(--shell-border);
+}
+
+.slack-app-main {
+  background: var(--shell-main-bg);
+}
+
+.wiki-notion-editor .ProseMirror blockquote {
+  opacity: 1 !important;
+  border-left: 3px solid #0052CC !important;
+  background: #F4F5F7 !important;
+  font-style: normal !important;
+  color: #172B4D !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 0 3px 3px 0 !important;
+}
+
+.dark .wiki-notion-editor .ProseMirror blockquote {
+  border-left-color: #4C9AFF !important;
+  background: #1D2125 !important;
+  color: #B6C2CF !important;
+}
+
+.wiki-notion-editor .ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.75em 0;
+}
+
+.wiki-notion-editor .ProseMirror ul,
+.wiki-notion-editor .ProseMirror ol {
+  padding-left: 1.35rem;
+}
+
+.wiki-notion-editor .ProseMirror li {
+  padding-left: 0.2rem;
+}
+
+.wiki-notion-editor .ProseMirror h1,
+.wiki-notion-editor .ProseMirror h2,
+.wiki-notion-editor .ProseMirror h3,
+.wiki-notion-editor .ProseMirror h4,
+.wiki-notion-editor .ProseMirror h5,
+.wiki-notion-editor .ProseMirror h6 {
+  color: #172B4D;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dark .wiki-notion-editor .ProseMirror h1,
+.dark .wiki-notion-editor .ProseMirror h2,
+.dark .wiki-notion-editor .ProseMirror h3,
+.dark .wiki-notion-editor .ProseMirror h4,
+.dark .wiki-notion-editor .ProseMirror h5,
+.dark .wiki-notion-editor .ProseMirror h6 {
+  color: #FFFFFF;
+}
+
+.wiki-notion-editor .ProseMirror h1 {
+  font-size: 1.8rem;
+  line-height: 1.25;
+  margin-top: 1.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.wiki-notion-editor .ProseMirror h2 {
+  font-size: 1.5rem;
+  line-height: 1.3;
+  margin-top: 1.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.wiki-notion-editor .ProseMirror h3 {
+  font-size: 1.25rem;
+  line-height: 1.35;
+  margin-top: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.wiki-notion-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: #9b9a97;
+}
+
+.wiki-notion-editor .ProseMirror-selectednode {
+  outline: 2px solid rgba(139, 92, 246, 0.28);
+  border-radius: 4px;
+}
+
+/* Wide tables (e.g. CSV imports with 30-40 columns) scroll horizontally
+   inside the editor canvas. The ProseMirror element itself gets
+   overflow-x: auto so only the editor area scrolls, not the whole page.
+   text paragraphs, headings, and action buttons are unaffected. */
+.wiki-notion-editor .wiki-notion-proseMirror {
+  overflow-x: auto;
+}
+
+.wiki-notion-editor .ProseMirror table {
+  display: table;
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+}
+
+.wiki-notion-editor .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+}
+
+/* Line-anchored wiki comments (Google Sheets / Docs style) */
+.wiki-comment-editor-shell {
+  position: relative;
+  padding-left: 2.25rem;
+}
+
+.wiki-notion-editor .ProseMirror>.wiki-block-has-comments {
+  border-left: 3px solid #fbbf24;
+  padding-left: 0.5rem;
+  margin-left: -0.125rem;
+}
+
+.wiki-notion-editor .ProseMirror>.wiki-block-selected {
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+.wiki-notion-editor .ProseMirror>.wiki-block-highlighted {
+  background: rgba(251, 191, 36, 0.12);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.35);
+  animation: wiki-block-highlight-pulse 1.2s ease-in-out 2;
+}
+
+@keyframes wiki-block-highlight-pulse {
+
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.35);
+  }
+
+  50% {
+    box-shadow: inset 0 0 0 2px rgba(251, 191, 36, 0.55);
+  }
+}
+
+/* Selected text area while composing a comment */
+.wiki-notion-editor .wiki-comment-area-active {
+  background: rgba(59, 130, 246, 0.28);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  outline: 1px solid rgba(37, 99, 235, 0.45);
+}
+
+/* Saved comment ranges on the page */
+.wiki-notion-editor .wiki-comment-area-marked {
+  background: rgba(251, 191, 36, 0.22);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  border-bottom: 2px solid rgba(245, 158, 11, 0.65);
+}
+
+/* Temporarily focused comment range */
+.wiki-notion-editor .wiki-comment-area-focus {
+  background: rgba(251, 191, 36, 0.38);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  outline: 2px solid rgba(245, 158, 11, 0.75);
+  animation: wiki-selection-highlight-pulse 1s ease-in-out 2;
+}
+
+@keyframes wiki-selection-highlight-pulse {
+
+  0%,
+  100% {
+    outline-color: rgba(245, 158, 11, 0.75);
+  }
+
+  50% {
+    outline-color: rgba(234, 88, 12, 0.95);
+  }
+}
+
+/* Callout / info panel blocks */
+.wiki-notion-editor .ProseMirror .callout-block {
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-left: 4px solid;
+}
+
+.wiki-notion-editor .ProseMirror .callout-block[data-callout-type="info"] {
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+  color: #1e3a5f;
+}
+
+.wiki-notion-editor .ProseMirror .callout-block[data-callout-type="warning"] {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+  color: #713f12;
+}
+
+.wiki-notion-editor .ProseMirror .callout-block[data-callout-type="success"] {
+  border-left-color: #22c55e;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.wiki-notion-editor .ProseMirror .callout-block[data-callout-type="danger"] {
+  border-left-color: #ef4444;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.dark .wiki-notion-editor .ProseMirror .callout-block[data-callout-type="info"] {
+  background: #1e3a5f40;
+  color: #93c5fd;
+}
+
+.dark .wiki-notion-editor .ProseMirror .callout-block[data-callout-type="warning"] {
+  background: #45260040;
+  color: #fcd34d;
+}
+
+.dark .wiki-notion-editor .ProseMirror .callout-block[data-callout-type="success"] {
+  background: #14532d40;
+  color: #86efac;
+}
+
+.dark .wiki-notion-editor .ProseMirror .callout-block[data-callout-type="danger"] {
+  background: #7f1d1d40;
+  color: #fca5a5;
+}
+
+/* ─── CodeBlockLowlight — wrapper, header, language selector ─── */
+.code-block-lowlight-wrapper {
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: #0f1117;
+}
+
+.dark .code-block-lowlight-wrapper {
+  border-color: #2d2d3d;
+}
+
+.code-block-lowlight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.375rem 0.75rem;
+  background: #1a1d27;
+  border-bottom: 1px solid #2d2d3d;
+}
+
+.code-block-lang-select {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #8b9cc8;
+  font-size: 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.code-block-lang-select option {
+  background: #1a1d27;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+}
+
+.code-block-lang-label {
+  display: none;
+  /* hidden — select acts as both picker and label */
+}
+
+.code-block-lowlight-pre {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: transparent;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  tab-size: 2;
+}
+
+.code-block-lowlight-pre code {
+  background: transparent;
+  color: #e2e8f0;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  font-family: inherit;
+  white-space: pre;
+}
+
+/* ─── Mermaid code blocks (language: mermaid) ─── */
+.code-block-mermaid-wrapper {
+  margin: 1rem 0;
+}
+
+.code-block-mermaid-editing .code-block-mermaid-source {
+  max-height: 220px;
+}
+
+.code-block-mermaid-preview {
+  background: #fafbfc;
+  padding: 0.75rem;
+}
+
+.dark .code-block-mermaid-preview {
+  background: #1a1d27;
+}
+
+.code-block-mermaid-preview-label {
+  margin-bottom: 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #5e6c84;
+}
+
+.code-block-mermaid-preview-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.375rem;
+  border: 1px solid #dfe1e6;
+  background: #fff;
+}
+
+.dark .code-block-mermaid-preview-img {
+  border-color: #2d2d3d;
+  background: #0f1117;
+}
+
+/* ─── highlight.js token colors (One Dark Pro palette) ─── */
+.hljs-comment,
+.hljs-quote {
+  color: #6a737d;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-addition {
+  color: #c678dd;
+}
+
+.hljs-number,
+.hljs-string,
+.hljs-meta .hljs-meta-string,
+.hljs-literal,
+.hljs-doctag,
+.hljs-regexp {
+  color: #98c379;
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #61afef;
+}
+
+.hljs-attribute,
+.hljs-attr,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-class .hljs-title,
+.hljs-type {
+  color: #e5c07b;
+}
+
+.hljs-symbol,
+.hljs-bullet,
+.hljs-subst,
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-link {
+  color: #56b6c2;
+}
+
+.hljs-built_in,
+.hljs-deletion {
+  color: #e06c75;
+}
+
+.hljs-formula {
+  background: #2d2d3d;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+.hljs-function {
+  color: #61afef;
+}
+
+.hljs-params {
+  color: #abb2bf;
+}
+
+.hljs-operator {
+  color: #56b6c2;
+}
+
+.hljs-punctuation {
+  color: #abb2bf;
+}
+
+.hljs-property {
+  color: #e5c07b;
+}
+
+.hljs-tag {
+  color: #e06c75;
+}
+
+/* Wiki comments panel — compact compose editor */
+.wiki-comments-panel .wiki-comment-compose-editor .ProseMirror {
+  min-height: 2.75rem;
+  max-height: 8.75rem;
+  overflow-y: auto;
+  padding: 0.5rem 0.625rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.wiki-comments-panel .wiki-comment-compose-editor .ProseMirror p {
+  margin: 0;
+}
+
+/*
+ * ==========================================
+ * DARK MODE: remap hardcoded light utilities
+ * Applies app-wide (auth, portals, legacy pages)
+ * ==========================================
+ */
+
+.dark .bg-white,
+.dark .\!bg-white {
+  background-color: var(--card-bg) !important;
+}
+
+.dark .bg-white\/5 {
+  background-color: color-mix(in srgb, var(--card-bg) 5%, transparent) !important;
+}
+
+.dark .bg-white\/10 {
+  background-color: color-mix(in srgb, var(--card-bg) 10%, transparent) !important;
+}
+
+.dark .bg-white\/20 {
+  background-color: color-mix(in srgb, var(--card-bg) 20%, transparent) !important;
+}
+
+.dark .bg-white\/30 {
+  background-color: color-mix(in srgb, var(--card-bg) 30%, transparent) !important;
+}
+
+.dark .bg-white\/50 {
+  background-color: color-mix(in srgb, var(--card-bg) 50%, transparent) !important;
+}
+
+.dark .bg-white\/60 {
+  background-color: color-mix(in srgb, var(--card-bg) 60%, transparent) !important;
+}
+
+.dark .bg-white\/70 {
+  background-color: color-mix(in srgb, var(--card-bg) 70%, transparent) !important;
+}
+
+.dark .bg-white\/80 {
+  background-color: color-mix(in srgb, var(--card-bg) 80%, transparent) !important;
+}
+
+.dark .bg-white\/90 {
+  background-color: color-mix(in srgb, var(--card-bg) 90%, transparent) !important;
+}
+
+.dark .bg-white\/95 {
+  background-color: color-mix(in srgb, var(--card-bg) 95%, transparent) !important;
+}
+
+.dark .hover\:bg-white:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+.dark .hover\:bg-white\/50:hover {
+  background-color: color-mix(in srgb, var(--surface-hover) 50%, transparent) !important;
+}
+
+.dark .hover\:bg-white\/60:hover {
+  background-color: color-mix(in srgb, var(--surface-hover) 60%, transparent) !important;
+}
+
+.dark .hover\:bg-white\/80:hover {
+  background-color: color-mix(in srgb, var(--surface-hover) 80%, transparent) !important;
+}
+
+.dark .border-white {
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+.dark .border-white\/10 {
+  border-color: color-mix(in srgb, var(--border-color, var(--border)) 10%, transparent) !important;
+}
+
+.dark .border-white\/15 {
+  border-color: color-mix(in srgb, var(--border-color, var(--border)) 15%, transparent) !important;
+}
+
+.dark .border-white\/20 {
+  border-color: color-mix(in srgb, var(--border-color, var(--border)) 20%, transparent) !important;
+}
+
+.dark .border-white\/25 {
+  border-color: color-mix(in srgb, var(--border-color, var(--border)) 25%, transparent) !important;
+}
+
+.dark .border-white\/80 {
+  border-color: color-mix(in srgb, var(--border-color, var(--border)) 80%, transparent) !important;
+}
+
+.dark .to-white {
+  --tw-gradient-to: var(--card-bg) !important;
+}
+
+.dark .from-white {
+  --tw-gradient-from: var(--card-bg) !important;
+}
+
+.dark .text-slate-300 {
+  color: #d4d4d8 !important;
+}
+
+.dark .text-slate-400,
+.dark .text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+.dark .text-slate-600 {
+  color: #e4e4e7 !important;
+}
+
+.dark .text-slate-700,
+.dark .text-slate-800,
+.dark .text-slate-900 {
+  color: var(--text-main) !important;
+}
+
+.dark .text-gray-900 {
+  color: var(--text-main) !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/80 {
+  background-color: color-mix(in srgb, var(--surface-dim) 85%, transparent) !important;
+}
+
+.dark .bg-slate-100 {
+  background-color: var(--surface-dim) !important;
+}
+
+.dark .border-slate-50,
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+.dark .hover\:bg-slate-50:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+.dark .hover\:bg-\[\#f8f9fa\]:hover,
+.dark .hover\:bg-\[\#f0f2f4\]:hover,
+.dark .hover\:bg-\[\#f9fafb\]:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+/* Light-tinted status/alert backgrounds */
+.dark .bg-rose-50,
+.dark .bg-red-50 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+
+.dark .bg-emerald-50,
+.dark .bg-green-50 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+.dark .bg-amber-50,
+.dark .bg-yellow-50 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+
+.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+
+.dark .bg-indigo-50,
+.dark .bg-violet-50 {
+  background-color: rgba(99, 102, 241, 0.12) !important;
+}
+
+.dark .border-rose-100,
+.dark .border-rose-200 {
+  border-color: rgba(244, 63, 94, 0.3) !important;
+}
+
+.dark .border-emerald-100,
+.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.dark .border-amber-100,
+.dark .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+/* =============================================================================
+   Dark mode: neutral-* colour family (used in WeeklyTrackerColumnsModal
+   and other components that don't use slate-* or gray-*)
+   ============================================================================= */
+
+.dark .bg-neutral-50,
+.dark .bg-neutral-50\/80,
+.dark .bg-neutral-100 {
+  background-color: var(--surface-dim) !important;
+}
+
+.dark .bg-neutral-200 {
+  background-color: var(--surface-hover) !important;
+}
+
+.dark .bg-neutral-900 {
+  background-color: var(--foreground) !important;
+}
+
+.dark .text-neutral-900 {
+  color: var(--text-main) !important;
+}
+
+.dark .text-neutral-600,
+.dark .text-neutral-500 {
+  color: var(--text-muted) !important;
+}
+
+.dark .text-neutral-400 {
+  color: #d4d4d8 !important;
+}
+
+.dark .border-neutral-100,
+.dark .border-neutral-200,
+.dark .border-neutral-300 {
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+.dark .hover\:bg-neutral-100:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+.dark .hover\:bg-red-50:hover {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+
+/* =============================================================================
+   Dark mode: hardcoded Jira/Atlassian hex backgrounds used outside
+   [data-pm-jira] scope (standalone pages, social, blog components)
+   ============================================================================= */
+
+.dark .bg-\[\#fafbfc\],
+.dark .bg-\[\#fafafa\],
+.dark .bg-\[\#f9fafb\] {
+  background-color: var(--card-bg) !important;
+}
+
+.dark .bg-\[\#deebff\] {
+  background-color: rgba(71, 145, 255, 0.15) !important;
+}
+
+.dark .border-\[\#dfe1e6\],
+.dark .border-\[\#ddd8d0\] {
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+/* =============================================================================
+   Dark mode: page-level background bleed fix
+   When the active tab content sits outside a scoped dark panel, the
+   surrounding page area must also be dark.
+   ============================================================================= */
+
+.dark .pm-content-x {
+  background-color: #0f0f10 !important;
+}
+
+/* =============================================================================
+   Dark mode: expanded text color remaps — covers hardcoded non-slate families
+   and components (LMS, HRMS dashboard, quiz, activity timeline, report charts)
+   that render outside the .crm-app-main scope.
+   ============================================================================= */
+
+/* gray-* family */
+.dark .text-gray-700,
+.dark .text-gray-800 {
+  color: var(--text-main) !important;
+}
+
+.dark .text-gray-500,
+.dark .text-gray-600 {
+  color: var(--text-muted) !important;
+}
+
+.dark .text-gray-400 {
+  color: #d4d4d8 !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-gray-100 {
+  background-color: var(--surface-dim) !important;
+}
+
+.dark .bg-gray-200 {
+  background-color: var(--surface-hover) !important;
+}
+
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+/* zinc-* family */
+.dark .text-zinc-900,
+.dark .text-zinc-800,
+.dark .text-zinc-700 {
+  color: var(--text-main) !important;
+}
+
+.dark .text-zinc-500,
+.dark .text-zinc-600 {
+  color: var(--text-muted) !important;
+}
+
+.dark .bg-zinc-50,
+.dark .bg-zinc-100 {
+  background-color: var(--surface-dim) !important;
+}
+
+/* stone-* family */
+.dark .text-stone-900,
+.dark .text-stone-800,
+.dark .text-stone-700 {
+  color: var(--text-main) !important;
+}
+
+.dark .text-stone-500,
+.dark .text-stone-600 {
+  color: var(--text-muted) !important;
+}
+
+/* Generic white/black text overrides for cards */
+.dark .text-black {
+  color: var(--text-main) !important;
+}
+
+/* bg-white inside dark panels that aren't under .theme-crm-hubspot — already handled globally,
+   but scope this tighter for card-level elements like quiz-interface, progress-tracker */
+.dark .bg-white.rounded-lg,
+.dark .bg-white.rounded-xl,
+.dark .bg-white.rounded-2xl,
+.dark .bg-white.rounded-3xl {
+  background-color: var(--card-bg) !important;
+}
+
+/* Status badge tints — light backgrounds with dark text become invisible */
+.dark .bg-green-100 { background-color: rgba(34, 197, 94, 0.15) !important; }
+.dark .bg-green-200 { background-color: rgba(34, 197, 94, 0.22) !important; }
+.dark .text-green-800,
+.dark .text-green-900 { color: #86efac !important; }
+.dark .text-green-700 { color: #4ade80 !important; }
+
+.dark .bg-blue-100 { background-color: rgba(59, 130, 246, 0.15) !important; }
+.dark .bg-blue-200 { background-color: rgba(59, 130, 246, 0.22) !important; }
+.dark .text-blue-800,
+.dark .text-blue-900 { color: #93c5fd !important; }
+.dark .text-blue-700 { color: #60a5fa !important; }
+
+.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.15) !important; }
+.dark .text-red-800,
+.dark .text-red-900 { color: #fca5a5 !important; }
+.dark .text-red-700 { color: #f87171 !important; }
+
+.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.15) !important; }
+.dark .bg-amber-200 { background-color: rgba(245, 158, 11, 0.22) !important; }
+.dark .text-amber-800,
+.dark .text-amber-900 { color: #fde68a !important; }
+.dark .text-amber-700 { color: #fbbf24 !important; }
+
+.dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.12) !important; }
+.dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.18) !important; }
+.dark .text-indigo-700,
+.dark .text-indigo-800 { color: #a5b4fc !important; }
+.dark .text-indigo-600 { color: #818cf8 !important; }
+.dark .text-indigo-500 { color: #6366f1 !important; }
+.dark .border-indigo-100,
+.dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.3) !important; }
+
+.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.12) !important; }
+.dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.18) !important; }
+.dark .text-purple-800,
+.dark .text-purple-900 { color: #d8b4fe !important; }
+.dark .text-purple-700 { color: #c084fc !important; }
+
+.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.15) !important; }
+.dark .text-emerald-800,
+.dark .text-emerald-900 { color: #a7f3d0 !important; }
+.dark .text-emerald-700 { color: #34d399 !important; }
+.dark .text-emerald-600 { color: #10b981 !important; }
+
+/* Slate color variations not previously covered — keep light, never dark-on-dark */
+.dark .text-slate-200 { color: #e4e4e7 !important; }
+
+/* bg-slate-200 used in progress bars and dividers */
+.dark .bg-slate-200 { background-color: var(--surface-hover) !important; }
+
+/* Inputs inside standalone components (quiz, LMS pages) */
+.dark input[class*="border-slate-200"],
+.dark textarea[class*="border-slate-200"],
+.dark select[class*="border-slate-200"] {
+  border-color: var(--border-color, var(--border)) !important;
+  background-color: var(--color-input) !important;
+  color: var(--text-main) !important;
+}
+
+/* Text inside stat/info boxes that use hardcoded white bg with slate text */
+.dark [class*="bg-white"][class*="bg-opacity-"] {
+  background-color: color-mix(in srgb, var(--card-bg) 60%, transparent) !important;
+}
+
+/* Progress bar track color */
+.dark .bg-gray-200.rounded-full,
+.dark .bg-slate-200.rounded-full {
+  background-color: var(--surface-hover) !important;
+}
+
+/* Hardcoded inline styles on labels / description text from legacy components */
+.dark .text-slate-700.font-medium,
+.dark .font-medium.text-slate-700 {
+  color: var(--text-main) !important;
+}
+
+/* ─── LMS quiz indicator buttons (bg-green-200 text-green-900 answered) ─── */
+.dark .bg-green-200.text-green-900 {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+  color: #86efac !important;
+}
+
+/* ─── Hover overrides for status button groups ─── */
+.dark .hover\:bg-green-300:hover { background-color: rgba(34, 197, 94, 0.3) !important; }
+.dark .hover\:bg-slate-300:hover { background-color: var(--surface-hover) !important; }
+.dark .hover\:bg-slate-400:hover { background-color: #52525b !important; }
+
+/* ─── PM report charts — hardcoded bg-white cards with text-slate-* ─── */
+.dark .border-slate-200.bg-white.shadow-sm {
+  background-color: var(--card-bg) !important;
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+/* ─── HRMS Dashboard overview cards ─── */
+.dark .rounded-2xl.border-slate-200.bg-white,
+.dark .rounded-3xl.border-slate-200.bg-white {
+  background-color: var(--card-bg) !important;
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+/* ─── Activity timeline: hardcoded bg-slate-50 metadata boxes ─── */
+.dark .bg-slate-50\/90 {
+  background-color: color-mix(in srgb, var(--surface-dim) 90%, transparent) !important;
+}
+
+/* ─── Email preview iframes inside activity timeline (stay white internally) ─── */
+.dark .crm-email-body-content,
+.dark .crm-email-body-content * {
+  color: var(--text-main) !important;
+}
+
+/* pre-formatted email text block */
+.dark pre.whitespace-pre-wrap {
+  background-color: var(--card-bg) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+/* ─── Holiday calendar — day number and description text ─── */
+.dark .text-slate-700.text-xs.font-bold,
+.dark .text-slate-400.text-xs {
+  color: var(--text-muted) !important;
+}
+
+/* bg-slate-50 used as calendar "out of month" day filler */
+.dark .bg-slate-50\/50 {
+  background-color: color-mix(in srgb, var(--surface-dim) 50%, transparent) !important;
+}
+
+/* ─── Generic modal / dialog panels that use bg-white + text-slate-900 ─── */
+.dark .fixed.inset-0 .bg-white {
+  background-color: var(--card-bg) !important;
+  color: var(--text-main) !important;
+}
+
+/*
+ * =============================================================================
+ * DARK MODE VISIBILITY — portal-wide contrast rescue (light mode untouched)
+ * Remaps hardcoded HubSpot / Jira light-theme hex colors and forces readable
+ * text on dark surfaces. Does not change application logic.
+ * =============================================================================
+ */
+
+/* Base text inheritance */
+.dark body,
+.dark .crm-app-main,
+.dark .theme-crm-hubspot,
+.dark .theme-hrms,
+.dark .theme-collab-slack {
+  color: var(--text-main);
+}
+
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: var(--text-main) !important;
+}
+
+.dark label,
+.dark legend,
+.dark th,
+.dark .text-text-main,
+.dark [class*="text-text-main"] {
+  color: var(--text-main) !important;
+}
+
+.dark .text-text-muted,
+.dark [class*="text-text-muted"],
+.dark .text-muted-foreground,
+.dark p.text-muted,
+.dark span.text-muted {
+  color: var(--text-muted) !important;
+}
+
+.dark [role="tab"],
+.dark [role="tablist"] button {
+  color: var(--text-muted) !important;
+}
+
+.dark [role="tab"][aria-selected="true"],
+.dark [role="tab"][data-state="active"] {
+  color: var(--text-main) !important;
+}
+
+/* Placeholder / ghost text must stay readable */
+.dark ::placeholder {
+  color: #a1a1aa !important;
+  opacity: 1 !important;
+}
+
+/* Hardcoded HubSpot / Atlassian ink text → bright */
+.dark [class*="text-[#172b4d]"],
+.dark [class*="text-[#091e42]"],
+.dark [class*="text-[#253858]"],
+.dark [class*="text-[#1d2125]"],
+.dark [class*="text-[#292a2e]"],
+.dark [class*="text-[#121212]"],
+.dark [class*="text-[#0a0a0a]"],
+.dark [class*="text-[#111827]"],
+.dark [class*="text-[#1f2937]"],
+.dark [class*="text-[#33475b]"] {
+  color: #ffffff !important;
+}
+
+/* Hardcoded muted navy / slate labels → bright muted */
+.dark [class*="text-[#5e6c84]"],
+.dark [class*="text-[#6b778c]"],
+.dark [class*="text-[#42526e]"],
+.dark [class*="text-[#344563]"],
+.dark [class*="text-[#425b76]"],
+.dark [class*="text-[#516f90]"],
+.dark [class*="text-[#64748b]"],
+.dark [class*="text-[#666666]"],
+.dark [class*="text-[#6b7280]"],
+.dark [class*="text-[#97a0af]"],
+.dark [class*="text-[#8993a4]"],
+.dark [class*="text-[#9ca3af]"] {
+  color: #d4d4d8 !important;
+}
+
+/* Hardcoded light panel fills → dark surfaces (never leave white cards) */
+.dark [class*="bg-[#ffffff]"],
+.dark [class*="bg-[#fafbfc]"],
+.dark [class*="bg-[#fafafa]"],
+.dark [class*="bg-[#f9fafb]"],
+.dark [class*="bg-[#f8f9fa]"],
+.dark [class*="bg-[#f8fafc]"],
+.dark [class*="bg-[#f7f8f9]"],
+.dark [class*="bg-[#f4f5f7]"],
+.dark [class*="bg-[#f0f2f4]"],
+.dark [class*="bg-[#ebecf0]"],
+.dark [class*="bg-[#f1f2f4]"],
+.dark [class*="bg-[#ede9e3]"],
+.dark [class*="bg-[#faf8f5]"],
+.dark [class*="bg-[#fff]"],
+.dark .bg-\[\#f8fafc\],
+.dark .bg-\[\#f7f8f9\] {
+  background-color: var(--card-bg, #121212) !important;
+}
+
+/* Social desk pale icon tiles — not white/cyan chips in dark mode */
+.dark [class*="bg-[#e6f4f7]"],
+.dark .bg-violet-50 {
+  background-color: #1a1a1a !important;
+}
+
+.dark [class*="bg-[#deebff]"],
+.dark [class*="bg-[#e9f2ff]"],
+.dark [class*="bg-[#e0f4f7]"] {
+  background-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+.dark [class*="bg-[#e3fcef]"],
+.dark [class*="bg-[#dcfce7]"] {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.dark [class*="bg-[#ffebe6]"],
+.dark [class*="bg-[#fef2f2]"],
+.dark [class*="bg-[#fee2e2]"] {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+
+.dark [class*="bg-[#fef3c7]"],
+.dark [class*="bg-[#fffbeb]"],
+.dark [class*="bg-[#fff3ef]"] {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+
+.dark [class*="border-[#dfe1e6]"],
+.dark [class*="border-[#ddd8d0]"],
+.dark [class*="border-[#e8e4dc]"],
+.dark [class*="border-[#e2e8f0]"],
+.dark [class*="border-[#f1f4f8]"] {
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+/* Hover soft fills */
+.dark [class*="hover:bg-[#f4f5f7]"]:hover,
+.dark [class*="hover:bg-[#ebecf0]"]:hover,
+.dark [class*="hover:bg-[#fafbfc]"]:hover,
+.dark [class*="hover:bg-[#f0ece6]"]:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+/* Cards / panels / inputs — keep dark fills */
+.dark .bg-card,
+.dark .bg-popover,
+.dark .bg-background {
+  background-color: var(--card-bg) !important;
+}
+
+.dark .bg-muted,
+.dark .bg-secondary,
+.dark .bg-accent {
+  background-color: var(--surface-dim) !important;
+  color: var(--text-main) !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea,
+.dark [role="combobox"],
+.dark [data-slot="input"] {
+  color: #ffffff !important;
+  background-color: var(--input-bg, var(--color-input)) !important;
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+.dark button.border,
+.dark button[class*="border-border"],
+.dark button[class*="border-input"],
+.dark button[class*="bg-white"] {
+  background-color: var(--card-bg) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color, var(--border)) !important;
+}
+
+/* Primary filled CTAs — bright accent + white label (match action buttons) */
+.dark button.bg-primary:not([class*="bg-primary/"]),
+.dark .bg-primary:not([class*="bg-primary/"]) {
+  background-color: var(--hs-link, #4791ff) !important;
+  color: #ffffff !important;
+}
+
+.dark button.bg-primary:not([class*="bg-primary/"]) *,
+.dark .bg-primary:not([class*="bg-primary/"]) .text-white,
+.dark .bg-primary:not([class*="bg-primary/"]) .text-primary-foreground {
+  color: #ffffff !important;
+}
+
+/* Explicit hs-link CTAs (filters / apply) */
+.dark button.bg-\[var\(--hs-link\)\],
+.dark .bg-\[var\(--hs-link\)\],
+.dark [class*="bg-[var(--hs-link)]"] {
+  background-color: var(--hs-link, #4791ff) !important;
+  color: #ffffff !important;
+}
+
+.dark button.bg-\[var\(--hs-link\)\] *,
+.dark [class*="bg-[var(--hs-link)]"] {
+  color: #ffffff !important;
+}
+
+/* Soft cyan engagement chips must not wash out */
+.dark .bg-\[\#e0f4f7\] {
+  background-color: rgba(167, 139, 250, 0.18) !important;
+  color: #ffffff !important;
+}
+
+/* Catch remaining ink text via CSS variable usage when parent tokens lag */
+.dark [class*="text-[var(--text-main)]"],
+.dark .text-\[var\(--text-main\)\] {
+  color: #ffffff !important;
+}
+
+.dark [class*="text-[var(--text-muted)]"],
+.dark .text-\[var\(--text-muted\)\] {
+  color: #e4e4e7 !important;
+}
+
+.dark [class*="text-[var(--foreground)]"],
+.dark .text-\[var\(--foreground\)\] {
+  color: #ffffff !important;
+}
+
+/* Report panel icons — keep accent readable, do not force pure white on all .text-primary links */
+.dark .bg-primary\/10 {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+.dark .bg-primary\/10 .text-primary,
+.dark .bg-primary\/10 svg {
+  color: #ffffff !important;
+}
+
+.dark button.bg-primary\/10.text-primary,
+.dark .bg-primary\/10.text-primary {
+  color: #ffffff !important;
+}
+
+/* Filled “ink” buttons that used bg-text-main + text-white: white-on-white in dark */
+.dark .bg-text-main.text-white,
+.dark button.bg-text-main.text-white,
+.dark .bg-\[var\(--text-main\)\].text-white,
+.dark button.bg-\[var\(--text-main\)\].text-white {
+  background-color: #ffffff !important;
+  color: #0a0a0a !important;
+  border-color: #ffffff !important;
+}
+
+.dark .bg-text-main.text-white:hover,
+.dark button.bg-text-main.text-white:hover,
+.dark .bg-\[var\(--text-main\)\].text-white:hover,
+.dark button.bg-\[var\(--text-main\)\].text-white:hover {
+  background-color: #e4e4e7 !important;
+  color: #0a0a0a !important;
+}
+
+.dark .bg-text-main.text-white:disabled,
+.dark button.bg-text-main.text-white:disabled,
+.dark .bg-\[var\(--text-main\)\].text-white:disabled {
+  color: #0a0a0a !important;
+  opacity: 0.45;
+}
+
+/* Sidebar / shell */
+.dark .slack-app-shell,
+.dark .slack-app-main,
+.dark .crm-app-shell,
+.dark .crm-app-main {
+  background-color: var(--background) !important;
+  color: var(--text-main) !important;
+}
+
+.dark .crm-app-header,
+.dark .slack-app-header {
+  background-color: var(--card-bg) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color, var(--border)) !important;
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.11/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.11",
+  "version": "1.0.0",
+  "id": "2b8ebd56-6aae-4e1b-b461-12f5a6b0c2a2",
+  "packageName": "com.mathionix.notifier",
+  "developer": {
+    "name": "Mathionix IT",
+    "websiteUrl": "https://apps.mathionix.tech",
+    "privacyUrl": "https://apps.mathionix.tech/privacy",
+    "termsOfUseUrl": "https://apps.mathionix.tech/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Mathionix Notifier",
+    "full": "Mathionix Suite Notification Bot"
+  },
+  "description": {
+    "short": "Sends proactive task notifications.",
+    "full": "Receives real-time updates from Mathionix Suite and sends personal DMs for task assignments, mentions, and CRM updates."
+  },
+  "accentColor": "#00f2ff",
+  "bots": [
+    {
+      "botId": "1f646233-6d02-4b12-9bf4-7861989d3792",
+      "scopes": [
+        "personal"
+      ],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": []
+}

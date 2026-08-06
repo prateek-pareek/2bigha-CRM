@@ -1,0 +1,98 @@
+"use client";
+
+import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+
+export default function AuthGuard({ children }: { children: React.ReactNode }) {
+    const router = useRouter();
+    const pathname = usePathname();
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        const isAuthPage = pathname.startsWith('/auth');
+        const isUnauthorizedPage = pathname === '/unauthorized';
+        const isClientPortalTokenPath =
+            /^\/portal\/[^/]+\/?$/.test(pathname);
+        const isPublicPage =
+            pathname.startsWith('/wiki/public') ||
+            pathname.startsWith('/career-portal') ||
+            pathname.startsWith('/public/employee-agreements/sign') ||
+            pathname.startsWith('/huddle/join') ||
+            isClientPortalTokenPath;
+
+        // Get search params for error and from checks
+        const searchInput = window.location.search;
+        const searchParams = new URLSearchParams(searchInput);
+        const hasError = searchParams.has('error') || searchInput.includes('error=');
+        const fromPath = searchParams.get('from');
+
+        if (!token && !isAuthPage && !isUnauthorizedPage && !isPublicPage) {
+            // Not logged in and not on auth page - redirect to login
+            const redirectPath = `/auth/login?from=${encodeURIComponent(pathname)}`;
+            router.replace(redirectPath);
+        } else if (token && isAuthPage && !hasError) {
+            // Already logged in and on login page (without error), redirect to a default dashboard
+            // We'll try to get the user from localStorage to determine the best dashboard
+            const savedUser = localStorage.getItem('user');
+
+            // INITIAL target is the 'from' parameter if it exists and is not an auth page
+            let targetPath = fromPath && !fromPath.startsWith('/auth') && fromPath.startsWith('/') ? fromPath : null;
+
+            if (savedUser) {
+                try {
+                    const user = JSON.parse(savedUser);
+                    const tools = (user.permittedTools || []).map((t: string) => t.toUpperCase());
+                    const managementRoles = ['ADMIN', 'CEO', 'CTO', 'MANAGER', 'EXECUTIVE', 'SENIOR MEMBER', 'ADMINISTRATOR'];
+                    const isAdmin = managementRoles.includes(user.role?.toUpperCase() || '');
+
+                    // CRM-only product: always land in CRM workspace unless `from` is set
+                    if (!targetPath) {
+                        if (isAdmin || tools.includes('CRM') || tools.length === 0) {
+                            targetPath = '/crm/workspace';
+                        } else {
+                            targetPath = '/unauthorized';
+                        }
+                    }
+                } catch (e) {
+                    if (!targetPath) targetPath = '/crm/workspace';
+                }
+            }
+
+            router.replace(targetPath || '/crm/workspace');
+        } else if (token) {
+            setIsAuthenticated(true);
+        }
+
+        setIsLoading(false);
+    }, [pathname, router]);
+
+    const isAuthPage = pathname.startsWith('/auth');
+    const isUnauthorizedPage = pathname === '/unauthorized';
+    const isClientPortalTokenPath = /^\/portal\/[^/]+\/?$/.test(pathname);
+    const isPublicPage =
+        pathname.startsWith('/wiki/public') ||
+        pathname.startsWith('/career-portal') ||
+        pathname.startsWith('/public/employee-agreements/sign') ||
+        pathname.startsWith('/huddle/join') ||
+        isClientPortalTokenPath;
+
+    if (isLoading) {
+        return (
+            <div className="h-screen w-screen flex items-center justify-center bg-background">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    if (isAuthPage || isUnauthorizedPage || isPublicPage) {
+        return <>{children}</>;
+    }
+
+    if (!isAuthenticated) {
+        return null; // Will redirect in useEffect
+    }
+
+    return <>{children}</>;
+}

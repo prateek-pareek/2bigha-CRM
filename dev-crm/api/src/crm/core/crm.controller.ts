@@ -1,0 +1,1004 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  Patch,
+  Query,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  Delete,
+  Request,
+  BadRequestException,
+  ForbiddenException,
+  Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { resolveListPagination, CRM_MAX_BOARD_PAGE_SIZE, CRM_MAX_PAGE_SIZE } from '../../common/lib/pagination/list-pagination';
+import { parseCrmFiltersQuery } from '../shared/crm-list-filters';
+import { parseCrmEmailEngagementQuery } from '../email/crm-email-engagement-filter.service';
+import { CRMService } from './crm.service';
+import { CrmEmailEngagementBatchService } from '../email/crm-email-engagement-batch.service';
+import { ClientPortalNeedsService } from '../portal/client-portal-needs.service';
+import { CrmCalendarSyncService } from '../calendar/crm-calendar-sync.service';
+import { InboxOAuthService } from '../inbox/inbox-oauth.service';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { RbacGuard } from '../crm-users/rbac.guard';
+import { Permissions } from '../crm-users/permissions.decorator';
+import { canViewCrmRevenue, isCrmTopAdmin, redactCrmRevenueForUser } from '../shared/crm-admin-access.util';
+
+@Controller('crm')
+@UseGuards(JwtAuthGuard, RbacGuard)
+export class CRMController {
+  constructor(
+    private readonly crmService: CRMService,
+    private readonly clientPortalNeedsService: ClientPortalNeedsService,
+    private readonly crmCalendarSyncService: CrmCalendarSyncService,
+    private readonly inboxOAuthService: InboxOAuthService,
+    private readonly crmEmailEngagementBatchService: CrmEmailEngagementBatchService,
+  ) {}
+
+  @Get('distinct-values')
+  @Permissions('leads:read', 'contacts:read', 'organizations:read', 'deals:read', 'clients:read', 'platform-opportunities:read')
+  async getDistinctValues(
+    @Query('module') module: string,
+    @Query('field') field: string,
+    @Query('pipeline') pipeline?: string,
+  ) {
+    if (!module || !field) {
+      throw new BadRequestException('module and field are required');
+    }
+    return this.crmService.getDistinctValues(module, field, pipeline);
+  }
+
+  /** Duplicate check for email / phone / LinkedIn (leads + contacts). */
+  @Get('person-identifiers/check')
+  @Permissions('leads:read', 'contacts:read')
+  checkPersonIdentifiers(
+    @Query('email') email?: string,
+    @Query('mobileNo') mobileNo?: string,
+    @Query('phone') phone?: string,
+    @Query('linkedinUrl') linkedinUrl?: string,
+    @Query('entityType') entityType: 'lead' | 'contact' = 'lead',
+    @Query('excludeLeadId') excludeLeadId?: string,
+    @Query('excludeContactId') excludeContactId?: string,
+  ) {
+    return this.crmService.checkPersonIdentifiers({
+      email,
+      mobileNo,
+      phone,
+      linkedinUrl,
+      entityType: entityType === 'contact' ? 'contact' : 'lead',
+      excludeLeadId,
+      excludeContactId,
+    });
+  }
+
+  // Leads
+  @Post('leads')
+  @Permissions('leads:write')
+  async createLead(@Body() dto: any, @Request() req: any) {
+    return this.crmService.createLead(dto, req.user);
+  }
+
+  @Get('leads')
+  @Permissions('leads:read')
+  findAllLeads(
+    @Request() req: any,
+    @Query('pipeline') pipeline?: string,
+    @Query('mine') mine?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('leadType') leadType?: string,
+    @Query('filters') filters?: string,
+    @Query('lastActivity') lastActivity?: string,
+    @Query('emailOpenMode') emailOpenMode?: string,
+    @Query('emailOpenDays') emailOpenDays?: string,
+    @Query('emailReply') emailReply?: string,
+    @Query('emailSent') emailSent?: string,
+    @Query('includeConverted') includeConverted?: string,
+  ) {
+    const parsed = resolveListPagination(
+      { page, pageSize, search },
+      { maxPageSize: CRM_MAX_BOARD_PAGE_SIZE },
+    );
+    const parsedFilters = parseCrmFiltersQuery(filters);
+    const emailEngagement = parseCrmEmailEngagementQuery({
+      lastActivity,
+      emailOpenMode,
+      emailOpenDays,
+      emailReply,
+      emailSent,
+    });
+    const lt: 'standard' | 'platform' | undefined =
+      leadType === 'platform' || leadType === 'standard' ? leadType : undefined;
+    return this.crmService.findAllLeads(req.user, pipeline, {
+      page: parsed.page,
+      pageSize: parsed.pageSize,
+      search: parsed.search,
+      mine: mine === '1' || mine === 'true',
+      leadType: lt,
+      filters: parsedFilters,
+      emailEngagement,
+      includeConverted:
+        includeConverted === '1' || includeConverted === 'true',
+    });
+  }
+
+  /** Batched email open / reply signals for leads board & list (replaces N×3 per-lead HTTP calls). */
+  @Post('leads/email-engagement-batch')
+  @Permissions('leads:read')
+  batchLeadEmailEngagement(@Body() body: { ids?: unknown }) {
+    return this.crmEmailEngagementBatchService.getBatchForModule(body?.ids, 'leads');
+  }
+
+  @Get('leads/:id')
+  @Permissions('leads:read')
+  findOneLead(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.findOneLead(id, req.user);
+  }
+
+  @Put('leads/:id')
+  @Permissions('leads:write', 'leads:move_pipeline')
+  async updateLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    return this.crmService.updateLead(id, dto, req.user);
+  }
+
+  @Patch('leads/:id')
+  @Permissions('leads:write', 'leads:move_pipeline')
+  async patchLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    return this.crmService.updateLead(id, dto, req.user);
+  }
+
+  @Post('leads/:id/recalculate-score')
+  @Permissions('leads:write')
+  recalculateLeadScore(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.recalculateLeadScore(id, req.user);
+  }
+
+  // Deals
+  @Get('deals')
+  @Permissions('deals:read')
+  findAllDeals(
+    @Request() req: any,
+    @Query('pipeline') pipeline?: string,
+    /** When viewing the default deal pipeline, include deals with no pipeline set (matches board UI). */
+    @Query('unassigned') unassigned?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('filters') filters?: string,
+  ) {
+    const parsed = resolveListPagination(
+      { page, pageSize, search },
+      { maxPageSize: CRM_MAX_BOARD_PAGE_SIZE },
+    );
+    const parsedFilters = parseCrmFiltersQuery(filters);
+    return this.crmService.findAllDeals(
+      req.user,
+      pipeline,
+      unassigned === '1' || unassigned === 'true',
+      { ...parsed, filters: parsedFilters },
+    );
+  }
+
+  @Get('deals/:id')
+  @Permissions('deals:read')
+  findOneDeal(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.findOneDeal(id, req.user);
+  }
+
+  @Post('deals')
+  @Permissions('deals:write')
+  async createDeal(@Body() dto: any, @Request() req: any) {
+    return this.crmService.createDeal(dto, req.user);
+  }
+
+  @Put('deals/:id')
+  @Permissions('deals:write', 'deals:move_pipeline')
+  async updateDeal(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    return this.crmService.updateDeal(id, dto, req.user);
+  }
+
+  @Patch('deals/:id')
+  @Permissions('deals:write', 'deals:move_pipeline')
+  async patchDeal(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    return this.crmService.updateDeal(id, dto, req.user);
+  }
+
+  // Organizations
+  @Get('organizations')
+  @Permissions('organizations:read')
+  async findAllOrganizations(
+    @Request() req: any,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('filters') filters?: string,
+    @Query('lastActivity') lastActivity?: string,
+    @Query('emailOpenMode') emailOpenMode?: string,
+    @Query('emailOpenDays') emailOpenDays?: string,
+    @Query('emailReply') emailReply?: string,
+  ) {
+    const parsed = resolveListPagination(
+      { page, pageSize, search },
+      { maxPageSize: CRM_MAX_PAGE_SIZE },
+    );
+    const parsedFilters = parseCrmFiltersQuery(filters);
+    const emailEngagement = parseCrmEmailEngagementQuery({
+      lastActivity,
+      emailOpenMode,
+      emailOpenDays,
+      emailReply,
+    });
+    const data = await this.crmService.findAllOrganizations({
+      ...parsed,
+      filters: parsedFilters,
+      emailEngagement,
+    });
+    return redactCrmRevenueForUser(req.user, data);
+  }
+
+  @Get('organizations/list')
+  @Permissions('organizations:read')
+  findAllOrganizationsList() {
+    return this.crmService.findAllOrganizationsList();
+  }
+
+  @Get('organizations/:id')
+  @Permissions('organizations:read')
+  async findOneOrganization(@Param('id') id: string, @Request() req: any) {
+    const data = await this.crmService.findOneOrganization(id);
+    return redactCrmRevenueForUser(req.user, data);
+  }
+
+  @Post('organizations')
+  @Permissions('organizations:write')
+  async createOrganization(@Body() dto: any, @Request() req: any) {
+    return this.crmService.createOrganization(dto, req.user);
+  }
+
+  @Put('organizations/:id')
+  @Permissions('organizations:write')
+  async updateOrganization(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @Request() req: any,
+  ) {
+    return this.crmService.updateOrganization(id, dto, req.user);
+  }
+
+  @Patch('organizations/:id')
+  @Permissions('organizations:write')
+  async patchOrganization(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @Request() req: any,
+  ) {
+    return this.crmService.updateOrganization(id, dto, req.user);
+  }
+
+  // Contacts
+  @Get('contacts')
+  @Permissions('contacts:read')
+  findAllContacts(
+    @Request() req: any,
+    @Query('mine') mine?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('filters') filters?: string,
+    @Query('lastActivity') lastActivity?: string,
+    @Query('emailOpenMode') emailOpenMode?: string,
+    @Query('emailOpenDays') emailOpenDays?: string,
+    @Query('emailReply') emailReply?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ) {
+    const parsed = resolveListPagination(
+      { page, pageSize, search },
+      { maxPageSize: CRM_MAX_BOARD_PAGE_SIZE },
+    );
+    const parsedFilters = parseCrmFiltersQuery(filters);
+    const emailEngagement = parseCrmEmailEngagementQuery({
+      lastActivity,
+      emailOpenMode,
+      emailOpenDays,
+      emailReply,
+    });
+    const normalizedSortOrder =
+      String(sortOrder || '')
+        .trim()
+        .toLowerCase() === 'asc'
+        ? ('asc' as const)
+        : ('desc' as const);
+    return this.crmService.findAllContacts(req.user, {
+      page: parsed.page,
+      pageSize: parsed.pageSize,
+      search: parsed.search,
+      mine: mine === '1' || mine === 'true',
+      filters: parsedFilters,
+      emailEngagement,
+      sortBy: sortBy?.trim() || undefined,
+      sortOrder: normalizedSortOrder,
+    });
+  }
+
+  @Get('contacts/list')
+  @Permissions('contacts:read')
+  findAllContactsList(@Request() req: any) {
+    return this.crmService.findAllContactsList(req.user);
+  }
+
+  /** Batched email open / reply signals for contacts list. */
+  @Post('contacts/email-engagement-batch')
+  @Permissions('contacts:read')
+  batchContactEmailEngagement(@Body() body: { ids?: unknown }) {
+    return this.crmEmailEngagementBatchService.getBatchForModule(
+      body?.ids,
+      'contacts',
+    );
+  }
+
+  @Get('contacts/:id')
+  @Permissions('contacts:read')
+  findOneContact(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.findOneContact(id, req.user);
+  }
+
+  @Post('contacts')
+  @Permissions('contacts:write')
+  async createContact(@Body() dto: any, @Request() req: any) {
+    return this.crmService.createContact(dto, req.user);
+  }
+
+  @Put('contacts/:id')
+  @Permissions('contacts:write')
+  async updateContact(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @Request() req: any,
+  ) {
+    return this.crmService.updateContact(id, dto, req.user);
+  }
+
+  @Patch('contacts/:id')
+  @Permissions('contacts:write')
+  async patchContact(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    return this.crmService.updateContact(id, dto, req.user);
+  }
+
+  // Activities
+  @Get('activities')
+  @Permissions('activities:read')
+  findActivities(
+    @Query('relatedTo') relatedTo?: string,
+    @Query('type') type?: string,
+    @Query('pipelineId') pipelineId?: string,
+    @Query('relatedType') relatedType?: string,
+  ) {
+    return this.crmService.findActivities(
+      relatedTo,
+      type,
+      pipelineId,
+      relatedType,
+    );
+  }
+
+  @Post('activities')
+  @Permissions('activities:write')
+  createActivity(@Body() dto: any, @Request() req: any) {
+    return this.crmService.createActivity(dto, req.user);
+  }
+
+  @Patch('activities/:id')
+  @Permissions('activities:write')
+  patchActivity(@Param('id') id: string, @Body() dto: any) {
+    return this.crmService.updateActivity(id, dto);
+  }
+
+  @Delete('activities/:id')
+  @Permissions('admin:manage')
+  removeActivity(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.removeActivity(id, req.user?.userId);
+  }
+
+  // Calendar — external sync (Google / Outlook via connected mailbox OAuth)
+  @Get('calendar/connections')
+  @Permissions('dashboard:read')
+  getCalendarConnections(@Request() req: any) {
+    return this.crmCalendarSyncService.getConnectionStatus(
+      req.user.userId,
+      req.user.email,
+    );
+  }
+
+  @Get('calendar/sync')
+  @Permissions('dashboard:read')
+  syncCalendarEvents(
+    @Request() req: any,
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+  ) {
+    return this.crmCalendarSyncService.syncExternalEvents(
+      req.user.userId,
+      req.user.email,
+      start,
+      end,
+    );
+  }
+
+  @Get('calendar/oauth/google/authorize')
+  @Permissions('dashboard:read')
+  getCalendarGoogleOAuth(@Request() req: any) {
+    const state = this.inboxOAuthService.signOAuthState(
+      req.user.userId,
+      'gmail',
+      { returnTo: 'calendar' },
+    );
+    return { url: this.inboxOAuthService.buildGoogleAuthorizeUrl(state) };
+  }
+
+  @Get('calendar/oauth/microsoft/authorize')
+  @Permissions('dashboard:read')
+  getCalendarMicrosoftOAuth(@Request() req: any) {
+    const state = this.inboxOAuthService.signOAuthState(
+      req.user.userId,
+      'outlook',
+      { returnTo: 'calendar' },
+    );
+    return { url: this.inboxOAuthService.buildMicrosoftAuthorizeUrl(state) };
+  }
+
+  @Get('calendar-events')
+  @Permissions('dashboard:read', 'activities:read')
+  getCalendarEvents(
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+    @Query('owner') owner?: string,
+  ) {
+    return this.crmService.getCalendarEvents(start, end, owner);
+  }
+
+  @Post('calendar-events')
+  @Permissions('activities:write')
+  createCalendarEvent(@Body() dto: any, @Request() req: any) {
+    return this.crmService.createCalendarEvent(dto, req.user);
+  }
+
+  // Dashboard
+  @Get('dashboard')
+  @Permissions('dashboard:read')
+  getDashboard(
+    @Request() req: any,
+    @Query('days') days?: string,
+    @Query('owner') owner?: string,
+    @Query('filters') filters?: string,
+    @Query('compare') compare?: string,
+  ) {
+    return this.crmService.getDashboardStats(
+      days || '30',
+      owner,
+      filters,
+      req.user,
+      compare,
+    );
+  }
+
+  @Get('reports/revenue-forecast')
+  @Permissions('dashboard:read', 'deals:read')
+  getRevenueForecastReport(
+    @Request() req: any,
+    @Query('owner') owner?: string,
+    @Query('pipeline') pipeline?: string,
+    @Query('months') months?: string,
+  ) {
+    if (!canViewCrmRevenue(req.user)) {
+      throw new ForbiddenException(
+        'Revenue forecast is restricted to the platform super administrator.',
+      );
+    }
+    const n = months ? parseInt(months, 10) : 6;
+    return this.crmService.getRevenueForecastReport(
+      owner,
+      pipeline,
+      Number.isFinite(n) ? n : 6,
+    );
+  }
+
+  /** Leads pipeline + email tracking analytics (board / reports UI). */
+  @Get('reports/board')
+  @Permissions('dashboard:read', 'leads:read')
+  getBoardReports(
+    @Query('days') days?: string,
+    @Query('owner') owner?: string,
+  ) {
+    return this.crmService.getBoardReports(days || '30', owner);
+  }
+
+  /** Leads Dashboard KPIs + dimensional analytics (live CRM lead aggregates). */
+  @Get('reports/leads-dashboard')
+  @Permissions('dashboard:read', 'leads:read')
+  getLeadsDashboardAnalytics(
+    @Query('days') days?: string,
+    @Query('owner') owner?: string,
+    @Query('compare') compare?: string,
+  ) {
+    return this.crmService.getLeadsDashboardAnalytics(
+      days || '30',
+      owner,
+      compare,
+    );
+  }
+
+  /** Sales department health: work done, activity trends, rep leaderboard, pipeline snapshot. */
+  @Get('reports/sales-health')
+  @Permissions('dashboard:read', 'leads:read', 'deals:read')
+  async getSalesDepartmentHealth(
+    @Request() req: any,
+    @Query('window') window?: string,
+    @Query('owner') owner?: string,
+  ) {
+    const data = await this.crmService.getSalesDepartmentHealth(
+      window || 'this_week',
+      owner,
+    );
+    return redactCrmRevenueForUser(req.user, data);
+  }
+
+  /** Summary charts: email opens/replies over time, leads by pipeline & service. */
+  @Get('reports/summary-charts')
+  @Permissions('dashboard:read', 'leads:read')
+  getReportSummaryCharts(
+    @Query('window') window?: string,
+    @Query('owner') owner?: string,
+  ) {
+    return this.crmService.getReportSummaryCharts(window || 'today', owner);
+  }
+
+  /** Opens/clicks per saved email template (tracked sends with templateId). */
+  @Get('reports/email-templates')
+  @Permissions(
+    'settings:write',
+    'leads:read',
+    'deals:read',
+    'contacts:read',
+  )
+  getEmailTemplatePerformance(
+    @Query('days') days?: string,
+    @Query('owner') owner?: string,
+  ) {
+    return this.crmService.getEmailTemplatePerformance(days || '30', owner);
+  }
+
+  /** Opens/clicks grouped by sending address (fromEmail) for all tracked sends in the period. */
+  @Get('reports/email-senders')
+  @Permissions(
+    'settings:write',
+    'leads:read',
+    'deals:read',
+    'contacts:read',
+  )
+  getEmailSenderPerformance(
+    @Query('days') days?: string,
+    @Query('owner') owner?: string,
+  ) {
+    return this.crmService.getEmailSenderPerformance(days || '30', owner);
+  }
+
+  /** Action queue: leads needing outreach, stale follow-up, unopened tracked emails. */
+  @Get('reports/attention')
+  @Permissions('dashboard:read', 'leads:read')
+  getSalesAttention(@Query('owner') owner?: string) {
+    return this.crmService.getSalesAttention(owner);
+  }
+
+  /** Rep workspace: attention, tasks, pipeline snapshot, closing deals, activity feed. */
+  @Get('workspace')
+  @Permissions('dashboard:read')
+  getSalesWorkspace(
+    @Request() req: any,
+    @Query('owner') owner?: string,
+    @Query('window') window?: string,
+    @Query('sections') sections?: string,
+  ) {
+    return this.crmService.getSalesWorkspace(
+      owner,
+      req?.user,
+      window,
+      sections,
+    );
+  }
+
+  // Export/Import
+  @Get('export/:type')
+  @Permissions('admin:manage')
+  async exportData(
+    @Param('type') type: string,
+    @Query('ids') ids?: string,
+    @Query('pipelineId') pipelineId?: string,
+  ) {
+    const parsedIds = String(ids || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    return this.crmService.exportToCsv(type, {
+      ids: parsedIds,
+      pipelineId,
+    });
+  }
+
+  @Post('import/preview')
+  @Permissions('admin:manage')
+  @UseInterceptors(FileInterceptor('file'))
+  async getImportPreview(@UploadedFile() file: any) {
+    return { headers: this.crmService.getFileHeaders(file.buffer) };
+  }
+
+  @Post('import/:type')
+  @Permissions('admin:manage')
+  @UseInterceptors(FileInterceptor('file'))
+  async importData(
+    @Param('type') type: string,
+    @UploadedFile() file: any,
+    @Body('mapping') mappingJson?: string,
+    @Body('duplicateStrategy') duplicateStrategy?: string,
+    @Request() req?: any,
+  ) {
+    const mapping = mappingJson ? JSON.parse(mappingJson) : undefined;
+    return this.crmService.startImportFromExcel(
+      type,
+      file.buffer,
+      mapping,
+      req?.user,
+      duplicateStrategy,
+    );
+  }
+
+  @Get('import/jobs/:jobId')
+  @Permissions('admin:manage')
+  getImportJob(@Param('jobId') jobId: string) {
+    return this.crmService.getImportJobStatus(jobId);
+  }
+
+  // --- Deletion ---
+  @Delete('leads/:id')
+  @Permissions('leads:delete')
+  removeLead(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.removeLead(id, req.user?.userId);
+  }
+
+  @Post('leads/bulk-delete')
+  @Permissions('leads:delete')
+  bulkRemoveLeads(@Body('ids') ids: string[], @Request() req: any) {
+    return this.crmService.bulkRemoveLeads(ids, req.user?.userId);
+  }
+
+  @Post('leads/bulk-assign')
+  @Permissions('leads:write')
+  bulkAssignLeads(
+    @Body()
+    body: {
+      ownerName?: string;
+      ids?: string[];
+    },
+    @Request() req: any,
+  ) {
+    return this.crmService.bulkAssignLeads(
+      {
+        ownerName: body?.ownerName,
+        ids: body?.ids,
+      },
+      req.user,
+    );
+  }
+
+  @Post('leads/:id/convert')
+  @Permissions('leads:write')
+  convertLead(
+    @Param('id') id: string,
+    @Body()
+    dto: {
+      type: 'contact' | 'organization' | 'deal' | 'client';
+      pipelineId?: string;
+      stage?: string;
+    },
+    @Request() req: any,
+  ) {
+    return this.crmService.convertLead(id, dto, req.user);
+  }
+
+  @Post('deals/:id/convert')
+  @Permissions('deals:write')
+  convertDeal(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.convertDeal(id, req.user);
+  }
+
+  @Post('deals/:id/convert-to-lead')
+  @Permissions('deals:write')
+  convertDealToLead(
+    @Param('id') id: string,
+    @Body()
+    dto: {
+      pipelineId?: string;
+      stage?: string;
+    },
+    @Request() req: any,
+  ) {
+    return this.crmService.convertDealToLead(id, dto, req.user);
+  }
+
+  @Delete('deals/:id')
+  @Permissions('deals:delete')
+  removeDeal(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.removeDeal(id, req.user?.userId);
+  }
+
+  @Post('deals/bulk-delete')
+  @Permissions('admin:manage')
+  bulkRemoveDeals(@Body('ids') ids: string[], @Request() req: any) {
+    return this.crmService.bulkRemoveDeals(ids, req.user?.userId);
+  }
+
+  @Get('deals/:id/portal-messages')
+  @Permissions('deals:read')
+  async getDealPortalMessages(@Param('id') id: string, @Request() req: any) {
+    await this.crmService.assertClientPortalAccess(req.user, id, 'viewer');
+    return this.crmService.getDealMessages(id);
+  }
+
+  @Post('deals/:id/portal-messages')
+  @Permissions('deals:write')
+  async sendDealPortalMessage(
+    @Param('id') id: string,
+    @Body() body: { text?: string },
+    @Request() req: any,
+  ) {
+    await this.crmService.assertClientPortalAccess(req.user, id, 'manager');
+    const adminId = String(req.user.userId || req.user.id || 'admin');
+    const adminName = String(req.user.displayName || req.user.name || 'Admin');
+    return this.crmService.sendDealMessage(id, adminId, adminName, body?.text || '');
+  }
+
+  @Get('deals/:id/portal-needs')
+  @Permissions('deals:read')
+  async listDealPortalNeeds(@Param('id') id: string, @Request() req: any) {
+    await this.crmService.assertClientPortalAccess(req.user, id, 'viewer');
+    return this.clientPortalNeedsService.findByDealId(id);
+  }
+
+  @Post('deals/:id/portal-needs')
+  @Permissions('deals:write')
+  async createDealPortalNeed(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      category: string;
+      title: string;
+      description?: string;
+      dueDate?: string;
+      status?: string;
+      sortOrder?: number;
+    },
+    @Request() req: any,
+  ) {
+    await this.crmService.assertClientPortalAccess(req.user, id, 'manager');
+    await this.crmService.logClientPortalAccessEvent(id, req.user, 'portal_need_created', {
+      category: body?.category || '',
+      title: body?.title || '',
+    });
+    return this.clientPortalNeedsService.create(id, body);
+  }
+
+  @Patch('portal-needs/:needId')
+  @Permissions('deals:write')
+  async updatePortalNeed(
+    @Param('needId') needId: string,
+    @Body()
+    body: Partial<{
+      category: string;
+      title: string;
+      description: string;
+      dueDate: string | null;
+      status: string;
+      sortOrder: number;
+    }>,
+    @Request() req: any,
+  ) {
+    const need = await this.clientPortalNeedsService.findByNeedId(needId);
+    await this.crmService.assertClientPortalAccess(req.user, String(need.deal), 'manager');
+    await this.crmService.logClientPortalAccessEvent(String(need.deal), req.user, 'portal_need_updated', {
+      needId,
+    });
+    return this.clientPortalNeedsService.update(needId, body);
+  }
+
+  @Delete('portal-needs/:needId')
+  @Permissions('deals:write')
+  async removePortalNeed(@Param('needId') needId: string, @Request() req: any) {
+    const need = await this.clientPortalNeedsService.findByNeedId(needId);
+    await this.crmService.assertClientPortalAccess(req.user, String(need.deal), 'manager');
+    await this.crmService.logClientPortalAccessEvent(String(need.deal), req.user, 'portal_need_deleted', {
+      needId,
+    });
+    return this.clientPortalNeedsService.remove(needId);
+  }
+
+  @Delete('organizations/:id')
+  @Permissions('organizations:delete')
+  removeOrganization(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.removeOrganization(id, req.user?.userId);
+  }
+
+  @Delete('contacts/:id')
+  @Permissions('contacts:delete')
+  removeContact(@Param('id') id: string, @Request() req: any) {
+    return this.crmService.removeContact(id, req.user?.userId);
+  }
+
+  @Post('contacts/bulk-delete')
+  @Permissions('admin:manage')
+  bulkRemoveContacts(@Body('ids') ids: string[], @Request() req: any) {
+    return this.crmService.bulkRemoveContacts(ids, req.user?.userId);
+  }
+
+  @Post('fetch-link-metadata')
+  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  fetchLinkMetadata(@Body('url') url: string) {
+    return this.crmService.fetchLinkMetadata(url);
+  }
+
+  @Get('proxy-image')
+  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  async proxyImage(@Query('url') url: string, @Res() res: Response) {
+    return this.crmService.proxyImage(url, res);
+  }
+
+  @Get('settings/currency')
+  @Permissions('settings:write', 'admin:manage')
+  getCurrencySettings(@Request() req: any) {
+    if (!canViewCrmRevenue(req.user)) {
+      throw new ForbiddenException(
+        'Currency settings are restricted to the platform super administrator.',
+      );
+    }
+    return this.crmService.getGlobalSettings();
+  }
+
+  @Put('settings/currency')
+  @Permissions('settings:write', 'admin:manage')
+  updateCurrencyRate(@Body('usdToInr') usdToInr: number, @Request() req: any) {
+    if (!canViewCrmRevenue(req.user)) {
+      throw new ForbiddenException(
+        'Currency settings are restricted to the platform super administrator.',
+      );
+    }
+    return this.crmService.updateCurrencyRate(Number(usdToInr));
+  }
+
+  @Post('settings/currency/rates')
+  @Permissions('settings:write', 'admin:manage')
+  upsertCurrencyRate(
+    @Body('code') code: string,
+    @Body('symbol') symbol: string,
+    @Body('rateToInr') rateToInr: number,
+    @Request() req: any,
+  ) {
+    if (!canViewCrmRevenue(req.user)) {
+      throw new ForbiddenException(
+        'Currency settings are restricted to the platform super administrator.',
+      );
+    }
+    return this.crmService.upsertCurrencyRate(code, symbol, Number(rateToInr));
+  }
+
+  @Delete('settings/currency/rates/:code')
+  @Permissions('settings:write', 'admin:manage')
+  deleteCurrencyRate(@Param('code') code: string, @Request() req: any) {
+    if (!canViewCrmRevenue(req.user)) {
+      throw new ForbiddenException(
+        'Currency settings are restricted to the platform super administrator.',
+      );
+    }
+    return this.crmService.deleteCurrencyRate(code);
+  }
+
+  @Get('settings/email-deliverability')
+  @Permissions('settings:write', 'admin:manage')
+  getEmailDeliverabilitySettings() {
+    return this.crmService.getEmailDeliverabilitySettings();
+  }
+
+  @Put('settings/email-deliverability')
+  @Permissions('settings:write', 'admin:manage')
+  updateEmailDeliverabilitySettings(
+    @Body()
+    body: {
+      enforceSendLimits?: boolean;
+      maxEmailsPerHourPerAccount?: number;
+      maxEmailsPerDayPerAccount?: number;
+      enableWarmupRamp?: boolean;
+      commercialMailingAddress?: string;
+      requireCommercialFooter?: boolean;
+      blockHighRiskComposerSends?: boolean;
+      emailTrackingEnabled?: boolean;
+      optOutFooterStyle?: 'natural' | 'formal';
+      enforceHumanOutreachChecks?: boolean;
+      minOutreachBodyWords?: number;
+      maxOutreachBodyWords?: number;
+      maxOutreachParagraphs?: number;
+      blockNonHumanOutreachSends?: boolean;
+    },
+  ) {
+    return this.crmService.updateEmailDeliverabilitySettings(body || {});
+  }
+
+  @Get('settings/email-deliverability/health')
+  @Permissions('settings:write', 'admin:manage')
+  getEmailDeliverabilityHealth(@Request() req: any) {
+    if (!isCrmTopAdmin(req.user, req.crmDbUser ?? req.user?.crmDbUser)) {
+      throw new ForbiddenException(
+        'Deliverability health is restricted to top administrators.',
+      );
+    }
+    return this.crmService.getEmailDeliverabilityHealth();
+  }
+
+  @Get('settings/workflow-scheduler')
+  @Permissions('settings:write', 'admin:manage')
+  getWorkflowSchedulerSettings() {
+    return this.crmService.getWorkflowSchedulerSettings();
+  }
+
+  @Put('settings/workflow-scheduler')
+  @Permissions('settings:write', 'admin:manage')
+  updateWorkflowSchedulerSettings(
+    @Body() body: { workflowSchedulerEnabled?: boolean },
+  ) {
+    if (typeof body?.workflowSchedulerEnabled !== 'boolean') {
+      throw new BadRequestException(
+        'workflowSchedulerEnabled (boolean) is required',
+      );
+    }
+    return this.crmService.updateWorkflowSchedulerSettings({
+      workflowSchedulerEnabled: body.workflowSchedulerEnabled,
+    });
+  }
+
+  @Get('settings/opportunity-platforms')
+  @Permissions(
+    'leads:read',
+    'platform-opportunities:read',
+    'settings:read',
+    'settings:write',
+  )
+  getOpportunitySourcePlatforms() {
+    return this.crmService.getOpportunitySourcePlatforms();
+  }
+
+  @Put('settings/opportunity-platforms')
+  @Permissions('settings:write', 'admin:manage')
+  updateOpportunitySourcePlatforms(
+    @Body('customPlatforms') customPlatforms: unknown,
+  ) {
+    return this.crmService.updateOpportunitySourcePlatforms(customPlatforms);
+  }
+
+  /** CRM-wide wiki attachments (same PM wiki module as project boards). */
+  @Get('settings/wiki-links')
+  @Permissions('settings:write')
+  getCrmWikiLinks() {
+    return this.crmService.getCrmWikiLinks();
+  }
+
+  @Put('settings/wiki-links')
+  @Permissions('settings:write')
+  updateCrmWikiLinks(@Body('wikiLinks') wikiLinks: unknown) {
+    return this.crmService.updateCrmWikiLinks(wikiLinks);
+  }
+}

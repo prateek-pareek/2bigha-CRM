@@ -1,0 +1,281 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/portals/*": [
+        "./src/portals/*"
+      ],
+      "@/common/*": [
+        "./src/common/*"
+      ],
+      "@/suite/*": [
+        "./src/common/*"
+      ],
+      "@/app/*": [
+        "./src/app/*"
+      ],
+      "@/components/crm": [
+        "./src/portals/crm/components"
+      ],
+      "@/components/crm/*": [
+        "./src/portals/crm/components/*"
+      ],
+      "@/components/suite": [
+        "./src/common/components"
+      ],
+      "@/components/suite/*": [
+        "./src/common/components/*"
+      ],
+      "@/components/ui": [
+        "./src/common/components/ui"
+      ],
+      "@/components/ui/*": [
+        "./src/common/components/ui/*"
+      ],
+      "@/components/layout": [
+        "./src/common/components/layout"
+      ],
+      "@/components/layout/*": [
+        "./src/common/components/layout/*"
+      ],
+      "@/components/media": [
+        "./src/common/components/media"
+      ],
+      "@/components/media/*": [
+        "./src/common/components/media/*"
+      ],
+      "@/components/notifications": [
+        "./src/common/components/notifications"
+      ],
+      "@/components/notifications/*": [
+        "./src/common/components/notifications/*"
+      ],
+      "@/components/platform-cloud": [
+        "./src/common/components/platform-cloud"
+      ],
+      "@/components/platform-cloud/*": [
+        "./src/common/components/platform-cloud/*"
+      ],
+      "@/components/AppShell": [
+        "./src/common/components/shell/AppShell"
+      ],
+      "@/components/AuthGuard": [
+        "./src/common/components/shell/AuthGuard"
+      ],
+      "@/components/ClientPortalShell": [
+        "./src/common/components/shell/ClientPortalShell"
+      ],
+      "@/components/GlobalSearch": [
+        "./src/common/components/search/GlobalSearch"
+      ],
+      "@/components/LazyGlobalSearch": [
+        "./src/common/components/search/LazyGlobalSearch"
+      ],
+      "@/components/MathionixBrand": [
+        "./src/common/components/shell/MathionixBrand"
+      ],
+      "@/components/Pagination": [
+        "./src/common/components/shell/Pagination"
+      ],
+      "@/components/PermissionRefreshBanner": [
+        "./src/common/components/shell/PermissionRefreshBanner"
+      ],
+      "@/components/Providers": [
+        "./src/common/components/shell/Providers"
+      ],
+      "@/components/QuickChatWidget": [
+        "./src/common/components/shell/QuickChatWidget"
+      ],
+      "@/components/RealtimeManager": [
+        "./src/common/components/shell/RealtimeManager"
+      ],
+      "@/components/Sidebar": [
+        "./src/common/components/shell/Sidebar"
+      ],
+      "@/components/SuiteAppearanceProvider": [
+        "./src/common/components/shell/SuiteAppearanceProvider"
+      ],
+      "@/components/ThemeModeToggle": [
+        "./src/common/components/shell/ThemeModeToggle"
+      ],
+      "@/components/VoiceWriteButton": [
+        "./src/common/components/shell/VoiceWriteButton"
+      ],
+      "@/components/RichTextEditor": [
+        "./src/common/components/editors/RichTextEditor"
+      ],
+      "@/components/NotificationList": [
+        "./src/common/components/notifications/NotificationList"
+      ],
+      "@/components/SuitePageShell": [
+        "./src/common/components/shell/SuitePageShell"
+      ],
+      "@/components/common": [
+        "./src/common/components"
+      ],
+      "@/components/common/*": [
+        "./src/common/components/*"
+      ],
+      "@/lib/crm": [
+        "./src/portals/crm/lib"
+      ],
+      "@/lib/crm/*": [
+        "./src/portals/crm/lib/*"
+      ],
+      "@/lib/suite": [
+        "./src/common/lib"
+      ],
+      "@/lib/suite/*": [
+        "./src/common/lib/*"
+      ],
+      "@/lib/api": [
+        "./src/common/lib/api"
+      ],
+      "@/lib/api/*": [
+        "./src/common/lib/api/*"
+      ],
+      "@/lib/media": [
+        "./src/common/lib/media"
+      ],
+      "@/lib/media/*": [
+        "./src/common/lib/media/*"
+      ],
+      "@/lib/notifications": [
+        "./src/common/lib/notifications"
+      ],
+      "@/lib/notifications/*": [
+        "./src/common/lib/notifications/*"
+      ],
+      "@/lib/permissions": [
+        "./src/common/lib/permissions"
+      ],
+      "@/lib/permissions/*": [
+        "./src/common/lib/permissions/*"
+      ],
+      "@/lib/platform-cloud": [
+        "./src/common/lib/platform-cloud"
+      ],
+      "@/lib/platform-cloud/*": [
+        "./src/common/lib/platform-cloud/*"
+      ],
+      "@/lib/hooks": [
+        "./src/common/lib/hooks"
+      ],
+      "@/lib/hooks/*": [
+        "./src/common/lib/hooks/*"
+      ],
+      "@/lib/utils": [
+        "./src/common/lib/utils"
+      ],
+      "@/lib/feature-flags": [
+        "./src/common/lib/feature-flags"
+      ],
+      "@/lib/brand-assets": [
+        "./src/common/lib/brand-assets"
+      ],
+      "@/lib/browser-tab-brand": [
+        "./src/common/lib/browser-tab-brand"
+      ],
+      "@/lib/cartoon-effects": [
+        "./src/common/lib/cartoon-effects"
+      ],
+      "@/lib/jwt-subject": [
+        "./src/common/lib/jwt-subject"
+      ],
+      "@/lib/playNotificationSound": [
+        "./src/common/lib/playNotificationSound"
+      ],
+      "@/lib/public-portal-api": [
+        "./src/common/lib/public-portal-api"
+      ],
+      "@/lib/speech-to-text": [
+        "./src/common/lib/speech-to-text"
+      ],
+      "@/lib/suite-appearance": [
+        "./src/common/lib/suite-appearance"
+      ],
+      "@/lib/suite-layout": [
+        "./src/common/lib/suite-layout"
+      ],
+      "@/lib/webrtc-ice-servers": [
+        "./src/common/lib/webrtc-ice-servers"
+      ],
+      "@/lib/rich-text": [
+        "./src/common/lib/rich-text"
+      ],
+      "@/hooks/usePermissions": [
+        "./src/common/hooks/usePermissions"
+      ],
+      "@/hooks/useNotifications": [
+        "./src/common/hooks/useNotifications"
+      ],
+      "@/hooks/useRouteModuleAccess": [
+        "./src/common/hooks/useRouteModuleAccess"
+      ],
+      "@/hooks/use-cartoon-kanban-feedback": [
+        "./src/common/hooks/use-cartoon-kanban-feedback"
+      ],
+      "@/hooks/use-suite-board-effects": [
+        "./src/common/hooks/use-suite-board-effects"
+      ],
+      "@/hooks/useCrmAiDraftAvailability": [
+        "./src/portals/crm/hooks/useCrmAiDraftAvailability"
+      ],
+      "@/hooks/useOpportunitySourcePlatforms": [
+        "./src/portals/crm/hooks/useOpportunitySourcePlatforms"
+      ],
+      "@/stores/crmImportStore": [
+        "./src/portals/crm/stores/crmImportStore"
+      ],
+      "@/stores/emailComposerStore": [
+        "./src/portals/crm/stores/emailComposerStore"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/page_prev.tsx",
+    "**/page_prev_*.tsx",
+    "**/*_prev.tsx",
+    "**/*_prev.ts",
+    "**/CRMCalendarView_prev.tsx",
+    "src/components/crm",
+    "src/components/lms",
+    "src/components/Providers.tsx",
+    "src/components/Sidebar.tsx",
+    "src/components/AppShell.tsx",
+    "src/lib/crm"
+  ]
+}

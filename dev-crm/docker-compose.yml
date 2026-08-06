@@ -1,0 +1,162 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: mathionix-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis_data:/data
+    # Optional — API runs fine without Redis; set REDIS_URL on backend to enable cache.
+
+  mongodb:
+    image: mongo:8.2
+    container_name: mathionix-mongodb
+    restart: always
+    stop_grace_period: 30s
+    # Cap container + WiredTiger cache so mongod cannot OOM-kill the VPS
+    # (default WT cache ≈ 50% of host RAM — fatal on small Hostinger boxes).
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    oom_score_adj: -500
+    command:
+      - mongod
+      - --bind_ip_all
+      - --wiredTigerCacheSizeGB
+      - '0.5'
+    # ═══════════════════════════════════════════════════════════════════
+    # PRODUCTION DATA — DO NOT RESET
+    # Volume name MUST stay `myapp_mongodb_data` (external name below).
+    # Safe:  docker rm -f mathionix-mongodb && docker compose up -d --no-deps mongodb
+    # NEVER: docker compose down -v
+    # NEVER: docker volume rm / prune myapp_mongodb_data
+    # NEVER: mongosh dropDatabase / drop collection on prod
+    # NEVER: migrate-atlas-to-local.sh unless explicitly approved
+    # ═══════════════════════════════════════════════════════════════════
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  backend:
+    image: myapp_backend:latest
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: mathionix-backend
+    restart: always
+    expose:
+      - "4000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mathionix-backend.rule=Host(`apps.mathionix.tech`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))"
+      - "traefik.http.routers.mathionix-backend.priority=2"
+      - "traefik.http.routers.mathionix-backend.entrypoints=websecure"
+      - "traefik.http.routers.mathionix-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.mathionix-backend.loadbalancer.server.port=4000"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/mathionix-crm
+      - MONGO_URI_CRM=mongodb://mongodb:27017/mathionix-crm
+      - MONGO_URI_PM=mongodb://mongodb:27017/mathionix-crm
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - REDIS_ENABLED=${REDIS_ENABLED:-true}
+      - REDIS_CACHE_TTL_SECONDS=${REDIS_CACHE_TTL_SECONDS:-180}
+      - REDIS_CACHE_TTL_PM_BOARD_SECONDS=${REDIS_CACHE_TTL_PM_BOARD_SECONDS:-60}
+      - REDIS_CACHE_TTL_CRM_LIST_SECONDS=${REDIS_CACHE_TTL_CRM_LIST_SECONDS:-90}
+      - REDIS_CACHE_TTL_CRM_BOARD_SECONDS=${REDIS_CACHE_TTL_CRM_BOARD_SECONDS:-60}
+      - REDIS_CACHE_TTL_CRM_REPORTING_SECONDS=${REDIS_CACHE_TTL_CRM_REPORTING_SECONDS:-90}
+      - REDIS_CACHE_TTL_CRM_DETAIL_SECONDS=${REDIS_CACHE_TTL_CRM_DETAIL_SECONDS:-120}
+      - REDIS_CACHE_TTL_CRM_PICKER_SECONDS=${REDIS_CACHE_TTL_CRM_PICKER_SECONDS:-300}
+      - REDIS_CACHE_TTL_WIKI_SECONDS=${REDIS_CACHE_TTL_WIKI_SECONDS:-90}
+      - REDIS_CACHE_TTL_SEARCH_SECONDS=${REDIS_CACHE_TTL_SEARCH_SECONDS:-45}
+      - REDIS_CACHE_TTL_SOCIAL_PUBLIC_SECONDS=${REDIS_CACHE_TTL_SOCIAL_PUBLIC_SECONDS:-300}
+      - PORT=4000
+      - JWT_SECRET=supersecret
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+      - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}
+      - MICROSOFT_CALLBACK_URL=${MICROSOFT_CALLBACK_URL}
+      # CRM inbox Gmail OAuth (and fallbacks GOOGLE_* used by api-hrms if CRM_INBOX_* unset)
+      - CRM_INBOX_GOOGLE_CLIENT_ID=${CRM_INBOX_GOOGLE_CLIENT_ID}
+      - CRM_INBOX_GOOGLE_CLIENT_SECRET=${CRM_INBOX_GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - CRM_OAUTH_PUBLIC_URL=${CRM_OAUTH_PUBLIC_URL}
+      - SITE_CMS_PUBLIC_API_KEY=${SITE_CMS_PUBLIC_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_SECURE=${SMTP_SECURE}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - TEAMS_CLIENT_ID=${TEAMS_CLIENT_ID}
+      - TEAMS_CLIENT_SECRET=${TEAMS_CLIENT_SECRET}
+      - TEAMS_TENANT_ID=${TEAMS_TENANT_ID}
+      - BOT_SERVICE_URL=${BOT_SERVICE_URL}
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
+      # Entra user object ID for Graph 1:1 Teams chats (required with TEAMS_* / MICROSOFT_* Graph app)
+      - TEAMS_SENDER_ID=${TEAMS_SENDER_ID}
+      - FRONTEND_URL=${FRONTEND_URL}
+      # Same origin browsers use for /api (OAuth redirect_uri must match Azure/Google)
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - PUBLIC_API_URL=${PUBLIC_API_URL}
+      - TRACKING_BASE_URL=${TRACKING_BASE_URL}
+      # Github Creds
+      - PM_GITHUB_CLIENT_ID=${PM_GITHUB_CLIENT_ID}
+      - PM_GITHUB_CLIENT_SECRET=${PM_GITHUB_CLIENT_SECRET}
+      # CRM AI email drafting (api-hrms reads process.env — must be present at container runtime)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-}
+      # Social / Marketing SEO — Semrush automated rank checks (SerpAPI fallback)
+      - SEMRUSH_API_KEY=${SEMRUSH_API_KEY:-}
+      - SERPAPI_API_KEY=${SERPAPI_API_KEY:-}
+      - SEO_SIMULATE_RANK=${SEO_SIMULATE_RANK:-}
+      # Social desk AI image generation (OpenAI Images API)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_IMAGE_MODEL=${OPENAI_IMAGE_MODEL:-dall-e-3}
+      - IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER:-auto}
+      - IMAGE_GEN_SIMULATE=${IMAGE_GEN_SIMULATE:-}
+      # Cloudinary image storage (uploads + AI-generated images)
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
+      - CLOUDINARY_UPLOAD_FOLDER=${CLOUDINARY_UPLOAD_FOLDER:-mathionix}
+      - IMAGE_UPLOAD_MAX_INPUT_BYTES=${IMAGE_UPLOAD_MAX_INPUT_BYTES:-15728640}
+      - INTERNAL_CLIENT_PORTAL_KEY=${INTERNAL_CLIENT_PORTAL_KEY}
+
+  frontend:
+    image: myapp_frontend:latest
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        - NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL:-http://localhost:4000}
+        - NEXT_PUBLIC_CRM_STANDALONE=true
+    container_name: mathionix-frontend
+    restart: always
+    expose:
+      - "3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mathionix-frontend.rule=Host(`apps.mathionix.tech`)"
+      - "traefik.http.routers.mathionix-frontend.priority=1"
+      - "traefik.http.routers.mathionix-frontend.entrypoints=websecure"
+      - "traefik.http.routers.mathionix-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.mathionix-frontend.loadbalancer.server.port=3000"
+    depends_on:
+      - backend
+
+volumes:
+  mongodb_data:
+    name: myapp_mongodb_data
+    # PRODUCTION: survives container recreate. Never rename this volume name.
+    # Never: docker volume rm / prune myapp_mongodb_data or compose down -v.
+  redis_data:
+    name: myapp_redis_data

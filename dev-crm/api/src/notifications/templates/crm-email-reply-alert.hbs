@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 680px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 6px; }
+        .header { background: #f8f9fa; padding: 12px; border-bottom: 1px solid #eee; }
+        .content { padding: 16px 4px; }
+        .meta { margin: 0; padding: 0; list-style: none; }
+        .meta li { margin: 8px 0; }
+        .preview { margin-top: 14px; padding: 12px; border: 1px solid #eee; border-radius: 4px; background: #fafafa; white-space: pre-wrap; }
+        .button { display: inline-block; margin-top: 16px; padding: 10px 16px; background: #0078d4; color: #fff !important; text-decoration: none; border-radius: 4px; }
+        .footer { font-size: 12px; color: #777; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin:0;">Client Reply Received</h2>
+        </div>
+        <div class="content">
+            <p>A client replied to your CRM email thread.</p>
+            <ul class="meta">
+                <li><strong>From:</strong> {{senderName}} &lt;{{senderEmail}}&gt;</li>
+                <li><strong>To Mailbox:</strong> {{mailboxEmail}}</li>
+                <li><strong>Subject:</strong> {{subject}}</li>
+                <li><strong>CRM Record:</strong> {{module}} - {{recordLabel}}</li>
+                <li><strong>Received At:</strong> {{receivedAt}}</li>
+                <li><strong>Inbox Email ID:</strong> {{inboxEmailId}}</li>
+            </ul>
+            <p><strong>Reply preview:</strong></p>
+            <div class="preview">{{bodyPreview}}</div>
+            {{#if crmUrl}}
+            <a class="button" href="{{crmUrl}}">Open in CRM</a>
+            {{/if}}
+        </div>
+        <div class="footer">
+            This is an automated CRM alert to help your team respond quickly.
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,2599 @@
+/* Typography scale — HubSpot-dense CRM cadence; overridden from HR Settings via :root inline vars (suite-appearance). */
+:root {
+  --suite-font-h1: 1.25rem;
+  --suite-font-h2: 1rem;
+  --suite-font-h3: 0.9375rem;
+  --suite-font-body: 0.875rem;
+  --suite-font-small: 0.8125rem;
+  --suite-font-caption: 0.75rem;
+}
+
+/* Page roots inside AppShell: prefer `mx-auto w-full max-w-*` + `pb-8 md:pb-10` — main already adds horizontal padding.
+   HRMS, CRM, and PM list/dashboard pages follow this; shared tokens: `portal/src/lib/suite-layout.ts` (HS_PANEL, SUITE_PAGE_*). */
+
+/*
+ * CRMS Sales Admin Panel UI Kit reference
+ * https://www.figma.com/design/mLJ5tTHg7RoZlALa4akemV/CRMS---Sales---CRM-Admin-Panel-UI-Kit--Community-
+ * Light gray canvas · white cards · red primary · ~8px radii
+ */
+.theme-crm-hubspot {
+  --background: #f7f8f9;
+  --foreground: #1f2020;
+  --sidebar-bg: #ffffff;
+  /* CRMS / Dreams primary red */
+  --primary: #e41f07;
+  --primary-foreground: #ffffff;
+  --primary-light: #fce9e6;
+  --primary-dark: #c41a06;
+  --primary-muted: #f5a89f;
+  /* Links follow primary in this kit */
+  --hs-link: #e41f07;
+  --hs-link-hover: #c41a06;
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
+  --text-main: #1f2020;
+  --text-muted: #707070;
+  --surface-dim: #f0f2f5;
+  --surface-hover: #e9ecef;
+  --color-input: #ffffff;
+
+  --success: #28c76f;
+  --success-light: #e0f8ea;
+  --error: #e41f07;
+  --error-light: #fce9e6;
+  --warning: #ff9f43;
+  --warning-light: #fff0e1;
+  /* CRMS Bootstrap info blue (charts / soft avatars) */
+  --info: #2f80ed;
+  --info-light: #eaf2fd;
+  /* CRMS view-toggle active — measured .view-icons .btn.active */
+  --teal: #0e9384;
+  --teal-light: #e6f6f4;
+  --hs-record-header-bg: #ffffff;
+  --hs-record-header-border: #e2e8f0;
+
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-error: var(--error);
+  --color-error-light: var(--error-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar-bg);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-muted: var(--primary-muted);
+  --color-card: var(--card-bg);
+  --color-border: var(--border-color);
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-surface-dim: var(--surface-dim);
+  --color-surface-hover: var(--surface-hover);
+
+  --crm-shell-bg: #f7f8f9;
+  --crm-header-bg: #ffffff;
+  --crm-header-border: #e2e8f0;
+
+  /* CRMS / Dreams — ~5px corners, soft elevation */
+  --crm-radius-ui: 5px;
+  --crm-radius-modal: 8px;
+  --crm-shadow-card: none;
+  --crm-shadow-raised: 0 4px 14px rgba(32, 44, 75, 0.08);
+  --crm-shadow-input: 0 4px 4px rgba(219, 219, 219, 0.25);
+  --crm-shadow-button-hover: 0 6px 16px rgba(228, 31, 7, 0.22);
+  /* Dreams `.line-title` — card header accent (red → amber) */
+  --crm-line-title: linear-gradient(180deg, #e41f07 0%, #ffa201 100%);
+  --crm-linear-gradient: var(--crm-line-title);
+  --radius-lg: 5px;
+  --radius-md: 5px;
+  --radius-sm: 4px;
+
+  /* CRMS white sidebar + soft active rail */
+  --suite-sidebar-bg: #ffffff;
+  --suite-sidebar-fg: #1f2020;
+  --suite-sidebar-border: #e2e8f0;
+  --suite-sidebar-hover: #f7f8f9;
+  --suite-sidebar-active-bg: #fce9e6;
+  --suite-sidebar-chip-bg: #f7f8f9;
+  --suite-sidebar-logo-ring: #e2e8f0;
+}
+
+.crm-suite-sidebar {
+  --suite-sidebar-muted: color-mix(in srgb, var(--suite-sidebar-fg) 68%, transparent);
+}
+
+/*
+ * Dreams CRMS typography — Golos Text + admin template scale.
+ * Scoped to [data-crm-app] so PM/HRMS keep Inter / HubSpot-dense stacks.
+ * Source: https://crms.dreamstechnologies.com/html/assets/css/style.css
+ * body { font-family: "Golos Text", sans-serif; font-size: 14px; font-weight: 400; line-height: 1.5; }
+ */
+[data-crm-app],
+[data-crm-theme="crms"] {
+  --font-golos: "Golos Text", sans-serif;
+  --font-app: "Golos Text", sans-serif;
+  --font-display: "Golos Text", sans-serif;
+  --font-sans: "Golos Text", sans-serif;
+
+  /* Override HubSpot-dense suite tiers with CRMS sizes */
+  --suite-font-h1: 1.25rem; /* 20px — page title / .main-title */
+  --suite-font-h2: 1.125rem; /* 18px */
+  --suite-font-h3: 1rem; /* 16px — kanban column / h6 */
+  --suite-font-body: 0.875rem; /* 14px */
+  --suite-font-small: 0.875rem; /* 14px — do not crush text-sm */
+  --suite-font-caption: 0.75rem; /* 12px */
+  --crm-font-sidebar: 0.9375rem; /* 15px */
+  --crm-font-menu-title: 0.8125rem; /* 13px */
+}
+
+/* Force Golos on the CRM shell (beats body Inter + Tailwind font-sans) */
+[data-crm-app],
+[data-crm-theme="crms"],
+[data-crm-app] .theme-crm-hubspot,
+[data-crm-theme="crms"] .theme-crm-hubspot,
+[data-crm-app] .crm-app-shell,
+[data-crm-app] .crm-suite-sidebar,
+[data-crm-app] .crm-app-header,
+[data-crm-app] .crm-app-main {
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: normal;
+  font-feature-settings: normal;
+  font-variation-settings: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Descendants inherit Golos — do not fall back to Inter via utilities */
+[data-crm-app] *:not(.ti):not([class^="ti-"]):not([class*=" ti-"]):not(.crm-ti-icon):not(code):not(pre):not(kbd):not(samp),
+[data-crm-theme="crms"] *:not(.ti):not([class^="ti-"]):not([class*=" ti-"]):not(.crm-ti-icon):not(code):not(pre):not(kbd):not(samp) {
+  font-family: inherit !important;
+}
+
+.theme-crm-hubspot {
+  background-color: var(--background) !important;
+  color: var(--text-main) !important;
+  font-family: "Golos Text", sans-serif !important;
+  font-size: var(--suite-font-body);
+}
+
+[data-crm-app].theme-crm-hubspot,
+[data-crm-app] .theme-crm-hubspot {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* CRMS page titles — .main-title / h4: 20px · 700 · normal tracking */
+.theme-crm-hubspot .crm-app-main h1,
+[data-crm-app] .crm-app-main h1,
+[data-crm-theme="crms"] h1 {
+  font-family: "Golos Text", sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+  color: var(--text-main);
+}
+
+.theme-crm-hubspot input,
+.theme-crm-hubspot textarea,
+.theme-crm-hubspot select {
+  color: var(--text-main) !important;
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--border-color) !important;
+  background-color: var(--color-input) !important;
+}
+
+.theme-crm-hubspot input:focus,
+.theme-crm-hubspot textarea:focus,
+.theme-crm-hubspot select:focus {
+  outline: none !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent) !important;
+}
+
+/* List toolbars — softer focus so Search / selects don't look like error borders */
+.theme-crm-hubspot .crm-list-page input:focus,
+.theme-crm-hubspot .crm-list-page textarea:focus,
+.theme-crm-hubspot .crm-list-page select:focus,
+.theme-crm-hubspot .crm-list-page input:focus-visible,
+.theme-crm-hubspot .crm-list-page textarea:focus-visible,
+.theme-crm-hubspot .crm-list-page select:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color)) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent) !important;
+}
+
+.theme-crm-hubspot .crm-list-page button:focus-visible {
+  outline: none !important;
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color)) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent) !important;
+}
+
+/* Kill shadcn focus rings — CRMS primary focus */
+.theme-crm-hubspot input:focus-visible:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+.theme-crm-hubspot textarea:focus-visible,
+.theme-crm-hubspot select:focus-visible {
+  outline: none !important;
+  border-color: var(--primary) !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent) !important;
+}
+
+.theme-crm-hubspot input::placeholder,
+.theme-crm-hubspot textarea::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1;
+}
+
+/* Radix SelectTrigger & similar field buttons — same chrome as HubSpot text fields */
+.theme-crm-hubspot button.border-input.bg-background:focus,
+.theme-crm-hubspot button.border-input.bg-background:focus-visible {
+  outline: none !important;
+  border-color: var(--primary) !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent) !important;
+}
+
+.theme-crm-hubspot button.border-input.bg-background {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--border-color) !important;
+  background-color: var(--color-input) !important;
+  color: var(--text-main) !important;
+}
+
+.theme-crm-hubspot .bg-background {
+  background-color: var(--background) !important;
+}
+
+.theme-crm-hubspot .bg-card {
+  background-color: var(--card-bg) !important;
+}
+
+.theme-crm-hubspot .bg-primary {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* Body / table links — coral (CTAs use .bg-primary ink, not .text-primary) */
+.theme-crm-hubspot .text-primary {
+  color: var(--hs-link) !important;
+}
+
+.theme-crm-hubspot .border-border {
+  border-color: var(--border-color) !important;
+}
+
+.theme-crm-hubspot .text-text-main {
+  color: var(--text-main) !important;
+}
+
+.theme-crm-hubspot .text-text-muted {
+  color: var(--text-muted) !important;
+}
+
+.theme-crm-hubspot .bg-surface-dim {
+  background-color: var(--surface-dim) !important;
+}
+
+.theme-crm-hubspot .bg-sidebar {
+  background-color: var(--sidebar-bg) !important;
+}
+
+.theme-crm-hubspot .bg-success {
+  background-color: var(--success) !important;
+}
+
+.theme-crm-hubspot .bg-error {
+  background-color: var(--error) !important;
+}
+
+.theme-crm-hubspot .text-white {
+  color: #ffffff !important;
+}
+
+.theme-crm-hubspot .shadow-soft {
+  box-shadow: var(--crm-shadow-card) !important;
+}
+
+.theme-crm-hubspot .bg-primary-light {
+  background-color: var(--primary-light) !important;
+}
+
+.theme-crm-hubspot .text-primary-dark {
+  color: var(--primary-dark) !important;
+}
+
+/* App shell chrome when inside CRM theme */
+.theme-crm-hubspot .crm-app-shell {
+  background-color: var(--crm-shell-bg);
+}
+
+.theme-crm-hubspot .crm-app-header {
+  background-color: var(--crm-header-bg);
+  border-bottom-color: var(--crm-header-border);
+}
+
+.theme-crm-hubspot .crm-app-main {
+  background-color: var(--crm-shell-bg);
+  font-size: var(--suite-font-body);
+}
+
+/* ---------- HubSpot-style cards & panels ---------- */
+.theme-crm-hubspot .glass {
+  background: #ffffff !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: var(--crm-shadow-card) !important;
+  border-radius: var(--crm-radius-ui) !important;
+  backdrop-filter: none !important;
+}
+
+.theme-crm-hubspot .shadow-sm {
+  box-shadow: var(--crm-shadow-card) !important;
+}
+
+.theme-crm-hubspot .shadow-md,
+.theme-crm-hubspot .shadow-lg {
+  box-shadow: var(--crm-shadow-raised) !important;
+}
+
+/* Suite sidebar rail — CRMS white nav */
+.theme-crm-hubspot .crm-suite-sidebar {
+  background-color: var(--suite-sidebar-bg, #ffffff) !important;
+  color: var(--suite-sidebar-fg, #1f2020) !important;
+  border-right-color: var(--suite-sidebar-border, #e2e8f0) !important;
+  font-family: var(--font-app), "Segoe UI", "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+}
+
+/* CRMS active nav — soft red pill (Dreams), no left accent bar */
+.theme-crm-hubspot .crm-suite-sidebar .crm-hs-nav-item {
+  border-radius: 6px !important;
+}
+
+.theme-crm-hubspot .crm-suite-sidebar .crm-hs-nav-item[class*="bg-[var(--primary-light)]"],
+.theme-crm-hubspot .crm-suite-sidebar .crm-hs-nav-item[class*="bg-[var(--surface-dim)]"],
+.theme-crm-hubspot .crm-suite-sidebar .crm-hs-nav-item[class*="bg-[var(--suite-sidebar-active-bg)]"] {
+  background-color: var(--suite-sidebar-active-bg) !important;
+  color: var(--primary) !important;
+  box-shadow: none !important;
+  border-radius: 6px !important;
+}
+
+[data-crm-theme="crms"] .crm-suite-sidebar .suite-sidebar-nav-item[class*="bg-[var(--suite-sidebar-active-bg)]"],
+[data-crm-theme="crms"] .crm-suite-sidebar a.suite-sidebar-nav-item[aria-current],
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item.font-medium {
+  border-radius: 6px;
+}
+
+.theme-crm-hubspot .crm-suite-sidebar [class*="text-[var(--primary)]"],
+.theme-crm-hubspot .crm-suite-sidebar .crm-hs-nav-item[class*="text-[var(--primary)]"] {
+  color: var(--primary) !important;
+}
+
+/* Keep white glyphs inside the solid active icon tile */
+.theme-crm-hubspot .crm-suite-sidebar .suite-sidebar-nav-icon--active,
+.theme-crm-hubspot .crm-suite-sidebar .suite-sidebar-nav-icon--active svg,
+.theme-crm-hubspot .crm-suite-sidebar .suite-sidebar-nav-icon--active [class*="text-"] {
+  color: #ffffff !important;
+}
+
+.theme-crm-hubspot .crm-suite-sidebar [class*="text-[var(--text-muted)]"],
+.theme-crm-hubspot .crm-suite-sidebar [class*="text-[var(--text-muted)]"] {
+  color: var(--text-muted) !important;
+}
+
+.theme-crm-hubspot .crm-suite-sidebar [class*="border-[var(--border-color)]"] {
+  border-color: var(--border-color) !important;
+}
+
+.theme-crm-hubspot .crm-suite-sidebar .crm-hs-nav-item:hover:not([class*="bg-[var(--suite-sidebar-active-bg)]"]) {
+  background-color: var(--suite-sidebar-hover) !important;
+}
+
+/* CRM top header — white bar under data-crm-theme */
+[data-crm-theme="crms"] .crm-app-header,
+[data-crm-app] .crm-app-header {
+  background: #ffffff !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+[data-crm-theme="crms"] .crm-app-header input,
+[data-crm-app] .crm-app-header input {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: var(--crm-shadow-input);
+}
+
+/* CRMS header search — rectangular (not pill), ~38px */
+.crm-app-header .crm-header-search span.rounded-full,
+.crm-app-header .crm-header-search [class*="rounded-full"] {
+  border-radius: 6px !important;
+  height: 38px;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  display: flex !important;
+  align-items: center;
+  box-shadow: none !important;
+  border-color: #e8e8e8 !important;
+}
+
+.crm-app-header .crm-header-search {
+  max-width: 320px;
+}
+
+
+.theme-crm-hubspot .shadow-2xl,
+.theme-crm-hubspot .shadow-xl {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* CRM cards / tiles — rounded panels */
+.theme-crm-hubspot .rounded-lg,
+.theme-crm-hubspot .rounded-xl,
+.theme-crm-hubspot .rounded-2xl {
+  border-radius: var(--crm-radius-ui) !important;
+}
+
+/* Large marketing-style radii → still restrained panels */
+.theme-crm-hubspot [class*="rounded-[var(--crm-radius-ui)]"],
+.theme-crm-hubspot [class*="rounded-[var(--crm-radius-ui)]"],
+.theme-crm-hubspot [class*="rounded-[var(--crm-radius-ui)]"],
+.theme-crm-hubspot [class*="rounded-[var(--crm-radius-ui)]"] {
+  border-radius: var(--crm-radius-modal) !important;
+}
+
+.theme-crm-hubspot .rounded-full {
+  border-radius: 9999px !important;
+}
+
+/* Bordered surfaces */
+.theme-crm-hubspot .border-slate-50,
+.theme-crm-hubspot .border-slate-100,
+.theme-crm-hubspot .border-slate-200 {
+  border-color: var(--border-color) !important;
+}
+
+/* Primary / outline buttons (shadcn rounded-md + legacy rounded-lg) */
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg {
+  border-radius: var(--crm-radius-ui) !important;
+  font-weight: 600 !important;
+}
+
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.bg-primary,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.bg-primary {
+  box-shadow: 0 1px 2px rgba(254, 63, 81, 0.25) !important;
+  border: 1px solid transparent !important;
+}
+
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.bg-primary:hover,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.bg-primary:hover {
+  background-color: var(--primary-dark) !important;
+  box-shadow: var(--crm-shadow-button-hover) !important;
+}
+
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.border-border,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.border-border,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.border-input,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.border-input {
+  background-color: #ffffff !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.border-border:hover,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.border-border:hover,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.border-input:hover,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.border-input:hover {
+  background-color: var(--surface-dim) !important;
+  border-color: var(--border-color) !important;
+}
+
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.bg-transparent:hover,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.bg-transparent:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+/* Native & misc buttons: pill FAB / icon circles stay round */
+.theme-crm-hubspot button.rounded-2xl:not(.rounded-full),
+.theme-crm-hubspot button.rounded-xl:not(.rounded-full) {
+  border-radius: var(--crm-radius-ui) !important;
+  font-weight: 600 !important;
+}
+
+.theme-crm-hubspot button.bg-primary:not(.rounded-full):hover {
+  background-color: var(--primary-dark) !important;
+}
+
+/* Coral text links */
+.theme-crm-hubspot a.text-hs-link,
+.theme-crm-hubspot .text-hs-link {
+  color: var(--hs-link) !important;
+}
+.theme-crm-hubspot a.text-hs-link:hover,
+.theme-crm-hubspot .text-hs-link:hover {
+  color: var(--hs-link-hover) !important;
+  text-decoration: underline;
+}
+
+/* Record page hero — flat white bar */
+.theme-crm-hubspot .crm-hs-record-header {
+  background: var(--hs-record-header-bg);
+  border: 1px solid var(--hs-record-header-border);
+  border-radius: var(--crm-radius-ui);
+  box-shadow: var(--crm-shadow-card);
+}
+
+/* Data tables — light grid */
+.theme-crm-hubspot table.data-hs-table thead tr {
+  background: var(--surface-dim);
+  border-bottom: 1px solid var(--border-color);
+}
+.theme-crm-hubspot table.data-hs-table th {
+  font-size: var(--suite-font-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.theme-crm-hubspot table.data-hs-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+.theme-crm-hubspot table.data-hs-table tbody td {
+  border-bottom: 1px solid var(--border-color);
+}
+.theme-crm-hubspot table.data-hs-table thead th {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-crm-hubspot a.inline-flex.items-center.rounded-lg,
+.theme-crm-hubspot a.inline-flex.items-center.rounded-md {
+  border-radius: var(--crm-radius-ui) !important;
+}
+
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.bg-error,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.bg-error,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md[class*="bg-error"],
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg[class*="bg-error"] {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12) !important;
+}
+
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.bg-error:hover,
+.theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.bg-error:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35) !important;
+}
+
+/* PM kanban — restore per-variant board chrome */
+.theme-crm-hubspot [data-pm-board-column][data-pm-card-variant="jira"] {
+  border-radius: 12px !important;
+  background-color: var(--border-color) !important;
+  border-color: var(--border-color) !important;
+}
+.theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="jira"] {
+  border-radius: 8px !important;
+  border-color: var(--border-color) !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.13) !important;
+}
+.theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="jira"]:hover {
+  background-color: var(--surface-dim) !important;
+  box-shadow: 0 1px 2px rgba(9, 30, 66, 0.15) !important;
+}
+
+/* Jira-style issue keys on board cards (theme maps .text-primary to coral link) */
+.theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="jira"] .text-hs-link {
+  color: var(--primary) !important;
+}
+
+.theme-crm-hubspot [data-pm-board-column][data-pm-card-variant="hubspot"] {
+  border-radius: 1rem !important;
+}
+.theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="hubspot"] {
+  border-radius: var(--crm-radius-ui) !important;
+  box-shadow: var(--crm-shadow-card) !important;
+  border-color: var(--border-color) !important;
+  background-color: var(--card-bg) !important;
+}
+.theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="hubspot"]:hover {
+  box-shadow: var(--crm-shadow-raised) !important;
+}
+
+/* ------------------------------------------------------------------
+ * PM & HRMS: workspace typography — Inter stack, editorial neutrals.
+ * Scoped to main so header/sidebar keep existing chrome.
+ * ------------------------------------------------------------------ */
+.theme-crm-hubspot .crm-app-main {
+  font-family: var(--font-app), "Segoe UI", "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+}
+
+.theme-crm-hubspot .crm-app-main .text-slate-900,
+.theme-crm-hubspot .crm-app-main .text-gray-900 {
+  color: var(--text-main) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .text-slate-800 {
+  color: var(--text-main) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .text-slate-700,
+.theme-crm-hubspot .crm-app-main .text-gray-700 {
+  color: color-mix(in srgb, var(--text-main) 88%, var(--text-muted)) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .text-slate-600,
+.theme-crm-hubspot .crm-app-main .text-gray-600 {
+  color: var(--text-muted) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .text-slate-500,
+.theme-crm-hubspot .crm-app-main .text-gray-500 {
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-main)) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .text-slate-400,
+.theme-crm-hubspot .crm-app-main .text-gray-400 {
+  color: color-mix(in srgb, var(--text-muted) 72%, transparent) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .text-muted-foreground {
+  color: var(--text-muted) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .text-foreground {
+  color: var(--text-main) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .hover\:text-slate-900:hover,
+.theme-crm-hubspot .crm-app-main .hover\:text-gray-900:hover {
+  color: var(--text-main) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .hover\:text-slate-800:hover {
+  color: var(--text-main) !important;
+}
+
+.theme-crm-hubspot .crm-app-main .font-orbitron {
+  font-family: var(--font-app), "Segoe UI", "Helvetica Neue", Helvetica, Arial,
+    sans-serif !important;
+  letter-spacing: 0.03em;
+}
+
+.theme-crm-hubspot .crm-app-main .font-black {
+  font-weight: 700 !important;
+}
+
+/* ------------------------------------------------------------------
+ * Legacy hardcoded hex utility remap
+ * Keeps existing JSX classNames intact while shifting visuals to
+ * the editorial palette used across internal tools.
+ * ------------------------------------------------------------------ */
+html:not(.dark) .theme-crm-hubspot [class*="text-[#33475b]"] {
+  color: #121212 !important;
+}
+html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
+  color: #666666 !important;
+}
+.theme-crm-hubspot [class*="text-[#0091ae]"] {
+  color: #ee5f3a !important;
+}
+.theme-crm-hubspot [class*="text-[#ff7a59]"] {
+  color: #ee5f3a !important;
+}
+.theme-crm-hubspot [class*="bg-[#f5f8fa]"] {
+  background-color: #f7f5f2 !important;
+}
+.theme-crm-hubspot [class*="bg-[#eaf0f6]"] {
+  background-color: #ede9e3 !important;
+}
+.theme-crm-hubspot [class*="bg-[#fff5f2]"] {
+  background-color: #fce7e0 !important;
+}
+.theme-crm-hubspot [class*="bg-[#ff7a59]"] {
+  background-color: #ee5f3a !important;
+}
+.theme-crm-hubspot [class*="border-[#cbd6e2]"] {
+  border-color: #ddd8d0 !important;
+}
+.theme-crm-hubspot [class*="border-[#0091ae]"] {
+  border-color: #ee5f3a !important;
+}
+.theme-crm-hubspot [class*="border-[#ffd4c9]"] {
+  border-color: #f9b8a7 !important;
+}
+.theme-crm-hubspot [class*="hover:bg-[#f5f8fa]"]:hover {
+  background-color: #f7f5f2 !important;
+}
+.theme-crm-hubspot [class*="hover:bg-[#eaf0f6]"]:hover {
+  background-color: #ede9e3 !important;
+}
+.theme-crm-hubspot [class*="hover:text-[#33475b]"]:hover {
+  color: #121212 !important;
+}
+.theme-crm-hubspot [class*="hover:text-[#0091ae]"]:hover {
+  color: #ee5f3a !important;
+}
+.theme-crm-hubspot [class*="text-[#253342]"] {
+  color: #0a0a0a !important;
+}
+.theme-crm-hubspot [class*="bg-[#e0f4f7]"] {
+  background-color: #fce7e0 !important;
+}
+.theme-crm-hubspot [class*="border-l-[#ff7a59]"] {
+  border-left-color: #ee5f3a !important;
+}
+.theme-crm-hubspot [class*="from-[#f5f8fa]"] {
+  --tw-gradient-from: #f7f5f2 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(247 245 242 / 0) var(--tw-gradient-to-position) !important;
+}
+.theme-crm-hubspot [class*="to-[#f5f8fa]"] {
+  --tw-gradient-to: #f7f5f2 var(--tw-gradient-to-position) !important;
+}
+.theme-crm-hubspot [class*="via-[#f5f8fa]"] {
+  --tw-gradient-via: #f7f5f2 var(--tw-gradient-via-position) !important;
+  --tw-gradient-to: rgb(247 245 242 / 0) var(--tw-gradient-to-position) !important;
+}
+
+/* ------------------------------------------------------------------
+ * Shared typography + component chrome remap
+ * Gives legacy screens the same cadence as Dreams CRMS (Golos Text)
+ * without changing feature behavior.
+ * ------------------------------------------------------------------ */
+.theme-crm-hubspot {
+  font-family: "Golos Text", sans-serif !important;
+}
+
+/* Preserve Tabler Icons webfont (CRMS) — must beat inherit rules above */
+.theme-crm-hubspot .ti,
+.theme-crm-hubspot [class^="ti-"],
+.theme-crm-hubspot [class*=" ti-"],
+.theme-crm-hubspot .crm-ti-icon,
+[data-crm-app] .ti,
+[data-crm-app] .crm-ti-icon,
+[data-crm-theme="crms"] .ti,
+[data-crm-theme="crms"] .crm-ti-icon {
+  font-family: "tabler-icons" !important;
+  font-style: normal !important;
+  font-weight: normal !important;
+  font-variant: normal !important;
+  text-transform: none !important;
+  line-height: 1 !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  speak: none;
+}
+
+.theme-crm-hubspot h1,
+.theme-crm-hubspot h2,
+.theme-crm-hubspot h3,
+.theme-crm-hubspot h4,
+.theme-crm-hubspot [class*="font-display"],
+[data-crm-app] h1,
+[data-crm-app] h2,
+[data-crm-app] h3,
+[data-crm-app] h4 {
+  font-family: "Golos Text", sans-serif !important;
+  letter-spacing: normal !important;
+}
+
+/* Semantic headings — align with configurable tier sizes (all modules). */
+.theme-crm-hubspot h1 {
+  font-size: var(--suite-font-h1) !important;
+}
+.theme-crm-hubspot h2 {
+  font-size: var(--suite-font-h2) !important;
+}
+.theme-crm-hubspot h3 {
+  font-size: var(--suite-font-h3) !important;
+}
+.theme-crm-hubspot h4 {
+  font-size: var(--suite-font-h3) !important;
+}
+
+/*
+ * CRM-only: match Dreams CRMS heading weights/sizes (700, normal tracking).
+ * Page title = h4.main-title (20px). Kanban column = h6 (16px).
+ */
+[data-crm-app] .theme-crm-hubspot h1,
+[data-crm-app].theme-crm-hubspot h1 {
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+  color: var(--text-main);
+}
+[data-crm-app] .theme-crm-hubspot h2,
+[data-crm-app].theme-crm-hubspot h2 {
+  font-size: 1.125rem !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+}
+[data-crm-app] .theme-crm-hubspot h3,
+[data-crm-app].theme-crm-hubspot h3 {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+}
+[data-crm-app] .theme-crm-hubspot h4,
+[data-crm-app].theme-crm-hubspot h4 {
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+}
+[data-crm-app] .theme-crm-hubspot h5,
+[data-crm-app].theme-crm-hubspot h5 {
+  font-size: 1.125rem !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+}
+[data-crm-app] .theme-crm-hubspot h6,
+[data-crm-app].theme-crm-hubspot h6 {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+}
+/* Form section titles stay compact (utility text-sm on h3) */
+[data-crm-app] .theme-crm-hubspot h3.text-sm {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+}
+
+/* Tailwind text-* utilities inside suite theme */
+.theme-crm-hubspot .text-xs {
+  font-size: var(--suite-font-caption) !important;
+}
+.theme-crm-hubspot .text-sm {
+  font-size: var(--suite-font-small) !important;
+}
+.theme-crm-hubspot .text-base {
+  font-size: var(--suite-font-body) !important;
+}
+.theme-crm-hubspot .text-lg {
+  font-size: var(--suite-font-h3) !important;
+}
+.theme-crm-hubspot .text-xl {
+  font-size: var(--suite-font-h2) !important;
+}
+.theme-crm-hubspot .text-2xl {
+  font-size: var(--suite-font-h1) !important;
+}
+.theme-crm-hubspot .text-3xl {
+  font-size: calc(var(--suite-font-h1) * 1.12) !important;
+}
+
+/*
+ * CRM-only: restore CRMS / natural Tailwind sizes (undo HubSpot crushing).
+ * text-sm=14 · text-base=16 · text-lg=18 · text-xl=20 · text-2xl=24
+ */
+[data-crm-app] .theme-crm-hubspot .text-xs,
+[data-crm-app].theme-crm-hubspot .text-xs {
+  font-size: 0.75rem !important;
+}
+[data-crm-app] .theme-crm-hubspot .text-sm,
+[data-crm-app].theme-crm-hubspot .text-sm {
+  font-size: 0.875rem !important;
+}
+[data-crm-app] .theme-crm-hubspot .text-base,
+[data-crm-app].theme-crm-hubspot .text-base {
+  font-size: 1rem !important;
+}
+[data-crm-app] .theme-crm-hubspot .text-lg,
+[data-crm-app].theme-crm-hubspot .text-lg {
+  font-size: 1.125rem !important;
+}
+[data-crm-app] .theme-crm-hubspot .text-xl,
+[data-crm-app].theme-crm-hubspot .text-xl {
+  font-size: 1.25rem !important;
+}
+[data-crm-app] .theme-crm-hubspot .text-2xl,
+[data-crm-app].theme-crm-hubspot .text-2xl {
+  font-size: 1.5rem !important;
+}
+[data-crm-app] .theme-crm-hubspot .text-3xl,
+[data-crm-app].theme-crm-hubspot .text-3xl {
+  font-size: 1.875rem !important;
+}
+
+/* Normalize arbitrary pixel text classes → same tiers as above */
+.theme-crm-hubspot [class*="text-[9px]"],
+.theme-crm-hubspot [class*="text-[10px]"],
+.theme-crm-hubspot [class*="text-[11px]"] {
+  font-size: var(--suite-font-caption) !important;
+}
+.theme-crm-hubspot [class*="text-[12px]"] {
+  font-size: var(--suite-font-small) !important;
+}
+.theme-crm-hubspot [class*="text-[13px]"],
+.theme-crm-hubspot [class*="text-[14px]"] {
+  font-size: var(--suite-font-body) !important;
+}
+.theme-crm-hubspot [class*="text-[15px]"],
+.theme-crm-hubspot [class*="text-[16px]"],
+.theme-crm-hubspot [class*="text-[17px]"] {
+  font-size: var(--suite-font-h3) !important;
+}
+.theme-crm-hubspot [class*="text-[18px]"],
+.theme-crm-hubspot [class*="text-[19px]"],
+.theme-crm-hubspot [class*="text-[20px]"] {
+  font-size: var(--suite-font-h2) !important;
+}
+.theme-crm-hubspot [class*="text-[22px]"],
+.theme-crm-hubspot [class*="text-[24px]"] {
+  font-size: var(--suite-font-h1) !important;
+}
+
+/* CRM-only: keep arbitrary px sizes honest (no collapsing 17→15, 20→18, etc.) */
+[data-crm-app] .theme-crm-hubspot [class*="text-[9px]"],
+[data-crm-app] .theme-crm-hubspot [class*="text-[10px]"] {
+  font-size: 0.625rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[11px]"] {
+  font-size: 0.6875rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[12px]"] {
+  font-size: 0.75rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[13px]"] {
+  font-size: 0.8125rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[14px]"] {
+  font-size: 0.875rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[15px]"] {
+  font-size: 0.9375rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[16px]"] {
+  font-size: 1rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[17px]"] {
+  font-size: 1.0625rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[18px]"] {
+  font-size: 1.125rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[19px]"] {
+  font-size: 1.1875rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[20px]"] {
+  font-size: 1.25rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[22px]"] {
+  font-size: 1.375rem !important;
+}
+[data-crm-app] .theme-crm-hubspot [class*="text-[24px]"] {
+  font-size: 1.5rem !important;
+}
+
+/* Roundness — CRMS ~8px; keep sharp legacy 3px from becoming oversized */
+.theme-crm-hubspot [class*="rounded-[3px]"] { border-radius: var(--radius-sm) !important; }
+.theme-crm-hubspot [class*="rounded-[6px]"] { border-radius: var(--radius-md) !important; }
+.theme-crm-hubspot [class*="rounded-[8px]"] { border-radius: var(--radius-md) !important; }
+
+/* Shared card shell (for legacy bespoke panel classes) */
+.theme-crm-hubspot [class*="shadow-[0_8px_24px"] {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+  border-color: #ddd8d0 !important;
+}
+
+/* Compact toolbar/button controls remain consistent everywhere */
+.theme-crm-hubspot button,
+.theme-crm-hubspot a[role="button"] {
+  font-size: var(--suite-font-small);
+  font-weight: 500;
+}
+
+/* CRMS buttons — 14px / 500 (not crushed to 13px) */
+[data-crm-app] .theme-crm-hubspot button,
+[data-crm-app] .theme-crm-hubspot a[role="button"],
+[data-crm-app].theme-crm-hubspot button,
+[data-crm-app].theme-crm-hubspot a[role="button"] {
+  font-size: 0.875rem !important;
+  font-weight: 500;
+}
+
+/* CRMS sidebar — uppercase section labels · nav items 14/500 · icon tiles */
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-section-label,
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-product-label {
+  font-size: 0.6875rem !important; /* 11px */
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: var(--text-muted) !important;
+}
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item {
+  font-size: 0.875rem !important; /* 14px */
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text-main, #1f2020) !important;
+}
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item[class*="bg-[var(--suite-sidebar-active-bg)]"],
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item[class*="text-[var(--primary)]"] {
+  color: var(--primary) !important;
+}
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item span {
+  font-size: inherit;
+  font-weight: inherit;
+}
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-icon {
+  flex-shrink: 0;
+}
+[data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-icon--active svg {
+  color: #fff !important;
+}
+
+/* CRMS kanban — column title 16/700 · card name 14/500 */
+[data-crm-app] .crm-kanban-column-title {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+  color: #1f2020 !important;
+}
+[data-crm-app] .crm-kanban-column-summary {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  color: #1f2020 !important;
+}
+[data-crm-app] .crm-kanban-card-title {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  color: #1f2020 !important;
+}
+[data-crm-app] .crm-kanban-card-subtitle,
+[data-crm-app] .crm-kanban-meta-row {
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  color: #707070 !important;
+}
+
+/* =============================================================================
+ * Dark mode (html.dark via next-themes) — zinc / stone canvas, coral accent
+ * ============================================================================= */
+.dark .theme-crm-hubspot {
+  --background: #14141a;
+  --foreground: #f4f4f5;
+  --sidebar-bg: #1a1a22;
+  --primary: #fe3f51;
+  --primary-foreground: #ffffff;
+  --primary-light: rgba(254, 63, 81, 0.18);
+  --primary-dark: #ff6b7a;
+  --primary-muted: #f7a0a8;
+  --hs-link: #ff6b7a;
+  --hs-link-hover: #fe3f51;
+  --accent: #2a2a30;
+  --accent-foreground: #ffffff;
+  --card-bg: #1c1c24;
+  --border-color: #2e2e38;
+  --text-main: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --surface-dim: #22222c;
+  --surface-hover: #2a2a34;
+  --color-input: #22222c;
+
+  --success: #28c76f;
+  --success-light: rgba(40, 199, 111, 0.15);
+  --error: #fe3f51;
+  --error-light: rgba(254, 63, 81, 0.15);
+  --warning: #ff9f43;
+  --warning-light: rgba(255, 159, 67, 0.15);
+  --info: #3b82f6;
+  --info-light: rgba(59, 130, 246, 0.15);
+
+  --hs-record-header-bg: #1a1a1e;
+  --hs-record-header-border: #3f3f46;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar-bg);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-muted: var(--primary-muted);
+  --color-card: var(--card-bg);
+  --color-border: var(--border-color);
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-surface-dim: var(--surface-dim);
+  --color-surface-hover: var(--surface-hover);
+
+  --crm-shell-bg: #0f0f10;
+  --crm-header-bg: #141416;
+  --crm-header-border: #3f3f46;
+
+  --crm-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --crm-shadow-raised: 0 12px 28px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.35);
+  --crm-shadow-button-hover: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --suite-sidebar-bg: #141416;
+  --suite-sidebar-fg: #ffffff;
+  --suite-sidebar-border: #3f3f46;
+  --suite-sidebar-hover: #1f1f23;
+  --suite-sidebar-active-bg: #2a2a30;
+  --suite-sidebar-chip-bg: #1f1f23;
+  --suite-sidebar-logo-ring: #52525b;
+}
+
+.dark .theme-crm-hubspot input:focus,
+.dark .theme-crm-hubspot textarea:focus,
+.dark .theme-crm-hubspot select:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hs-link) 45%, transparent) !important;
+}
+
+.dark .theme-crm-hubspot .glass {
+  background: var(--card-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark .theme-crm-hubspot .bg-white {
+  background-color: var(--card-bg) !important;
+}
+
+/* Remap hardcoded Tailwind slate utilities to suite tokens */
+.dark .theme-crm-hubspot .text-slate-300 {
+  color: #d4d4d8 !important;
+}
+
+.dark .theme-crm-hubspot .text-slate-400,
+.dark .theme-crm-hubspot .text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+.dark .theme-crm-hubspot .text-slate-600 {
+  color: #e4e4e7 !important;
+}
+
+.dark .theme-crm-hubspot .text-slate-700 {
+  color: #f4f4f5 !important;
+}
+
+.dark .theme-crm-hubspot .text-slate-800,
+.dark .theme-crm-hubspot .text-slate-900 {
+  color: #ffffff !important;
+}
+
+.dark .theme-crm-hubspot .bg-slate-50,
+.dark .theme-crm-hubspot .bg-slate-50\/50,
+.dark .theme-crm-hubspot .bg-slate-50\/80 {
+  background-color: color-mix(in srgb, var(--surface-dim) 85%, transparent) !important;
+}
+
+.dark .theme-crm-hubspot .bg-slate-100 {
+  background-color: var(--surface-dim) !important;
+}
+
+.dark .theme-crm-hubspot .border-slate-100,
+.dark .theme-crm-hubspot .border-slate-200,
+.dark .theme-crm-hubspot .border-slate-300 {
+  border-color: var(--border-color) !important;
+}
+
+.dark .theme-crm-hubspot .stroke-slate-100 {
+  stroke: var(--border-color) !important;
+}
+
+.dark .theme-crm-hubspot .from-slate-50 {
+  --tw-gradient-from: var(--surface-dim) !important;
+}
+
+.dark .theme-crm-hubspot .to-white {
+  --tw-gradient-to: var(--card-bg) !important;
+}
+
+.dark .theme-crm-hubspot .hover\:bg-white:hover,
+.dark .theme-crm-hubspot .hover\:bg-slate-50:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+.dark .theme-crm-hubspot .prose-slate {
+  --tw-prose-body: var(--text-main);
+  --tw-prose-headings: var(--text-main);
+  --tw-prose-bold: var(--text-main);
+  --tw-prose-links: var(--hs-link);
+  --tw-prose-quotes: var(--text-muted);
+  color: var(--text-main);
+}
+
+.dark .theme-crm-hubspot .prose-slate :where(h1, h2, h3, h4, h5, h6, strong) {
+  color: var(--text-main);
+}
+
+.dark .theme-crm-hubspot .prose-slate :where(p, li, td, th) {
+  color: var(--text-main);
+}
+
+/* Status / entity badges (light tints → readable on dark surfaces) */
+.dark .theme-crm-hubspot .border-indigo-200.bg-indigo-50.text-indigo-700,
+.dark .theme-crm-hubspot .border-indigo-200.bg-indigo-50 {
+  border-color: rgba(129, 140, 248, 0.45) !important;
+  background-color: rgba(99, 102, 241, 0.18) !important;
+  color: #c7d2fe !important;
+}
+
+.dark .theme-crm-hubspot .border-emerald-200.bg-emerald-50.text-emerald-700,
+.dark .theme-crm-hubspot .border-emerald-200.bg-emerald-50 {
+  border-color: rgba(52, 211, 153, 0.45) !important;
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  color: #a7f3d0 !important;
+}
+
+.dark .theme-crm-hubspot .border-amber-200.bg-amber-50.text-amber-900 {
+  border-color: rgba(251, 191, 36, 0.45) !important;
+  background-color: rgba(251, 191, 36, 0.12) !important;
+  color: #fde68a !important;
+}
+
+.dark .theme-crm-hubspot .border-emerald-200.bg-emerald-50.text-emerald-800 {
+  border-color: rgba(52, 211, 153, 0.45) !important;
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  color: #a7f3d0 !important;
+}
+
+.dark .theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.border-border,
+.dark .theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.border-border,
+.dark .theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.border-input,
+.dark .theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.border-input {
+  background-color: var(--color-input) !important;
+  box-shadow: var(--crm-shadow-card) !important;
+}
+
+.dark .theme-crm-hubspot [data-pm-board-column][data-pm-card-variant="jira"] {
+  background-color: #27272a !important;
+  border-color: #3f3f46 !important;
+}
+
+.dark .theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="jira"] {
+  background-color: #18181b !important;
+  border-color: #52525b !important;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark .theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="jira"]:hover {
+  background-color: #27272a !important;
+}
+
+.dark .theme-crm-hubspot [class*="shadow-[0_8px_24px"] {
+  box-shadow: var(--crm-shadow-raised) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark .theme-crm-hubspot [class*="text-[#33475b]"] {
+  color: var(--text-main) !important;
+}
+
+.dark .theme-crm-hubspot [class*="text-[#516f90]"] {
+  color: var(--text-muted) !important;
+}
+
+.dark .theme-crm-hubspot .shadow-2xl,
+.dark .theme-crm-hubspot .shadow-xl {
+  box-shadow: var(--crm-shadow-raised) !important;
+}
+
+/* Dark mode button contrast and visibility fixes */
+.dark .theme-crm-hubspot .bg-primary.text-white,
+.dark .theme-crm-hubspot .bg-primary .text-white {
+  color: var(--primary-foreground) !important;
+}
+
+.dark .theme-crm-hubspot .bg-primary .text-white\/50,
+.dark .theme-crm-hubspot .bg-primary [class*="text-white/50"] {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent) !important;
+}
+
+.dark .theme-crm-hubspot button.text-emerald-600 {
+  color: #34d399 !important;
+  border-color: rgba(52, 211, 153, 0.3) !important;
+}
+.dark .theme-crm-hubspot button.text-emerald-600:hover {
+  background-color: rgba(52, 211, 153, 0.1) !important;
+}
+
+.dark .theme-crm-hubspot button.text-amber-600 {
+  color: #fbbf24 !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
+}
+.dark .theme-crm-hubspot button.text-amber-600:hover {
+  background-color: rgba(251, 191, 36, 0.1) !important;
+}
+
+.dark .theme-crm-hubspot button.text-rose-600 {
+  color: #f87171 !important;
+  border-color: rgba(248, 113, 113, 0.3) !important;
+}
+.dark .theme-crm-hubspot button.text-rose-600:hover {
+  background-color: rgba(248, 113, 113, 0.1) !important;
+}
+
+.dark .theme-crm-hubspot .bg-slate-200 {
+  background-color: var(--surface-hover) !important;
+}
+
+.dark .theme-crm-hubspot .bg-slate-50\/5 {
+  background-color: color-mix(in srgb, var(--surface-dim) 5%, transparent) !important;
+}
+.dark .theme-crm-hubspot .bg-slate-50\/10 {
+  background-color: color-mix(in srgb, var(--surface-dim) 10%, transparent) !important;
+}
+.dark .theme-crm-hubspot .bg-slate-50\/20 {
+  background-color: color-mix(in srgb, var(--surface-dim) 20%, transparent) !important;
+}
+
+/* Hardcoded off-white panel header backgrounds and hover overrides in dark mode */
+.dark .theme-crm-hubspot .bg-\[var\(--surface-dim\)\] {
+  background-color: #121212 !important;
+}
+.dark .theme-crm-hubspot .hover\:bg-\[var\(--surface-dim\)\]:hover {
+  background-color: var(--surface-hover) !important;
+}
+.dark .theme-crm-hubspot .border-\[\#f1f4f8\] {
+  border-color: var(--border-color) !important;
+}
+
+/* Dark mode violet color adjustments for Sales Copilot chat suggestions and icons */
+.dark .theme-crm-hubspot .text-violet-900,
+.dark .theme-crm-hubspot [class*="text-violet-900"],
+.dark .theme-crm-hubspot .text-violet-700,
+.dark .theme-crm-hubspot [class*="text-violet-700"] {
+  color: #a78bfa !important;
+}
+
+.dark .theme-crm-hubspot .border-violet-200,
+.dark .theme-crm-hubspot [class*="border-violet-200"] {
+  border-color: rgba(167, 139, 250, 0.4) !important;
+}
+
+.dark .theme-crm-hubspot .bg-violet-50,
+.dark .theme-crm-hubspot [class*="bg-violet-50"],
+.dark .theme-crm-hubspot .bg-violet-100,
+.dark .theme-crm-hubspot [class*="bg-violet-100"] {
+  background-color: rgba(167, 139, 250, 0.15) !important;
+}
+
+.dark .theme-crm-hubspot .hover\:bg-violet-100:hover,
+.dark .theme-crm-hubspot [class*="hover:bg-violet-100"]:hover {
+  background-color: rgba(167, 139, 250, 0.25) !important;
+}
+
+.dark .theme-crm-hubspot .focus\:border-violet-400:focus,
+.dark .theme-crm-hubspot [class*="focus:border-violet-400"]:focus {
+  border-color: #a78bfa !important;
+}
+
+.dark .theme-crm-hubspot .focus\:ring-violet-100:focus,
+.dark .theme-crm-hubspot [class*="focus:ring-violet-100"]:focus {
+  --tw-ring-color: rgba(167, 139, 250, 0.25) !important;
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.25) !important;
+}
+
+/* Fix bg-[var(--text-main)] buttons and elements in dark mode to retain high contrast (black bg, white text, white border) */
+.dark .theme-crm-hubspot .bg-\[var\(--text-main\)\] {
+  background-color: #121212 !important;
+  color: #ffffff !important;
+  border: 1px solid #ffffff !important;
+}
+.dark .theme-crm-hubspot .bg-\[var\(--text-main\)\] * {
+  color: #ffffff !important;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+/* Compact spacing, text, and padding for small screens scoped to the workspace */
+@media (max-width: 1024px) {
+  .crm-workspace-container.theme-crm-hubspot .rounded-md.border {
+    padding: 0.75rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="p-6"] {
+    padding: 0.875rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="p-4"] {
+    padding: 0.75rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="py-6"] {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="px-6"] {
+    padding-left: 0.875rem !important;
+    padding-right: 0.875rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="px-5"] {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="py-5"] {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="gap-4"] {
+    gap: 0.75rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="gap-3"] {
+    gap: 0.5rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="space-y-6"] > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.875rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot [class*="space-y-4"] > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem !important;
+  }
+  
+  /* Compact typography */
+  .crm-workspace-container.theme-crm-hubspot h1,
+  .crm-workspace-container.theme-crm-hubspot .text-\[22px\],
+  .crm-workspace-container.theme-crm-hubspot .text-\[24px\] {
+    font-size: 1.15rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot h2,
+  .crm-workspace-container.theme-crm-hubspot .text-xl {
+    font-size: 0.95rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot h3,
+  .crm-workspace-container.theme-crm-hubspot .text-lg {
+    font-size: 0.875rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot .text-sm {
+    font-size: 0.75rem !important;
+  }
+  .crm-workspace-container.theme-crm-hubspot .text-xs {
+    font-size: 0.7rem !important;
+  }
+  
+  /* KPI value size override */
+  .crm-workspace-container.theme-crm-hubspot .text-xl.font-semibold {
+    font-size: 1.1rem !important;
+  }
+}
+
+/* ─── Jira module mode ─── *
+ * Applied when a layout root has data-jira-module OR data-pm-jira (suite shells).
+ * Overrides the warm-cream CRM palette with Atlassian Jira tokens so the
+ * shell, sidebar, cards, and typography match the PM Jira experience.
+ */
+html:not(.dark) [data-jira-module],
+html:not(.dark) [data-jira-module] .theme-crm-hubspot,
+html:not(.dark) [data-jira-module] .theme-collab-slack,
+html:not(.dark) [data-pm-jira],
+html:not(.dark) [data-pm-jira] .theme-crm-hubspot,
+html:not(.dark) [data-pm-jira] .theme-collab-slack,
+html:not(.dark) [data-pm-jira] .theme-hrms {
+  --background: var(--surface-dim);
+  --foreground: var(--text-main);
+  --primary: var(--primary);
+  --primary-foreground: #ffffff;
+  --primary-light: var(--primary-light);
+  --primary-dark: var(--primary-dark);
+  --primary-muted: var(--text-muted);
+  --hs-link: var(--primary);
+  --hs-link-hover: var(--primary-dark);
+  --card-bg: #ffffff;
+  --border-color: var(--border-color);
+  --text-main: var(--text-main);
+  --text-muted: var(--text-muted);
+  --surface-dim: var(--border-color);
+  --surface-hover: var(--surface-dim);
+  --color-input: #ffffff;
+  --crm-shell-bg: var(--surface-dim);
+  --crm-header-bg: #ffffff;
+  --crm-header-border: var(--border-color);
+  --crm-radius-ui: 3px;
+  --crm-radius-modal: 3px;
+  --crm-shadow-card: 0 1px 0 rgba(9, 30, 66, 0.13);
+  --crm-shadow-raised: 0 4px 8px rgba(9, 30, 66, 0.15);
+  --radius-lg: 3px;
+  --radius-md: 3px;
+  --radius-sm: 3px;
+  --suite-sidebar-bg: #ffffff;
+  --suite-sidebar-fg: var(--text-main);
+  --suite-sidebar-border: var(--border-color);
+  --suite-sidebar-hover: var(--surface-dim);
+  --suite-sidebar-active-bg: var(--primary-light);
+  --suite-sidebar-chip-bg: var(--surface-dim);
+  --suite-sidebar-logo-ring: var(--border-color);
+  --shell-main-bg: var(--surface-dim);
+  --shell-header-bg: #ffffff;
+  --shell-border: var(--border-color);
+  --shell-sidebar-bg: #ffffff;
+}
+
+[data-jira-module],
+[data-jira-module] .theme-crm-hubspot,
+[data-pm-jira],
+[data-pm-jira] .theme-crm-hubspot {
+  font-family: var(--font-app), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 14px;
+  line-height: 1.4286;
+}
+
+/* CRM always wins over suite Jira Inter face when both attrs are present */
+[data-crm-app][data-jira-module],
+[data-crm-app][data-pm-jira],
+[data-crm-theme="crms"][data-jira-module],
+[data-crm-theme="crms"][data-pm-jira],
+[data-crm-app] .theme-crm-hubspot,
+[data-crm-theme="crms"] .theme-crm-hubspot {
+  font-family: "Golos Text", sans-serif !important;
+}
+
+/* Social desk — subtle pink accent on the product chip */
+[data-jira-module="social"] {
+  --hs-link: #db2777;
+  --hs-link-hover: #be185d;
+  --primary: #db2777;
+  --primary-dark: #be185d;
+  --primary-light: #fce7f3;
+  --suite-sidebar-active-bg: #fce7f3;
+}
+
+/*
+ * CRMS kit theme — reassert after suite Jira token pass.
+ * CRM layout sets data-crm-theme="crms" so Atlassian blues do not win.
+ * Ref: https://www.figma.com/design/mLJ5tTHg7RoZlALa4akemV/CRMS---Sales---CRM-Admin-Panel-UI-Kit--Community-
+ */
+html:not(.dark) [data-crm-theme="crms"],
+html:not(.dark) [data-crm-theme="crms"] .theme-crm-hubspot,
+html:not(.dark) [data-crm-theme="crms"] .theme-collab-slack {
+  --background: #f7f8f9;
+  --foreground: #1f2020;
+  --primary: #e41f07;
+  --primary-foreground: #ffffff;
+  --primary-light: #fce9e6;
+  --primary-dark: #c41a06;
+  --primary-muted: #f5a89f;
+  --hs-link: #e41f07;
+  --hs-link-hover: #c41a06;
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
+  --text-main: #1f2020;
+  --text-muted: #707070;
+  --surface-dim: #f0f2f5;
+  --surface-hover: #e9ecef;
+  --color-input: #ffffff;
+  --success: #28c76f;
+  --success-light: #e0f8ea;
+  --error: #e41f07;
+  --error-light: #fce9e6;
+  --warning: #ff9f43;
+  --warning-light: #fff0e1;
+  --info: #3b82f6;
+  --info-light: #eff6ff;
+  --crm-shell-bg: #f7f8f9;
+  --crm-header-bg: #ffffff;
+  --crm-header-border: #e2e8f0;
+  --crm-radius-ui: 5px;
+  --crm-radius-modal: 8px;
+  --crm-shadow-card: none;
+  --crm-shadow-raised: 0 4px 14px rgba(32, 44, 75, 0.08);
+  --crm-shadow-input: 0 4px 4px rgba(219, 219, 219, 0.25);
+  --crm-shadow-button-hover: 0 6px 16px rgba(228, 31, 7, 0.22);
+  --radius-lg: 5px;
+  --radius-md: 5px;
+  --radius-sm: 4px;
+  --suite-sidebar-bg: #ffffff;
+  --suite-sidebar-fg: #1f2020;
+  --suite-sidebar-border: #e2e8f0;
+  --suite-sidebar-hover: #f7f8f9;
+  --suite-sidebar-active-bg: #fce9e6;
+  --suite-sidebar-chip-bg: #f7f8f9;
+  --suite-sidebar-logo-ring: #e2e8f0;
+  --shell-main-bg: #f7f8f9;
+  --shell-header-bg: #ffffff;
+  --shell-border: #e2e8f0;
+  --shell-sidebar-bg: #ffffff;
+}
+
+.dark [data-crm-theme="crms"],
+.dark [data-crm-theme="crms"] .theme-crm-hubspot,
+.dark [data-crm-theme="crms"] .theme-collab-slack {
+  --background: #14141a !important;
+  --foreground: #f4f4f5 !important;
+  --text-main: #f4f4f5 !important;
+  --text-muted: #a1a1aa !important;
+  --card-bg: #1c1c24 !important;
+  --border-color: #2e2e38 !important;
+  --surface-dim: #22222c !important;
+  --surface-hover: #2a2a34 !important;
+  --color-input: #22222c !important;
+  --primary: #fe3f51 !important;
+  --primary-foreground: #ffffff !important;
+  --primary-light: rgba(254, 63, 81, 0.18) !important;
+  --primary-dark: #ff6b7a !important;
+  --hs-link: #ff6b7a !important;
+  --hs-link-hover: #fe3f51 !important;
+  --suite-sidebar-fg: #f4f4f5 !important;
+  --suite-sidebar-bg: #1a1a22 !important;
+  --suite-sidebar-active-bg: rgba(254, 63, 81, 0.18) !important;
+  --crm-shell-bg: #14141a !important;
+  --crm-header-bg: #1a1a22 !important;
+  color: #f4f4f5 !important;
+}
+
+/*
+ * CRM Theme Customizer accents — `[data-crm-app][data-crm-accent=…]`
+ * Default crimson uses the CRMS tokens above (no attribute needed).
+ */
+html:not(.dark) [data-crm-app][data-crm-accent="teal"],
+html:not(.dark) [data-crm-app][data-crm-accent="teal"] .theme-crm-hubspot {
+  --primary: #0e9384;
+  --primary-foreground: #ffffff;
+  --primary-light: #e6f6f4;
+  --primary-dark: #0b7569;
+  --primary-muted: #9ad4cd;
+  --hs-link: #0e9384;
+  --hs-link-hover: #0b7569;
+  --suite-sidebar-active-bg: #e6f6f4;
+  --crm-shadow-button-hover: 0 6px 16px rgba(14, 147, 132, 0.22);
+  --error: #e41f07;
+  --error-light: #fce9e6;
+}
+
+html:not(.dark) [data-crm-app][data-crm-accent="orange"],
+html:not(.dark) [data-crm-app][data-crm-accent="orange"] .theme-crm-hubspot {
+  --primary: #ff9f43;
+  --primary-foreground: #ffffff;
+  --primary-light: #fff0e1;
+  --primary-dark: #e8892e;
+  --primary-muted: #ffc894;
+  --hs-link: #e8892e;
+  --hs-link-hover: #d47820;
+  --suite-sidebar-active-bg: #fff0e1;
+  --crm-shadow-button-hover: 0 6px 16px rgba(255, 159, 67, 0.28);
+}
+
+html:not(.dark) [data-crm-app][data-crm-accent="indigo"],
+html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --primary-light: #eef2ff;
+  --primary-dark: #4338ca;
+  --primary-muted: #a5b4fc;
+  --hs-link: #4f46e5;
+  --hs-link-hover: #4338ca;
+  --suite-sidebar-active-bg: #eef2ff;
+  --crm-shadow-button-hover: 0 6px 16px rgba(79, 70, 229, 0.25);
+}
+
+.dark [data-crm-app][data-crm-accent="teal"],
+.dark [data-crm-app][data-crm-accent="teal"] .theme-crm-hubspot {
+  --primary: #2dd4bf !important;
+  --primary-light: rgba(45, 212, 191, 0.18) !important;
+  --primary-dark: #5eead4 !important;
+  --hs-link: #5eead4 !important;
+  --hs-link-hover: #2dd4bf !important;
+  --suite-sidebar-active-bg: rgba(45, 212, 191, 0.18) !important;
+}
+
+.dark [data-crm-app][data-crm-accent="orange"],
+.dark [data-crm-app][data-crm-accent="orange"] .theme-crm-hubspot {
+  --primary: #fb923c !important;
+  --primary-light: rgba(251, 146, 60, 0.18) !important;
+  --primary-dark: #fdba74 !important;
+  --hs-link: #fdba74 !important;
+  --hs-link-hover: #fb923c !important;
+  --suite-sidebar-active-bg: rgba(251, 146, 60, 0.18) !important;
+}
+
+.dark [data-crm-app][data-crm-accent="indigo"],
+.dark [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
+  --primary: #818cf8 !important;
+  --primary-light: rgba(129, 140, 248, 0.18) !important;
+  --primary-dark: #a5b4fc !important;
+  --hs-link: #a5b4fc !important;
+  --hs-link-hover: #818cf8 !important;
+  --suite-sidebar-active-bg: rgba(129, 140, 248, 0.18) !important;
+}
+
+/* CRMS theme-customizer FAB */
+.crm-theme-toggle .ti,
+.crm-theme-toggle .crm-ti-icon {
+  color: inherit;
+}
+
+/* Dark: suite jira-module tokens must not leave Atlassian ink on black */
+.dark [data-jira-module],
+.dark [data-jira-module] .theme-crm-hubspot,
+.dark [data-jira-module] .theme-collab-slack {
+  --background: #0f0f10 !important;
+  --foreground: #ffffff !important;
+  --text-main: #ffffff !important;
+  --text-muted: #e4e4e7 !important;
+  --card-bg: #1a1a1e !important;
+  --border-color: #3f3f46 !important;
+  --surface-dim: #1f1f23 !important;
+  --surface-hover: #2a2a30 !important;
+  --color-input: #1f1f23 !important;
+  --primary: #ffffff !important;
+  --primary-foreground: #0f0f10 !important;
+  --primary-dark: #f4f4f5 !important;
+  --suite-sidebar-fg: #ffffff !important;
+  --suite-sidebar-bg: #1a1a1e !important;
+  --crm-shell-bg: #0f0f10 !important;
+  --crm-header-bg: #1a1a1e !important;
+  color: #ffffff !important;
+}
+
+/* Page padding — match PM's pm-page-padded (24px gutters, Jira rhythm) */
+[data-jira-module] .pm-page-padded,
+[data-pm-jira] .pm-page-padded {
+  padding: 1.5rem !important;
+}
+@media (min-width: 640px) {
+  [data-jira-module] .pm-page-padded,
+  [data-pm-jira] .pm-page-padded {
+    padding: 1.5rem !important;
+  }
+}
+@media (min-width: 1024px) {
+  [data-jira-module] .pm-page-padded,
+  [data-pm-jira] .pm-page-padded {
+    padding: 1.5rem !important;
+  }
+}
+
+/* Dark mode email body overrides to prevent inline styled text colors from rendering black/invisible */
+.dark .theme-crm-hubspot .crm-email-body-content,
+.dark .theme-crm-hubspot .crm-email-body-content * {
+  color: var(--text-main) !important;
+  background-color: transparent !important;
+}
+
+/* Dark mode: force readable text on CRM surfaces (tabs, labels, muted copy) */
+.dark .theme-crm-hubspot,
+.dark .theme-crm-hubspot .crm-app-main {
+  color: var(--text-main) !important;
+}
+
+.dark .theme-crm-hubspot h1,
+.dark .theme-crm-hubspot h2,
+.dark .theme-crm-hubspot h3,
+.dark .theme-crm-hubspot h4,
+.dark .theme-crm-hubspot h5,
+.dark .theme-crm-hubspot h6,
+.dark .theme-crm-hubspot .text-text-main,
+.dark .theme-crm-hubspot .text-primary:not(a):not([href]),
+.dark .theme-crm-hubspot th,
+.dark .theme-crm-hubspot label {
+  color: var(--text-main) !important;
+}
+
+.dark .theme-crm-hubspot .text-text-muted,
+.dark .theme-crm-hubspot p.text-text-muted,
+.dark .theme-crm-hubspot .text-muted-foreground {
+  color: var(--text-muted) !important;
+}
+
+.dark .theme-crm-hubspot [role="tab"] {
+  color: var(--text-muted) !important;
+}
+
+.dark .theme-crm-hubspot [role="tab"][aria-selected="true"],
+.dark .theme-crm-hubspot [role="tab"][data-state="active"] {
+  color: var(--text-main) !important;
+  background-color: var(--card-bg) !important;
+}
+
+.dark .theme-crm-hubspot button.bg-white,
+.dark .theme-crm-hubspot .bg-white {
+  background-color: var(--card-bg) !important;
+  color: var(--text-main) !important;
+}
+
+.dark .theme-crm-hubspot [class*="text-[var(--text-main)]"],
+.dark .theme-crm-hubspot [class*="text-[var(--text-main)]"],
+.dark .theme-crm-hubspot [class*="text-[var(--text-main)]"] {
+  color: #ffffff !important;
+}
+
+.dark .theme-crm-hubspot [class*="text-[var(--text-muted)]"],
+.dark .theme-crm-hubspot [class*="text-[var(--text-muted)]"],
+.dark .theme-crm-hubspot [class*="text-[var(--text-muted)]"],
+.dark .theme-crm-hubspot [class*="text-[#344563]"],
+.dark .theme-crm-hubspot [class*="text-[#425b76]"],
+.dark .theme-crm-hubspot [class*="text-[var(--text-muted)]"] {
+  color: var(--text-muted) !important;
+}
+
+.dark .theme-crm-hubspot [class*="bg-[var(--surface-dim)]"],
+.dark .theme-crm-hubspot [class*="bg-[var(--border-color)]"],
+.dark .theme-crm-hubspot [class*="bg-[var(--surface-dim)]"] {
+  background-color: var(--surface-dim) !important;
+}
+
+.dark .theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.border-border,
+.dark .theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.border-border,
+.dark .theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-md.border-input,
+.dark .theme-crm-hubspot button.inline-flex.items-center.justify-center.rounded-lg.border-input {
+  background-color: var(--card-bg) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* ── Enterprise CRM chrome (FlowCRM / HubSpot / Syncra–inspired) ── */
+.theme-crm-hubspot .crm-panel {
+  background-clip: padding-box;
+}
+
+.theme-crm-hubspot .crm-kpi {
+  min-height: 6.5rem;
+}
+
+.theme-crm-hubspot .crm-workspace-container > .crm-panel:first-child,
+.theme-crm-hubspot .crm-workspace-container > div:first-child {
+  box-shadow: var(--crm-shadow-card);
+}
+
+/* Soft tab underline animation for workspace */
+.theme-crm-hubspot .crm-workspace-container [role="tablist"] {
+  scrollbar-width: none;
+}
+
+.theme-crm-hubspot .crm-workspace-container [role="tab"][data-state="active"] {
+  font-weight: 600;
+}
+
+/* Settings / secondary rails — denser enterprise nav */
+.theme-crm-hubspot aside a[class*="rounded"] {
+  letter-spacing: 0.01em;
+}
+
+/*
+ * CRMS Figma components — everywhere remaps
+ * Rewrites leftover Jira / Atlassian hardcodes to CRMS tokens under CRM shell.
+ */
+[data-crm-theme="crms"] [class*="border-[var(--border-color)]"],
+[data-crm-theme="crms"] [class*="border-[var(--border-color)]"],
+[data-crm-theme="crms"] [class*="border-[var(--border-color)]"],
+[data-crm-app] [class*="border-[var(--border-color)]"],
+[data-crm-app] [class*="border-[var(--border-color)]"] {
+  border-color: var(--border-color) !important;
+}
+
+[data-crm-theme="crms"] [class*="bg-[var(--primary-light)]"],
+[data-crm-theme="crms"] [class*="bg-[var(--surface-dim)]"],
+[data-crm-theme="crms"] [class*="bg-[var(--border-color)]"],
+[data-crm-theme="crms"] [class*="bg-[var(--surface-dim)]"] {
+  background-color: var(--surface-dim) !important;
+}
+
+[data-crm-theme="crms"] [class*="bg-[var(--primary)]"],
+[data-crm-theme="crms"] [class*="bg-[var(--primary-dark)]"],
+[data-crm-theme="crms"] [class*="bg-[var(--primary-dark)]"],
+[data-crm-theme="crms"] [class*="hover:bg-[var(--primary-dark)]"]:hover {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+[data-crm-theme="crms"] [class*="text-[var(--primary)]"],
+[data-crm-theme="crms"] [class*="text-[var(--primary-dark)]"],
+[data-crm-theme="crms"] [class*="!text-[var(--primary-dark)]"] {
+  color: var(--primary) !important;
+}
+
+[data-crm-theme="crms"] [class*="text-[var(--text-main)]"],
+[data-crm-theme="crms"] [class*="text-[var(--text-main)]"],
+[data-crm-theme="crms"] [class*="text-[var(--text-main)]"] {
+  color: var(--text-main) !important;
+}
+
+[data-crm-theme="crms"] [class*="text-[var(--text-muted)]"],
+[data-crm-theme="crms"] [class*="text-[var(--text-muted)]"],
+[data-crm-theme="crms"] [class*="text-[var(--text-muted)]"],
+[data-crm-theme="crms"] [class*="text-[var(--text-muted)]"],
+[data-crm-theme="crms"] [class*="text-[var(--text-muted)]"] {
+  color: var(--text-muted) !important;
+}
+
+[data-crm-theme="crms"] [class*="border-[var(--primary)]"],
+[data-crm-theme="crms"] [class*="!border-[var(--primary-dark)]"],
+[data-crm-theme="crms"] [class*="focus-visible:border-[var(--primary)]"]:focus-visible {
+  border-color: var(--primary) !important;
+}
+
+[data-crm-theme="crms"] [class*="ring-[var(--primary)]"],
+[data-crm-theme="crms"] [class*="focus-visible:ring-[var(--primary)]"] {
+  --tw-ring-color: color-mix(in srgb, var(--primary) 30%, transparent) !important;
+}
+
+[data-crm-theme="crms"] [class*="rounded-[3px]"] {
+  border-radius: var(--radius-md) !important;
+}
+
+/* Oversized marketing radii → CRMS 5px cards */
+[data-crm-theme="crms"] [class*="rounded-[var(--crm-radius-ui)]"],
+[data-crm-theme="crms"] [class*="rounded-[var(--crm-radius-ui)]"],
+[data-crm-theme="crms"] [class*="rounded-[var(--crm-radius-ui)]"],
+[data-crm-theme="crms"] [class*="rounded-[var(--crm-radius-ui)]"],
+[data-crm-theme="crms"] [class*="rounded-[var(--crm-radius-ui)]"],
+[data-crm-app] [class*="rounded-[var(--crm-radius-ui)]"],
+[data-crm-app] [class*="rounded-[var(--crm-radius-ui)]"] {
+  border-radius: var(--crm-radius-ui) !important;
+}
+
+/* Blue focus / hover leftovers → CRMS primary */
+[data-crm-theme="crms"] [class*="hover:border-blue"],
+[data-crm-theme="crms"] [class*="border-blue-200"],
+[data-crm-theme="crms"] [class*="border-blue-100"] {
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent) !important;
+}
+
+[data-crm-theme="crms"] [class*="ring-blue"],
+[data-crm-theme="crms"] [class*="focus:ring-blue"],
+[data-crm-theme="crms"] [class*="focus:ring-4"][class*="blue"] {
+  --tw-ring-color: color-mix(in srgb, var(--primary) 20%, transparent) !important;
+}
+
+[data-crm-theme="crms"] [class*="shadow-blue"],
+[data-crm-theme="crms"] [class*="hover:shadow-[0_20px_40px_rgba(59,130,246"] {
+  --tw-shadow-color: color-mix(in srgb, var(--primary) 12%, transparent) !important;
+}
+
+/* Kanban — Dreams CRMS (unscoped so it always applies under AppShell) */
+.crm-kanban-board {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.crm-kanban-column {
+  display: flex;
+  width: 300px;
+  max-width: 300px;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  padding: 8px;
+  min-height: 320px;
+}
+
+.crm-kanban-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 8px;
+  border: none;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 4px 4px 0 rgba(219, 219, 219, 0.25);
+}
+
+.crm-kanban-column-header-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.crm-kanban-column-title {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #1f2020;
+}
+
+.crm-kanban-stage-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--crm-stage-accent, #ffa201);
+}
+
+.crm-kanban-column-summary {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #1f2020;
+}
+
+.crm-kanban-column-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 8rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.crm-kanban-card {
+  position: relative;
+  margin-top: 16px;
+  padding: 20px;
+  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 4px 4px 0 rgba(219, 219, 219, 0.25);
+  overflow: visible;
+  transition: box-shadow 0.15s ease;
+}
+
+.crm-kanban-card::before {
+  display: none;
+}
+
+.crm-kanban-topbar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin: 0 0 16px;
+  border-radius: 0;
+  background: var(--crm-stage-accent, #ffa201);
+}
+
+.crm-kanban-card:hover {
+  box-shadow: 0 6px 12px 0 rgba(219, 219, 219, 0.35);
+}
+
+.crm-kanban-avatar {
+  display: inline-flex;
+  height: 40px;
+  width: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #eaf2fd;
+  color: #2f80ed;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.crm-kanban-avatar--info { background: #eaf2fd; color: #2f80ed; }
+.crm-kanban-avatar--danger { background: #fde9e9; color: #ef1e1e; }
+.crm-kanban-avatar--warning { background: #fef8e6; color: #f9b801; }
+.crm-kanban-avatar--success { background: #e8f9e8; color: #1abe17; }
+.crm-kanban-avatar--primary { background: #fce9e6; color: #e41f07; }
+
+.crm-kanban-avatar--sm {
+  height: 24px;
+  width: 24px;
+  font-size: 10px;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #707070;
+  padding: 2px;
+}
+
+.crm-kanban-card-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.crm-kanban-card-head-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+}
+
+.crm-kanban-card-head-trailing {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  z-index: 1;
+}
+
+.crm-kanban-card:hover .crm-kanban-card-head-trailing,
+.crm-kanban-card:focus-within .crm-kanban-card-head-trailing,
+.crm-kanban-card.ring-2 .crm-kanban-card-head-trailing {
+  display: inline-flex;
+}
+
+.crm-kanban-card-title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #1f2020;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crm-kanban-card:hover .crm-kanban-card-title {
+  color: var(--primary);
+}
+
+.crm-kanban-card-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #707070;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crm-kanban-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.crm-kanban-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #707070; /* CRMS .text-default */
+  line-height: 21px;
+}
+
+.crm-kanban-meta-row:last-child {
+  margin-bottom: 16px; /* space before footer like reference */
+}
+
+.crm-kanban-meta-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: #1f2020; /* CRMS .text-dark on icons */
+}
+
+.crm-kanban-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0;
+  padding-top: 16px; /* Bootstrap pt-3 */
+  border-top: 1px solid #e2e8f0;
+}
+
+.crm-kanban-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.crm-kanban-card-action {
+  display: inline-flex;
+  height: 24px;
+  width: 24px;
+  align-items: center;
+  justify-content: center;
+  color: #1f2020;
+  opacity: 0.85;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.crm-kanban-card-action:hover {
+  color: var(--primary);
+  opacity: 1;
+}
+
+.crm-kanban-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.crm-kanban-header-action {
+  display: inline-flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #2f80ed;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.crm-kanban-header-action--menu {
+  color: #707070;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 4px 4px 0 rgba(219, 219, 219, 0.25);
+}
+
+.crm-kanban-header-action:hover {
+  background: #f7f8f9;
+  color: var(--primary);
+}
+
+/* Record detail — CRMS leads-details.html */
+[data-crm-theme="crms"] .crm-record-hero {
+  position: relative;
+}
+
+[data-crm-theme="crms"] .crm-record-avatar {
+  letter-spacing: 0.02em;
+}
+
+[data-crm-theme="crms"] .crm-record-gear {
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+@media (max-width: 640px) {
+  [data-crm-theme="crms"] .crm-record-gear {
+    right: 0.75rem;
+    top: 0.75rem;
+    transform: none;
+  }
+}
+
+[data-crm-theme="crms"] .crm-record-pipeline-title {
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+[data-crm-theme="crms"] .crm-record-info-divider {
+  margin: 1rem 0;
+  border: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Dreams `.line-title` — vertical accent on section / chart headers */
+[data-crm-theme="crms"] .crm-line-title,
+.theme-crm-hubspot .crm-line-title {
+  display: inline-block;
+  width: 3px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 1px;
+  background: var(--crm-line-title, linear-gradient(180deg, #e41f07 0%, #ffa201 100%));
+}
+
+/* Shared list / calendar content panel under view toggle */
+[data-crm-theme="crms"] .crm-view-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--crm-radius-ui);
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  box-shadow: var(--crm-shadow-card);
+}
+
+/* CRMS table rhythm — measured from companies-list.html / deals-list.html
+ * Shared by `.crm-table` (CrmTable) and any table under `.crm-list-page`
+ * so leads / deals / contacts / companies / clients match the dashboard look.
+ * th: Golos 13/600 #1F2020 · lh 19.5 · pad 8px 17px 8px 10px · bg #f7f8f9
+ * td: Golos 14/400 #707070 · lh 21 · pad 10px 8px · nowrap
+ * name (fs-14 fw-medium): 14/500 #1F2020 · lh 1.2
+ * badge / soft-tag: 12/500 · pad 5px 6px · lh 12px · radius 6px
+ */
+.crm-table,
+.crm-list-page table,
+[data-crm-theme="crms"] .crm-table,
+[data-crm-theme="crms"] .crm-list-page table,
+[data-crm-app] .crm-table,
+[data-crm-app] .crm-list-page table {
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: normal;
+  color: #707070;
+  border-collapse: collapse;
+  width: 100%;
+  background: #ffffff;
+}
+
+.crm-table thead th,
+.crm-list-page table thead th,
+[data-crm-theme="crms"] .crm-table thead th,
+[data-crm-theme="crms"] .crm-list-page table thead th,
+[data-crm-app] .crm-table thead th,
+[data-crm-app] .crm-list-page table thead th {
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  background: #f7f8f9 !important;
+  padding: 8px 17px 8px 10px !important;
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.5 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  color: #1f2020 !important;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.crm-table thead th.sticky,
+.crm-list-page table thead th.sticky,
+[data-crm-theme="crms"] .crm-table thead th.sticky,
+[data-crm-theme="crms"] .crm-list-page table thead th.sticky,
+[data-crm-app] .crm-table thead th.sticky,
+[data-crm-app] .crm-list-page table thead th.sticky {
+  background: #f7f8f9 !important;
+  box-shadow: inset 0 -1px 0 var(--border-color, #e2e8f0);
+}
+
+.crm-table tbody td,
+.crm-list-page table tbody td,
+[data-crm-theme="crms"] .crm-table tbody td,
+[data-crm-theme="crms"] .crm-list-page table tbody td,
+[data-crm-app] .crm-table tbody td,
+[data-crm-app] .crm-list-page table tbody td {
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  border-bottom-width: 1px !important;
+  padding: 10px 8px !important;
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+  letter-spacing: normal !important;
+  color: #707070 !important;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.crm-table tbody tr:last-child td,
+.crm-list-page table tbody tr:last-child td,
+[data-crm-theme="crms"] .crm-table tbody tr:last-child td,
+[data-crm-theme="crms"] .crm-list-page table tbody tr:last-child td,
+[data-crm-app] .crm-table tbody tr:last-child td,
+[data-crm-app] .crm-list-page table tbody tr:last-child td {
+  border-bottom-width: 0 !important;
+}
+
+.crm-table tbody tr:hover td,
+.crm-list-page table tbody tr:hover td,
+[data-crm-theme="crms"] .crm-table tbody tr:hover td,
+[data-crm-theme="crms"] .crm-list-page table tbody tr:hover td,
+[data-crm-app] .crm-table tbody tr:hover td,
+[data-crm-app] .crm-list-page table tbody tr:hover td {
+  background: #fafbfc;
+}
+
+.crm-table tbody tr.crm-table-row-selected td,
+.crm-list-page table tbody tr.crm-table-row-selected td,
+[data-crm-theme="crms"] .crm-table tbody tr.crm-table-row-selected td,
+[data-crm-theme="crms"] .crm-list-page table tbody tr.crm-table-row-selected td,
+[data-crm-app] .crm-table tbody tr.crm-table-row-selected td,
+[data-crm-app] .crm-list-page table tbody tr.crm-table-row-selected td {
+  background: color-mix(in srgb, var(--primary, #e41f07) 4%, white);
+}
+
+/* Primary name / title in a row — Dreams `.fs-14.fw-medium` */
+.crm-table .crm-list-name,
+.crm-list-page table .crm-list-name,
+[data-crm-theme="crms"] .crm-table .crm-list-name,
+[data-crm-theme="crms"] .crm-list-page table .crm-list-name,
+[data-crm-app] .crm-table .crm-list-name,
+[data-crm-app] .crm-list-page table .crm-list-name {
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  color: #1f2020 !important;
+}
+
+.crm-table .crm-list-sub,
+[data-crm-theme="crms"] .crm-table .crm-list-sub {
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+  color: #707070 !important;
+}
+
+/* Owner / muted secondary copy stays body color */
+.crm-table .crm-list-owner-cell span,
+[data-crm-theme="crms"] .crm-list-owner-cell span {
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+  color: #707070 !important;
+}
+
+.crm-table .crm-list-muted,
+.crm-table .crm-list-muted-text,
+[data-crm-theme="crms"] .crm-list-muted-text {
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+  color: #707070 !important;
+}
+
+/* Soft tags + status pills — badge-tag / badge-status */
+.crm-table .crm-soft-badge,
+.crm-table .crm-list-status-badge,
+[data-crm-theme="crms"] .crm-soft-badge,
+[data-crm-theme="crms"] .crm-list-status-badge {
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 12px !important;
+  letter-spacing: normal !important;
+  padding: 5px 6px !important;
+  border-radius: 6px !important;
+}
+
+.crm-table .crm-table-check,
+[data-crm-theme="crms"] .crm-table .crm-table-check {
+  width: 2.5rem;
+  text-align: center;
+  padding-left: 12px !important;
+  padding-right: 8px !important;
+}
+
+.crm-table .crm-table-actions,
+[data-crm-theme="crms"] .crm-table .crm-table-actions {
+  width: 3.5rem;
+  text-align: right;
+  padding-right: 12px !important;
+}
+
+.crm-table-action-btn {
+  vertical-align: middle;
+}
+
+.crm-table tbody tr:hover .crm-table-action-btn {
+  border-color: #e2e8f0;
+}
+
+/* CRMS list page rhythm — matches contacts.html content stack */
+[data-crm-theme="crms"] .crm-list-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+}
+
+[data-crm-theme="crms"] .crm-list-page .crm-table thead th,
+[data-crm-theme="crms"] .crm-list-page table thead th,
+.crm-list-page .crm-table thead th,
+.crm-list-page table thead th {
+  background: #f7f8f9 !important;
+  font-family: "Golos Text", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.5 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  color: #1f2020 !important;
+}
+
+/*
+ * CRM modal / offcanvas typography — owned here (not pm.css [data-pm-jira]).
+ * Prefer class `crm-modal`; `crm-modal` kept as legacy alias.
+ */
+[data-crm-theme="crms"] .crm-modal,
+[data-crm-theme="crms"] .crm-jira-modal,
+[data-crm-app] .crm-modal,
+[data-crm-app] .crm-jira-modal,
+.theme-crm-hubspot .crm-modal,
+.theme-crm-hubspot .crm-jira-modal {
+  font-family: "Golos Text", sans-serif !important;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+[data-crm-theme="crms"] .crm-modal h2,
+[data-crm-theme="crms"] .crm-modal h2,
+[data-crm-app] .crm-modal h2,
+[data-crm-app] .crm-modal h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-main);
+}
+
+[data-crm-theme="crms"] .crm-modal h3,
+[data-crm-theme="crms"] .crm-modal h4,
+[data-crm-theme="crms"] .crm-modal h3,
+[data-crm-theme="crms"] .crm-modal h4,
+[data-crm-app] .crm-modal h3,
+[data-crm-app] .crm-modal h4,
+[data-crm-app] .crm-modal h3,
+[data-crm-app] .crm-modal h4 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+[data-crm-theme="crms"] .crm-modal label,
+[data-crm-theme="crms"] .crm-modal label,
+[data-crm-app] .crm-modal label,
+[data-crm-app] .crm-modal label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-main);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+[data-crm-theme="crms"] .crm-modal input,
+[data-crm-theme="crms"] .crm-modal textarea,
+[data-crm-theme="crms"] .crm-modal select,
+[data-crm-theme="crms"] .crm-modal [role="combobox"],
+[data-crm-theme="crms"] .crm-modal input,
+[data-crm-theme="crms"] .crm-modal textarea,
+[data-crm-theme="crms"] .crm-modal select,
+[data-crm-theme="crms"] .crm-modal [role="combobox"],
+[data-crm-app] .crm-modal input,
+[data-crm-app] .crm-modal textarea,
+[data-crm-app] .crm-modal select,
+[data-crm-app] .crm-modal input,
+[data-crm-app] .crm-modal textarea,
+[data-crm-app] .crm-modal select {
+  border-radius: var(--radius-md);
+  border-color: var(--border-color);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+[data-crm-theme="crms"] .crm-modal input:focus,
+[data-crm-theme="crms"] .crm-modal textarea:focus,
+[data-crm-theme="crms"] .crm-modal select:focus,
+[data-crm-theme="crms"] .crm-modal input:focus,
+[data-crm-theme="crms"] .crm-modal textarea:focus,
+[data-crm-theme="crms"] .crm-modal select:focus,
+[data-crm-app] .crm-modal input:focus,
+[data-crm-app] .crm-modal textarea:focus,
+[data-crm-app] .crm-modal input:focus,
+[data-crm-app] .crm-modal textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+/* shadcn primary buttons under CRM → CRMS red */
+[data-crm-theme="crms"] .theme-crm-hubspot button.bg-primary,
+[data-crm-theme="crms"] button.bg-primary {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+[data-crm-theme="crms"] .theme-crm-hubspot button.bg-primary:hover,
+[data-crm-theme="crms"] button.bg-primary:hover {
+  background-color: var(--primary-dark) !important;
+}
+
+/* Blue status pills → CRMS primary tint */
+[data-crm-theme="crms"] [class*="border-blue-100"],
+[data-crm-theme="crms"] [class*="bg-blue-50"] {
+  border-color: color-mix(in srgb, var(--primary) 20%, transparent) !important;
+  background-color: var(--primary-light) !important;
+  color: var(--primary) !important;
+}

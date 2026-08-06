@@ -1,0 +1,4711 @@
+/* PM tool — Jira Software layout language, repainted to the suite's Dreams CRMS palette
+   (scoped via data-pm-jira on layout root). Board/kanban/list/detail visuals below this
+   block intentionally keep their Jira-specific styling untouched — see design-system audit. */
+
+/* Apply Dreams tokens on PM root AND nested theme wrappers (AppShell re-declares theme-crm-hubspot). */
+html:not(.dark) [data-pm-jira],
+html:not(.dark) [data-pm-jira] .theme-crm-hubspot,
+html:not(.dark) [data-pm-jira] .theme-collab-slack {
+  --background: #f7f8f9;
+  --foreground: #1f2020;
+  --primary: #e41f07;
+  --primary-foreground: #ffffff;
+  --primary-light: #fce9e6;
+  --primary-dark: #c41a06;
+  --primary-muted: #f5a89f;
+  --hs-link: #e41f07;
+  --hs-link-hover: #c41a06;
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
+  --text-main: #1f2020;
+  --text-muted: #707070;
+  --surface-dim: #f0f2f5;
+  --surface-hover: #e9ecef;
+  --color-input: #ffffff;
+  --crm-shell-bg: #f7f8f9;
+  --crm-header-bg: #ffffff;
+  --crm-header-border: #e2e8f0;
+  --crm-radius-ui: 5px;
+  --crm-radius-modal: 8px;
+  --crm-shadow-card: none;
+  --crm-shadow-raised: 0 4px 14px rgba(32, 44, 75, 0.08);
+  --radius-lg: 5px;
+  --radius-md: 5px;
+  --radius-sm: 4px;
+  --suite-sidebar-bg: #ffffff;
+  --suite-sidebar-fg: #1f2020;
+  --suite-sidebar-border: #e2e8f0;
+  --suite-sidebar-hover: #f7f8f9;
+  --suite-sidebar-active-bg: #fce9e6;
+  --suite-sidebar-chip-bg: #f7f8f9;
+  --suite-sidebar-logo-ring: #e2e8f0;
+  --shell-main-bg: #f7f8f9;
+  --shell-header-bg: #ffffff;
+  --shell-border: #e2e8f0;
+  --shell-sidebar-bg: #ffffff;
+}
+
+[data-pm-jira],
+[data-pm-jira] .theme-crm-hubspot {
+  font-family: var(--pm-jira-font) !important;
+  font-size: 14px;
+  line-height: 1.4286;
+}
+
+html:not(.dark) [data-pm-jira],
+html:not(.dark) [data-pm-jira] .theme-crm-hubspot {
+  color: #1f2020 !important;
+  background-color: #f7f8f9 !important;
+}
+
+/* PM titles — sans, not editorial serif */
+.theme-crm-hubspot[data-pm-jira] .crm-app-main h1,
+.theme-crm-hubspot[data-pm-jira] .crm-app-main h2,
+.theme-crm-hubspot[data-pm-jira] .crm-app-main h3 {
+  font-family: var(--pm-jira-font) !important;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main h1,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main h2,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main h3 {
+  color: #1f2020;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-page-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .pm-page-title {
+  color: #1f2020;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+/* Links & primary accents */
+.theme-crm-hubspot[data-pm-jira] .text-primary {
+  color: #e41f07 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .border-primary {
+  border-color: #e41f07 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .text-hs-link {
+  color: #e41f07 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .bg-primary {
+  background-color: #e41f07 !important;
+  color: #ffffff !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .bg-primary\/10 {
+  background-color: #fce9e6 !important;
+}
+
+/* Inputs — Dreams density */
+.theme-crm-hubspot[data-pm-jira] input,
+.theme-crm-hubspot[data-pm-jira] textarea,
+.theme-crm-hubspot[data-pm-jira] select,
+.theme-crm-hubspot[data-pm-jira] [role="combobox"] {
+  border-radius: 5px !important;
+  border-color: #e2e8f0 !important;
+  font-size: 14px !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] input:focus,
+.theme-crm-hubspot[data-pm-jira] textarea:focus,
+.theme-crm-hubspot[data-pm-jira] select:focus {
+  border-color: #e41f07 !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22) !important;
+}
+
+/* Slate → Dreams neutrals inside PM main (light mode only) */
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-slate-900,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-gray-900 {
+  color: #1f2020 !important;
+}
+
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-slate-800,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-slate-700,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-gray-700 {
+  color: #4a4a4a !important;
+}
+
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-slate-600,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-slate-500,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-gray-500 {
+  color: #707070 !important;
+}
+
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-slate-400,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .text-gray-400 {
+  color: #a3a3a3 !important;
+}
+
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .border-slate-100,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .border-slate-200 {
+  border-color: #e2e8f0 !important;
+}
+
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .bg-slate-50 {
+  background-color: #f7f8f9 !important;
+}
+
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .crm-app-main .bg-slate-50\/50 {
+  background-color: #fcfcfc !important;
+}
+
+/* Soften leftover HubSpot uppercase micro-labels under Jira shell */
+[data-pm-jira] .tracking-widest,
+[data-pm-jira] .tracking-\[0\.2em\] {
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .uppercase.tracking-widest,
+[data-pm-jira] .font-mono.uppercase.tracking-widest {
+  text-transform: none !important;
+}
+
+/* Remove sci-fi typography in PM workspace */
+.theme-crm-hubspot[data-pm-jira] .crm-app-main .font-orbitron {
+  font-family: var(--font-app), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .crm-app-main .font-black {
+  font-weight: 600 !important;
+}
+
+/* Jira tab bar helper — board / project views */
+[data-pm-jira] .pm-jira-tab,
+.theme-crm-hubspot[data-pm-jira] .pm-jira-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 2.5rem;
+  border-bottom-width: 2px;
+  border-bottom-style: solid;
+  border-radius: 0;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4286;
+  box-shadow: none;
+}
+
+[data-pm-jira] .pm-jira-tab[data-active="true"],
+.theme-crm-hubspot[data-pm-jira] .pm-jira-tab[data-active="true"] {
+  border-bottom-color: #0c66e4;
+  color: #0c66e4;
+  background-color: transparent;
+}
+
+[data-pm-jira] .pm-jira-tab[data-active="false"],
+.theme-crm-hubspot[data-pm-jira] .pm-jira-tab[data-active="false"] {
+  border-bottom-color: transparent;
+  background-color: transparent;
+}
+
+html:not(.dark) [data-pm-jira] .pm-jira-tab[data-active="false"],
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .pm-jira-tab[data-active="false"] {
+  color: #5e6c84;
+}
+
+html:not(.dark) [data-pm-jira] .pm-jira-tab[data-active="false"]:hover,
+html:not(.dark) .theme-crm-hubspot[data-pm-jira] .pm-jira-tab[data-active="false"]:hover {
+  color: #172b4d;
+  background-color: #f4f5f7;
+  border-bottom-color: #ebecf0;
+}
+
+.dark [data-pm-jira] .pm-jira-tab[data-active="false"],
+.dark .theme-crm-hubspot[data-pm-jira] .pm-jira-tab[data-active="false"] {
+  color: #d4d4d8 !important;
+}
+
+.dark [data-pm-jira] .pm-jira-tab[data-active="false"]:hover,
+.dark .theme-crm-hubspot[data-pm-jira] .pm-jira-tab[data-active="false"]:hover {
+  color: #ffffff !important;
+  background-color: #2a2a30 !important;
+  border-bottom-color: #3f3f46 !important;
+}
+
+[data-pm-jira],
+[data-jira-auth] {
+  /* Suite-wide body font — was a system-UI stack (Segoe UI/Helvetica); switched to Inter
+     so the whole product (Auth, Vault, Executive, Social, Client Portals, Portal, LMS, PM)
+     renders the same premium type as CRM/HRMS instead of falling back to OS defaults.
+     ~25 rules across pm.css / suite-internal-jira.css key off this one variable. */
+  --pm-jira-font: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-app: var(--pm-jira-font);
+  --font-display: var(--pm-jira-font);
+  --font-sans: var(--pm-jira-font);
+}
+
+[data-pm-jira],
+[data-pm-jira] .pm-jira-font,
+.theme-crm-hubspot[data-pm-jira] .pm-jira-font,
+[data-jira-auth],
+[data-jira-auth] .pm-jira-font {
+  font-family: var(--pm-jira-font) !important;
+  font-size: 14px;
+  line-height: 1.42857143;
+  letter-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Beat HubSpot serif display titles when Jira shell is active */
+.theme-crm-hubspot[data-pm-jira] .crm-app-main h1,
+.theme-crm-hubspot[data-pm-jira] .crm-app-main h2,
+.theme-crm-hubspot[data-pm-jira] .crm-app-main h3,
+.theme-crm-hubspot[data-pm-jira] .crm-app-main h4 {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+/* Board header — beat HubSpot h1 serif / Inter Tight display rules */
+.theme-crm-hubspot[data-pm-jira] .pm-board-header,
+.theme-crm-hubspot[data-pm-jira] .pm-board-header *,
+.theme-crm-hubspot[data-pm-jira] .pm-board-tab-bar,
+.theme-crm-hubspot[data-pm-jira] .pm-board-tab-bar *,
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar,
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar * {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-header h1,
+.theme-crm-hubspot[data-pm-jira] .pm-board-header h2,
+.theme-crm-hubspot[data-pm-jira] .pm-board-header h3,
+.theme-crm-hubspot[data-pm-jira] .pm-board-header .pm-board-project-title,
+.theme-crm-hubspot[data-pm-jira] .pm-board-header .pm-board-project-title-text,
+.theme-crm-hubspot[data-pm-jira] .pm-board-header .pm-board-project-title button,
+.theme-crm-hubspot[data-pm-jira] .pm-board-header .pm-board-eyebrow {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-project-title-text {
+  font-size: 24px !important;
+  line-height: 32px !important;
+  font-weight: 500 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-eyebrow {
+  font-size: 12px !important;
+  line-height: 16px !important;
+  font-weight: 400 !important;
+}
+
+[data-pm-jira] .pm-board-header {
+  box-shadow: none;
+}
+
+/* Board header typography — match Jira Cloud (override HubSpot button font-size / serif h1) */
+[data-pm-jira] .pm-board-header,
+[data-pm-jira] .pm-board-header button,
+[data-pm-jira] .pm-board-header a,
+[data-pm-jira] .pm-board-toolbar,
+[data-pm-jira] .pm-board-toolbar button {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 14px;
+  line-height: 1.42857143;
+  letter-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-pm-jira] .pm-board-eyebrow {
+  font-size: 12px !important;
+  line-height: 16px !important;
+  font-weight: 400 !important;
+}
+
+[data-pm-jira] .pm-board-project-title,
+[data-pm-jira] .pm-board-project-title .pm-board-project-title-text {
+  font-size: 24px !important;
+  line-height: 32px !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .pm-board-avatar {
+  font-size: 11px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+}
+
+[data-pm-jira] .pm-board-tab-bar {
+  min-height: 40px;
+  scrollbar-width: thin;
+}
+
+[data-pm-jira] .pm-board-toolbar {
+  overflow-x: auto;
+  scrollbar-width: none; /* hide scrollbar but allow scroll */
+}
+
+[data-pm-jira] .pm-board-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+[data-pm-jira] .pm-board-header {
+  overflow: visible;
+}
+
+[data-pm-jira] .pm-board-tab,
+[data-pm-jira] .pm-board-tab-bar .pm-jira-tab {
+  font-size: 14px !important;
+  line-height: 20px !important;
+  font-weight: 400 !important;
+  letter-spacing: normal !important;
+  border-radius: 0 !important;
+  margin-bottom: -1px;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-pm-jira] .pm-board-tab[data-active="true"],
+[data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-label {
+  font-weight: 500 !important;
+  border-bottom-color: #0052cc !important;
+}
+
+html:not(.dark) [data-pm-jira] .pm-board-tab[data-active="true"],
+html:not(.dark) [data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-label {
+  color: #0052cc !important;
+}
+
+html:not(.dark) [data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-icon {
+  color: #0052cc !important;
+}
+
+html:not(.dark) [data-pm-jira] .pm-board-tab[data-active="false"] .pm-board-tab-icon {
+  color: #42526e !important;
+}
+
+html:not(.dark) [data-pm-jira] .pm-board-tab[data-active="false"] .pm-board-tab-label {
+  color: #42526e !important;
+}
+
+html:not(.dark) [data-pm-jira] .pm-board-tab:hover .pm-board-tab-label,
+html:not(.dark) [data-pm-jira] .pm-board-tab:hover .pm-board-tab-icon {
+  color: #172b4d !important;
+}
+
+.dark [data-pm-jira] .pm-board-tab[data-active="true"],
+.dark [data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-label,
+.dark [data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-icon {
+  color: #82b4ff !important;
+  border-bottom-color: #82b4ff !important;
+}
+
+.dark [data-pm-jira] .pm-board-tab[data-active="false"] .pm-board-tab-icon,
+.dark [data-pm-jira] .pm-board-tab[data-active="false"] .pm-board-tab-label {
+  color: #d4d4d8 !important;
+}
+
+.dark [data-pm-jira] .pm-board-tab:hover .pm-board-tab-label,
+.dark [data-pm-jira] .pm-board-tab:hover .pm-board-tab-icon {
+  color: #ffffff !important;
+}
+
+[data-pm-jira] .pm-board-tab:hover,
+[data-pm-jira] .pm-board-tab:focus-visible {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-tab-bar button.pm-board-tab {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+  font-weight: 400 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-tab-bar button.pm-board-tab[data-active="true"] {
+  font-weight: 500 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-tab-bar button.pm-board-tab:hover {
+  background: transparent !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar-search-input {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  height: 32px !important;
+  line-height: 20px !important;
+  border-radius: 3px !important;
+  background-color: #fafbfc !important;
+  border-color: #dfe1e6 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar-search-input::placeholder {
+  color: #7a869a !important;
+  opacity: 1 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar-filter,
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar-icon {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  height: 32px !important;
+  border-radius: 3px !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar-jql {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-tab-bar button {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-tab-bar button:hover {
+  background: transparent !important;
+}
+
+[data-pm-jira] .crm-app-main .pm-board-header h1 {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  letter-spacing: normal !important;
+  margin: 0;
+  padding: 0;
+  line-height: inherit !important;
+}
+
+/* HubSpot shrinks all theme buttons to 13px — restore Jira 14px in board chrome */
+.theme-crm-hubspot[data-pm-jira] .pm-board-header button {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar .pm-board-toolbar-filter,
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar .pm-board-toolbar-icon,
+.theme-crm-hubspot[data-pm-jira] .pm-board-toolbar .pm-board-toolbar-jql {
+  font-size: 14px !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-board-create-btn {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-summary,
+.theme-crm-hubspot[data-pm-jira] .pm-summary * {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-summary h3 {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-project-more-menu,
+.theme-crm-hubspot[data-pm-jira] .pm-project-more-menu * {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-project-more-item {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-project-more-trigger {
+  font-size: 14px !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-issue-detail,
+.theme-crm-hubspot[data-pm-jira] .pm-issue-detail * {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-issue-detail h3 {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-issue-detail .pm-issue-detail-row span:first-child {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  text-transform: none !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-calendar,
+.theme-crm-hubspot[data-pm-jira] .pm-calendar * {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-calendar .pm-board-toolbar-filter,
+.theme-crm-hubspot[data-pm-jira] .pm-calendar .pm-board-toolbar-search-input,
+.theme-crm-hubspot[data-pm-jira] .pm-calendar .pm-board-toolbar-icon {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-boards,
+.theme-crm-hubspot[data-pm-jira] .pm-boards * {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-boards .pm-board-project-title-text {
+  font-size: 24px !important;
+  line-height: 32px !important;
+  font-weight: 500 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-boards h2 {
+  font-family: var(--pm-jira-font) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-boards .pm-board-toolbar .pm-board-toolbar-filter,
+.theme-crm-hubspot[data-pm-jira] .pm-boards .pm-board-toolbar-search-input,
+.theme-crm-hubspot[data-pm-jira] .pm-boards .pm-board-create-btn {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-boards .pm-board-create-btn {
+  font-weight: 500 !important;
+}
+
+/* Issues list (project board tab) — Jira table density */
+[data-pm-jira] .pm-list-view,
+[data-pm-jira] .pm-list-view button,
+[data-pm-jira] .pm-list-view input,
+[data-pm-jira] .pm-list-view [role="combobox"] {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .pm-list-view .font-orbitron {
+  font-family: inherit !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-list-view table {
+  font-size: 14px;
+}
+
+/* Issues list — compact table density + faster paint on long lists */
+[data-pm-jira] .pm-list-view .pm-list-table th,
+[data-pm-jira] .pm-list-view .pm-list-table td {
+  padding: 4px 8px !important;
+}
+
+[data-pm-jira] .pm-list-view .pm-list-table th {
+  height: 32px !important;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+[data-pm-jira] .pm-list-view .pm-list-table td {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+[data-pm-jira] .pm-list-view .pm-list-table .pm-list-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 34px;
+}
+
+[data-pm-jira] .pm-list-view .pm-list-table .pm-list-row.pm-row-idle:hover {
+  animation: none !important;
+  box-shadow: none !important;
+}
+
+[data-pm-jira] .pm-list-view .pm-list-table [role="combobox"] {
+  height: 28px !important;
+  min-height: 28px !important;
+  font-size: 12px !important;
+}
+
+[data-pm-jira] .pm-list-view .pm-list-table td .flex.h-6.w-6 {
+  height: 22px !important;
+  width: 22px !important;
+  font-size: 9px !important;
+}
+
+[data-pm-jira] .pm-list-view .pm-list-table td .inline-flex.rounded-\[3px\] {
+  font-size: 11px;
+  line-height: 1.2;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+/* Jira kanban columns + cards */
+[data-pm-jira] .pm-board-kanban-column,
+[data-pm-jira] .pm-board-kanban-card,
+[data-pm-jira] .pm-board-kanban-column button,
+[data-pm-jira] .pm-board-kanban-card button {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .pm-board-kanban-column-header h3 {
+  font-size: 11px !important;
+  line-height: 1.27272727 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+[data-pm-jira] .pm-board-kanban-card {
+  font-size: 14px;
+  line-height: 1.42857143;
+}
+
+[data-pm-jira] .pm-board-kanban-card .pm-issue-key {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+/* Kanban drag — lift, drop, column pulse */
+@keyframes pm-board-card-lift {
+  from {
+    transform: rotate(0deg) scale(1);
+    box-shadow: 0 1px 1px rgba(9, 30, 66, 0.13);
+  }
+
+  to {
+    transform: rotate(1.25deg) scale(1.045);
+    box-shadow: 0 14px 28px rgba(9, 30, 66, 0.22), 0 0 0 1px rgba(0, 82, 204, 0.12);
+  }
+}
+
+@keyframes pm-board-card-land {
+  0% {
+    transform: scale(1.04);
+    box-shadow: 0 8px 20px rgba(0, 82, 204, 0.18);
+  }
+
+  55% {
+    transform: scale(0.985);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 1px 1px rgba(9, 30, 66, 0.13);
+  }
+}
+
+@keyframes pm-board-column-pulse {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(0, 82, 204, 0);
+  }
+
+  35% {
+    box-shadow: inset 0 0 0 2px rgba(0, 82, 204, 0.45), 0 0 0 4px rgba(222, 235, 255, 0.65);
+  }
+
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(0, 82, 204, 0);
+  }
+}
+
+[data-pm-jira] .pm-board-drag-overlay {
+  animation: pm-board-card-lift 0.16s ease-out forwards;
+  cursor: grabbing;
+}
+
+[data-pm-jira] .pm-board-card-placeholder {
+  border-style: dashed !important;
+  border-color: #b3d4ff !important;
+  background: #f4f5f7 !important;
+  transform: scale(0.98);
+}
+
+[data-pm-jira] .pm-board-card-landed {
+  animation: pm-board-card-land 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-pm-jira] .pm-board-kanban-column.pm-board-column-drop-active {
+  background: #deebff !important;
+  box-shadow: inset 0 0 0 2px rgba(0, 82, 204, 0.35);
+}
+
+[data-pm-jira] .pm-board-kanban-column.pm-board-column-drop-pulse {
+  animation: pm-board-column-pulse 0.52s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  [data-pm-jira] .pm-board-drag-overlay,
+  [data-pm-jira] .pm-board-card-landed,
+  [data-pm-jira] .pm-board-kanban-column.pm-board-column-drop-pulse,
+  [data-pm-jira] .pm-board-card-enter,
+  [data-pm-jira] .pm-row-enter,
+  [data-pm-jira] .pm-row-idle:hover,
+  [data-pm-jira] .pm-chip-pop,
+  [data-pm-jira] .pm-drop-zone-pulse,
+  [data-pm-jira] .pm-roadmap-bar-enter,
+  [data-pm-jira] .pm-calendar-chip-enter,
+  [data-pm-jira] .pm-timeline-segment-enter,
+  [data-pm-jira] .pm-board-confetti-piece,
+  [data-pm-jira] .pm-board-celebration-star,
+  [data-pm-jira] .pm-board-celebration-bubble,
+  [data-pm-jira] .crm-kanban-card-enter,
+  [data-pm-jira] .crm-kanban-card-idle:hover,
+  [data-pm-jira] .crm-kanban-card-landed,
+  [data-pm-jira] .crm-kanban-column-pulse,
+  [data-pm-jira] .crm-create-btn-pop,
+  [data-pm-jira] .pm-empty-companion-avatar,
+  [data-pm-jira] .pm-empty-companion-bubble,
+  [data-pm-jira] .pm-empty-companion-sparkle,
+  [data-pm-jira] .pm-empty-companion-zzz,
+  [data-pm-jira] .pm-empty-companion--drop-target,
+  [data-pm-jira] .pm-board-count-pop,
+  [data-pm-jira] .pm-board-inline-create-pop,
+  [data-pm-jira] .pm-board-create-btn-pop,
+  [data-pm-jira] .pm-board-avatar-pop,
+  [data-pm-jira] .pm-board-done-check-wiggle,
+  [data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-icon {
+    animation: none !important;
+  }
+
+  [data-pm-jira] .pm-board-card-placeholder {
+    transform: none;
+  }
+
+  [data-pm-jira] .pm-board-card-idle:hover,
+  [data-pm-jira] .pm-row-idle:hover {
+    transform: none !important;
+  }
+}
+
+/* Playful board polish — hover, entrance, celebration */
+@keyframes pm-board-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96) rotate(-0.5deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes pm-board-card-hover-pop {
+  0% {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+
+  40% {
+    transform: translateY(-3px) scale(1.015) rotate(-0.35deg);
+  }
+
+  100% {
+    transform: translateY(-2px) scale(1.01) rotate(0.2deg);
+  }
+}
+
+@keyframes pm-board-count-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  35% {
+    transform: scale(1.28);
+  }
+
+  70% {
+    transform: scale(0.94);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pm-board-empty-bounce {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-6px) rotate(-4deg);
+  }
+}
+
+@keyframes pm-board-inline-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pm-board-btn-wiggle {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-2deg) scale(1.02);
+  }
+
+  75% {
+    transform: rotate(2deg) scale(1.02);
+  }
+}
+
+@keyframes pm-board-avatar-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.18);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pm-board-done-wiggle {
+
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  25% {
+    transform: rotate(-12deg) scale(1.15);
+  }
+
+  50% {
+    transform: rotate(10deg) scale(1.2);
+  }
+
+  75% {
+    transform: rotate(-6deg) scale(1.1);
+  }
+}
+
+@keyframes pm-board-tab-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.2);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pm-board-confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, -10vh, 0) rotate(0deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(-40px + (var(--pm-confetti-i) * 11px)),
+        105vh,
+        0) rotate(calc(180deg + var(--pm-confetti-i) * 24deg)) scale(0.4);
+  }
+}
+
+@keyframes pm-board-star-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2) rotate(20deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6) rotate(90deg);
+  }
+}
+
+[data-pm-jira] .pm-playful .pm-board-kanban-card.pm-board-card-enter,
+[data-pm-jira] .pm-board-playful .pm-board-kanban-card.pm-board-card-enter {
+  animation: pm-board-card-enter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--pm-card-enter-delay, 0ms));
+}
+
+[data-pm-jira] .pm-playful .pm-board-kanban-card.pm-board-card-idle:hover,
+[data-pm-jira] .pm-board-playful .pm-board-kanban-card.pm-board-card-idle:hover {
+  animation: pm-board-card-hover-pop 0.28s ease-out forwards;
+  z-index: 2;
+}
+
+[data-pm-jira] .pm-playful .pm-board-kanban-card.pm-board-card-idle,
+[data-pm-jira] .pm-board-playful .pm-board-kanban-card.pm-board-card-idle {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* Shared row / list / backlog polish */
+[data-pm-jira] .pm-playful .pm-row-enter {
+  animation: pm-board-card-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--pm-row-enter-delay, 0ms);
+}
+
+[data-pm-jira] .pm-playful .pm-row-idle {
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-pm-jira] .pm-playful .pm-row-idle:hover {
+  animation: pm-board-card-hover-pop 0.26s ease-out forwards;
+}
+
+[data-pm-jira] .pm-playful .pm-list-row.pm-row-idle:hover {
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 2px 8px rgba(9, 30, 66, 0.08);
+}
+
+[data-pm-jira] .pm-playful .pm-chip-pop {
+  animation: pm-board-count-pop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-pm-jira] .pm-playful .pm-drop-zone-pulse {
+  animation: pm-board-column-pulse 0.55s ease-out infinite;
+}
+
+[data-pm-jira] .pm-playful .pm-roadmap-bar.pm-roadmap-bar-enter {
+  animation: pm-board-inline-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--pm-row-enter-delay, 0ms);
+}
+
+[data-pm-jira] .pm-playful .pm-roadmap-bar:hover {
+  filter: brightness(1.05);
+  transform: translateY(-50%) scale(1.02) !important;
+}
+
+[data-pm-jira] .pm-playful .pm-calendar-chip.pm-calendar-chip-enter {
+  animation: pm-board-card-enter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--pm-row-enter-delay, 0ms);
+}
+
+[data-pm-jira] .pm-playful .pm-calendar-chip:hover {
+  animation: pm-board-card-hover-pop 0.24s ease-out forwards;
+}
+
+[data-pm-jira] .pm-playful .pm-timeline-segment.pm-timeline-segment-enter {
+  animation: pm-board-inline-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--pm-row-enter-delay, 0ms);
+}
+
+[data-pm-jira] .pm-playful .pm-timeline-segment:hover {
+  filter: brightness(1.06);
+  transform: translateY(-50%) scale(1.03);
+}
+
+[data-pm-jira] .pm-board-count-pop {
+  display: inline-block;
+  animation: pm-board-count-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-pm-jira] .pm-board-empty-mascot {
+  display: inline-block;
+  font-size: 1.75rem;
+  line-height: 1;
+  filter: grayscale(0.15);
+  animation: pm-board-empty-bounce 2.2s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-board-column-empty {
+  border: 1px dashed #c1c7d0;
+  border-radius: 3px;
+  margin: 0 0 0.5rem;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* PM empty companions — playful mascots & speech bubbles */
+@keyframes pm-companion-float {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-8px) rotate(-3deg);
+  }
+}
+
+@keyframes pm-companion-hungry-shake {
+
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  20% {
+    transform: rotate(-6deg) scale(1.05);
+  }
+
+  40% {
+    transform: rotate(5deg) scale(1.08);
+  }
+
+  60% {
+    transform: rotate(-4deg) scale(1.05);
+  }
+
+  80% {
+    transform: rotate(3deg) scale(1.02);
+  }
+}
+
+@keyframes pm-companion-bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pm-companion-bubble-wiggle {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-1.5deg);
+  }
+
+  75% {
+    transform: rotate(1.5deg);
+  }
+}
+
+@keyframes pm-companion-sparkle-twinkle {
+
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pm-companion-zzz-float {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  30% {
+    opacity: 0.85;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(10px, -14px);
+  }
+}
+
+@keyframes pm-companion-drop-glow {
+
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 2px rgba(0, 82, 204, 0.25);
+  }
+
+  50% {
+    box-shadow: inset 0 0 0 2px rgba(0, 82, 204, 0.55), 0 0 20px rgba(0, 82, 204, 0.12);
+  }
+}
+
+[data-pm-jira] .pm-empty-companion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0.75rem 0.5rem 1rem;
+  border-radius: 8px;
+  overflow: visible;
+}
+
+[data-pm-jira] .pm-empty-companion--compact {
+  min-height: 148px;
+  justify-content: center;
+}
+
+[data-pm-jira] .pm-empty-companion--comfortable {
+  min-height: 200px;
+  padding: 1.5rem 1rem 2rem;
+}
+
+[data-pm-jira] .pm-empty-companion--mini {
+  min-height: 0;
+  padding: 0.25rem 0.15rem 0.35rem;
+  gap: 0.15rem;
+  flex-direction: column-reverse;
+}
+
+[data-pm-jira] .pm-empty-companion--mini .pm-empty-companion-bubble {
+  margin-bottom: 0.25rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 8px;
+  animation: pm-companion-bubble-in 0.35s ease both;
+}
+
+[data-pm-jira] .pm-empty-companion--mini .pm-empty-companion-bubble-text {
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+[data-pm-jira] .pm-empty-companion--mini .pm-empty-companion-avatar {
+  font-size: 1.15rem;
+}
+
+[data-pm-jira] .pm-empty-companion--mini .pm-empty-companion-avatar-wrap {
+  margin-bottom: 0;
+}
+
+[data-pm-jira] .pm-empty-companion--drop-target {
+  animation: pm-companion-drop-glow 0.9s ease-in-out infinite;
+  background: rgba(222, 235, 255, 0.35);
+  border-radius: 8px;
+}
+
+[data-pm-jira] .pm-empty-companion-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+[data-pm-jira] .pm-empty-companion-sparkle {
+  position: absolute;
+  font-size: 0.65rem;
+  color: #ffc400;
+  animation: pm-companion-sparkle-twinkle 2.4s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-empty-companion-sparkle-a {
+  top: 12%;
+  left: 18%;
+}
+
+[data-pm-jira] .pm-empty-companion-sparkle-b {
+  top: 8%;
+  right: 22%;
+  color: #0052cc;
+  animation-delay: 0.8s;
+}
+
+[data-pm-jira] .pm-empty-companion-sparkle-c {
+  bottom: 28%;
+  right: 14%;
+  animation-delay: 1.4s;
+}
+
+[data-pm-jira] .pm-empty-companion-bubble {
+  position: relative;
+  max-width: 100%;
+  margin-bottom: 0.65rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1.5px solid #dfe1e6;
+  box-shadow: 0 2px 8px rgba(9, 30, 66, 0.08);
+  animation: pm-companion-bubble-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both,
+    pm-companion-bubble-wiggle 3.5s ease-in-out 0.5s infinite;
+}
+
+[data-pm-jira] .pm-empty-companion-bubble--excited {
+  border-color: #0c66e4;
+  background: #deebff;
+  animation: pm-companion-bubble-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both,
+    pm-companion-bubble-wiggle 0.6s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-empty-companion-bubble-text {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: #42526e;
+}
+
+[data-pm-jira] .pm-empty-companion-bubble--excited .pm-empty-companion-bubble-text {
+  color: #0c66e4;
+}
+
+[data-pm-jira] .pm-empty-companion-bubble-tail {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-right: 1.5px solid #dfe1e6;
+  border-bottom: 1.5px solid #dfe1e6;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+[data-pm-jira] .pm-empty-companion-bubble--excited .pm-empty-companion-bubble-tail {
+  background: #deebff;
+  border-color: #0c66e4;
+}
+
+[data-pm-jira] .pm-empty-companion-avatar-wrap {
+  position: relative;
+  margin-bottom: 0.35rem;
+}
+
+[data-pm-jira] .pm-empty-companion-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(9, 30, 66, 0.12));
+  animation: pm-companion-float 2.8s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-empty-companion--comfortable .pm-empty-companion-avatar {
+  font-size: 3rem;
+}
+
+[data-pm-jira] .pm-empty-companion-avatar--hungry {
+  animation: pm-companion-hungry-shake 2.2s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-empty-companion-avatar--energetic {
+  animation: pm-companion-float 1.6s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-empty-companion-avatar--celebrate {
+  animation: pm-board-done-wiggle 2.5s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-empty-companion-zzz {
+  position: absolute;
+  top: -4px;
+  right: -12px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #97a0af;
+  animation: pm-companion-zzz-float 2.2s ease-out infinite;
+}
+
+[data-pm-jira] .pm-empty-companion-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #172b4d;
+}
+
+[data-pm-jira] .pm-empty-companion--comfortable .pm-empty-companion-title {
+  font-size: 14px;
+  margin-top: 0.25rem;
+}
+
+[data-pm-jira] .pm-empty-companion-hint {
+  margin: 0.35rem 0 0;
+  font-size: 11px;
+  color: #97a0af;
+  max-width: 220px;
+}
+
+/* ── Empty companion: animated mascot scenes ── */
+[data-pm-jira] .pm-empty-companion-scene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+[data-pm-jira] .pm-empty-companion-scene .pm-empty-companion-bubble {
+  position: relative;
+  z-index: 2;
+  margin-bottom: -0.35rem;
+  max-width: calc(100% - 0.5rem);
+}
+
+[data-pm-jira] .pm-empty-companion--comfortable .pm-empty-companion-scene .pm-empty-companion-bubble {
+  margin-bottom: -0.5rem;
+  max-width: 18rem;
+}
+
+[data-pm-jira] .pm-empty-companion--mini .pm-empty-companion-scene {
+  flex-direction: column-reverse;
+  gap: 0.15rem;
+}
+
+[data-pm-jira] .pm-empty-companion--mini .pm-empty-companion-scene .pm-empty-companion-bubble {
+  margin-bottom: 0;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot-frame {
+  position: relative;
+  z-index: 1;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #ffffff 0%, #f4f5f7 55%, #ebecf0 100%);
+  border: 2px solid #dfe1e6;
+  box-shadow:
+    0 8px 20px rgba(9, 30, 66, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--compact .pm-empty-companion-mascot-frame {
+  padding: 0.35rem 0.5rem 0.15rem;
+  border-radius: 14px;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--comfortable .pm-empty-companion-mascot-frame {
+  padding: 0.65rem 0.85rem 0.35rem;
+  border-radius: 18px;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--mini .pm-empty-companion-mascot-frame {
+  padding: 0.1rem 0.15rem 0;
+  border-radius: 10px;
+  border-width: 1.5px;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--hungry .pm-empty-companion-mascot-frame {
+  background: linear-gradient(160deg, #fff7e6 0%, #fff 50%, #deebff 100%);
+  border-color: #ffab00;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--energetic .pm-empty-companion-mascot-frame {
+  background: linear-gradient(160deg, #fff0db 0%, #fff 50%, #ffe8cc 100%);
+  border-color: #ff8b00;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--celebrate .pm-empty-companion-mascot-frame {
+  background: linear-gradient(160deg, #e3fcef 0%, #fff 50%, #deebff 100%);
+  border-color: #36b37e;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--curious .pm-empty-companion-mascot-frame {
+  background: linear-gradient(160deg, #f3f0ff 0%, #fff 50%, #deebff 100%);
+  border-color: #6554c0;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--alert .pm-empty-companion-mascot-frame {
+  background: linear-gradient(160deg, #ffebe6 0%, #fff 50%, #fff7e6 100%);
+  border-color: #ff5630;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--dreamy .pm-empty-companion-mascot-frame {
+  background: linear-gradient(160deg, #e6fcff 0%, #fff 50%, #e3fcef 100%);
+  border-color: #00b8d9;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--sleepy .pm-empty-companion-mascot-frame {
+  background: linear-gradient(160deg, #f4f5f7 0%, #fff 50%, #ebecf0 100%);
+  border-color: #97a0af;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--lonely .pm-empty-companion-mascot-frame {
+  background: linear-gradient(160deg, #f4f5f7 0%, #fff 50%, #deebff 100%);
+  border-color: #0c66e4;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.55) 48%,
+      transparent 62%);
+  animation: pm-mascot-shine-sweep 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot-frame svg {
+  display: block;
+  width: 88px;
+  height: 88px;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--comfortable .pm-empty-companion-mascot-frame svg {
+  width: 128px;
+  height: 128px;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--mini .pm-empty-companion-mascot-frame svg {
+  width: 40px;
+  height: 40px;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot-ring {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  color: #0c66e4;
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--mini .pm-empty-companion-mascot-ring {
+  display: none;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot-ring-stroke {
+  animation: pm-mascot-ring-spin 12s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes pm-mascot-shine-sweep {
+
+  0%,
+  100% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+
+  45% {
+    opacity: 0.7;
+  }
+
+  55% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes pm-mascot-ring-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pm-mascot-body-bounce {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes pm-mascot-body-pump {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  35% {
+    transform: scale(1.04);
+  }
+
+  65% {
+    transform: scale(0.98);
+  }
+}
+
+@keyframes pm-mascot-body-dance {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-3deg);
+  }
+
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes pm-mascot-body-float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes pm-mascot-body-tilt {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes pm-mascot-body-sway {
+
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes pm-mascot-arm-flex {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  50% {
+    transform: rotate(-12deg);
+  }
+}
+
+@keyframes pm-mascot-plate-bob {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+@keyframes pm-mascot-trophy-lift {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-6px) rotate(-4deg);
+  }
+}
+
+@keyframes pm-mascot-glass-sweep {
+
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  50% {
+    transform: translate(4px, 2px) rotate(8deg);
+  }
+}
+
+@keyframes pm-mascot-cloud-drift {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  50% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes pm-mascot-sprout-grow {
+
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  50% {
+    transform: scaleY(1.08);
+  }
+}
+
+@keyframes pm-mascot-cone-blink {
+
+  0%,
+  90%,
+  100% {
+    opacity: 1;
+  }
+
+  95% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes pm-mascot-confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(18px) rotate(120deg);
+    opacity: 0.3;
+  }
+}
+
+@keyframes pm-mascot-box-wiggle {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes pm-mascot-zzz-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  40% {
+    opacity: 0.9;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes pm-mascot-spark-pop {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+[data-pm-jira] .pm-mascot-body--bounce {
+  animation: pm-mascot-body-bounce 2s ease-in-out infinite;
+  transform-origin: center;
+}
+
+[data-pm-jira] .pm-mascot-body--pump {
+  animation: pm-mascot-body-pump 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+[data-pm-jira] .pm-mascot-body--dance {
+  animation: pm-mascot-body-dance 2.2s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+[data-pm-jira] .pm-mascot-body--float {
+  animation: pm-mascot-body-float 2.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+[data-pm-jira] .pm-mascot-body--tilt {
+  animation: pm-mascot-body-tilt 3s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+[data-pm-jira] .pm-mascot-body--sway {
+  animation: pm-mascot-body-sway 3.5s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+[data-pm-jira] .pm-mascot-arm--flex-left {
+  animation: pm-mascot-arm-flex 1.2s ease-in-out infinite;
+  transform-origin: 26px 58px;
+}
+
+[data-pm-jira] .pm-mascot-arm--flex-right {
+  animation: pm-mascot-arm-flex 1.2s ease-in-out 0.15s infinite;
+  transform-origin: 94px 58px;
+}
+
+[data-pm-jira] .pm-mascot-plate--bob {
+  animation: pm-mascot-plate-bob 1.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+[data-pm-jira] .pm-mascot-trophy--lift {
+  animation: pm-mascot-trophy-lift 2s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+[data-pm-jira] .pm-mascot-glass--sweep {
+  animation: pm-mascot-glass-sweep 2.4s ease-in-out infinite;
+  transform-origin: 82px 48px;
+}
+
+[data-pm-jira] .pm-mascot-cloud--drift {
+  animation: pm-mascot-cloud-drift 3.2s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-mascot-sprout--grow {
+  animation: pm-mascot-sprout-grow 2s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+[data-pm-jira] .pm-mascot-cone--blink {
+  animation: pm-mascot-cone-blink 2.5s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-mascot-box--wiggle {
+  animation: pm-mascot-box-wiggle 2.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+[data-pm-jira] .pm-mascot-confetti--1 {
+  animation: pm-mascot-confetti-fall 2.2s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-mascot-confetti--2 {
+  animation: pm-mascot-confetti-fall 2.6s ease-in-out 0.4s infinite;
+}
+
+[data-pm-jira] .pm-mascot-confetti--3 {
+  animation: pm-mascot-confetti-fall 2s ease-in-out 0.8s infinite;
+}
+
+[data-pm-jira] .pm-mascot-spark--a {
+  animation: pm-mascot-spark-pop 1.5s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-mascot-spark--b {
+  animation: pm-mascot-spark-pop 1.5s ease-in-out 0.5s infinite;
+}
+
+[data-pm-jira] .pm-mascot-zzz--a {
+  animation: pm-mascot-zzz-rise 2.2s ease-out infinite;
+}
+
+[data-pm-jira] .pm-mascot-zzz--b {
+  animation: pm-mascot-zzz-rise 2.2s ease-out 0.5s infinite;
+}
+
+[data-pm-jira] .pm-mascot-zzz--c {
+  animation: pm-mascot-zzz-rise 2.2s ease-out 1s infinite;
+}
+
+[data-pm-jira] .pm-mascot-mouth--open {
+  animation: pm-mascot-body-pump 1.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+[data-pm-jira] .pm-empty-companion--drop-target .pm-empty-companion-mascot-frame {
+  animation: pm-companion-drop-glow 0.9s ease-in-out infinite;
+  border-color: #0c66e4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  [data-pm-jira] .pm-empty-companion-mascot-shine,
+  [data-pm-jira] .pm-empty-companion-mascot-ring-stroke,
+  [data-pm-jira] .pm-mascot-body--bounce,
+  [data-pm-jira] .pm-mascot-body--pump,
+  [data-pm-jira] .pm-mascot-body--dance,
+  [data-pm-jira] .pm-mascot-body--float,
+  [data-pm-jira] .pm-mascot-body--tilt,
+  [data-pm-jira] .pm-mascot-body--sway,
+  [data-pm-jira] .pm-mascot-arm--flex-left,
+  [data-pm-jira] .pm-mascot-arm--flex-right,
+  [data-pm-jira] .pm-mascot-plate--bob,
+  [data-pm-jira] .pm-mascot-trophy--lift,
+  [data-pm-jira] .pm-mascot-glass--sweep,
+  [data-pm-jira] .pm-mascot-cloud--drift,
+  [data-pm-jira] .pm-mascot-sprout--grow,
+  [data-pm-jira] .pm-mascot-cone--blink,
+  [data-pm-jira] .pm-mascot-box--wiggle,
+  [data-pm-jira] .pm-mascot-confetti--1,
+  [data-pm-jira] .pm-mascot-confetti--2,
+  [data-pm-jira] .pm-mascot-confetti--3,
+  [data-pm-jira] .pm-mascot-spark--a,
+  [data-pm-jira] .pm-mascot-spark--b,
+  [data-pm-jira] .pm-mascot-zzz--a,
+  [data-pm-jira] .pm-mascot-zzz--b,
+  [data-pm-jira] .pm-mascot-zzz--c,
+  [data-pm-jira] .pm-mascot-mouth--open {
+    animation: none !important;
+  }
+}
+
+[data-pm-jira] .pm-board-column-empty.pm-board-column-empty--companion {
+  border: none;
+  margin: 0 0 0.5rem;
+  background: transparent;
+  min-height: 0;
+  padding: 0.25rem 0;
+}
+
+/* ── Empty state: unified illustration banners ── */
+[data-pm-jira] .pm-empty-banner {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 2px solid #dfe1e6;
+  box-shadow: 0 10px 28px rgba(9, 30, 66, 0.1);
+  background: linear-gradient(135deg, #ffffff 0%, #f4f5f7 100%);
+}
+
+[data-pm-jira] .pm-empty-banner__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg,
+      transparent 28%,
+      rgba(255, 255, 255, 0.65) 48%,
+      transparent 68%);
+  animation: pm-mascot-shine-sweep 3.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+[data-pm-jira] .pm-empty-banner__pattern {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background-image: radial-gradient(circle at 12% 18%, rgba(12, 102, 228, 0.12) 0%, transparent 42%),
+    radial-gradient(circle at 88% 82%, rgba(255, 139, 0, 0.1) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+[data-pm-jira] .pm-empty-banner__visual {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+[data-pm-jira] .pm-empty-banner--compact .pm-empty-banner__visual {
+  padding: 0.35rem 0.35rem 0.45rem;
+  min-height: 118px;
+}
+
+[data-pm-jira] .pm-empty-banner--comfortable .pm-empty-banner__visual {
+  padding: 0.75rem 0.85rem 0.85rem;
+  min-height: 172px;
+  max-width: 15rem;
+  margin: 0 auto;
+}
+
+[data-pm-jira] .pm-empty-banner--mini .pm-empty-banner__visual {
+  padding: 0.15rem;
+  min-height: 48px;
+}
+
+/* ── Illustration-integrated comic labels ── */
+[data-pm-jira] .pm-empty-illust-label {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  width: 92%;
+  max-width: 11rem;
+  pointer-events: none;
+}
+
+[data-pm-jira] .pm-empty-banner--comfortable .pm-empty-illust-label {
+  max-width: 13rem;
+}
+
+[data-pm-jira] .pm-empty-banner--mini .pm-empty-illust-label {
+  width: auto;
+  max-width: none;
+  left: auto;
+  right: -2px;
+  top: -2px;
+  transform: rotate(8deg) scale(0.72);
+  transform-origin: top right;
+}
+
+[data-pm-jira] .pm-empty-illust-label__burst {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 88%;
+  height: auto;
+  transform: translate(-50%, -50%);
+  color: #ffab00;
+  animation: pm-illust-burst-spin 8s linear infinite;
+}
+
+[data-pm-jira] .pm-empty-illust-label__bubble {
+  position: relative;
+  width: 100%;
+}
+
+[data-pm-jira] .pm-empty-illust-label__bubble-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 3px 6px rgba(9, 30, 66, 0.12));
+}
+
+[data-pm-jira] .pm-empty-illust-label__bubble-fill {
+  fill: #ffffff;
+}
+
+[data-pm-jira] .pm-empty-illust-label__bubble-stroke {
+  stroke: #172b4d;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+[data-pm-jira] .pm-empty-illust-label--energetic .pm-empty-illust-label__bubble-stroke {
+  stroke: #ff8b00;
+}
+
+[data-pm-jira] .pm-empty-illust-label--celebrate .pm-empty-illust-label__bubble-stroke {
+  stroke: #36b37e;
+}
+
+[data-pm-jira] .pm-empty-illust-label--hungry .pm-empty-illust-label__bubble-stroke {
+  stroke: #ffab00;
+}
+
+[data-pm-jira] .pm-empty-illust-label--curious .pm-empty-illust-label__bubble-stroke {
+  stroke: #6554c0;
+}
+
+[data-pm-jira] .pm-empty-illust-label--alert .pm-empty-illust-label__bubble-stroke {
+  stroke: #ff5630;
+}
+
+[data-pm-jira] .pm-empty-illust-label--dreamy .pm-empty-illust-label__bubble-stroke {
+  stroke: #00b8d9;
+}
+
+[data-pm-jira] .pm-empty-illust-label__type {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.5rem 0.55rem;
+  text-align: center;
+}
+
+[data-pm-jira] .pm-empty-illust-label__primary {
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #172b4d;
+  -webkit-text-stroke: 0.4px rgba(255, 255, 255, 0.9);
+  paint-order: stroke fill;
+  text-shadow:
+    1px 1px 0 #fff,
+    -1px 1px 0 #fff,
+    1px -1px 0 #fff,
+    0 2px 0 rgba(9, 30, 66, 0.15);
+  animation: pm-illust-text-pop 2.4s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-empty-banner--comfortable .pm-empty-illust-label__primary {
+  font-size: 14px;
+}
+
+[data-pm-jira] .pm-empty-banner--mini .pm-empty-illust-label__primary {
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+
+[data-pm-jira] .pm-empty-illust-label__secondary {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: #5e6c84;
+  font-style: italic;
+}
+
+[data-pm-jira] .pm-empty-banner--comfortable .pm-empty-illust-label__secondary {
+  font-size: 9px;
+}
+
+[data-pm-jira] .pm-empty-illust-label--energetic .pm-empty-illust-label__primary {
+  color: #de350b;
+}
+
+[data-pm-jira] .pm-empty-illust-label--celebrate .pm-empty-illust-label__primary {
+  color: #006644;
+}
+
+[data-pm-jira] .pm-empty-banner--drop-target .pm-empty-illust-label__primary {
+  color: #0c66e4;
+  animation: pm-illust-text-pop 0.45s ease-in-out infinite;
+}
+
+@keyframes pm-illust-burst-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes pm-illust-text-pop {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  [data-pm-jira] .pm-empty-illust-label__burst,
+  [data-pm-jira] .pm-empty-illust-label__primary {
+    animation: none !important;
+  }
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--excited svg {
+  animation: pm-mascot-body-pump 0.55s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-empty-companion-mascot--bare svg {
+  display: block;
+  width: 96px;
+  height: 96px;
+}
+
+[data-pm-jira] .pm-empty-banner--comfortable .pm-empty-companion-mascot--bare svg {
+  width: 140px;
+  height: 140px;
+}
+
+[data-pm-jira] .pm-empty-banner--mini .pm-empty-companion-mascot--bare svg {
+  width: 40px;
+  height: 40px;
+}
+
+[data-pm-jira] .pm-empty-banner--hungry {
+  border-color: #ffab00;
+  background: linear-gradient(135deg, #fff7e6 0%, #ffffff 55%, #deebff 100%);
+}
+
+[data-pm-jira] .pm-empty-banner--energetic {
+  border-color: #ff8b00;
+  background: linear-gradient(135deg, #fff0db 0%, #ffffff 55%, #ffe8cc 100%);
+}
+
+[data-pm-jira] .pm-empty-banner--celebrate {
+  border-color: #36b37e;
+  background: linear-gradient(135deg, #e3fcef 0%, #ffffff 55%, #deebff 100%);
+}
+
+[data-pm-jira] .pm-empty-banner--curious {
+  border-color: #6554c0;
+  background: linear-gradient(135deg, #f3f0ff 0%, #ffffff 55%, #deebff 100%);
+}
+
+[data-pm-jira] .pm-empty-banner--alert {
+  border-color: #ff5630;
+  background: linear-gradient(135deg, #ffebe6 0%, #ffffff 55%, #fff7e6 100%);
+}
+
+[data-pm-jira] .pm-empty-banner--dreamy {
+  border-color: #00b8d9;
+  background: linear-gradient(135deg, #e6fcff 0%, #ffffff 55%, #e3fcef 100%);
+}
+
+[data-pm-jira] .pm-empty-banner--sleepy {
+  border-color: #97a0af;
+  background: linear-gradient(135deg, #f4f5f7 0%, #ffffff 55%, #ebecf0 100%);
+}
+
+[data-pm-jira] .pm-empty-banner--lonely {
+  border-color: #0c66e4;
+  background: linear-gradient(135deg, #f4f5f7 0%, #ffffff 55%, #deebff 100%);
+}
+
+[data-pm-jira] .pm-empty-banner--drop-target {
+  animation: pm-companion-drop-glow 0.9s ease-in-out infinite;
+  border-color: #0c66e4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  [data-pm-jira] .pm-empty-banner__shine,
+  [data-pm-jira] .pm-empty-banner__spark {
+    animation: none !important;
+  }
+}
+
+[data-pm-jira] .pm-board-inline-create.pm-board-inline-create-pop {
+  animation: pm-board-inline-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: top center;
+}
+
+[data-pm-jira] .pm-board-create-btn-pop:hover {
+  animation: pm-board-btn-wiggle 0.45s ease-in-out;
+}
+
+[data-pm-jira] .pm-board-kanban-column .pm-board-add-issue-btn:hover {
+  animation: pm-board-btn-wiggle 0.4s ease-in-out;
+}
+
+[data-pm-jira] .pm-board-avatar-pop {
+  animation: pm-board-avatar-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-pm-jira] .pm-board-done-check-wiggle {
+  animation: pm-board-done-wiggle 0.55s ease-in-out;
+}
+
+[data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-icon {
+  animation: pm-board-tab-pop 0.35s ease-out;
+}
+
+[data-pm-jira] .pm-board-confetti-piece {
+  position: absolute;
+  top: -12px;
+  left: var(--pm-confetti-left);
+  width: calc(7px + (var(--pm-confetti-i) % 3) * 3px);
+  height: calc(7px + (var(--pm-confetti-i) % 4) * 2px);
+  border-radius: calc(2px + (var(--pm-confetti-i) % 2));
+  background: var(--pm-confetti-color);
+  opacity: 0.95;
+  animation: pm-board-confetti-fall 1.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation-delay: var(--pm-confetti-delay);
+  transform: rotate(var(--pm-confetti-rotate));
+}
+
+[data-pm-jira] .pm-board-celebration-star {
+  position: absolute;
+  top: 38%;
+  font-size: 1.75rem;
+  color: #ffc400;
+  text-shadow: 0 0 12px rgba(255, 196, 0, 0.45);
+  animation: pm-board-star-pop 0.9s ease-out forwards;
+  pointer-events: none;
+}
+
+[data-pm-jira] .pm-board-celebration-star-a {
+  left: 42%;
+}
+
+[data-pm-jira] .pm-board-celebration-star-b {
+  left: 50%;
+  font-size: 2rem;
+  color: #36b37e;
+  animation-delay: 0.08s;
+}
+
+[data-pm-jira] .pm-board-celebration-star-c {
+  left: 58%;
+  color: #0052cc;
+  animation-delay: 0.14s;
+}
+
+@keyframes pm-board-bubble-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(-15deg);
+  }
+
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.35) rotate(8deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.7) rotate(20deg);
+  }
+}
+
+[data-pm-jira] .pm-board-celebration-bubble {
+  position: absolute;
+  top: 34%;
+  font-size: 2.25rem;
+  line-height: 1;
+  filter: drop-shadow(0 4px 12px rgba(9, 30, 66, 0.2));
+  animation: pm-board-bubble-pop 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
+[data-pm-jira] .pm-board-celebration-bubble-a {
+  left: 38%;
+}
+
+[data-pm-jira] .pm-board-celebration-bubble-b {
+  left: 50%;
+  font-size: 2.5rem;
+  animation-delay: 0.06s;
+}
+
+[data-pm-jira] .pm-board-celebration-bubble-c {
+  left: 62%;
+  animation-delay: 0.12s;
+}
+
+/* CRM kanban cartoon polish (shares PM keyframes) */
+[data-pm-jira] .crm-playful .crm-kanban-card.crm-kanban-card-enter {
+  animation: pm-board-card-enter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--crm-card-enter-delay, 0ms);
+}
+
+[data-pm-jira] .crm-playful .crm-kanban-card.crm-kanban-card-idle:hover {
+  animation: pm-board-card-hover-pop 0.28s ease-out forwards;
+  z-index: 2;
+}
+
+[data-pm-jira] .crm-kanban-card.crm-kanban-card-landed {
+  animation: pm-board-card-land 0.52s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-pm-jira] .crm-kanban-column.crm-kanban-column-pulse {
+  animation: pm-board-column-pulse 0.52s ease-out;
+}
+
+[data-pm-jira] .crm-kanban-column.crm-kanban-column-win-glow {
+  box-shadow: inset 0 0 0 2px rgba(54, 179, 126, 0.4), 0 0 24px rgba(54, 179, 126, 0.15);
+}
+
+[data-pm-jira] .crm-kanban-card-dragging {
+  opacity: 0.35;
+  transform: scale(0.97) rotate(-1deg);
+}
+
+[data-pm-jira] .crm-create-btn-pop:hover {
+  animation: pm-board-btn-wiggle 0.45s ease-in-out;
+}
+
+[data-pm-jira] .crm-kanban-count-pop {
+  display: inline-block;
+  animation: pm-board-count-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-pm-jira] .pm-board-kanban-column.pm-board-column-done-glow {
+  box-shadow: inset 0 0 0 1px rgba(54, 179, 126, 0.35);
+}
+
+[data-pm-jira] .pm-empty-companion-panel {
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  padding: 1rem 0;
+}
+
+@keyframes pm-done-pakka-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pm-done-pakka-emoji-wobble {
+
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  25% {
+    transform: rotate(-8deg) scale(1.08);
+  }
+
+  75% {
+    transform: rotate(8deg) scale(1.05);
+  }
+}
+
+[data-pm-jira] .pm-done-pakka-dialog {
+  animation: pm-done-pakka-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-pm-jira] .pm-done-pakka-emoji {
+  display: block;
+  margin: 0 auto 0.5rem;
+  font-size: 2.5rem;
+  line-height: 1;
+  animation: pm-done-pakka-emoji-wobble 1.2s ease-in-out infinite;
+}
+
+[data-pm-jira] .pm-done-pakka-quote {
+  animation: pm-companion-bubble-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+
+[data-pm-jira] .pm-done-pakka-confirm:hover {
+  animation: pm-board-btn-wiggle 0.4s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  [data-pm-jira] .pm-done-pakka-dialog,
+  [data-pm-jira] .pm-done-pakka-emoji,
+  [data-pm-jira] .pm-done-pakka-quote,
+  [data-pm-jira] .pm-done-pakka-confirm:hover {
+    animation: none !important;
+  }
+}
+
+@keyframes pm-nibhana-enter {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes pm-nibhana-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(12px) scale(0.96);
+  }
+}
+
+@keyframes pm-nibhana-progress-shrink {
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes pm-nibhana-avatar-pump {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+[data-pm-jira] .pm-in-progress-nibhana-toast--enter {
+  animation: pm-nibhana-enter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-pm-jira] .pm-in-progress-nibhana-toast--exit {
+  animation: pm-nibhana-exit 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+[data-pm-jira] .pm-in-progress-nibhana-progress {
+  animation: pm-nibhana-progress-shrink 2s linear forwards;
+}
+
+[data-pm-jira] .pm-in-progress-nibhana-avatar {
+  animation: pm-nibhana-avatar-pump 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  [data-pm-jira] .pm-in-progress-nibhana-toast--enter,
+  [data-pm-jira] .pm-in-progress-nibhana-toast--exit,
+  [data-pm-jira] .pm-in-progress-nibhana-avatar,
+  [data-pm-jira] .pm-in-progress-nibhana-progress {
+    animation: none !important;
+  }
+}
+
+@keyframes lms-padh-le-enter {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes lms-padh-le-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(12px) scale(0.96);
+  }
+}
+
+@keyframes lms-padh-le-progress-shrink {
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes lms-padh-le-avatar-pump {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+[data-pm-jira] .lms-padh-le-toast--enter {
+  animation: lms-padh-le-enter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-pm-jira] .lms-padh-le-toast--exit {
+  animation: lms-padh-le-exit 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+[data-pm-jira] .lms-padh-le-progress {
+  animation: lms-padh-le-progress-shrink 2.5s linear forwards;
+}
+
+[data-pm-jira] .lms-padh-le-avatar {
+  animation: lms-padh-le-avatar-pump 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  [data-pm-jira] .lms-padh-le-toast--enter,
+  [data-pm-jira] .lms-padh-le-toast--exit,
+  [data-pm-jira] .lms-padh-le-avatar,
+  [data-pm-jira] .lms-padh-le-progress {
+    animation: none !important;
+  }
+}
+
+[data-pm-jira] .pm-calendar-day-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.5rem;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+[data-pm-jira] .group:hover .pm-calendar-day-empty {
+  opacity: 0.35;
+}
+
+[data-pm-jira] .pm-board-inline-create textarea,
+[data-pm-jira] .pm-board-inline-create button {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 14px !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .pm-issue-detail textarea,
+[data-pm-jira] .pm-issue-detail button,
+[data-pm-jira] .pm-issue-detail label {
+  font-family: inherit !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .pm-issue-detail h3 {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+}
+
+/* Create issue page + dialog — Jira form typography */
+[data-pm-jira] .pm-create-issue,
+[data-pm-jira] .pm-create-issue-dialog,
+[data-pm-jira] .pm-create-issue button,
+[data-pm-jira] .pm-create-issue-dialog button,
+[data-pm-jira] .pm-create-issue input,
+[data-pm-jira] .pm-create-issue textarea,
+[data-pm-jira] .pm-create-issue-dialog input,
+[data-pm-jira] .pm-create-issue-dialog textarea,
+[data-pm-jira] .pm-create-issue [role="combobox"],
+[data-pm-jira] .pm-create-issue-dialog [role="combobox"] {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .pm-create-issue,
+[data-pm-jira] .pm-create-issue-dialog {
+  font-size: 14px;
+  line-height: 1.42857143;
+  color: #172b4d;
+}
+
+[data-pm-jira] .crm-app-main .pm-create-issue h1,
+[data-pm-jira] .crm-app-main .pm-create-issue-dialog h2,
+[data-pm-jira] .pm-create-issue-title {
+  font-family: inherit !important;
+  font-size: 20px !important;
+  line-height: 1.2 !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .pm-create-issue-lead {
+  font-size: 14px !important;
+  line-height: 1.42857143 !important;
+  font-weight: 400 !important;
+  margin-top: 2px;
+}
+
+[data-pm-jira] .pm-create-issue label,
+[data-pm-jira] .pm-create-issue-dialog label {
+  font-size: 12px !important;
+  line-height: 1.33333333 !important;
+  font-weight: 600 !important;
+  color: #5e6c84 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-create-issue button,
+.theme-crm-hubspot[data-pm-jira] .pm-create-issue-dialog button {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+/* CRM modals & slide panels — normalize legacy uppercase / heavy type inside Jira overlays */
+[data-pm-jira] .crm-jira-modal,
+[data-pm-jira] .crm-jira-modal h1,
+[data-pm-jira] .crm-jira-modal h2,
+[data-pm-jira] .crm-jira-modal h3,
+[data-pm-jira] .crm-jira-modal h4 {
+  font-family: inherit !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+[data-pm-jira] .crm-jira-modal h2 {
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  color: #172b4d !important;
+}
+
+[data-pm-jira] .crm-jira-modal h3,
+[data-pm-jira] .crm-jira-modal h4 {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #5e6c84 !important;
+}
+
+[data-pm-jira] .crm-jira-modal .font-black {
+  font-weight: 600 !important;
+}
+
+[data-pm-jira] .crm-jira-modal label {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #5e6c84 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .crm-jira-modal input,
+[data-pm-jira] .crm-jira-modal textarea,
+[data-pm-jira] .crm-jira-modal select,
+[data-pm-jira] .crm-jira-modal [role="combobox"] {
+  border-radius: 3px !important;
+  border-color: #dfe1e6 !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
+[data-pm-jira] .crm-jira-modal input:focus,
+[data-pm-jira] .crm-jira-modal textarea:focus,
+[data-pm-jira] .crm-jira-modal select:focus {
+  border-color: #0c66e4 !important;
+  box-shadow: 0 0 0 1px rgba(12, 102, 228, 0.3) !important;
+}
+
+/* Scrollbars */
+.theme-crm-hubspot[data-pm-jira] .custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.theme-crm-hubspot[data-pm-jira] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c1c7d0;
+  border-radius: 4px;
+}
+
+.theme-crm-hubspot[data-pm-jira] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #97a0af;
+}
+
+.theme-crm-hubspot [data-pm-board-card] {
+  flex-shrink: 0;
+}
+
+/* PM Wiki — Confluence visual language */
+.theme-crm-hubspot[data-pm-jira] .pm-wiki-root,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page {
+  height: 100%;
+  min-height: 0;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki {
+  color: #172b4d;
+  background-color: #f4f5f7;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .text-primary {
+  color: #0c66e4 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .bg-primary {
+  background-color: #0c66e4 !important;
+  color: #ffffff !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .border-border {
+  border-color: #dfe1e6 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .bg-card {
+  background-color: #ffffff !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .bg-background {
+  background-color: #f4f5f7 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .text-muted-foreground {
+  color: #5e6c84 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .text-foreground {
+  color: #172b4d !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .bg-muted\/20,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .bg-muted\/10,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .bg-muted\/30 {
+  background-color: #fafbfc !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .hover\:bg-muted\/50:hover,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .hover\:bg-muted\/30:hover {
+  background-color: #f4f5f7 !important;
+}
+
+/* ── Confluence wiki: typography, editor, tables, code blocks ── */
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page {
+  --wiki-content-max: 100%;
+  --wiki-content-gutter: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 1.42857143;
+  letter-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-editor,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page button,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page input,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page h1 {
+  font-family: inherit;
+  letter-spacing: normal;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-comment-editor-shell {
+  padding-left: 1.75rem;
+  padding-right: 0;
+}
+
+/* Editor toolbar — Confluence flat icon bar */
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar button {
+  height: 2rem !important;
+  min-width: 2rem !important;
+  border-radius: 3px !important;
+  color: #44546f !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar button:hover {
+  background-color: #f4f5f7 !important;
+  color: #172b4d !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar button.bg-muted,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar button[class*='bg-primary'] {
+  background-color: #deebff !important;
+  color: #0c66e4 !important;
+}
+
+/* Body prose */
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror {
+  font-size: 14px !important;
+  line-height: 1.71428571 !important;
+  color: #172b4d !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror p,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror p {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+  font-size: 14px !important;
+  line-height: 1.71428571 !important;
+  color: #172b4d !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror p:first-child,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror p:first-child {
+  margin-top: 0;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror strong,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror strong {
+  font-weight: 600;
+  color: #172b4d;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror a,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror a {
+  color: #0c66e4;
+  text-decoration: none;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror a:hover,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror a:hover {
+  text-decoration: underline;
+  color: #0055cc;
+}
+
+/* Headings inside page body (not page title) */
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror h1,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror h1 {
+  font-size: 24px !important;
+  line-height: 1.25 !important;
+  font-weight: 600 !important;
+  color: #172b4d !important;
+  margin-top: 1.75rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror h2,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror h2 {
+  font-size: 20px !important;
+  line-height: 1.3 !important;
+  font-weight: 600 !important;
+  color: #172b4d !important;
+  margin-top: 1.5rem !important;
+  margin-bottom: 0.375rem !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror h3,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror h3 {
+  font-size: 16px !important;
+  line-height: 1.375 !important;
+  font-weight: 600 !important;
+  color: #172b4d !important;
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror ul,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror ol,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror ul,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror ol {
+  margin-top: 0.5rem;
+  padding-left: 1.5rem;
+  color: #172b4d;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror li,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror li {
+  margin-top: 0.25rem;
+  font-size: 14px;
+  line-height: 1.71428571;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror blockquote,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror blockquote {
+  border-left: 3px solid #dfe1e6 !important;
+  background: #f4f5f7 !important;
+  color: #42526e !important;
+  padding: 0.5rem 0.75rem !important;
+  margin: 0.75rem 0 !important;
+  border-radius: 0 3px 3px 0 !important;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror code:not(pre code),
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror code:not(pre code) {
+  background: #f4f5f7 !important;
+  color: #172b4d !important;
+  border: 1px solid #dfe1e6;
+  border-radius: 3px;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.857em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Tables — Confluence gray header rows */
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror table,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  font-size: 14px;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror th,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror td,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror th,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror td {
+  border: 1px solid #dfe1e6;
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  color: #172b4d;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror th,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror th {
+  background: #f4f5f7;
+  font-weight: 600;
+  text-align: left;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror tr:first-child td,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror tr:first-child td {
+  background: #fafbfc;
+}
+
+/* Code blocks */
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .code-block-lowlight-wrapper {
+  border: 1px solid #dfe1e6;
+  border-radius: 3px;
+  margin: 1rem 0;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .code-block-lowlight-header {
+  background: #f4f5f7;
+  border-bottom: 1px solid #dfe1e6;
+  padding: 0.375rem 0.75rem;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .code-block-lang-select {
+  color: #5e6c84 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .code-block-lowlight-pre {
+  background: #172b4d !important;
+  color: #f4f5f7 !important;
+  font-size: 12px;
+  line-height: 1.66666667;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror p.is-editor-empty:first-child::before,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror p.is-editor-empty:first-child::before {
+  color: #97a0af;
+  font-style: normal;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror img,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror img {
+  border-radius: 3px;
+  max-width: 100%;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .wiki-docmost .ProseMirror,
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .wiki-comment-editor-shell {
+  font-size: 14px;
+  line-height: 1.714;
+  color: #172b4d;
+}
+
+/* Confluence-style comments sidebar */
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .wiki-conf-comments .wiki-conf-mention {
+  display: inline;
+  border-radius: 10px;
+  background-color: #deebff;
+  color: #0055cc;
+  padding: 1px 6px;
+  font-weight: 500;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .wiki-conf-comments .wiki-conf-comment-compose .ProseMirror {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #172b4d;
+}
+
+.theme-crm-hubspot[data-pm-jira] .pm-wiki .wiki-conf-comments .wiki-conf-comment-compose .ProseMirror p.is-editor-empty:first-child::before {
+  color: #97a0af;
+  font-style: normal;
+}
+
+
+/* ---------- PM shell chrome (Jira canvas + sidebar) ---------- */
+html:not(.dark) [data-pm-jira] .crm-app-shell,
+html:not(.dark) [data-pm-jira] .slack-app-shell,
+html:not(.dark) [data-pm-jira] .crm-app-main,
+html:not(.dark) [data-pm-jira] .slack-app-main {
+  background-color: #f4f5f7 !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-app-header,
+html:not(.dark) [data-pm-jira] .slack-app-header,
+html:not(.dark) [data-pm-jira] .pm-jira-app-header {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+[data-pm-jira] .pm-jira-app-header,
+[data-pm-jira] .pm-jira-app-header * {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .pm-jira-app-header .pm-jira-header-icon,
+[data-pm-jira] .pm-jira-app-header .pm-jira-header-search-trigger {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  text-transform: none !important;
+}
+
+[data-pm-jira] .pm-jira-header-theme button {
+  height: 2rem !important;
+  width: 2rem !important;
+  border-radius: 5px !important;
+  color: #707070 !important;
+}
+
+[data-pm-jira] .pm-jira-header-theme button:hover {
+  background-color: #f7f8f9 !important;
+  color: #1f2020 !important;
+}
+
+html:not(.dark) [data-pm-jira] .crm-suite-sidebar {
+  background-color: #ffffff !important;
+  color: #1f2020 !important;
+  border-right-color: #e2e8f0 !important;
+  --suite-sidebar-muted: #707070;
+}
+
+[data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item.font-semibold,
+[data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item.text-\[\#0c66e4\],
+[data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item[class*="text-[var(--primary)]"] {
+  color: var(--primary, #e41f07) !important;
+}
+
+[data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item.font-semibold svg,
+[data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item.text-\[\#0c66e4\] svg {
+  color: var(--primary, #e41f07) !important;
+}
+
+/* Active icon tile — white glyph on solid primary */
+[data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-icon--active,
+[data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-icon--active svg {
+  color: #fff !important;
+}
+
+[data-pm-jira] .crm-suite-sidebar .suite-sidebar-section-label,
+[data-pm-jira] .crm-suite-sidebar .suite-sidebar-product-label {
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: var(--text-muted, #6b7280) !important;
+}
+
+[data-pm-jira] .crm-suite-sidebar .crm-hs-nav-item[class*="border-l-"],
+[data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item {
+  border-radius: 6px;
+  border-left-width: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-pm-jira] .crm-app-main {
+  padding: 0 !important;
+}
+
+[data-pm-jira] .pm-page-padded {
+  padding: 1.5rem !important;
+}
+
+@media (min-width: 640px) {
+  [data-pm-jira] .pm-page-padded {
+    padding: 1.5rem !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-pm-jira] .pm-page-padded {
+    padding: 1.5rem !important;
+  }
+}
+
+/* Tailwind semantic tokens inside PM */
+[data-pm-jira] .bg-background {
+  background-color: #f4f5f7 !important;
+}
+
+[data-pm-jira] .bg-card {
+  background-color: #ffffff !important;
+}
+
+[data-pm-jira] .border-border {
+  border-color: #dfe1e6 !important;
+}
+
+[data-pm-jira] .text-text-main,
+[data-pm-jira] .text-foreground {
+  color: #172b4d !important;
+}
+
+[data-pm-jira] .text-text-muted,
+[data-pm-jira] .text-muted-foreground {
+  color: #5e6c84 !important;
+}
+
+[data-pm-jira] .bg-surface-hover,
+[data-pm-jira] .hover\:bg-surface-hover:hover {
+  background-color: #f4f5f7 !important;
+}
+
+/* Primary actions — Jira blue */
+[data-pm-jira] button.bg-primary,
+[data-pm-jira] .bg-primary.text-primary-foreground,
+[data-pm-jira] .bg-primary.text-black {
+  background-color: #0c66e4 !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-pm-jira] button.bg-primary:hover,
+[data-pm-jira] .bg-primary.text-primary-foreground:hover {
+  background-color: #0055cc !important;
+}
+
+[data-pm-jira] .glass {
+  background: #ffffff !important;
+  border: 1px solid #dfe1e6 !important;
+  border-radius: 3px !important;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.13) !important;
+  backdrop-filter: none !important;
+}
+
+[data-pm-jira] .rounded-xl,
+[data-pm-jira] .rounded-2xl,
+[data-pm-jira] .rounded-3xl {
+  border-radius: 3px !important;
+}
+
+[data-pm-jira] [class*="rounded-[3px]"] {
+  border-radius: 3px !important;
+}
+
+/* Mirror Jira selectors for nested shell (ancestor has data-pm-jira) */
+[data-pm-jira] .text-primary {
+  color: #0c66e4 !important;
+}
+
+[data-pm-jira] .text-hs-link {
+  color: #0c66e4 !important;
+}
+
+[data-pm-jira] .border-primary {
+  border-color: #0c66e4 !important;
+}
+
+[data-pm-jira] .bg-primary\/10 {
+  background-color: #deebff !important;
+}
+
+[data-pm-jira] .crm-app-main h1,
+[data-pm-jira] .crm-app-main h2,
+[data-pm-jira] .crm-app-main h3 {
+  font-family: var(--pm-jira-font) !important;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none !important;
+  color: #172b4d;
+}
+
+[data-pm-jira] .crm-app-main h1 {
+  font-size: 1.5rem !important;
+  line-height: 1.333 !important;
+}
+
+[data-pm-jira] .crm-app-main h2 {
+  font-size: 1rem !important;
+  line-height: 1.4286 !important;
+}
+
+/* ---------- PM layout rhythm (Jira 16–24px gutters) ---------- */
+[data-pm-jira] .pm-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+[data-pm-jira] .pm-content-x {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+/** Tab panels below board toolbar — aligns with header/toolbar px-6 gutters. */
+[data-pm-jira] .pm-board-tab-content {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  padding-top: 0.75rem;
+  padding-bottom: 1.5rem;
+}
+
+[data-pm-jira] .pm-page-header {
+  border-bottom: 1px solid #dfe1e6;
+  padding-bottom: 1rem;
+}
+
+[data-pm-jira] .pm-eyebrow {
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+[data-pm-jira] .pm-section {
+  gap: 1rem;
+}
+
+/* Sci-fi label cleanup — keep issue keys monospace */
+[data-pm-jira] .crm-app-main .font-mono:not(.pm-issue-key) {
+  font-family: inherit !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+[data-pm-jira] .crm-app-main .tracking-widest:not(.pm-issue-key),
+[data-pm-jira] .crm-app-main [class*="tracking-[0.2em]"]:not(.pm-issue-key),
+[data-pm-jira] .crm-app-main [class*="tracking-[0.25em]"]:not(.pm-issue-key) {
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+/* CRM / HRMS legacy buttons & pills — Jira density */
+[data-pm-jira] .crm-app-main button.font-black,
+[data-pm-jira] .crm-app-main a.font-black,
+[data-pm-jira] .crm-app-main button.uppercase,
+[data-pm-jira] .crm-app-main a.uppercase {
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+[data-pm-jira] .crm-app-main button.rounded-xl,
+[data-pm-jira] .crm-app-main button.rounded-2xl,
+[data-pm-jira] .crm-app-main a.rounded-xl,
+[data-pm-jira] .crm-app-main a.rounded-2xl {
+  border-radius: 3px !important;
+  box-shadow: none !important;
+}
+
+/* HubSpot violet focus → Jira blue inside suite */
+.theme-crm-hubspot[data-pm-jira] input:focus,
+.theme-crm-hubspot[data-pm-jira] textarea:focus,
+.theme-crm-hubspot[data-pm-jira] select:focus,
+.theme-crm-hubspot[data-pm-jira] input:focus-visible:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+.theme-crm-hubspot[data-pm-jira] textarea:focus-visible,
+.theme-crm-hubspot[data-pm-jira] select:focus-visible,
+.theme-crm-hubspot[data-pm-jira] button.border-input.bg-background:focus,
+.theme-crm-hubspot[data-pm-jira] button.border-input.bg-background:focus-visible {
+  border-color: #0c66e4 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: 0 0 0 1px rgba(12, 102, 228, 0.35) !important;
+}
+
+/* Sidebar nav — Jira section labels */
+[data-pm-jira] .crm-suite-sidebar p[class*="uppercase"],
+[data-pm-jira] .crm-suite-sidebar span[class*="uppercase"] {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+}
+
+[data-pm-jira] .crm-suite-sidebar,
+[data-pm-jira] .crm-suite-sidebar * {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .crm-suite-sidebar .crm-hs-nav-item {
+  font-size: 14px !important;
+  line-height: 1.4286 !important;
+}
+
+[data-pm-jira] .crm-suite-sidebar .crm-hs-nav-item:not(.font-semibold) {
+  font-weight: 400 !important;
+}
+
+[data-pm-jira] .crm-suite-sidebar .crm-hs-nav-item.font-semibold {
+  font-weight: 500 !important;
+}
+
+[data-pm-jira] .suite-sidebar-collapse-btn {
+  background-color: #0c66e4 !important;
+  color: #ffffff !important;
+}
+
+[data-pm-jira] .suite-sidebar-collapse-btn:hover {
+  background-color: #0055cc !important;
+}
+
+/* Sidebar brand — compact Jira rail header */
+[data-pm-jira] .suite-sidebar-brand {
+  min-height: 3.5rem !important;
+  height: 3.5rem !important;
+}
+
+[data-pm-jira] .suite-jira-sidebar {
+  width: 15rem;
+}
+
+/* Main content panels — Jira card chrome */
+[data-pm-jira] .crm-app-main .glass,
+[data-pm-jira] .crm-app-main [class*="shadow-soft"] {
+  border-radius: 3px !important;
+  border-color: #dfe1e6 !important;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.13) !important;
+}
+
+[data-pm-jira] .crm-app-main .rounded-lg,
+[data-pm-jira] .crm-app-main .rounded-xl,
+[data-pm-jira] .crm-app-main .rounded-2xl {
+  border-radius: 3px !important;
+}
+
+[data-pm-jira] .suite-jira-shell {
+  background-color: #f4f5f7 !important;
+}
+
+[data-pm-jira] .suite-jira-main {
+  background-color: #f4f5f7 !important;
+}
+
+/* App switcher — Jira switch-apps menu */
+[data-pm-jira] .suite-workspace-trigger,
+[data-pm-jira] .suite-workspace-menu,
+[data-pm-jira] .suite-workspace-item {
+  font-family: var(--pm-jira-font) !important;
+  letter-spacing: normal !important;
+}
+
+[data-pm-jira] .suite-workspace-menu [data-radix-collection-item]:focus,
+[data-pm-jira] .suite-workspace-item:hover {
+  background-color: #f4f5f7 !important;
+}
+
+[data-pm-jira] .suite-workspace-item.bg-\[\#deebff\]:hover,
+[data-pm-jira] .suite-workspace-item[class*="deebff"]:hover {
+  background-color: #deebff !important;
+}
+
+/* Compact controls in PM toolbar */
+[data-pm-jira] .pm-toolbar-btn {
+  height: 2rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 3px;
+}
+
+/* =============================================================================================
+   Dark Mode Overrides for PM (Projects Section) and Suite Modules
+   ============================================================================= */
+.dark [data-pm-jira],
+.dark [data-pm-jira] .theme-crm-hubspot,
+.dark [data-pm-jira] .theme-collab-slack {
+  --background: #0a0a0a !important;
+  --foreground: #ffffff !important;
+  --primary-light: #1a1a1a !important;
+  --hs-link: #4791ff !important;
+  --hs-link-hover: #82b4ff !important;
+  --card-bg: #121212 !important;
+  --border-color: #2a2a2a !important;
+  --text-main: #ffffff !important;
+  --text-muted: #e4e4e7 !important;
+  --surface-dim: #141414 !important;
+  --surface-hover: #1a1a1a !important;
+  --color-input: #141414 !important;
+  --crm-shell-bg: #0a0a0a !important;
+  --crm-header-bg: #0f0f0f !important;
+  --crm-header-border: #2a2a2a !important;
+  --suite-sidebar-bg: #0f0f0f !important;
+  --suite-sidebar-fg: #ffffff !important;
+  --suite-sidebar-border: #2a2a2a !important;
+  --suite-sidebar-hover: #1a1a1a !important;
+  --suite-sidebar-active-bg: rgba(12, 102, 228, 0.25) !important;
+  --suite-sidebar-chip-bg: #1a1a1a !important;
+  --suite-sidebar-logo-ring: #2a2a2a !important;
+  --shell-main-bg: #0a0a0a !important;
+  --shell-header-bg: #0f0f0f !important;
+  --shell-border: #2a2a2a !important;
+  --shell-sidebar-bg: #0f0f0f !important;
+}
+
+.dark [data-pm-jira],
+.dark [data-pm-jira] .theme-crm-hubspot {
+  color: #ffffff !important;
+  background-color: #0a0a0a !important;
+}
+
+/* Force headings visibility in dark mode */
+.dark [data-pm-jira] h1,
+.dark [data-pm-jira] h2,
+.dark [data-pm-jira] h3,
+.dark [data-pm-jira] h4,
+.dark [data-pm-jira] h5,
+.dark [data-pm-jira] h6,
+.dark [data-pm-jira] .crm-app-main h1,
+.dark [data-pm-jira] .crm-app-main h2,
+.dark [data-pm-jira] .crm-app-main h3,
+.dark [data-pm-jira] .pm-page-title,
+.dark [data-pm-jira] .pm-board-project-title,
+.dark [data-pm-jira] .pm-board-project-title-text,
+.dark [data-pm-jira] .pm-board-eyebrow,
+.dark [data-pm-jira] .pm-summary h3,
+.dark [data-pm-jira] .pm-issue-detail h3,
+.dark [data-pm-jira] .pm-boards h2,
+.dark [data-pm-jira] .pm-create-issue-title,
+.dark [data-pm-jira] .crm-jira-modal h2 {
+  color: #ffffff !important;
+}
+
+/* Fix hardcoded utility backgrounds (remap white/gray backgrounds to blackish surfaces) */
+.dark [data-pm-jira] .bg-white,
+.dark [data-pm-jira] .\!bg-white,
+.dark [data-pm-jira] .bg-\[\#fafbfc\],
+.dark [data-pm-jira] .bg-\[\#f8fafc\],
+.dark [data-pm-jira] .bg-\[\#f7f8f9\],
+.dark [data-pm-jira] .bg-slate-50,
+.dark [data-pm-jira] .bg-slate-50\/50,
+.dark [data-pm-jira] .bg-slate-100,
+.dark [data-pm-jira] .pm-boards .bg-white,
+.dark [data-pm-jira] .pm-boards .border-b.bg-white,
+.dark [data-pm-jira] .pm-wiki-root .bg-card,
+.dark [data-pm-jira] .bg-card,
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror tr:first-child td,
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror tr:first-child td {
+  background-color: #121212 !important;
+}
+
+.dark [data-pm-jira] .bg-\[\#f4f5f7\],
+.dark [data-pm-jira] .bg-background,
+.dark [data-pm-jira] .bg-slate-200,
+.dark [data-pm-jira] .pm-boards,
+.dark [data-pm-jira] .pm-wiki {
+  background-color: #0a0a0a !important;
+}
+
+.dark [data-pm-jira] .bg-\[\#dfe1e6\],
+.dark [data-pm-jira] .bg-\[\#ebecf0\] {
+  background-color: #1a1a1a !important;
+}
+
+.dark [data-pm-jira] .ring-white {
+  --tw-ring-color: #121212 !important;
+}
+
+/* Sidebar structure, items and active highlights */
+.dark [data-pm-jira] .crm-suite-sidebar,
+.dark [data-pm-jira] .suite-jira-sidebar {
+  background-color: #0f0f0f !important;
+  color: #ffffff !important;
+  border-right-color: #2a2a2a !important;
+}
+
+/* Section headers (CRM / Inbound / Outbound) — bright, not ink-on-black */
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-section-label,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-product-label,
+.dark [data-pm-jira] .crm-suite-sidebar p[class*="uppercase"],
+.dark [data-pm-jira] .crm-suite-sidebar p[class*="text-[#5e6c84]"],
+.dark [data-pm-jira] .crm-suite-sidebar span[class*="text-[#5e6c84]"],
+.dark [data-pm-jira] .crm-suite-sidebar .text-\[\#5e6c84\] {
+  color: #f4f4f5 !important;
+}
+
+/* Inactive nav + icons — high-visibility light gray / white */
+.dark [data-pm-jira] .suite-sidebar-nav-item,
+.dark [data-pm-jira] .crm-hs-nav-item,
+.dark [data-pm-jira] .suite-sidebar-nav-item:not(.font-semibold),
+.dark [data-pm-jira] .crm-hs-nav-item:not(.font-semibold),
+.dark [data-pm-jira] .suite-sidebar-nav-item .text-\[\#42526e\],
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item {
+  color: #f4f4f5 !important;
+}
+
+.dark [data-pm-jira] .crm-suite-sidebar .crm-hs-nav-item svg,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item svg,
+.dark [data-pm-jira] .crm-suite-sidebar .text-\[\#5e6c84\] svg,
+.dark [data-pm-jira] .crm-suite-sidebar [class*="text-[#5e6c84]"] {
+  color: #e4e4e7 !important;
+}
+
+/* Active links: keep bright blue */
+.dark [data-pm-jira] .suite-sidebar-nav-itemActive,
+.dark [data-pm-jira] .suite-sidebar-nav-item[class*="bg-primary"],
+.dark [data-pm-jira] .suite-sidebar-nav-item[class*="deebff"],
+.dark [data-pm-jira] .suite-sidebar-nav-item.text-\[\#0c66e4\],
+.dark [data-pm-jira] .crm-hs-nav-item.font-semibold,
+.dark [data-pm-jira] .crm-hs-nav-item.font-semibold svg,
+.dark [data-pm-jira] .crm-suite-sidebar .suite-sidebar-nav-item.text-\[\#0c66e4\],
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item.font-semibold,
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item.font-semibold span,
+.dark [data-pm-jira] .crm-suite-sidebar a.crm-hs-nav-item.font-semibold svg {
+  color: #82b4ff !important;
+  background-color: rgba(12, 102, 228, 0.28) !important;
+}
+
+.dark [data-pm-jira] .suite-sidebar-nav-item:hover,
+.dark [data-pm-jira] .crm-hs-nav-item:hover {
+  color: #ffffff !important;
+  background-color: #1a1a1a !important;
+}
+
+.dark [data-pm-jira] .suite-sidebar-nav-item:hover svg,
+.dark [data-pm-jira] .crm-hs-nav-item:hover svg {
+  color: #ffffff !important;
+}
+
+/* Footer status */
+.dark [data-pm-jira] .crm-suite-sidebar .text-\[\#5e6c84\],
+.dark [data-pm-jira] .crm-suite-sidebar [class*="text-[#5e6c84]"] {
+  color: #e4e4e7 !important;
+}
+
+/* App switcher overlay / Switch apps dropdown */
+.dark .suite-workspace-menu,
+.dark [class*="workspaceMenu"] {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark .suite-workspace-item {
+  color: #fafaf9 !important;
+}
+
+.dark .suite-workspace-item:hover {
+  background-color: #2c2c2e !important;
+}
+
+.dark .suite-workspace-item.bg-\[\#deebff\],
+.dark .suite-workspace-item[class*="deebff"] {
+  background-color: rgba(12, 102, 228, 0.25) !important;
+}
+
+.dark .suite-workspace-item .text-\[\#172b4d\],
+.dark .suite-workspace-item .suite-workspace-name,
+.dark [class*="workspaceMenuTitle"] {
+  color: #fafaf9 !important;
+}
+
+.dark .suite-workspace-item .text-\[\#0c66e4\],
+.dark [class*="workspaceMenuTitleActive"] {
+  color: #4791ff !important;
+}
+
+.dark .suite-workspace-item .text-\[\#5e6c84\],
+.dark [class*="workspaceMenuTagline"] {
+  color: #a1a1aa !important;
+}
+
+.dark [data-pm-jira] .text-text-main,
+.dark [data-pm-jira] .text-foreground,
+.dark [data-pm-jira] .text-slate-900,
+.dark [data-pm-jira] .text-slate-800,
+.dark [data-pm-jira] .text-slate-700 {
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .text-text-muted,
+.dark [data-pm-jira] .text-muted-foreground,
+.dark [data-pm-jira] .text-slate-600,
+.dark [data-pm-jira] .text-slate-500 {
+  color: #a1a1aa !important;
+}
+
+/* Lighter, high-visibility colors for primary actions, links and tags */
+.dark [data-pm-jira] .text-\[\#0c66e4\],
+.dark [data-pm-jira] .text-\[\#0052cc\],
+.dark [data-pm-jira] .text-blue-600,
+.dark [data-pm-jira] .text-primary,
+.dark [data-pm-jira] .text-hs-link,
+.dark [data-pm-jira] .pm-issue-key {
+  color: #4791ff !important;
+}
+
+.dark [data-pm-jira] .hover\:text-\[\#0055cc\]:hover,
+.dark [data-pm-jira] .hover\:text-blue-700:hover,
+.dark [data-pm-jira] .pm-issue-key:hover {
+  color: #82b4ff !important;
+}
+
+/* Button override (avoid dark primary backgrounds) */
+.dark [data-pm-jira] button.bg-primary,
+.dark [data-pm-jira] .bg-primary.text-primary-foreground,
+.dark [data-pm-jira] .bg-primary.text-black {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] button.bg-primary:hover,
+.dark [data-pm-jira] .bg-primary.text-primary-foreground:hover {
+  background-color: #60a5fa !important;
+}
+
+/* Board card and inline create button hover states */
+.dark [data-pm-jira] .hover\:bg-\[\#ebecf0\]:hover,
+.dark [data-pm-jira] .hover\:bg-\[\#f4f5f7\]:hover,
+.dark [data-pm-jira] .hover\:bg-\[\#deebff\]:hover,
+.dark [data-pm-jira] .hover\:bg-slate-50:hover,
+.dark [data-pm-jira] .hover\:bg-slate-100:hover {
+  background-color: #27272a !important;
+}
+
+.dark [data-pm-jira] .hover\:text-\[\#172b4d\]:hover,
+.dark [data-pm-jira] .hover\:text-slate-900:hover {
+  color: #ffffff !important;
+}
+
+/* Utility text color overrides to ensure maximum visibility */
+.dark [data-pm-jira] .text-\[\#172b4d\],
+.dark [data-pm-jira] .text-\[\#33475b\],
+.dark [data-pm-jira] .text-\[\#111827\],
+.dark [data-pm-jira] .text-slate-900,
+.dark [data-pm-jira] .text-gray-900 {
+  color: #fafaf9 !important;
+}
+
+.dark [data-pm-jira] .text-\[\#42526e\],
+.dark [data-pm-jira] .text-\[\#44546f\],
+.dark [data-pm-jira] .text-slate-800,
+.dark [data-pm-jira] .text-slate-700,
+.dark [data-pm-jira] .text-gray-800,
+.dark [data-pm-jira] .text-gray-700 {
+  color: #e4e4e7 !important;
+}
+
+.dark [data-pm-jira] .text-\[\#5e6c84\],
+.dark [data-pm-jira] .text-\[\#516f90\],
+.dark [data-pm-jira] .text-slate-600,
+.dark [data-pm-jira] .text-slate-500,
+.dark [data-pm-jira] .text-gray-600,
+.dark [data-pm-jira] .text-gray-500 {
+  color: #a1a1aa !important;
+}
+
+/* Kanban card inside fields and dates visibility in dark mode */
+.dark [data-pm-jira] .pm-board-kanban-card .text-text-muted,
+.dark [data-pm-jira] .pm-board-kanban-card .text-xs.text-text-muted,
+.dark [data-pm-jira] .pm-board-kanban-card .text-xs,
+.dark [data-pm-jira] .pm-board-kanban-card span.text-text-muted,
+.dark [data-pm-jira] .pm-board-kanban-card div.text-text-muted,
+.dark [data-pm-jira] .pm-board-kanban-card .text-text-muted * {
+  color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .text-\[\#7a869a\],
+.dark [data-pm-jira] .text-\[\#97a0af\],
+.dark [data-pm-jira] .text-slate-400,
+.dark [data-pm-jira] .text-gray-400 {
+  color: #71717a !important;
+}
+
+/* Hardcoded margins, layouts & outer shells */
+.dark [data-pm-jira] .crm-app-shell,
+.dark [data-pm-jira] .slack-app-shell,
+.dark [data-pm-jira] .crm-app-main,
+.dark [data-pm-jira] .slack-app-main,
+.dark [data-pm-jira] .suite-jira-shell,
+.dark [data-pm-jira] .suite-jira-main,
+.dark [data-pm-jira] .pm-jira-app-header {
+  background-color: #121212 !important;
+}
+
+.dark [data-pm-jira] .crm-app-header,
+.dark [data-pm-jira] .slack-app-header,
+.dark [data-pm-jira] .pm-jira-app-header {
+  background-color: #1c1c1e !important;
+  border-bottom: 1px solid #2c2c2e !important;
+}
+
+/* Board columns & issue cards (vibrant / high-visibility) */
+.dark [data-pm-jira] .pm-board-kanban-column,
+.dark [data-pm-jira] [data-pm-board-column] {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .pm-board-kanban-card,
+.dark [data-pm-jira] [data-pm-board-card] {
+  background-color: #27272a !important;
+  border-color: #3f3f46 !important;
+  color: #fafaf9 !important;
+}
+
+.dark [data-pm-jira] .pm-board-kanban-card:hover,
+.dark [data-pm-jira] [data-pm-board-card]:hover {
+  background-color: #3f3f46 !important;
+}
+
+/* Modals, panels, popups and borders */
+.dark [data-pm-jira] .glass,
+.dark [data-pm-jira] .pm-panel,
+.dark [data-pm-jira] .crm-app-main .glass,
+.dark [data-pm-jira] .border-\[\#dfe1e6\],
+.dark [data-pm-jira] .border-\[\#ebecf0\],
+.dark [data-pm-jira] .border-slate-100,
+.dark [data-pm-jira] .border-slate-200,
+.dark [data-pm-jira] .border-slate-300,
+.dark [data-pm-jira] .border-gray-200 {
+  border-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .border-\[\#b3d4ff\],
+.dark [data-pm-jira] .border-blue-200 {
+  border-color: #3b82f6 !important;
+}
+
+.dark [data-pm-jira] input,
+.dark [data-pm-jira] textarea,
+.dark [data-pm-jira] select,
+.dark [data-pm-jira] [role="combobox"],
+.dark [data-pm-jira] .crm-jira-modal input,
+.dark [data-pm-jira] .crm-jira-modal textarea,
+.dark [data-pm-jira] .crm-jira-modal select,
+.dark [data-pm-jira] .crm-jira-modal [role="combobox"] {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+  color: #fafaf9 !important;
+}
+
+/* Wiki document and comments view updates */
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror th,
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror th,
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-proseMirror code:not(pre code),
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-prose .ProseMirror code:not(pre code) {
+  background-color: #1c1c1e !important;
+  color: #fafaf9 !important;
+  border-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar button {
+  color: #fafaf9 !important;
+}
+
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar button:hover {
+  background-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar button.bg-muted,
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .wiki-conf-toolbar button[class*='bg-primary'] {
+  background-color: rgba(12, 102, 228, 0.25) !important;
+  color: #4791ff !important;
+}
+
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .code-block-lowlight-wrapper {
+  border-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .code-block-lowlight-header {
+  background: #1c1c1e !important;
+  border-bottom-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .pm-wiki.wiki-conf-page .code-block-lang-select {
+  color: #a1a1aa !important;
+}
+
+/* Board Header Tab Overrides */
+.dark [data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-label,
+.dark [data-pm-jira] .pm-board-tab[data-active="true"] .pm-board-tab-icon,
+.dark [data-pm-jira] .pm-board-tab[data-active="true"],
+.dark [data-pm-jira] .pm-jira-tab[data-active="true"],
+.dark [data-pm-jira] .pm-board-tab[data-active="true"] span,
+.dark [data-pm-jira] .pm-jira-tab[data-active="true"] span,
+.dark [data-pm-jira] .pm-board-tab[data-active="true"] svg,
+.dark [data-pm-jira] .pm-jira-tab[data-active="true"] svg,
+.dark [data-pm-jira] .pm-board-tab-bar button[data-active="true"],
+.dark [data-pm-jira] .pm-board-tab-bar button[data-active="true"] span,
+.dark [data-pm-jira] .pm-board-tab-bar button[data-active="true"] svg {
+  color: #4791ff !important;
+  border-bottom-color: #4791ff !important;
+}
+
+.dark [data-pm-jira] .pm-board-tab[data-active="false"] .pm-board-tab-label,
+.dark [data-pm-jira] .pm-board-tab[data-active="false"] .pm-board-tab-icon,
+.dark [data-pm-jira] .pm-board-tab[data-active="false"],
+.dark [data-pm-jira] .pm-jira-tab[data-active="false"],
+.dark [data-pm-jira] .pm-board-tab[data-active="false"] span,
+.dark [data-pm-jira] .pm-jira-tab[data-active="false"] span,
+.dark [data-pm-jira] .pm-board-tab[data-active="false"] svg,
+.dark [data-pm-jira] .pm-jira-tab[data-active="false"] svg,
+.dark [data-pm-jira] .pm-board-tab-bar button[data-active="false"],
+.dark [data-pm-jira] .pm-board-tab-bar button[data-active="false"] span,
+.dark [data-pm-jira] .pm-board-tab-bar button[data-active="false"] svg {
+  color: #ffffff !important;
+  border-bottom-color: transparent !important;
+}
+
+.dark [data-pm-jira] .pm-board-tab[data-active="false"]:hover .pm-board-tab-label,
+.dark [data-pm-jira] .pm-board-tab[data-active="false"]:hover .pm-board-tab-icon,
+.dark [data-pm-jira] .pm-board-tab[data-active="false"]:hover,
+.dark [data-pm-jira] .pm-jira-tab[data-active="false"]:hover,
+.dark [data-pm-jira] .pm-board-tab-bar button[data-active="false"]:hover {
+  color: #ffffff !important;
+  background-color: #27272a !important;
+}
+
+/* =============================================================================
+   Sheet Drawers, Dialog Portals, and Select Dropdowns Overrides
+   ============================================================================= */
+.dark .pm-issue-detail,
+.dark .crm-jira-modal,
+.dark .pm-create-issue-dialog,
+.dark [role="dialog"],
+.dark [data-radix-portal] [role="dialog"] {
+  background-color: #121212 !important;
+  color: #fafaf9 !important;
+  border-color: #27272a !important;
+}
+
+.dark .pm-issue-detail .bg-white,
+.dark .pm-issue-detail .\!bg-white,
+.dark .crm-jira-modal .bg-white,
+.dark .pm-create-issue-dialog .bg-white,
+.dark [role="dialog"] .bg-white,
+.dark [role="dialog"] div[class*="bg-white"],
+.dark [data-radix-portal] [role="dialog"] .bg-white,
+.dark [data-radix-portal] [role="dialog"] div[class*="bg-white"] {
+  background-color: #18181b !important;
+}
+
+.dark .pm-issue-detail .bg-\[\#fafbfc\] {
+  background-color: #121212 !important;
+}
+
+.dark .pm-issue-detail .bg-\[\#f4f5f7\] {
+  background-color: #0f0f11 !important;
+}
+
+.dark .pm-issue-detail .bg-slate-50,
+.dark .pm-issue-detail .bg-slate-100 {
+  background-color: #18181b !important;
+}
+
+.dark .pm-issue-detail .text-\[\#172b4d\],
+.dark .crm-jira-modal .text-\[\#172b4d\],
+.dark [role="dialog"] .text-\[\#172b4d\],
+.dark [data-radix-portal] [role="dialog"] .text-\[\#172b4d\],
+.dark [data-radix-portal] [role="dialog"] h3,
+.dark [data-radix-portal] [role="dialog"] h2,
+.dark [data-radix-portal] [role="dialog"] h1,
+.dark [data-radix-portal] [role="dialog"] span {
+  color: #fafaf9 !important;
+}
+
+.dark .pm-issue-detail .text-\[\#42526e\],
+.dark .pm-issue-detail .text-\[\#44546f\],
+.dark .crm-jira-modal .text-\[\#42526e\],
+.dark [role="dialog"] .text-\[\#42526e\],
+.dark [data-radix-portal] [role="dialog"] .text-\[\#42526e\],
+.dark [data-radix-portal] [role="dialog"] .text-\[\#44546f\] {
+  color: #e4e4e7 !important;
+}
+
+.dark .pm-issue-detail .text-\[\#5e6c84\],
+.dark .pm-issue-detail .text-\[\#516f90\],
+.dark .crm-jira-modal .text-\[\#5e6c84\],
+.dark [role="dialog"] .text-\[\#5e6c84\],
+.dark [data-radix-portal] [role="dialog"] .text-\[\#5e6c84\] {
+  color: #a1a1aa !important;
+}
+
+.dark .pm-issue-detail .border-\[\#dfe1e6\],
+.dark .pm-issue-detail .border-\[\#ebecf0\],
+.dark .crm-jira-modal .border-\[\#dfe1e6\],
+.dark [role="dialog"] .border-\[\#dfe1e6\],
+.dark [data-radix-portal] [role="dialog"] .border-\[\#dfe1e6\] {
+  border-color: #27272a !important;
+}
+
+/* UserCombobox & Select fields */
+.dark .pm-issue-detail button[role="combobox"],
+.dark .pm-issue-detail .border-slate-200 {
+  background-color: #1c1c1e !important;
+  border-color: #27272a !important;
+  color: #fafaf9 !important;
+}
+
+.dark .pm-issue-detail .text-slate-900 {
+  color: #fafaf9 !important;
+}
+
+.dark .pm-issue-detail .text-slate-500 {
+  color: #a1a1aa !important;
+}
+
+.dark .pm-issue-detail .hover\:bg-slate-50:hover {
+  background-color: #27272a !important;
+}
+
+/* Input, Date-picker, Select, Textarea fields inside the issue panel */
+.dark .pm-issue-detail input,
+.dark .pm-issue-detail select,
+.dark .pm-issue-detail textarea {
+  background-color: #1c1c1e !important;
+  color: #fafaf9 !important;
+  border-color: #27272a !important;
+}
+
+.dark .pm-issue-detail input::placeholder,
+.dark .pm-issue-detail textarea::placeholder {
+  color: #71717a !important;
+}
+
+/* Quick chips, badges, and background hover styles */
+.dark .pm-issue-detail .bg-\[\#f4f5f7\] button,
+.dark .pm-issue-detail button.bg-\[\#f4f5f7\],
+.dark .pm-issue-detail span.bg-\[\#f4f5f7\],
+.dark .pm-issue-detail a.bg-\[\#f4f5f7\] {
+  background-color: #27272a !important;
+  color: #e4e4e7 !important;
+  border-color: #3f3f46 !important;
+}
+
+.dark .pm-issue-detail .hover\:bg-\[\#f4f5f7\]:hover,
+.dark .pm-issue-detail .hover\:text-\[\#0052cc\]:hover {
+  background-color: #27272a !important;
+  color: #3b82f6 !important;
+}
+
+.dark .pm-issue-detail button:hover:not([disabled]) {
+  background-color: #27272a !important;
+}
+
+.dark .pm-issue-detail .text-\[\#0052cc\],
+.dark .pm-issue-detail .text-\[\#0c66e4\],
+.dark .pm-issue-detail a.text-\[\#0052cc\],
+.dark .pm-issue-detail a.text-\[\#0c66e4\],
+.dark .pm-issue-detail button.text-\[\#0052cc\],
+.dark .pm-issue-detail button.text-\[\#0c66e4\] {
+  color: #3b82f6 !important;
+}
+
+/* Status Badges */
+.dark .pm-issue-detail .bg-sky-50 {
+  background-color: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+}
+
+.dark .pm-issue-detail .bg-amber-50 {
+  background-color: rgba(251, 191, 36, 0.15) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
+}
+
+.dark .pm-issue-detail .bg-green-50 {
+  background-color: rgba(74, 222, 128, 0.15) !important;
+  color: #4ade80 !important;
+  border-color: rgba(74, 222, 128, 0.3) !important;
+}
+
+/* Radix Select Content / Menus / Dropdowns */
+.dark [data-radix-popper-content-wrapper] [role="listbox"],
+.dark [data-radix-popper-content-wrapper] div[class*="bg-white"],
+.dark div[role="menu"][class*="bg-white"],
+.dark div[role="listbox"][class*="bg-white"],
+.dark [data-radix-menu-content],
+.dark [role="listbox"],
+.dark [data-radix-popper-content-wrapper] [role="dialog"] {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+  color: #fafaf9 !important;
+}
+
+.dark [data-radix-popper-content-wrapper] [role="option"],
+.dark div[role="menuitem"],
+.dark [role="listbox"] [role="option"],
+.dark [role="option"] span,
+.dark div[role="menuitem"] span {
+  color: #fafaf9 !important;
+}
+
+.dark [data-radix-popper-content-wrapper] [role="option"]:hover,
+.dark [data-radix-popper-content-wrapper] [role="option"][data-highlighted],
+.dark div[role="menuitem"]:hover,
+.dark div[role="menuitem"][data-highlighted],
+.dark [role="listbox"] [role="option"]:hover,
+.dark [role="listbox"] [role="option"][data-highlighted] {
+  background-color: #27272a !important;
+  color: #ffffff !important;
+}
+
+/* Force upper issue key badge text to be white in dark mode */
+.dark .pm-issue-detail-header-key {
+  color: #ffffff !important;
+}
+
+
+
+
+
+/* =============================================================================
+   Dark mode: tools tab & virtual-office tab — hardcoded Jira hex backgrounds
+   ============================================================================= */
+
+/* Row items in tools list and virtual-office rooms list */
+.dark [data-pm-jira] .bg-\[\#fafbfc\],
+.dark [data-pm-jira] .bg-\[\#fafafa\] {
+  background-color: #1c1c1e !important;
+  color: #fafaf9 !important;
+}
+
+.dark [data-pm-jira] .border-\[\#dfe1e6\] {
+  border-color: #2c2c2e !important;
+}
+
+/* Virtual-office icon badge (blue tint header icon) */
+.dark [data-pm-jira] .bg-\[\#deebff\] {
+  background-color: rgba(71, 145, 255, 0.15) !important;
+}
+
+.dark [data-pm-jira] .border-\[\#b3d4ff\] {
+  border-color: rgba(71, 145, 255, 0.35) !important;
+}
+
+/* Amber / emerald huddle badges inside rooms list */
+.dark [data-pm-jira] .bg-amber-100 {
+  background-color: rgba(251, 191, 36, 0.18) !important;
+}
+
+.dark [data-pm-jira] .text-amber-800 {
+  color: #fcd34d !important;
+}
+
+.dark [data-pm-jira] .bg-emerald-100 {
+  background-color: rgba(52, 211, 153, 0.18) !important;
+}
+
+.dark [data-pm-jira] .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+
+/* Hardcoded text colours used in tools/virtual-office tab headings & labels */
+.dark [data-pm-jira] .text-\[\#172b4d\] {
+  color: #fafaf9 !important;
+}
+
+.dark [data-pm-jira] .text-\[\#5e6c84\] {
+  color: #a1a1aa !important;
+}
+
+.dark [data-pm-jira] .text-\[\#0c66e4\] {
+  color: #4791ff !important;
+}
+
+/* Page background outside jiraClasses.panel — prevents white bleed below panels */
+.dark [data-pm-jira] .pm-content-x,
+.dark [data-pm-jira] .pm-board-tab-content {
+  background-color: #121212 !important;
+}
+
+/* =============================================================================
+   Dark mode: jiraBoardChrome header / tab bar / toolbar / filter bar
+   These use hardcoded bg-white and border-[#dfe1e6] via jiraClasses constants
+   ============================================================================= */
+
+/* Board header, tab bar, toolbar — all bg-white surfaces */
+.dark [data-pm-jira] .pm-board-header,
+.dark [data-pm-jira] .pm-board-tab-bar,
+.dark [data-pm-jira] .pm-board-toolbar {
+  background-color: #1c1c1e !important;
+  border-bottom-color: #2c2c2e !important;
+}
+
+/* Tab bar border-b */
+.dark [data-pm-jira] .pm-board-tab-bar {
+  border-bottom-color: #2c2c2e !important;
+}
+
+/* Filter bar (bg-white in filterBar constant) */
+.dark [data-pm-jira] .pm-board-filter-bar {
+  background-color: #1c1c1e !important;
+  border-bottom-color: #2c2c2e !important;
+}
+
+/* Toolbar search input (bg-[#fafbfc]) */
+.dark [data-pm-jira] .pm-board-toolbar-search-input {
+  background-color: #121212 !important;
+  border-color: #2c2c2e !important;
+  color: #fafaf9 !important;
+}
+
+.dark [data-pm-jira] .pm-board-toolbar-search-input::placeholder {
+  color: #52525b !important;
+}
+
+/* Toolbar buttons (bg-white borders) */
+.dark [data-pm-jira] .pm-board-toolbar-filter,
+.dark [data-pm-jira] .pm-board-toolbar-icon {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+  color: #a1a1aa !important;
+}
+
+.dark [data-pm-jira] .pm-board-toolbar-filter:hover,
+.dark [data-pm-jira] .pm-board-toolbar-icon:hover {
+  background-color: #27272a !important;
+  color: #fafaf9 !important;
+}
+
+/* Kanban board: "Add column" and add-issue row button */
+.dark [data-pm-jira] .pm-board-kanban-column {
+  background-color: #1c1c1e !important;
+}
+
+/* sectionPanel (bg-[#fafbfc]) used in crmModalChrome.sectionPanel */
+.dark [data-pm-jira] .pm-create-issue-body [class*="bg-\[#fafbfc\]"] {
+  background-color: #121212 !important;
+}
+
+/* jiraBoardChrome.titleMoreBtn uses bg-white */
+.dark [data-pm-jira] .pm-board-title-row button.bg-white,
+.dark [data-pm-jira] .pm-board-title-row a.bg-white {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+  color: #a1a1aa !important;
+}
+
+/* =============================================================================
+   Dark mode: wiki comments panel + wiki page list/status picker
+   ============================================================================= */
+
+/* Wiki comments side panel shell */
+.dark [data-pm-jira] .wiki-comments-panel {
+  background-color: #1c1c1e !important;
+  border-left-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .wiki-comments-panel .bg-white,
+.dark [data-pm-jira] .wiki-comments-panel [class*="bg-white"] {
+  background-color: #1c1c1e !important;
+}
+
+/* Comment compose footer bar (bg-white border-t) */
+.dark [data-pm-jira] .wiki-comments-panel .border-t.bg-white,
+.dark [data-pm-jira] .wiki-comments-panel .shrink-0.border-t {
+  background-color: #1c1c1e !important;
+  border-top-color: #2c2c2e !important;
+}
+
+/* Mention picker dropdown inside comment editor */
+.dark [data-pm-jira] .wiki-comments-panel .border-\[\#dfe1e6\].bg-white,
+.dark [data-pm-jira] .wiki-comments-panel .bg-\[\#fafbfc\] {
+  background-color: #121212 !important;
+  border-color: #2c2c2e !important;
+}
+
+/* Comment compose textarea */
+.dark [data-pm-jira] .wiki-conf-comment-compose,
+.dark [data-pm-jira] .wiki-comments-panel textarea,
+.dark [data-pm-jira] .wiki-comments-panel .wiki-comment-compose-editor {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+  color: #fafaf9 !important;
+}
+
+/* Avatar initials badge (bg-[#deebff]) */
+.dark [data-pm-jira] .wiki-comments-panel .bg-\[\#deebff\],
+.dark [data-pm-jira] .bg-\[\#deebff\] {
+  background-color: rgba(71, 145, 255, 0.18) !important;
+}
+
+.dark [data-pm-jira] .wiki-comments-panel .text-\[\#0c66e4\] {
+  color: #4791ff !important;
+}
+
+/* Text colours inside comments */
+.dark [data-pm-jira] .wiki-comments-panel .text-\[\#44546f\],
+.dark [data-pm-jira] .wiki-comments-panel .text-\[\#6b778c\],
+.dark [data-pm-jira] .wiki-comments-panel .text-\[\#97a0af\] {
+  color: #a1a1aa !important;
+}
+
+.dark [data-pm-jira] .wiki-comments-panel .hover\:text-\[\#de350b\]:hover {
+  color: #f87171 !important;
+}
+
+.dark [data-pm-jira] .wiki-comments-panel .hover\:bg-\[\#f4f5f7\]:hover {
+  background-color: #27272a !important;
+}
+
+.dark [data-pm-jira] .wiki-comments-panel .border-\[\#ebecf0\] {
+  border-color: #2c2c2e !important;
+}
+
+/* Wiki page list filter inputs + sort button */
+.dark [data-pm-jira] .bg-white.border-\[\#dfe1e6\],
+.dark [data-pm-jira] input.border-\[\#dfe1e6\].bg-white,
+.dark [data-pm-jira] button.border-\[\#dfe1e6\].bg-white {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+  color: #fafaf9 !important;
+}
+
+/* Wiki page status-picker dropdown */
+.dark [data-pm-jira] .bg-white.border-\[\#dfe1e6\].shadow-lg,
+.dark [data-pm-jira] .w-\[280px\].border-\[\#dfe1e6\].bg-white {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .border-\[\#dfe1e6\].bg-\[\#fafbfc\] {
+  background-color: #121212 !important;
+  border-color: #2c2c2e !important;
+}
+
+.dark [data-pm-jira] .hover\:bg-\[\#deebff\]:hover {
+  background-color: rgba(71, 145, 255, 0.18) !important;
+}
+
+/* =============================================================================
+   Dark mode: PM dialogs — create page/space/move-page, templates dashboard
+   ============================================================================= */
+
+/* Dialog content shells with hardcoded bg-white */
+.dark [data-pm-jira] [role="dialog"].border-\[\#dfe1e6\],
+.dark [data-pm-jira] [role="dialog"].border-\[\#dfe1e6\].bg-white {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+}
+
+/* create-page-dialog select inputs */
+.dark [data-pm-jira] .bg-white.border-slate-200 {
+  background-color: #1c1c1e !important;
+  border-color: #2c2c2e !important;
+  color: #fafaf9 !important;
+}
+
+/* templates-dashboard: template card icon bg-[#fafbfc] */
+.dark [data-pm-jira] .border-\[\#dfe1e6\].bg-\[\#fafbfc\] {
+  background-color: #121212 !important;
+  border-color: #2c2c2e !important;
+}
+
+/* templates-dashboard: "Jira" badge (bg-[#deebff] border-[#b3d4ff]) */
+.dark [data-pm-jira] .border-\[\#b3d4ff\].bg-\[\#deebff\] {
+  background-color: rgba(71, 145, 255, 0.18) !important;
+  border-color: rgba(71, 145, 255, 0.35) !important;
+  color: #4791ff !important;
+}
+
+/* hover:bg-[#fafbfc] on template cards */
+.dark [data-pm-jira] .hover\:bg-\[\#fafbfc\]:hover {
+  background-color: #27272a !important;
+}
+
+/* create-space-dialog / create-page icon badge (bg-[#deebff]) */
+.dark [data-pm-jira] .bg-\[\#deebff\].text-\[\#0c66e4\] {
+  background-color: rgba(71, 145, 255, 0.18) !important;
+  color: #4791ff !important;
+}
+
+.dark [data-pm-jira] .border-\[\#b3d4ff\] {
+  border-color: rgba(71, 145, 255, 0.35) !important;
+}
+
+/* =============================================================================
+   Dark mode: SerpPreview & social panels outside .theme-crm-hubspot scope
+   ============================================================================= */
+
+/* SerpPreview uses plain bg-white without var(--border-color) pattern */
+.dark .bg-white.border-slate-200.shadow-sm,
+.dark .p-3.bg-white {
+  background-color: var(--card-bg) !important;
+}
+
+/* Auth pages — Jira Cloud login pattern */
+[data-jira-auth],
+[data-jira-auth] * {
+  font-family: var(--pm-jira-font), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  letter-spacing: normal !important;
+}
+
+[data-jira-auth] .jira-auth-card h1,
+[data-jira-auth] .jira-auth-card h2 {
+  font-weight: 500 !important;
+  text-transform: none !important;
+}
+
+[data-jira-auth] .font-black,
+[data-jira-auth] .font-black * {
+  font-weight: 500 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
+[data-jira-auth] input,
+[data-jira-auth] button {
+  text-transform: none !important;
+}
+
+/* Dark Mode overrides for Wiki Page writing surface and text visibility */
+.dark [data-pm-jira] .wiki-page-content,
+.dark [data-pm-jira] .wiki-page-content h1,
+.dark [data-pm-jira] .wiki-page-content h2,
+.dark [data-pm-jira] .wiki-page-content h3,
+.dark [data-pm-jira] .wiki-page-content p,
+.dark [data-pm-jira] .wiki-page-content span,
+.dark [data-pm-jira] .wiki-page-content div,
+.dark [data-pm-jira] .wiki-page-content input,
+.dark [data-pm-jira] .wiki-page-content textarea,
+.dark [data-pm-jira] .wiki-page-content label,
+.dark [data-pm-jira] .wiki-page-content button {
+  color: var(--text-main, #f3f4f6) !important;
+}
+
+.dark [data-pm-jira] .wiki-page-content .text-\[\#172b4d\] {
+  color: var(--text-main, #f3f4f6) !important;
+}
+
+.dark [data-pm-jira] .wiki-page-content .text-\[\#5e6c84\],
+.dark [data-pm-jira] .wiki-page-content .text-\[\#6b778c\],
+.dark [data-pm-jira] .wiki-page-content .text-\[\#97a0af\] {
+  color: var(--text-muted, #94a3b8) !important;
+}
+
+.dark [data-pm-jira] .wiki-conf-proseMirror {
+  color: var(--text-main, #f3f4f6) !important;
+  caret-color: #ffffff !important;
+}
+
+.dark [data-pm-jira] .wiki-conf-proseMirror p,
+.dark [data-pm-jira] .wiki-conf-proseMirror h1,
+.dark [data-pm-jira] .wiki-conf-proseMirror h2,
+.dark [data-pm-jira] .wiki-conf-proseMirror h3,
+.dark [data-pm-jira] .wiki-conf-proseMirror li,
+.dark [data-pm-jira] .wiki-conf-proseMirror td,
+.dark [data-pm-jira] .wiki-conf-proseMirror th {
+  color: var(--text-main, #f3f4f6) !important;
+}
+
+/* Make Live badge visible and beautiful in dark mode */
+.dark [data-pm-jira] .wiki-live-badge {
+  background-color: rgba(6, 78, 59, 0.4) !important;
+  border-color: #065f46 !important;
+  color: #34d399 !important;
+}
+
+.dark [data-pm-jira] .wiki-live-badge span {
+  background-color: #34d399 !important;
+}
+
+/* Override editor text color and inline styles inside the editor to white in dark mode */
+.dark [data-pm-jira] .wiki-conf-proseMirror *,
+.dark [data-pm-jira] .ProseMirror * {
+  color: var(--text-main, #f3f4f6) !important;
+}
+
+/* Fix white boxes in sidebar and container backgrounds in dark mode */
+.dark [data-pm-jira] .bg-white {
+  background-color: #121212 !important;
+}
+
+.dark [data-pm-jira] .bg-\[\#f4f5f7\] {
+  background-color: var(--background, #0f172a) !important;
+}
+
+.dark [data-pm-jira] .bg-\[\#ebf2ff\] {
+  background-color: rgba(7, 29, 58, 0.7) !important;
+  color: #4791ff !important;
+}
+
+.dark [data-pm-jira] .text-\[\#0c66e4\] {
+  color: #4791ff !important;
+}
+
+.dark [data-pm-jira] .wiki-tree-item.bg-\[\#ebf2ff\] {
+  background-color: rgba(7, 29, 58, 0.7) !important;
+  color: #4791ff !important;
+}
+
+.dark [data-pm-jira] aside {
+  background-color: var(--card-bg, #1e1e1e) !important;
+  border-color: var(--border-color, #2d2d2d) !important;
+}
+
+.dark [data-pm-jira] aside .text-\[\#172b4d\] {
+  color: var(--text-main, #f3f4f6) !important;
+}
+
+.dark [data-pm-jira] aside .text-\[\#5e6c84\],
+.dark [data-pm-jira] aside .text-\[\#6b778c\],
+.dark [data-pm-jira] aside .text-\[\#97a0af\] {
+  color: var(--text-muted, #94a3b8) !important;
+}
+
+/* =============================================================================
+   PM Dark mode — full [data-pm-jira] token overrides
+   Switches the Jira light palette (white/f4f5f7/172b4d) to dark zinc tokens.
+   ============================================================================= */
+
+.dark [data-pm-jira],
+.dark [data-pm-jira] .theme-crm-hubspot,
+.dark [data-pm-jira] .theme-collab-slack {
+  --background: #0a0a0a;
+  --foreground: #ffffff;
+  --card-bg: #121212;
+  --border-color: #2a2a2a;
+  --text-main: #ffffff;
+  --text-muted: #e4e4e7;
+  --surface-dim: #141414;
+  --surface-hover: #1a1a1a;
+  --color-input: #141414;
+  --crm-shell-bg: #0a0a0a;
+  --crm-header-bg: #0f0f0f;
+  --crm-header-border: #2a2a2a;
+  --crm-shadow-card: 0 1px 0 rgba(0, 0, 0, 0.5);
+  --crm-shadow-raised: 0 4px 8px rgba(0, 0, 0, 0.55);
+  --suite-sidebar-bg: #0f0f0f;
+  --suite-sidebar-fg: #ffffff;
+  --suite-sidebar-border: #2a2a2a;
+  --suite-sidebar-hover: #1a1a1a;
+  --suite-sidebar-active-bg: rgba(12, 102, 228, 0.25);
+  --shell-main-bg: #0a0a0a;
+  --shell-header-bg: #0f0f0f;
+  --shell-border: #2a2a2a;
+  --shell-sidebar-bg: #0f0f0f;
+}
+
+/* Override the forced light color/background on the root */
+.dark [data-pm-jira],
+.dark [data-pm-jira] .theme-crm-hubspot {
+  color: var(--text-main) !important;
+  background-color: var(--background) !important;
+}
+
+/* Hardcoded Jira text colors → dark equivalents */
+.dark [data-pm-jira] .text-\[\#172b4d\],
+.dark [data-pm-jira] .crm-app-main .text-\[\#172b4d\] {
+  color: var(--text-main) !important;
+}
+
+.dark [data-pm-jira] .text-\[\#42526e\],
+.dark [data-pm-jira] .crm-app-main .text-\[\#42526e\] {
+  color: color-mix(in srgb, var(--text-main) 80%, var(--text-muted)) !important;
+}
+
+.dark [data-pm-jira] .text-\[\#5e6c84\],
+.dark [data-pm-jira] .text-\[\#6b778c\],
+.dark [data-pm-jira] .crm-app-main .text-\[\#5e6c84\] {
+  color: var(--text-muted) !important;
+}
+
+.dark [data-pm-jira] .text-\[\#97a0af\],
+.dark [data-pm-jira] .text-\[\#7a869a\] {
+  color: #71717a !important;
+}
+
+/* Hardcoded background whites */
+.dark [data-pm-jira] .bg-\[\#ffffff\],
+.dark [data-pm-jira] .bg-white {
+  background-color: var(--card-bg) !important;
+}
+
+.dark [data-pm-jira] .bg-\[\#f4f5f7\],
+.dark [data-pm-jira] .bg-\[\#fafbfc\],
+.dark [data-pm-jira] .bg-\[\#fafafa\] {
+  background-color: var(--surface-dim) !important;
+}
+
+.dark [data-pm-jira] .bg-\[\#ebecf0\] {
+  background-color: var(--surface-dim) !important;
+}
+
+/* Board kanban columns + cards */
+.dark [data-pm-jira] .pm-board-kanban-column {
+  background-color: var(--surface-dim) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark [data-pm-jira] .pm-board-kanban-card {
+  background-color: var(--card-bg) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: var(--crm-shadow-card) !important;
+}
+
+.dark [data-pm-jira] .pm-board-kanban-card:hover {
+  background-color: var(--surface-dim) !important;
+}
+
+/* Drag placeholder */
+.dark [data-pm-jira] .pm-board-card-placeholder {
+  border-color: #3f3f46 !important;
+  background: var(--surface-dim) !important;
+}
+
+/* Column active drop state */
+.dark [data-pm-jira] .pm-board-kanban-column.pm-board-column-drop-active {
+  background: rgba(99, 102, 241, 0.15) !important;
+  box-shadow: inset 0 0 0 2px rgba(99, 102, 241, 0.4) !important;
+}
+
+/* Column empty slot */
+.dark [data-pm-jira] .pm-board-column-empty {
+  border-color: #52525b !important;
+  background: rgba(39, 39, 42, 0.45) !important;
+}
+
+/* Board header text */
+.dark [data-pm-jira] .pm-board-header h1,
+.dark [data-pm-jira] .pm-board-header h2,
+.dark [data-pm-jira] .pm-board-header h3,
+.dark [data-pm-jira] .pm-board-header .pm-board-project-title-text,
+.dark [data-pm-jira] .pm-board-header .pm-board-eyebrow {
+  color: var(--text-main) !important;
+}
+
+/* Board toolbar */
+.dark [data-pm-jira] .pm-board-toolbar-search-input {
+  background-color: var(--color-input) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-main) !important;
+}
+
+.dark [data-pm-jira] .pm-board-toolbar-search-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Tabs */
+.dark [data-pm-jira] .pm-jira-tab[data-active="false"],
+.dark [data-pm-jira] .pm-board-tab[data-active="false"] .pm-board-tab-label,
+.dark [data-pm-jira] .pm-board-tab[data-active="false"] .pm-board-tab-icon {
+  color: var(--text-muted) !important;
+}
+
+.dark [data-pm-jira] .pm-jira-tab[data-active="false"]:hover,
+.dark [data-pm-jira] .pm-board-tab:hover .pm-board-tab-label,
+.dark [data-pm-jira] .pm-board-tab:hover .pm-board-tab-icon {
+  color: var(--text-main) !important;
+  background-color: var(--surface-dim) !important;
+}
+
+/* pm-panel */
+.dark [data-pm-jira] .pm-panel {
+  background: var(--card-bg) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: var(--crm-shadow-card) !important;
+}
+
+/* List view */
+.dark [data-pm-jira] .pm-list-view table {
+  color: var(--text-main) !important;
+}
+
+/* Slate → dark inside PM main */
+.dark [data-pm-jira] .crm-app-main .text-slate-900,
+.dark [data-pm-jira] .crm-app-main .text-gray-900 {
+  color: var(--text-main) !important;
+}
+
+.dark [data-pm-jira] .crm-app-main .text-slate-800,
+.dark [data-pm-jira] .crm-app-main .text-slate-700,
+.dark [data-pm-jira] .crm-app-main .text-gray-700 {
+  color: var(--text-main) !important;
+}
+
+.dark [data-pm-jira] .crm-app-main .text-slate-600,
+.dark [data-pm-jira] .crm-app-main .text-slate-500,
+.dark [data-pm-jira] .crm-app-main .text-gray-500 {
+  color: var(--text-muted) !important;
+}
+
+.dark [data-pm-jira] .crm-app-main .text-slate-400,
+.dark [data-pm-jira] .crm-app-main .text-gray-400 {
+  color: #71717a !important;
+}
+
+.dark [data-pm-jira] .crm-app-main .border-slate-100,
+.dark [data-pm-jira] .crm-app-main .border-slate-200 {
+  border-color: var(--border-color) !important;
+}
+
+.dark [data-pm-jira] .crm-app-main .bg-slate-50,
+.dark [data-pm-jira] .crm-app-main .bg-slate-50\/50,
+.dark [data-pm-jira] .crm-app-main .bg-slate-100 {
+  background-color: var(--surface-dim) !important;
+}
+
+.dark [data-pm-jira] .crm-app-main .bg-white {
+  background-color: var(--card-bg) !important;
+}
+
+/* Jira border colors */
+.dark [data-pm-jira] .border-\[\#dfe1e6\] {
+  border-color: var(--border-color) !important;
+}
+
+/* Inputs inside PM module */
+.dark [data-pm-jira] input,
+.dark [data-pm-jira] textarea,
+.dark [data-pm-jira] select {
+  background-color: var(--color-input) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Comment, History, and Worklog activity badges in dark mode */
+.dark [data-pm-jira] .bg-\[\#deebff\].text-\[\#0052cc\] {
+  background-color: rgba(71, 145, 255, 0.18) !important;
+  color: #4791ff !important;
+}
+.dark [data-pm-jira] .bg-\[\#e3fcef\].text-\[\#216e4e\] {
+  background-color: rgba(33, 110, 78, 0.2) !important;
+  color: #34d399 !important;
+}
+.dark [data-pm-jira] .bg-\[\#ebecf0\].text-\[\#42526e\] {
+  background-color: var(--surface-dim) !important;
+  color: var(--text-muted) !important;
+}
+
+/* Subtle slate text helper used by comment feed, tabs, SlidersHorizontal, and chips */
+.dark [data-pm-jira] .text-\[\#44546f\] {
+  color: var(--text-muted) !important;
+}
