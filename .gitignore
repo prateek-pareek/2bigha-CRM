@@ -1,3 +1,44 @@
+# Dependencies
+node_modules/
+package-lock.json
+# Portal Docker build requires a committed lockfile for `npm ci` on the VPS
+!portal/package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Next.js Build Output
+.next/
+out/
+build/
+
+# NestJS / TypeScript Build Output
+dist/
+*.tsbuildinfo
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+# Local / planning (repo root)
 plan/
 BIM_CRM_IMPLEMENTATION_PLAN_v2.md
 .claude/
