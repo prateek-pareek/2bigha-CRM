@@ -344,7 +344,7 @@ export class CRMUsersService implements OnModuleInit {
           },
           $setOnInsert: {
             email: employee.email,
-            password: await bcrypt.hash('Mathionix@2026', 10),
+            password: await bcrypt.hash('2Bigha@2026', 10),
             authProvider: 'local',
             _id: employee._id,
           },

@@ -63,7 +63,7 @@ const QUICK_LINKS = [
 
 /**
  * CRMS-style Theme Customizer — red gear FAB + right drawer.
- * Scoped to Mathionix CRM needs (mode, sidebar layout, accent, setup links).
+ * Scoped to 2Bigha CRM needs (mode, sidebar layout, accent, setup links).
  * Reference: https://crms.dreamstechnologies.com/html/leads.html `#theme-settings-offcanvas`
  */
 export function CrmThemeCustomizer() {
@@ -297,7 +297,7 @@ export function CrmThemeCustomizer() {
                 </div>
               </section>
 
-              {/* Mathionix setup shortcuts */}
+              {/* 2Bigha setup shortcuts */}
               <section className="rounded-[8px] border border-[var(--border-color)] bg-white p-3 shadow-sm dark:bg-[var(--card-bg)]">
                 <h3 className="mb-1 text-sm font-semibold text-[var(--text-main)]">CRM Setup</h3>
                 <p className="mb-2.5 text-xs text-[var(--text-muted)]">

@@ -1,4 +1,4 @@
-# Agent instructions (Mathionix-internal)
+# Agent instructions (2Bigha-internal)
 
 Use these so any AI or engineer keeps the **same structure**.
 

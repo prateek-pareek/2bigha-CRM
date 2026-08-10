@@ -24,6 +24,7 @@ const MERGEABLE_CORE_KEYS: Partial<Record<CrmModuleKey, string[]>> = {
     'leadOwner',
     'stage',
     'status',
+    'callStatus',
   ],
   contacts: [
     'salutation',

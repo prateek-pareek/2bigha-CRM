@@ -6665,7 +6665,7 @@ export class InboxAccountsService {
         ...(inlineAttachments.length ? { attachments: inlineAttachments } : {}),
         headers: {
           'Message-ID': messageId,
-          'X-Mailer': 'Mathionix CRM',
+          'X-Mailer': '2Bigha CRM',
           Precedence: 'auto',
           ...(replyHeaders || {}),
           ...(addListHeaders &&

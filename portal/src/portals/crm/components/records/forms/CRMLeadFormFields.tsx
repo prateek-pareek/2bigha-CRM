@@ -21,6 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 const EMPLOYEE_OPTIONS = ['1-10', '11-50', '51-200', '201-500', '500+'];
 const STATUS_OPTIONS = ['New', 'Qualified', 'Replied', 'Opportunity'];
+const CALL_STATUS_OPTIONS = ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'];
 
 /** CRMS section titles (Add Contact / Add Lead offcanvas) */
 const SECTION_LABEL: Record<string, string> = {
@@ -35,7 +36,7 @@ function sectionForKey(key: string): string {
   if (key.startsWith('cf:')) return 'custom';
   if (['salutation', 'firstName', 'lastName', 'email', 'additionalEmails', 'gender', 'mobileNo', 'phone', 'linkedinUrl', 'twitterHandle'].includes(key)) return 'contact';
   if (['organization', 'jobTitle', 'website', 'industry', 'annualRevenue', 'noOfEmployees', 'territory', 'relatedService'].includes(key)) return 'company';
-  if (['source', 'pipeline', 'stage', 'status', 'leadOwner'].includes(key)) return 'lead';
+  if (['source', 'pipeline', 'stage', 'status', 'callStatus', 'leadOwner'].includes(key)) return 'lead';
   return 'other';
 }
 
@@ -355,6 +356,15 @@ export default function CRMLeadFormFields({
             <label className={LBL}>Status (legacy)</label>
             <select name="status" defaultValue={selectedStage || 'New'} className={SEL}>
               {STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        );
+      case 'callStatus':
+        return (
+          <div key={key}>
+            <label className={LBL}>Call status</label>
+            <select name="callStatus" defaultValue="Not Called" className={SEL}>
+              {CALL_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
         );

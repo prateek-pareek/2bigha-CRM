@@ -70,6 +70,7 @@ export const BUILTIN_FILTER_OPTIONS: Record<string, string[]> = {
   salutation: ['Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'],
   pricingType: ['fixed', 'retainer', 'hourly', 'subscription'],
   platformEngagementStatus: ['New', 'Engaged', 'Won', 'Lost', 'Archived'],
+  callStatus: ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'],
 };
 
 const DATE_KEYS = new Set([
@@ -101,6 +102,7 @@ const SELECT_KEYS = new Set([
   'salutation',
   'pricingType',
   'platformEngagementStatus',
+  'callStatus',
 ]);
 
 /** ObjectId / array / non-filterable layout keys */

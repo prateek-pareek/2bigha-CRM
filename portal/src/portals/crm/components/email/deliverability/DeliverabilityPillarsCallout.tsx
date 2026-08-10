@@ -63,7 +63,7 @@ export default function DeliverabilityPillarsCallout({
                   </p>
                   {!compact ? (
                     <p className="mt-1 text-[11px] leading-snug text-sky-900/80">
-                      <span className="font-semibold">In Mathionix: </span>
+                      <span className="font-semibold">In 2Bigha: </span>
                       {pillar.inMathionix}
                     </p>
                   ) : null}

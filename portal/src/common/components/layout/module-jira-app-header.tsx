@@ -505,12 +505,12 @@ export function ModuleJiraAppHeader({
           <Link
             href="/"
             className="hidden lg:flex shrink-0 items-center gap-2 px-1 outline-none hover:opacity-90 rounded-[3px] focus-visible:ring-2 focus-visible:ring-[#0c66e4]/30"
-            aria-label="Mathionix home"
+            aria-label="2Bigha home"
           >
             <div className="relative h-8 w-8 shrink-0 overflow-hidden bg-white shadow-sm rounded-[3px] border border-[#dfe1e6]">
               <Image
                 src={MATHIONIX_MARK_PNG}
-                alt="Mathionix"
+                alt="2Bigha"
                 fill
                 priority
                 className="object-contain p-0.5"
@@ -519,7 +519,7 @@ export function ModuleJiraAppHeader({
             </div>
             <div className="hidden xl:flex flex-col leading-none">
               <span className="text-[11px] font-bold tracking-tight text-[#172b4d]">
-                Mathionix
+                2Bigha
               </span>
               <span className="text-[9px] font-medium tracking-widest uppercase text-[#5e6c84]">
                 Technologies

@@ -21,7 +21,7 @@ export function PortalContactColumn({ portalToken, dealId, authHeaders }: Portal
             MX
           </div>
           <div>
-            <p className="text-sm font-bold text-[var(--text-main)]">Mathionix Hub Manager</p>
+            <p className="text-sm font-bold text-[var(--text-main)]">2Bigha Hub Manager</p>
             <p className="mt-1 text-xs font-bold uppercase leading-none tracking-widest text-[var(--text-muted)]">
               Support &amp; delivery
             </p>

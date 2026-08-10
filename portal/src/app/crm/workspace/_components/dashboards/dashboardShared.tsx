@@ -240,7 +240,7 @@ export function ViewAllLink({ href, label }: { href: string; label: string }) {
 
 /**
  * Dreams dashboard “Recent Deals” table — same columns / cells as CRMS reference,
- * built with Mathionix CrmTable + list cell kit.
+ * built with 2Bigha CrmTable + list cell kit.
  */
 export function RecentDealsTable({
   deals,

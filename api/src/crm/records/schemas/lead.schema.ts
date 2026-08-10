@@ -24,6 +24,14 @@ export class Lead {
   @Prop({ default: 'New', index: true })
   stage: string; // Current stage in the lead pipeline
 
+  /** Latest outbound call outcome for this lead (synced with call activity UI). */
+  @Prop({
+    enum: ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'],
+    default: 'Not Called',
+    index: true,
+  })
+  callStatus?: string;
+
   @Prop({ index: true })
   email: string;
 

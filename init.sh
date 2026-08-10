@@ -1,9 +1,9 @@
 #!/bin/bash
-# Mathionix CRM — local dev bootstrap
+# 2Bigha CRM — local dev bootstrap
 
 set -e
 
-echo "Setting up Mathionix CRM..."
+echo "Setting up 2Bigha CRM..."
 
 npm run setup
 

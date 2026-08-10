@@ -1569,7 +1569,7 @@ export function CrmDocumentsWorkspace({
                         <Sparkles className="h-5 w-5 text-[var(--hs-link)]" />
                         <span className="text-sm font-semibold text-[var(--text-main)]">Standard proposal</span>
                         <span className="text-xs text-[var(--text-muted)]">
-                          Mathionix IT layout with default pricing tiers.
+                          2Bigha IT layout with default pricing tiers.
                         </span>
                       </button>
                       <button

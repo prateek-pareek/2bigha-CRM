@@ -96,7 +96,7 @@ export class ClientPortalNeedsService {
           const html = `
             <div style="background: #ffffff; color: #1e293b; padding: 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                 <div style="text-align: center; margin-bottom: 24px;">
-                    <span style="font-size: 28px; font-weight: bold; color: #007a94; letter-spacing: -0.5px;">Mathionix</span>
+                    <span style="font-size: 28px; font-weight: bold; color: #007a94; letter-spacing: -0.5px;">2Bigha</span>
                 </div>
                 <h2 style="color: #0f172a; font-size: 20px; font-weight: 700; margin-top: 0; text-align: center;">Action Required: New Document Request</h2>
                 <p style="color: #475569; font-size: 14px; line-height: 1.6;">Hello ${clientName},</p>
@@ -117,7 +117,7 @@ export class ClientPortalNeedsService {
 
           await this.mailService.sendMail({
             to: clientEmail,
-            subject: `[Mathionix Technologies] Action Required: New Document Request - ${body.title}`,
+            subject: `[2Bigha] Action Required: New Document Request - ${body.title}`,
             html,
           });
           console.log(`Successfully sent document request email to: ${clientEmail}`);

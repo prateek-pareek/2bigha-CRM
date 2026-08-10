@@ -218,16 +218,16 @@ export function ModuleJiraAppHeader({
             </DropdownMenu>
           </div>
 
-          {/* 3. Mathionix brand mark */}
+          {/* 3. 2Bigha brand mark */}
           <Link
             href="/"
             className="hidden lg:flex shrink-0 items-center gap-2 rounded-[3px] px-1 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[#0c66e4]/30"
-            aria-label="Mathionix home"
+            aria-label="2Bigha home"
           >
             <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-[3px] border border-[#dfe1e6] bg-white shadow-sm">
               <Image
                 src={MATHIONIX_MARK_PNG}
-                alt="Mathionix"
+                alt="2Bigha"
                 fill
                 priority
                 className="object-contain p-0.5"
@@ -236,7 +236,7 @@ export function ModuleJiraAppHeader({
             </div>
             <div className="hidden xl:flex flex-col leading-none">
               <span className="text-[11px] font-bold text-[#172b4d] tracking-tight">
-                Mathionix
+                2Bigha
               </span>
               <span className="text-[9px] font-medium text-[#5e6c84] tracking-widest uppercase">
                 Technologies

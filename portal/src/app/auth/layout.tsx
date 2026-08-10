@@ -11,7 +11,7 @@ import "@/app/crm/crm-hubspot.css";
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setBrowserTabIcon("crm");
-    document.title = "Mathionix CRM";
+    document.title = "2Bigha CRM";
   }, []);
 
   return (

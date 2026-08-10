@@ -33,6 +33,7 @@ const SIDEBAR_ORDER = [
   'source',
   'stage',
   'status',
+  'callStatus',
   'pipeline',
   'industry',
   'website',
@@ -322,6 +323,8 @@ export default function CRMLeadRecordFields({
         return lead.stage || '—';
       case 'status':
         return lead.status || '—';
+      case 'callStatus':
+        return lead.callStatus || '—';
       case 'createdAt':
         return lead.createdAt
           ? new Date(lead.createdAt).toLocaleString(undefined, {

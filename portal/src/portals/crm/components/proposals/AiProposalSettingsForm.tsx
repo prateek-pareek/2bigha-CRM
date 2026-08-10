@@ -330,7 +330,7 @@ export function AiProposalSettingsForm({
               {applyingMathionix ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : null}
-              Load Mathionix defaults
+              Load 2Bigha defaults
             </button>
           ) : null}
         </div>

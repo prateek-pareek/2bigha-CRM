@@ -118,7 +118,7 @@ export class UsersService {
       await this.notificationsService.create({
         recipient: saved._id.toString(),
         title: 'Account Created',
-        message: 'Your Mathionix Suite account has been created successfully.',
+        message: 'Your 2Bigha Suite account has been created successfully.',
         type: 'Info',
       });
       await this.notificationsService.sendInvitationEmail(saved.email, {

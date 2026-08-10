@@ -483,7 +483,7 @@ export default function Sidebar({
     const ActiveToolIcon = activeTool?.icon;
     const canManageEmployees = isAdmin || hasAccess('employees:edit') || hasAccess('employees:delete') || hasAccess('employees:write');
 
-    const activeToolName = tools.find(t => t.id === activeToolId)?.name || 'Mathionix Technologies';
+    const activeToolName = tools.find(t => t.id === activeToolId)?.name || '2Bigha';
     const suiteNavGroups =
         activeToolId === 'client-portals' && visibleTools.some((t) => t.id === 'client-portals')
             ? clientPortalGroups

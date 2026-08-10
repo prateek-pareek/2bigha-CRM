@@ -124,7 +124,7 @@ export class SlackIntegrationService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: 'Mathionix CRM Slack connection is working.',
+        text: '2Bigha CRM Slack connection is working.',
       }),
     });
     if (!response.ok) {

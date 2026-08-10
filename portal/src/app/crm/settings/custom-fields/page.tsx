@@ -184,7 +184,7 @@ export default function CustomFieldsPage() {
         <div>
           <h2 className="text-sm font-semibold text-[var(--text-main)]">Property Insights</h2>
           <p className="text-sm text-[var(--primary-muted)] mt-1 max-w-xl leading-relaxed">
-            Custom properties allow you to tailor Mathionix to your business processes — use them for lead scoring, deal values, or specific contact attributes.
+            Custom properties allow you to tailor 2Bigha to your business processes — use them for lead scoring, deal values, or specific contact attributes.
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0 px-5 py-3 rounded-md border border-[var(--surface-dim)] bg-white">

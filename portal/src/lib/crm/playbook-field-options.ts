@@ -24,6 +24,7 @@ function recordTypeToWorkflowKind(
 }
 
 const LEAD_STATUS_OPTIONS = ["New", "Qualified", "Replied", "Opportunity"];
+const CALL_STATUS_OPTIONS = ["Not Called", "Completed", "Missed", "Busy", "Failed"];
 const NO_EMPLOYEES_OPTIONS = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const SALUTATION_OPTIONS = ["Mr", "Ms", "Mrs", "Dr"];
@@ -106,6 +107,10 @@ export function getRecommendationPicklist(
 
   if (path === "status" && (recordType === "Lead" || recordType === "Contact")) {
     return { mode: "strings", options: [...LEAD_STATUS_OPTIONS] };
+  }
+
+  if (path === "callStatus" && recordType === "Lead") {
+    return { mode: "strings", options: [...CALL_STATUS_OPTIONS] };
   }
 
   if (path === "noOfEmployees") {

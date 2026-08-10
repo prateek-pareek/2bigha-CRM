@@ -1,4 +1,4 @@
-/** CRM-local theme prefs (Theme Customizer) — scoped to Mathionix CRM. */
+/** CRM-local theme prefs (Theme Customizer) — scoped to 2Bigha CRM. */
 
 export const CRM_THEME_PREFS_KEY = "crm-theme-prefs";
 

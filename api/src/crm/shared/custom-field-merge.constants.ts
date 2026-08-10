@@ -22,6 +22,7 @@ export const CUSTOM_FIELD_MERGEABLE_CORE: Record<string, Set<string>> = {
     'leadOwner',
     'stage',
     'status',
+    'callStatus',
   ]),
   contacts: new Set([
     'salutation',

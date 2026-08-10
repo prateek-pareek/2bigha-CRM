@@ -199,7 +199,7 @@ export class EmailCommunicationService {
         (a) => ({ filename: a.filename, content: a.content, contentType: a.contentType }),
       );
       const mailOptions: nodemailer.SendMailOptions = {
-        from: `"Mathionix CRM" <${process.env.SMTP_USER}>`,
+        from: `"2Bigha CRM" <${process.env.SMTP_USER}>`,
         to: data.recipient,
         ...(ccList.length ? { cc: ccList } : {}),
         subject: data.subject,
@@ -208,7 +208,7 @@ export class EmailCommunicationService {
         ...(inlineAttachments.length ? { attachments: inlineAttachments } : {}),
         headers: {
           'Message-ID': messageId,
-          'X-Mailer': 'Mathionix CRM',
+          'X-Mailer': '2Bigha CRM',
           Precedence: 'auto',
           ...(listMailbox != null && {
             'List-Unsubscribe': `<mailto:${listMailbox}>`,

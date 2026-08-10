@@ -110,7 +110,7 @@ function LoginContent() {
         <div className="text-center">
           <MathionixLoginBrandHero />
           <h1 className={cn(jiraAuthChrome.title, "mt-4")}>Log in to continue</h1>
-          <p className={jiraAuthChrome.lead}>Use your Mathionix account</p>
+          <p className={jiraAuthChrome.lead}>Use your 2Bigha account</p>
         </div>
 
         <div className="space-y-3">
@@ -210,7 +210,7 @@ function LoginContent() {
         </form>
 
         <footer className={jiraAuthChrome.footer}>
-          &copy; {new Date().getFullYear()} Mathionix Technologies
+          &copy; {new Date().getFullYear()} 2Bigha
         </footer>
       </div>
     </div>

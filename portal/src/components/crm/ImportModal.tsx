@@ -73,7 +73,7 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
  ],
  organizations: [
   { label: 'Company name', key: 'name' },
-  { label: 'Company record ID (Mathionix / HubSpot-style)', key: 'recordId' },
+  { label: 'Company record ID (2Bigha / HubSpot-style)', key: 'recordId' },
   { label: 'HubSpot company ID (Record ID)', key: 'hubspotCompanyId' },
   { label: 'Website', key: 'website' },
   { label: 'Phone', key: 'phone' },

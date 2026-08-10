@@ -736,7 +736,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                     </CrmFormGrid>
                   </CrmFormSection>
                 )}
-                {(sl('pipeline') || sl('stage') || sl('status') || sl('leadOwner') || sl('source')) && (
+                {(sl('pipeline') || sl('stage') || sl('status') || sl('callStatus') || sl('leadOwner') || sl('source')) && (
                   <CrmFormSection title="Lead Information" defaultOpen={false}>
                     <CrmFormGrid>
                       {sl('pipeline') && (
@@ -775,6 +775,15 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           options={['New', 'Qualified', 'Replied', 'Opportunity']}
                           value={selectedStage}
                           onChange={(e: any) => setSelectedStage(e.target.value)}
+                        />
+                      )}
+                      {sl('callStatus') && (
+                        <FormItem
+                          label="Call Status"
+                          name="callStatus"
+                          type="select"
+                          options={['Not Called', 'Completed', 'Missed', 'Busy', 'Failed']}
+                          defaultValue={initialData.callStatus || 'Not Called'}
                         />
                       )}
                       {sl('leadOwner') &&

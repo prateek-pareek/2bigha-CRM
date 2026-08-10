@@ -270,6 +270,7 @@ export class CRMService {
     salutation: ['Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'],
     pricingType: ['fixed', 'retainer', 'hourly', 'subscription'],
     platformEngagementStatus: ['New', 'Engaged', 'Won', 'Lost', 'Archived'],
+    callStatus: ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'],
   };
 
   private mergeDistinctOptionLists(
@@ -379,7 +380,7 @@ export class CRMService {
       'opportunitySourcePlatform', 'platformClientLabel', 'platformEngagementStatus',
       'opportunityListingUrl', 'ownerLabel', 'notes',
       'salutation', 'pricingType', 'nextStep', 'expectedDealValue', 'exchangeRate',
-      'contractMonths', 'converted',
+      'contractMonths', 'converted', 'callStatus',
     ]);
     if (!isCustom && !allowed.has(rawKey)) {
       return this.getFilterCatalogOptions(moduleName, rawKey, pipelineId);
@@ -2991,7 +2992,7 @@ export class CRMService {
     );
     const skip = (page - 1) * pageSize;
     const outreachSelect =
-      '_id firstName lastName email organization status stage pipeline createdAt leadType opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy customFields leadScore mobileNo phone recordId relatedService twitterHandle';
+      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy customFields leadScore mobileNo phone recordId relatedService twitterHandle';
     const [data, count] = await Promise.all([
       this.leadModel
         .find(filter)
@@ -3269,6 +3270,7 @@ export class CRMService {
         territory: 'Territory',
         status: 'Status',
         stage: 'Stage',
+        callStatus: 'Call Status',
         leadOwner: 'Owner',
         pipeline: 'Pipeline',
       };
@@ -3289,7 +3291,7 @@ export class CRMService {
               }
             }
 
-            if (['stage', 'status', 'leadOwner', 'pipeline'].includes(field)) {
+            if (['stage', 'status', 'callStatus', 'leadOwner', 'pipeline'].includes(field)) {
               changes.push(`${label} from '${oldVal || 'None'}' to '${newVal || 'None'}'`);
             } else {
               changes.push(label);
@@ -4487,7 +4489,7 @@ export class CRMService {
           const html = `
             <div style="background: #ffffff; color: #1e293b; padding: 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                 <div style="text-align: center; margin-bottom: 24px;">
-                    <span style="font-size: 28px; font-weight: bold; color: #007a94; letter-spacing: -0.5px;">Mathionix</span>
+                    <span style="font-size: 28px; font-weight: bold; color: #007a94; letter-spacing: -0.5px;">2Bigha</span>
                 </div>
                 <h2 style="color: #0f172a; font-size: 20px; font-weight: 700; margin-top: 0; text-align: center;">Project Status Update: ${title}</h2>
                 <p style="color: #475569; font-size: 14px; line-height: 1.6;">Hello ${clientName},</p>
@@ -4505,7 +4507,7 @@ export class CRMService {
 
           await this.mailService.sendMail({
             to: clientEmail,
-            subject: `[Mathionix Technologies] Project Status Update: ${title}`,
+            subject: `[2Bigha] Project Status Update: ${title}`,
             html,
           });
           console.log(`Successfully sent project update email to: ${clientEmail}`);

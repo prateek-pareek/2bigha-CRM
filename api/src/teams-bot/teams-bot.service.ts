@@ -170,7 +170,7 @@ export class TeamsBotService implements OnModuleInit {
             );
             return {
                 success: false,
-                error: `Bot not installed for ${email}. Install the Mathionix Notifier app in Teams first.`,
+                error: `Bot not installed for ${email}. Install the 2Bigha Notifier app in Teams first.`,
             };
         }
 

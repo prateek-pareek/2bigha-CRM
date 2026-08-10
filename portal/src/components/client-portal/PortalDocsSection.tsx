@@ -95,7 +95,7 @@ export function PortalDocsSection({
                     <p className="text-sm font-semibold text-[var(--text-main)] truncate">{doc.name}</p>
                     <p className="text-xs text-[var(--primary-muted)] uppercase tracking-wider">
                       {doc.type === 'admin_provided'
-                        ? 'From Mathionix'
+                        ? 'From 2Bigha'
                         : doc.satisfiedNeedId
                           ? 'Fulfills Request'
                           : 'Client Upload'}

@@ -102,6 +102,7 @@ export const CRM_CARD_BUILTIN_FIELDS: Record<CrmCardEntityId, CrmCardFieldDef[]>
     { key: 'source', label: 'Source', icon: Globe },
     { key: 'status', label: 'Status', icon: Tag },
     { key: 'stage', label: 'Stage', icon: Tag },
+    { key: 'callStatus', label: 'Call Status', icon: Phone },
     { key: 'priority', label: 'Priority', icon: Tag },
     { key: 'leadOwner', label: 'Lead Owner', icon: User },
     { key: 'leadScore', label: 'Score', icon: Target },
@@ -247,6 +248,7 @@ export function resolveCrmCardFieldValue(
     if (fieldKey === 'source') return String(record.source || '');
     if (fieldKey === 'status') return String(record.status || '');
     if (fieldKey === 'stage') return String(record.stage || record.status || '');
+    if (fieldKey === 'callStatus') return String(record.callStatus || '');
     if (fieldKey === 'priority') return String(record.priority || '');
     if (fieldKey === 'leadOwner') return String(record.leadOwner || '');
     if (fieldKey === 'pipeline') {

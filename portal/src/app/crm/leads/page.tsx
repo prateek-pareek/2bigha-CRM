@@ -141,6 +141,7 @@ interface Lead {
   organization: string;
   status: string; // This is the stage name
   stage?: string;
+  callStatus?: string;
   source?: string;
   pipeline?: string;
   priority?: string;
@@ -165,6 +166,7 @@ const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'organization', label: 'Organization' },
   { key: 'status', label: 'Status' },
   { key: 'stage', label: 'Stage' },
+  { key: 'callStatus', label: 'Call Status' },
   { key: 'source', label: 'Source' },
   { key: 'priority', label: 'Priority' },
   { key: 'leadOwner', label: 'Lead Owner' },
@@ -1452,6 +1454,7 @@ export default function LeadsPage() {
       }
       case 'status': return <CrmListStatusBadge label={lead.status || '—'} />;
       case 'stage': return <CrmListStatusBadge label={lead.stage || lead.status || '—'} />;
+      case 'callStatus': return <CrmListStatusBadge label={lead.callStatus || 'Not Called'} />;
       case 'createdAt': return <span className="text-sm text-[#707070]">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>;
       case 'lastEmailActivityAt': {
         const iso = leadEmailStatsById[lead._id]?.latestActivityIso;

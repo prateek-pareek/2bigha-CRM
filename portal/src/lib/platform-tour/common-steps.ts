@@ -3,7 +3,7 @@ import type { PlatformTourStep } from './types';
 /** Shell chrome shared across HRMS, CRM, PM, Social, Vault, and Client Portals */
 export const COMMON_SHELL_STEPS: PlatformTourStep[] = [
   {
-    title: 'Welcome to Mathionix',
+    title: 'Welcome to 2Bigha',
     description:
       'This quick tour walks you through the layout so you can find your way around. Use Next to continue or Skip to exit anytime.',
   },
@@ -11,7 +11,7 @@ export const COMMON_SHELL_STEPS: PlatformTourStep[] = [
     element: '[data-tour="workspace-switcher"]',
     title: 'Switch products',
     description:
-      'Mathionix is one suite with multiple products. Open this menu to jump between HRMS, CRM, Projects, Social desk, Vault, and Client Portals.',
+      '2Bigha is one suite with multiple products. Open this menu to jump between HRMS, CRM, Projects, Social desk, Vault, and Client Portals.',
     side: 'right',
   },
   {

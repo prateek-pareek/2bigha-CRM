@@ -1,13 +1,13 @@
-# Mathionix CRM (standalone copy)
+# 2Bigha CRM (standalone copy)
 
-Standalone CRM product extracted from **Mathionix-internal**.
+Standalone CRM product extracted from **2Bigha-internal**.
 
-This folder is a **copy only** — nothing was removed from `Mathionix-internal`.
+This folder is a **copy only** — nothing was removed from `2Bigha-internal`.
 Use this repo to build / rebrand another CRM product without touching the suite monorepo.
 
 ## What was copied
 
-| Area | Path in this repo | Source in Mathionix-internal |
+| Area | Path in this repo | Source in 2Bigha-internal |
 |------|-------------------|------------------------------|
 | CRM API module | `api/src/crm/` | `api-hrms/src/crm/` |
 | API shared infra | `api/src/common/` | `api-hrms/src/common/` |
@@ -21,7 +21,7 @@ Snapshot metadata: `_from-internal/COPIED_AT_UTC.txt`
 ## Structure
 
 ```
-Mathionix-crm/
+2Bigha-crm/
 ├── api/src/crm/              # Nest CRM module (records, inbox, pipelines, …)
 ├── api/src/common/           # Auth, users, redis, mail (CRM dependencies)
 ├── portal/src/app/crm/       # Next.js App Router screens
@@ -33,12 +33,12 @@ Mathionix-crm/
 
 ## Important
 
-- **Original suite is unchanged** — keep developing Mathionix-internal as usual.
+- **Original suite is unchanged** — keep developing 2Bigha-internal as usual.
 - This copy does **not** auto-sync. Re-copy when you want a fresh snapshot.
-- To re-sync from the suite (from Mathionix-internal root):
+- To re-sync from the suite (from 2Bigha-internal root):
 
 ```bash
-# Example re-sync (destructive to CRM folders in Mathionix-crm only)
+# Example re-sync (destructive to CRM folders in 2Bigha-crm only)
 rsync -a --delete ../Mathionix-internal/api-hrms/src/crm/ ./api/src/crm/
 rsync -a --delete ../Mathionix-internal/portal/src/app/crm/ ./portal/src/app/crm/
 rsync -a --delete ../Mathionix-internal/portal/src/portals/crm/ ./portal/src/portals/crm/

@@ -1,6 +1,6 @@
 # `@mathionix/ui`
 
-Shared design-system primitives + product kit used by the suite portal (and extractable into other Mathionix apps).
+Shared design-system primitives + product kit used by the suite portal (and extractable into other 2Bigha apps).
 
 ## Layers
 

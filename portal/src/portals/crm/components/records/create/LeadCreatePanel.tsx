@@ -299,6 +299,7 @@ export default function LeadCreatePanel({
       pipeline: selectedPipeline,
       stage,
       status: data.status || stage,
+      callStatus: entity === "lead" ? data.callStatus || "Not Called" : undefined,
       sourceMetadata,
       customFields: Object.keys(cfData).length > 0 ? cfData : undefined,
     });

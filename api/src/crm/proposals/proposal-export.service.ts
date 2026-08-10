@@ -132,7 +132,7 @@ function buildDocHeader(
   if (!hasCustom) {
     return `<header class="doc-header">
       <div>
-        <div class="brand">Mathionix</div>
+        <div class="brand">2Bigha</div>
         <div class="brand-sub">Technologies Private Limited</div>
       </div>
       ${pill}
@@ -160,7 +160,7 @@ function buildDocHeader(
 }
 
 const DEFAULT_FOOTER_SENTENCE =
-  'This document was generated from Mathionix CRM. Commercial terms are subject to the final agreement between parties.';
+  'This document was generated from 2Bigha CRM. Commercial terms are subject to the final agreement between parties.';
 
 function buildFooterInner(
   issuerProfile: 'agency' | 'freelancer',

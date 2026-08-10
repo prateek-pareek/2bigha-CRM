@@ -1,8 +1,8 @@
 {
-  "name": "mathionix-crm",
+  "name": "2bigha-crm",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone Mathionix CRM — extracted from Mathionix Suite",
+  "description": "2Bigha CRM",
   "scripts": {
     "dev:portal": "cd portal && npm run dev",
     "dev:api": "cd api && npm run start:dev",

@@ -489,7 +489,7 @@ export default function CrmMigrationSettingsPage() {
             3. Field mapping
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Map source columns to Mathionix fields. Source IDs keep company ↔
+            Map source columns to 2Bigha fields. Source IDs keep company ↔
             contact ↔ deal ↔ note links intact.
           </p>
           <div className="mt-4 space-y-2">

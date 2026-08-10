@@ -42,6 +42,7 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'pipeline', label: 'Pipeline', pinned: true },
   { key: 'stage', label: 'Stage' },
   { key: 'status', label: 'Status (legacy)' },
+  { key: 'callStatus', label: 'Call Status' },
   { key: 'leadScore', label: 'Lead score', recordOnly: true },
   { key: 'createdAt', label: 'Created', recordOnly: true },
 ];

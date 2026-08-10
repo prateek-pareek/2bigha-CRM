@@ -26,7 +26,7 @@ function dedupeSteps(steps: PlatformTourStep[]): PlatformTourStep[] {
 
 export function resolvePlatformTour(pathname: string): PlatformTourDefinition {
   const moduleId = resolveModuleId(pathname);
-  const moduleName = moduleId ? getModuleName(moduleId) : 'Mathionix Suite';
+  const moduleName = moduleId ? getModuleName(moduleId) : '2Bigha Suite';
 
   const pageSteps = getPageSteps(pathname);
   const moduleSteps = moduleId ? getModuleSteps(moduleId) : [];

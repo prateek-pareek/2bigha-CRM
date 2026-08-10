@@ -1,6 +1,6 @@
 # CRM extract — source map
 
-Copied from Mathionix-internal into Mathionix-crm (sibling folder).
+Copied from 2Bigha-internal into 2Bigha-crm (sibling folder).
 
 ## Included
 
@@ -14,17 +14,17 @@ Copied from Mathionix-internal into Mathionix-crm (sibling folder).
 - `portal/src/common/**` → `portal/src/common/**`
 - `packages/ui/**` → `packages/ui/**`
 
-## Not copied (still only in Mathionix-internal)
+## Not copied (still only in 2Bigha-internal)
 
 - HRMS / PM / Social portals and Nest modules
 - `client-portal/` product app
-- Suite root `docker-compose` / turbo workspace wiring (Mathionix-crm has its own)
+- Suite root `docker-compose` / turbo workspace wiring (2Bigha-crm has its own)
 
 ## Next steps to fully isolate the product
 
 1. Point `@mathionix/ui` in portal `package.json` to `file:../packages/ui`
 2. Ensure Nest `app.module.ts` imports CRM + common auth only
-3. Drop leftover HRMS/PM folders in Mathionix-crm if unused
+3. Drop leftover HRMS/PM folders in 2Bigha-crm if unused
 4. Use a dedicated Mongo DB name for this CRM
 
 ## CRM users & RBAC (added)

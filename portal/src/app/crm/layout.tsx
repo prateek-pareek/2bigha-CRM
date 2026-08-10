@@ -34,7 +34,7 @@ export default function CRMLayout({
   const pathname = usePathname();
 
   useEffect(() => {
-    document.title = "Mathionix CRM";
+    document.title = "2Bigha CRM";
     setBrowserTabIcon("crm");
     applyCrmAccent(readCrmThemePrefs().accent);
     if (!isLoaded) return;

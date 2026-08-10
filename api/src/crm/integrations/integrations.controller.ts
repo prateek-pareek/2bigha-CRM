@@ -80,7 +80,7 @@ export class IntegrationsController {
   async testWhatsApp(@Body('phone') phone: string) {
     const result = await this.whatsappService.sendMessage(
       phone,
-      'Hello from Mathionix CRM! This is a test message.',
+      'Hello from 2Bigha CRM! This is a test message.',
     );
     if (result.success)
       return { success: true, message: `Test message sent to ${phone}` };

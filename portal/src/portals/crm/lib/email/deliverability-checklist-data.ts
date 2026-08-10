@@ -536,7 +536,7 @@ export function formatChecklistExport(
   if (format === 'markdown') {
     lines.push('# Email Deliverability Checklist', '');
     lines.push(`**Progress:** ${done}/${DELIVERABILITY_CHECKLIST_TOTAL} completed`, '');
-    lines.push(`_Exported from Mathionix CRM · ${new Date().toLocaleString()}_`, '');
+    lines.push(`_Exported from 2Bigha CRM · ${new Date().toLocaleString()}_`, '');
   } else {
     lines.push('Email Deliverability Checklist');
     lines.push(`Progress: ${done}/${DELIVERABILITY_CHECKLIST_TOTAL} completed`);

@@ -151,7 +151,7 @@ export default function AiContractSettingsPage() {
         return;
       }
       setForm((prev) => ({ ...prev, ...(data as ContractAiSettingsForm) }));
-      toast.success("Mathionix contract defaults loaded");
+      toast.success("2Bigha contract defaults loaded");
     } catch {
       toast.error("Network error");
     } finally {

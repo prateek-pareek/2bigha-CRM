@@ -157,7 +157,7 @@ export default function AiProposalSettingsPage() {
         return;
       }
       setForm((prev) => ({ ...prev, ...(data as ProposalAiSettingsForm) }));
-      toast.success("Mathionix agency defaults loaded");
+      toast.success("2Bigha agency defaults loaded");
     } catch {
       toast.error("Network error");
     } finally {

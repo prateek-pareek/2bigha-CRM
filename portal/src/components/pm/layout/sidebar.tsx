@@ -41,7 +41,7 @@ import { Button } from '@/components/pm/ui/button';
 import { ScrollArea } from '@/components/pm/ui/scroll-area';
 import { useAuthStore } from '@/store/pm/auth-store';
 import Image from 'next/image';
-import { MATHIONIX_MARK_PNG, MATHIONIX_WORDMARK_DARK_BG_PNG } from '@/lib/brand-assets';
+import { MATHIONIX_MARK_PNG } from '@/lib/brand-assets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/pm/ui/avatar';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -247,34 +247,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <Link href="/pm/boards" className={cn('group flex min-w-0 items-center', !collapsed && 'gap-3')}>
                     {collapsed ? (
                         <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-[var(--border-color)] shadow-sm">
-                            <Image src={MATHIONIX_MARK_PNG} alt="Mathionix" fill priority={true} loading="eager" sizes="40px" className="object-contain" />
+                            <Image src={MATHIONIX_MARK_PNG} alt="2Bigha" fill priority={true} loading="eager" sizes="40px" className="object-contain" />
                         </div>
                     ) : (
-                        <>
-                            <div className="flex min-w-0 items-center gap-3 dark:hidden">
-                                <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-[var(--border-color)] shadow-sm">
-                                    <Image src={MATHIONIX_MARK_PNG} alt="Mathionix" fill priority={true} loading="eager" sizes="36px" className="object-contain" />
-                                </div>
-                                <div className="flex min-w-0 flex-col overflow-hidden">
-                                    <span className="truncate text-sm font-semibold tracking-tight text-[var(--text-main)]">Mathionix Technologies</span>
-                                    <span className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-[var(--hs-link)]">Projects</span>
-                                </div>
+                        <div className="flex min-w-0 items-center gap-3">
+                            <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-[var(--border-color)] shadow-sm">
+                                <Image src={MATHIONIX_MARK_PNG} alt="2Bigha" fill priority={true} loading="eager" sizes="36px" className="object-contain" />
                             </div>
-                            <div className="hidden min-w-0 flex-1 flex-col gap-1 dark:flex">
-                                <div className="relative h-8 w-full max-w-[210px]">
-                                    <Image
-                                        src={MATHIONIX_WORDMARK_DARK_BG_PNG}
-                                        alt="Mathionix Technologies"
-                                        fill
-                                        priority={true}
-                                        loading="eager"
-                                        className="object-contain object-left"
-                                        sizes="210px"
-                                    />
-                                </div>
-                                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--hs-link)]">Projects</span>
+                            <div className="flex min-w-0 flex-col overflow-hidden">
+                                <span className="truncate text-sm font-semibold tracking-tight text-[var(--text-main)]">2Bigha</span>
+                                <span className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-[var(--hs-link)]">Projects</span>
                             </div>
-                        </>
+                        </div>
                     )}
                 </Link>
             </div>

@@ -19,7 +19,7 @@ export default function ClientPortalsLayout({
   const router = useRouter();
 
   useEffect(() => {
-    document.title = "Mathionix Client Portals";
+    document.title = "2Bigha Client Portals";
     setBrowserTabIcon("crm");
     if (!isLoaded) return;
     const toolsUpper = permittedTools.map((t) => t.toUpperCase());

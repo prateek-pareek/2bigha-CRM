@@ -47,7 +47,7 @@ type Props = {
   filteredLeadIntakeRows: LeadIntakeRow[];
 };
 
-/** Weekly follow-up status + lead intake (Dreams-style stacked sections, Mathionix components). */
+/** Weekly follow-up status + lead intake (Dreams-style stacked sections, 2Bigha components). */
 export default function LeadStatusPanel({
   ws,
   error,

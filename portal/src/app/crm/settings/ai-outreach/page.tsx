@@ -274,7 +274,7 @@ export default function AiOutreachSettingsPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, businessName: e.target.value }))
               }
-              placeholder="e.g. Mathionix Technologies"
+              placeholder="e.g. 2Bigha"
             />
           </div>
 

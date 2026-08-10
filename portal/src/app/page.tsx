@@ -26,7 +26,7 @@ export default function RootDispatcher() {
                     M
                 </div>
                 <div className="text-xs text-slate-400 font-bold uppercase tracking-[0.3em] animate-pulse">
-                    Initializing Mathionix Technologies...
+                    Initializing 2Bigha...
                 </div>
             </div>
         </div>

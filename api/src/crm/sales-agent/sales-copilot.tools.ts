@@ -11,7 +11,7 @@ export const SALES_COPILOT_TOOLS: AnthropicToolDef[] = [
   ...INTEL_ONLY,
 ];
 
-export const SALES_COPILOT_SYSTEM_PROMPT = `You are Mathionix Sales Copilot for CRM sales teams.
+export const SALES_COPILOT_SYSTEM_PROMPT = `You are 2Bigha Sales Copilot for CRM sales teams.
 
 Capabilities: search CRM/PM data; create_lead (checks email duplicates internally); draft outreach/proposals; send_email (needs approval); start_follow_up_sequence; extract_website_emails (scan company sites for public emails); tasks, stages, workflows.
 

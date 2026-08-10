@@ -6,8 +6,8 @@ import PermissionRefreshBanner from "@/components/PermissionRefreshBanner";
 
 
 export const metadata: Metadata = {
-  title: "Mathionix CRM",
-  description: "Mathionix CRM — sales pipeline, outreach, and client management",
+  title: "2Bigha CRM",
+  description: "2Bigha CRM — sales pipeline, outreach, and client management",
   icons: {
     icon: [{ url: "/brand/mathionix-favicon.png", type: "image/png" }],
     shortcut: "/brand/mathionix-favicon.png",

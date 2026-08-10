@@ -347,7 +347,7 @@ export default function IntegrationsPage() {
                 Integrations
               </h1>
               <p className="text-xs text-[var(--primary-muted)]">
-                Connect software to Mathionix CRM — {connectedCount} connected ·{' '}
+                Connect software to 2Bigha CRM — {connectedCount} connected ·{' '}
                 {liveCount} live apps
               </p>
             </div>

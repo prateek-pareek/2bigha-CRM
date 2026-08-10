@@ -1,47 +1,38 @@
-/** Seeded defaults for Mathionix Technologies — agency IT consulting proposals. */
+/** Seeded defaults for 2Bigha — land marketplace proposals. */
 
-export const MATHIONIX_AGENCY_NAME = 'Mathionix Technologies';
+export const MATHIONIX_AGENCY_NAME = '2Bigha';
 
 export const MATHIONIX_AGENCY_INTRO =
-  'Mathionix Technologies is a well-established IT services and software development company specializing in the design, development, and deployment of high-quality digital solutions. With extensive experience in mobile application development, web platforms, and custom software systems, we partner with businesses to transform ideas into reliable, scalable, and user-centric technology products.';
+  '2Bigha is a digital land marketplace focused on making agricultural land, farmland, and rural property discovery more transparent and accessible across India. We help buyers, sellers, and investors explore verified listings, compare locations, and connect with land opportunities through a map-first experience.';
 
-export const MATHIONIX_AGENCY_SERVICES = `Mobile application development (React Native, iOS/Android)
-Web platforms and admin dashboards (Next.js, React)
-Custom backend APIs and integrations (NestJS, MongoDB, Redis)
-Cloud deployment and DevOps (AWS, GCP)
-UI/UX design support (Figma)
-Ongoing maintenance and post-launch support`;
+export const MATHIONIX_AGENCY_SERVICES = `Land listing and discovery (map-based search)
+Buyer–seller matching and lead management
+Listing verification and visibility tools
+Property insights and market comparison
+Subscription plans for enhanced listing reach
+Ongoing platform and CRM support`;
 
-export const MATHIONIX_AGENCY_DIFFERENTIATORS = `Milestone-based delivery with transparent communication
-Proven delivery across mobile, web, and platform projects
-Security-first engineering practices
-Flexible engagement: fixed-scope packages or iterative MVP builds`;
+export const MATHIONIX_AGENCY_DIFFERENTIATORS = `Land-first product focus (not generic real estate)
+Map-based discovery with clearer location context
+Transparent listing information for buyers and sellers
+CRM workflows tailored to land sales follow-ups`;
 
 export const MATHIONIX_PAYMENT_TERMS = `Payment terms:
-• 25% advance — to initiate the project
-• 40% midway — upon completion of core modules
+• 25% advance — to initiate the engagement
+• 40% midway — upon completion of agreed milestones
 • 25% before final delivery
-• 10% post deployment support phase
+• 10% post delivery support phase
 
-Indicative package options:
-• Mobile App + Web + Admin + Figma — ₹ 2,70,000 + GST
-• Mobile App + Web + Admin — ₹ 2,40,000 + GST
-• Mobile App + Admin — ₹ 2,00,000 + GST
+Payment method: Bank transfer (NEFT / IMPS / UPI)
+A/C Name: MY TWO BIGHA PRIVATE LIMITED
+Bank details shared on acceptance.`;
 
-Payment method: Bank transfer (NEFT / IMPS / SWIFT / Wise)
-A/C Name: MATHIONIX TECHNOLOGIES PRIVATE LIMITED
-Bank: HDFC BANK | IFSC: HDFC0006364 | A/C No.: 50200101247801
-SWIFT: HDFCINBBXXX | UPI: mathionix@ybl`;
-
-export const MATHIONIX_TECH_STACK = `Mobile: React Native, Redux, Firebase (OTP)
-Web (if applicable): Next.js
+export const MATHIONIX_TECH_STACK = `Web: Next.js, React
 Backend: NestJS, REST, MongoDB, Redis
-Admin: React / Next.js (shared API)
-Infra: AWS or GCP, S3-compatible storage, JWT sessions`;
+Maps & listing tools: platform-native discovery
+Infra: cloud hosting, secure auth sessions`;
 
-export const MATHIONIX_PORTFOLIO = `Our portfolio includes work with Ecolopers, UME Health, Salar, Pulse Digital Health, and other long-term partners across mobile, web, and platform delivery.
-
-Sample projects: Going Greek (US recruitment prep), AMME (nurse booking), GoalConnect (football scouting), Meyo (LinkedIn outreach).`;
+export const MATHIONIX_PORTFOLIO = `2Bigha.ai helps people explore agricultural land, farmland, farmhouse land, and rural investment opportunities across India with a focus on trust, transparency, and a simpler buying journey.`;
 
 export const MATHIONIX_FREELANCER_PAYMENT_TERMS = `Payment terms:
 • 30% advance to start

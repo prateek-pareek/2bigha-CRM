@@ -1,4 +1,4 @@
-/** Default IT consulting contract clauses — Mathionix agency profile. */
+/** Default IT consulting contract clauses — 2Bigha agency profile. */
 
 export const DEFAULT_CONTRACT_SECTION_OUTLINE = `1. Parties and definitions
 2. Scope of services
@@ -16,7 +16,7 @@ export const DEFAULT_CONTRACT_SECTION_OUTLINE = `1. Parties and definitions
 export const MATHIONIX_GOVERNING_LAW =
   'This Agreement is governed by the laws of India. Courts at Bengaluru, Karnataka shall have exclusive jurisdiction.';
 
-export const MATHIONIX_AGENCY_CONTRACT_PARTY = `Service Provider: MATHIONIX TECHNOLOGIES PRIVATE LIMITED
+export const MATHIONIX_AGENCY_CONTRACT_PARTY = `Service Provider: MY TWO BIGHA PRIVATE LIMITED
 Registered address: [Your registered office address]
 GSTIN: [Your GSTIN]`;
 
@@ -43,7 +43,7 @@ Liability cap: Limited to fees paid under this Agreement, excluding fraud or wil
 Independence: Consultant is an independent contractor, not an employee or agent of the client.`;
 
 export const MATHIONIX_SEED_CONTRACT_AGENCY = {
-  agencyLegalName: 'Mathionix Technologies Private Limited',
+  agencyLegalName: 'My Two Bigha Private Limited',
   agencyRegisteredAddress: '[Registered office address — update in settings]',
   agencySignatoryName: '[Authorized signatory name]',
   agencySignatoryTitle: 'Director',

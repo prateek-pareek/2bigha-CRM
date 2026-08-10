@@ -290,7 +290,7 @@ export class VoiceCallingService {
     // Click-to-call: ring agent, then Dial lead. Else call lead with a short notice.
     const twiml = agentPhone
       ? `<Response><Say voice="alice">Connecting you to the lead.</Say><Dial callerId="${fromNumber}">${toNumber}</Dial></Response>`
-      : `<Response><Say voice="alice">Hello from Mathionix CRM. This is an outbound call.</Say><Pause length="2"/><Hangup/></Response>`;
+      : `<Response><Say voice="alice">Hello from 2Bigha CRM. This is an outbound call.</Say><Pause length="2"/><Hangup/></Response>`;
 
     const dialTarget = agentPhone || toNumber;
     const body = new URLSearchParams({

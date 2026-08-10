@@ -25,7 +25,7 @@ import { MailService } from './mail.service';
             },
           },
           defaults: {
-            from: '"Mathionix CRM" <no-reply@mathionix.com>',
+            from: '"2Bigha CRM" <no-reply@2bigha.ai>',
           },
         };
       },

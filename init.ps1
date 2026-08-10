@@ -1,4 +1,4 @@
-# Mathionix CRM Infrastructure Initialization for Windows
+# 2Bigha CRM Infrastructure Initialization for Windows
 
 Write-Host "Initializing CRM Development Environment..." -ForegroundColor Blue
 

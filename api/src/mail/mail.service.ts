@@ -22,11 +22,11 @@ export class MailService {
     try {
       await this.mailerService.sendMail({
         to: userEmail,
-        subject: 'Welcome to Mathionix CRM',
+        subject: 'Welcome to 2Bigha CRM',
         html: `
           <div style="font-family: Inter, sans-serif; padding: 32px;">
             <h1>Welcome, ${fullName}</h1>
-            <p>Your Mathionix CRM account is ready.</p>
+            <p>Your 2Bigha CRM account is ready.</p>
           </div>
         `,
       });

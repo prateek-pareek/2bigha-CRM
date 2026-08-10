@@ -164,7 +164,7 @@ export class NotificationsService {
   async sendInvitationEmail(to: string, context: any) {
     await this.emailService.sendMail(
       to,
-      'Welcome to Mathionix HRMS - Your Portal is Ready',
+      'Welcome to 2Bigha HRMS - Your Portal is Ready',
       'invitation', // We'll assume a fallback if .hbs doesn't exist
       context,
     );

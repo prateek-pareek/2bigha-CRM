@@ -125,7 +125,7 @@ export default function DataIntelligencePage() {
           <div className="p-8 space-y-6">
             <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-xl">
               Examples: pipeline metrics, stale leads, record search, workspace attention, PM
-              issues. Answers use live data from your Mathionix workspace (scoped to your access).
+              issues. Answers use live data from your 2Bigha workspace (scoped to your access).
             </p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTED_DATA_QUESTIONS.map((q) => (
@@ -156,7 +156,7 @@ export default function DataIntelligencePage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-1">
-                    {m.role === "user" ? "You" : "Mathionix"}
+                    {m.role === "user" ? "You" : "2Bigha"}
                   </p>
                   <div className="text-sm text-[var(--text-main)] whitespace-pre-wrap leading-relaxed">
                     {m.content}

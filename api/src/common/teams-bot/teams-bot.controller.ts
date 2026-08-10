@@ -51,7 +51,7 @@ export class TeamsBotController {
           // Welcome the user
           try {
             await turnContext.sendActivity(
-              "👋 Hi! I'm the **Mathionix Notifier**. I'll send you proactive notifications directly here in Teams whenever a task is assigned to you or you're mentioned.",
+              "👋 Hi! I'm the **2Bigha Notifier**. I'll send you proactive notifications directly here in Teams whenever a task is assigned to you or you're mentioned.",
             );
           } catch (err) {
             this.logger.warn('Failed to send welcome message', err);
@@ -71,10 +71,10 @@ export class TeamsBotController {
         // Simple command responses
         if (text === 'help' || text === '/help') {
           await turnContext.sendActivity(
-            '**Mathionix Notifier** — available commands:\n\n' +
+            '**2Bigha Notifier** — available commands:\n\n' +
               '• `status` — check if your notifications are set up\n' +
               '• `help` — show this message\n\n' +
-              "You'll automatically receive DMs when tasks are assigned to you in Mathionix.",
+              "You'll automatically receive DMs when tasks are assigned to you in 2Bigha.",
           );
         } else if (text === 'status') {
           const email = activity.from?.name?.includes('@')

@@ -38,7 +38,7 @@ export default function DeliverabilityChecklistPage() {
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Progress is saved in your browser. Use{" "}
             <strong className="text-[var(--text-main)]">Apply detected</strong> to mark items
-            Mathionix can verify (SPF/DKIM/DMARC, send limits, List-Unsubscribe). For content
+            2Bigha can verify (SPF/DKIM/DMARC, send limits, List-Unsubscribe). For content
             checks, use the spam and subject &amp; body tester in the email composer (links,
             attachments, HTML weight, images, colors, duplicate sends, and simple subjects).
           </p>

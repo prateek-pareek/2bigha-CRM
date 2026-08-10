@@ -20,43 +20,41 @@ function paragraphs(text: string): string {
     .join("");
 }
 
-const MATHIONIX_INTRO = `Mathionix Technologies is a well-established IT services and software development company specializing in the design, development, and deployment of high-quality digital solutions. With extensive experience in mobile application development, web platforms, and custom software systems, we partner with businesses to transform ideas into reliable, scalable, and user-centric technology products.`;
+const MATHIONIX_INTRO = `2Bigha is a digital land marketplace focused on making agricultural land, farmland, and rural property discovery more transparent and accessible across India. We help buyers, sellers, and investors explore verified listings, compare locations, and connect with land opportunities through a map-first experience.`;
 
 /** Package / tier lines — combined with payment block for section 4. */
 const DEFAULT_PACKAGE_OPTIONS = `
 <ul>
-  <li><strong>Mobile App + Web + Admin + Figma</strong> — ₹ 2,70,000 + GST</li>
-  <li><strong>Mobile App + Web + Admin</strong> — ₹ 2,40,000 + GST</li>
-  <li><strong>Mobile App + Admin</strong> — ₹ 2,00,000 + GST</li>
+  <li><strong>Listing visibility boost</strong> — custom quote</li>
+  <li><strong>Verified listing package</strong> — custom quote</li>
+  <li><strong>Buyer lead management support</strong> — custom quote</li>
 </ul>`;
 
 const DEFAULT_PAYMENT_MILESTONES = `
 <p><strong>Payment terms</strong></p>
 <ul>
-  <li>25% advance — to initiate the project</li>
-  <li>40% midway — upon completion of core modules</li>
+  <li>25% advance — to initiate the engagement</li>
+  <li>40% midway — upon completion of agreed milestones</li>
   <li>25% before final delivery</li>
-  <li>10% post deployment support phase</li>
+  <li>10% post delivery support phase</li>
 </ul>`;
 
 const DEFAULT_TECH_STACK = `
 <ul>
-  <li><strong>Mobile:</strong> React Native, Redux, Firebase (OTP)</li>
-  <li><strong>Web (if applicable):</strong> Next.js</li>
+  <li><strong>Web:</strong> Next.js, React</li>
   <li><strong>Backend:</strong> NestJS, REST, MongoDB, Redis</li>
-  <li><strong>Admin:</strong> React / Next.js (shared API)</li>
-  <li><strong>Infra:</strong> AWS or GCP, S3-compatible storage, JWT sessions</li>
+  <li><strong>Maps &amp; listing tools:</strong> platform-native discovery</li>
+  <li><strong>Infra:</strong> cloud hosting, secure auth sessions</li>
 </ul>`;
 
 const PAYMENT_BLOCK = `
 <p><strong>Payment method</strong></p>
-<p>Bank transfer (NEFT / IMPS / SWIFT / Wise)</p>
-<p><strong>A/C Name:</strong> MATHIONIX TECHNOLOGIES PRIVATE LIMITED<br><strong>Bank:</strong> HDFC BANK<br><strong>IFSC:</strong> HDFC0006364<br><strong>A/C No.:</strong> 50200101247801<br><strong>SWIFT:</strong> HDFCINBBXXX</p>
-<p><strong>UPI:</strong> mathionix@ybl</p>`;
+<p>Bank transfer (NEFT / IMPS / UPI)</p>
+<p><strong>A/C Name:</strong> MY TWO BIGHA PRIVATE LIMITED</p>
+<p>Bank details shared on acceptance.</p>`;
 
 const PORTFOLIO_SNIPPET = `
-<p>Our portfolio includes work with Ecolopers, UME Health, Salar, Pulse Digital Health, and other long-term partners across mobile, web, and platform delivery.</p>
-<p><strong>Sample projects:</strong> Going Greek (US recruitment prep), AMME (nurse booking), GoalConnect (football scouting), Meyo (LinkedIn outreach).</p>`;
+<p>2Bigha.ai helps people explore agricultural land, farmland, farmhouse land, and rural investment opportunities across India with a focus on trust, transparency, and a simpler buying journey.</p>`;
 
 function linesToUl(linesRaw: string | undefined): string | null {
   const lines = (linesRaw ?? "")
@@ -157,8 +155,8 @@ ${delivery}
 <h2>6. Tech stack</h2>
 ${tech}
 <h2>7. Copyrights &amp; responsibilities</h2>
-<p>Standard mutual NDA-friendly terms: timely client inputs and payments; delivery per agreed scope; IP transfer after full payment; portfolio showcase rights for Mathionix without exposing sensitive data. Replace this section with your legal text if required.</p>
-<h2>8. Why Mathionix</h2>
+<p>Standard mutual NDA-friendly terms: timely client inputs and payments; delivery per agreed scope; IP transfer after full payment; portfolio showcase rights for 2Bigha without exposing sensitive data. Replace this section with your legal text if required.</p>
+<h2>8. Why 2Bigha</h2>
 <ul>
   <li>Proven mobile &amp; platform delivery</li>
   <li>Transparent communication</li>

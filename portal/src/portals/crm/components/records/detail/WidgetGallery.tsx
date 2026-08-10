@@ -69,7 +69,7 @@ export default function WidgetGallery({ isOpen, onClose, onAdd, context = 'dashb
 
  <div className={cn(crmModalChrome.slideFooter, 'justify-center')}>
  <p className="text-center text-xs text-[var(--text-muted)]">
- More widgets are periodically added by the Mathionix team.
+ More widgets are periodically added by the 2Bigha team.
  </p>
  </div>
  </div>

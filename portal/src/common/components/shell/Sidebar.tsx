@@ -745,7 +745,7 @@ export default function Sidebar({
     const ActiveToolIcon = activeTool?.icon;
 
 
-    const activeToolName = tools.find(t => t.id === activeToolId)?.name || 'Mathionix Technologies';
+    const activeToolName = tools.find(t => t.id === activeToolId)?.name || '2Bigha';
     const suiteNavGroups =
         activeToolId === 'crm' && visibleTools.some(t => t.id === 'crm')
             ? crmGroups

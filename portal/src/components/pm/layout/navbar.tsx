@@ -18,7 +18,7 @@ import {
 import { PM_API_URL, API_HOST_URL } from '@/lib/api/config';
 import { Input } from '@/components/pm/ui/input';
 import Image from 'next/image';
-import { MATHIONIX_MARK_PNG, MATHIONIX_WORDMARK_DARK_BG_PNG } from '@/lib/brand-assets';
+import { MATHIONIX_MARK_PNG } from '@/lib/brand-assets';
 import { useAuthStore } from '@/store/pm/auth-store';
 import { useState, useEffect } from 'react';
 import { ThemeToggle } from '@/components/pm/theme-toggle';
@@ -149,25 +149,14 @@ export function Navbar() {
             <div className="flex items-center justify-between h-20 border-b border-[var(--border-color)]">
                 {/* Logo */}
                 <Link href="/pm/boards" className="flex items-center gap-2 group min-w-0">
-                    <div className="flex items-center gap-2 dark:hidden">
+                    <div className="flex items-center gap-2">
                         <div className="relative h-10 w-10 bg-[var(--card-bg)] rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-[0_0_20px_rgba(0,242,255,0.2)] transition-all overflow-hidden border border-[var(--border-color)]">
-                            <Image src={MATHIONIX_MARK_PNG} alt="Mathionix Technologies" fill priority={true} loading="eager" className="object-contain" />
+                            <Image src={MATHIONIX_MARK_PNG} alt="2Bigha" fill priority={true} loading="eager" className="object-contain" />
                         </div>
                         <div className="flex flex-col">
-                            <span className="font-black tracking-tighter text-2xl text-[var(--text-main)] uppercase leading-none">Mathionix</span>
-                            <span className="text-[8px] text-primary/70 tracking-[0.4em] font-subheading uppercase">Technologies</span>
+                            <span className="font-black tracking-tighter text-2xl text-[var(--text-main)] uppercase leading-none">2Bigha</span>
+                            <span className="text-[8px] text-primary/70 tracking-[0.4em] font-subheading uppercase">CRM</span>
                         </div>
-                    </div>
-                    <div className="relative hidden dark:block h-10 w-[min(240px,40vw)] shrink-0">
-                        <Image
-                            src={MATHIONIX_WORDMARK_DARK_BG_PNG}
-                            alt="Mathionix Technologies"
-                            fill
-                            priority={true}
-                            loading="eager"
-                            className="object-contain object-left"
-                            sizes="240px"
-                        />
                     </div>
                 </Link>
 
