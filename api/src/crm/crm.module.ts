@@ -549,6 +549,11 @@ import {
     PostmasterService,
     AssociationsService,
     CustomObjectsService,
+    // Re-exported so sibling modules (e.g. WhatsAppTemplatesModule) can
+    // inject already-registered models (Integration, etc.) on
+    // 'crmConnection' without re-registering them via their own
+    // MongooseModule.forFeature(), which would throw OverwriteModelError.
+    MongooseModule,
   ],
 })
 export class CRMModule {}

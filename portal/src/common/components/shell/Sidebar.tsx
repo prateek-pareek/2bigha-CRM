@@ -352,6 +352,21 @@ const crmGroups = [
         ],
     },
     {
+        name: 'WhatsApp',
+        items: [
+            {
+                name: 'WhatsApp',
+                href: '/crm/whatsapp',
+                icon: CrmNavIcon.WhatsApp,
+                permission: 'inbox:read',
+                children: [
+                    { name: 'Chats', href: '/crm/whatsapp', icon: CrmNavIcon.Message, permission: 'inbox:read' },
+                    { name: 'Templates', href: '/crm/whatsapp/templates', icon: CrmNavIcon.FileText, permission: 'inbox:read' },
+                ],
+            },
+        ],
+    },
+    {
         name: 'Reports',
         items: [
             {

@@ -131,4 +131,5 @@ export const CrmNavIcon = {
   Globe: createCrmTiIcon("world"),
   BarChart: createCrmTiIcon("chart-bar"),
   MailSearch: createCrmTiIcon("mail-search"),
+  WhatsApp: createCrmTiIcon("brand-whatsapp"),
 } as const;

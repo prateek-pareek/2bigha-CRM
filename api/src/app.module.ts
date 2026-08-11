@@ -18,6 +18,7 @@ import { RedisModule } from './redis/redis.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AnthropicModule } from './integrations/anthropic/anthropic.module';
 import { DataIntelligenceModule } from './crm/data-intelligence/data-intelligence.module';
+import { WhatsAppTemplatesModule } from './crm/whatsapp-templates/whatsapp-templates.module';
 import { mongoConnectionLabel } from './common/mongo-connection-label.util';
 import {
   LOCAL_MONGO_URI,
@@ -62,6 +63,7 @@ import {
     NotificationsModule,
     CRMModule,
     DataIntelligenceModule,
+    WhatsAppTemplatesModule,
     RealtimeModule,
     MailModule,
     CRMUsersModule,

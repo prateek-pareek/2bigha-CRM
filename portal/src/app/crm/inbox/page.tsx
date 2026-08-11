@@ -20,6 +20,10 @@ import {
   CrmEmailActivityBody,
 } from '@/components/crm/inbox/CrmEmailActivityMedia';
 import WhatsAppTemplatePicker from '@/components/crm/inbox/WhatsAppTemplatePicker';
+import {
+  formatWaWindowCountdown,
+  getWhatsAppCareWindow,
+} from '@/lib/crm/whatsapp/care-window';
 import { CrmBreadcrumb, CrmButton } from "@/components/crm/ui";
 import { toast } from 'sonner';
 import "@/app/crm/crm-hubspot.css";
@@ -121,55 +125,6 @@ interface WhatsAppMessage {
 interface WhatsAppContact {
   waId: string;
   lastMessageAt: string;
-}
-
-const WA_CUSTOMER_CARE_WINDOW_MS = 24 * 60 * 60 * 1000;
-const WA_WINDOW_WARN_MS = 60 * 60 * 1000; // warn under 1 hour
-
-function formatWaWindowCountdown(ms: number): string {
-  if (ms <= 0) return '0m';
-  const totalMinutes = Math.floor(ms / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours <= 0) return `${minutes}m`;
-  return `${hours}h ${minutes}m`;
-}
-
-function getWhatsAppCareWindow(messages: WhatsAppMessage[], nowMs: number) {
-  const lastInbound = messages
-    .filter((m) => m.direction === 'inbound' && m.createdAt)
-    .reduce<Date | null>((latest, m) => {
-      const d = new Date(m.createdAt);
-      if (Number.isNaN(d.getTime())) return latest;
-      if (!latest || d > latest) return d;
-      return latest;
-    }, null);
-
-  if (!lastInbound) {
-    return {
-      status: 'no_inbound' as const,
-      lastInboundAt: null as Date | null,
-      expiresAt: null as Date | null,
-      remainingMs: 0,
-    };
-  }
-
-  const expiresAt = new Date(lastInbound.getTime() + WA_CUSTOMER_CARE_WINDOW_MS);
-  const remainingMs = expiresAt.getTime() - nowMs;
-  if (remainingMs <= 0) {
-    return {
-      status: 'expired' as const,
-      lastInboundAt: lastInbound,
-      expiresAt,
-      remainingMs: 0,
-    };
-  }
-  return {
-    status: remainingMs <= WA_WINDOW_WARN_MS ? ('expiring_soon' as const) : ('open' as const),
-    lastInboundAt: lastInbound,
-    expiresAt,
-    remainingMs,
-  };
 }
 
 const INBOX_ICON_FILTER_TIP =
