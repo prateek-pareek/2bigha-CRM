@@ -187,6 +187,12 @@ import {
 } from './schemas/service-offering.schema';
 import { ServiceOfferingsService } from './services/service-offerings.service';
 import { ServiceOfferingsController } from './services/service-offerings.controller';
+import {
+  LeadPicklistOption,
+  LeadPicklistOptionSchema,
+} from './records/schemas/lead-picklist-option.schema';
+import { LeadPicklistOptionsService } from './records/lead-picklist-options.service';
+import { LeadPicklistOptionsController } from './records/lead-picklist-options.controller';
 import { CrmAiService } from './ai/crm-ai.service';
 import { CrmAiController } from './ai/crm-ai.controller';
 import {
@@ -350,6 +356,7 @@ import {
         { name: CrmProposalBlock.name, schema: CrmProposalBlockSchema },
         { name: CrmProposalBranding.name, schema: CrmProposalBrandingSchema },
         { name: ServiceOffering.name, schema: ServiceOfferingSchema },
+        { name: LeadPicklistOption.name, schema: LeadPicklistOptionSchema },
         { name: PortalClientNeed.name, schema: PortalClientNeedSchema },
         {
           name: ClientPortalAccessAssignment.name,
@@ -430,6 +437,7 @@ import {
     ProposalBlocksController,
     ProposalBrandingController,
     ServiceOfferingsController,
+    LeadPicklistOptionsController,
     CrmAiController,
     PlatformOpportunitiesController,
     WebsiteInboundPublicController,
@@ -457,6 +465,7 @@ import {
     ProposalBlocksService,
     ProposalBrandingService,
     ServiceOfferingsService,
+    LeadPicklistOptionsService,
     CrmAiService,
     CrmProposalAiSettingsService,
     CrmContractAiSettingsService,
@@ -549,6 +558,7 @@ import {
     PostmasterService,
     AssociationsService,
     CustomObjectsService,
+    CRMUsersModule,
     // Re-exported so sibling modules (e.g. WhatsAppTemplatesModule) can
     // inject already-registered models (Integration, etc.) on
     // 'crmConnection' without re-registering them via their own

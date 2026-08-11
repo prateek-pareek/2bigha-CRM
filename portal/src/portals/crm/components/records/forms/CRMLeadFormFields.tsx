@@ -36,7 +36,7 @@ function sectionForKey(key: string): string {
   if (key.startsWith('cf:')) return 'custom';
   if (['salutation', 'firstName', 'lastName', 'email', 'additionalEmails', 'gender', 'mobileNo', 'phone', 'linkedinUrl', 'twitterHandle'].includes(key)) return 'contact';
   if (['organization', 'jobTitle', 'website', 'industry', 'annualRevenue', 'noOfEmployees', 'territory', 'relatedService'].includes(key)) return 'company';
-  if (['source', 'pipeline', 'stage', 'status', 'callStatus', 'leadOwner'].includes(key)) return 'lead';
+  if (['source', 'pipeline', 'stage', 'status', 'callStatus', 'leadOwner', 'leadCategory', 'group', 'notes'].includes(key)) return 'lead';
   return 'other';
 }
 
@@ -49,7 +49,7 @@ const SEL =
   'w-full h-[38px] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-main)] outline-none cursor-pointer shadow-[var(--crm-shadow-input)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/25 transition-all appearance-none';
 
 /** Fields that span both columns in CRMS 2-col layout */
-const FULL_WIDTH_KEYS = new Set(['additionalEmails', 'linkedinUrl', 'twitterHandle', 'website', 'relatedService']);
+const FULL_WIDTH_KEYS = new Set(['additionalEmails', 'linkedinUrl', 'twitterHandle', 'website', 'relatedService', 'notes']);
 
 interface CRMLeadFormFieldsProps {
   visibleKeys: string[];
@@ -65,6 +65,10 @@ interface CRMLeadFormFieldsProps {
   identifierContext?: PersonIdentifierContext;
   visualVariant?: 'default' | 'hubspot';
   services?: Array<{ _id: string; name: string }>;
+  /** Options from /crm/lead-picklist-options?listKey=leadCategory (see Settings > Lead Type & Group). */
+  leadCategories?: Array<{ _id: string; label: string }>;
+  /** Options from /crm/lead-picklist-options?listKey=group. */
+  leadGroups?: Array<{ _id: string; label: string }>;
 }
 
 export default function CRMLeadFormFields({
@@ -80,6 +84,8 @@ export default function CRMLeadFormFields({
   onDeleteCustom,
   identifierContext,
   services = [],
+  leadCategories = [],
+  leadGroups = [],
 }: CRMLeadFormFieldsProps) {
   const { canViewCrmRevenue } = usePermissions();
   const keys = canViewCrmRevenue
@@ -368,6 +374,33 @@ export default function CRMLeadFormFields({
             </select>
           </div>
         );
+      case 'leadCategory':
+        return (
+          <div key={key}>
+            <label className={LBL}>Lead Type</label>
+            <select name="leadCategory" defaultValue="" className={SEL}>
+              <option value="">Select Type</option>
+              {leadCategories.map((o) => <option key={o._id} value={o.label}>{o.label}</option>)}
+            </select>
+          </div>
+        );
+      case 'group':
+        return (
+          <div key={key}>
+            <label className={LBL}>Group</label>
+            <select name="group" defaultValue="" className={SEL}>
+              <option value="">Select Group</option>
+              {leadGroups.map((o) => <option key={o._id} value={o.label}>{o.label}</option>)}
+            </select>
+          </div>
+        );
+      case 'notes':
+        return (
+          <div key={key}>
+            <label className={LBL}>Note</label>
+            <textarea name="notes" placeholder="Add a new note..." rows={3} className={`${INP} h-auto min-h-[80px] py-2 resize-y`} />
+          </div>
+        );
       default:
         return null;
     }
@@ -479,7 +512,7 @@ export default function CRMLeadFormFields({
         <CrmFormSection
           key={`${group.section}-${index}`}
           title={SECTION_LABEL[group.section]}
-          defaultOpen={index === 0}
+          collapsible={false}
         >
           <CrmFormGrid>
             {group.keys.map((key) => {

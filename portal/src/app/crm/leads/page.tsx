@@ -57,7 +57,7 @@ import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import LeadCreatePanel from '@/components/crm/records/create/LeadCreatePanel';
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
-import { buildCrmListSearchParams, mergeDateRangeFilter, CRM_BOARD_PAGE_SIZE, unwrapCrmListPayload } from '@/lib/crm/list-query';
+import { buildCrmListSearchParams, mergeDateRangeFilter, mergeLeadCategoryFilter, CRM_BOARD_PAGE_SIZE, unwrapCrmListPayload } from '@/lib/crm/list-query';
 import {
   hasOutboundEmailSent,
   type CrmEmailEngagementStats,
@@ -149,8 +149,13 @@ interface Lead {
   customFields?: Record<string, any>;
   leadOwner?: string;
   createdBy?: string;
+  createdByName?: string;
   leadScore?: number;
   lastEmailActivityAt?: string | null;
+  clientId?: string;
+  leadCategory?: string;
+  group?: string;
+  notes?: string;
 }
 
 interface Column {
@@ -167,9 +172,12 @@ const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'status', label: 'Status' },
   { key: 'stage', label: 'Stage' },
   { key: 'callStatus', label: 'Call Status' },
-  { key: 'source', label: 'Source' },
+  { key: 'source', label: 'Lead Source' },
+  { key: 'leadCategory', label: 'Lead Type' },
+  { key: 'group', label: 'Group' },
   { key: 'priority', label: 'Priority' },
   { key: 'leadOwner', label: 'Lead Owner' },
+  { key: 'createdByName', label: 'Created By' },
   { key: 'leadScore', label: 'Score' },
   { key: 'pipeline', label: 'Pipeline' },
   { key: 'createdAt', label: 'Created Date' },
@@ -259,6 +267,9 @@ export default function LeadsPage() {
   const [selectedPipelineId, setSelectedPipelineId] = useState('');
   const [filters, setFilters] = useState<FilterCriteria[]>([]);
   const [filterProperties, setFilterProperties] = useState<FilterProperty[]>([]);
+  /** Lead-type tab bar (All Leads / Reference / Investor / Lead / Buyer lead, etc.) — '' = All Leads. */
+  const [leadCategoryTabs, setLeadCategoryTabs] = useState<Array<{ _id: string; label: string }>>([]);
+  const [activeLeadCategory, setActiveLeadCategory] = useState('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [serverTotal, setServerTotal] = useState(0);
@@ -430,8 +441,8 @@ export default function LeadsPage() {
 
   // For large datasets, keep list mode server-paged unless heavy client-only filters are active.
   const apiFilters = useMemo(
-    () => mergeDateRangeFilter(filters, dateRange),
-    [filters, dateRange],
+    () => mergeLeadCategoryFilter(mergeDateRangeFilter(filters, dateRange), activeLeadCategory),
+    [filters, dateRange, activeLeadCategory],
   );
 
   const needsClientFullList = viewMode !== 'list';
@@ -501,6 +512,26 @@ export default function LeadsPage() {
     },
     [],
   );
+
+  /** Lead-type tab bar options — see Settings > Lead Type & Group. */
+  const fetchLeadCategoryTabs = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/lead-picklist-options?listKey=leadCategory`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const data = res.ok ? await res.json() : [];
+      setLeadCategoryTabs(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      setLeadCategoryTabs([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchLeadCategoryTabs();
+  }, [fetchLeadCategoryTabs]);
 
   const fetchCustomFields = useCallback(async () => {
     if (customFieldsLoaded) return;
@@ -1455,6 +1486,9 @@ export default function LeadsPage() {
       case 'status': return <CrmListStatusBadge label={lead.status || '—'} />;
       case 'stage': return <CrmListStatusBadge label={lead.stage || lead.status || '—'} />;
       case 'callStatus': return <CrmListStatusBadge label={lead.callStatus || 'Not Called'} />;
+      case 'leadCategory': return <span className="text-sm text-[#707070]">{lead.leadCategory || '—'}</span>;
+      case 'group': return <span className="text-sm text-[#707070]">{lead.group || '—'}</span>;
+      case 'createdByName': return <span className="text-sm text-[#707070]">{lead.createdByName || lead.leadOwner || '—'}</span>;
       case 'createdAt': return <span className="text-sm text-[#707070]">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>;
       case 'lastEmailActivityAt': {
         const iso = leadEmailStatsById[lead._id]?.latestActivityIso;
@@ -1556,6 +1590,7 @@ export default function LeadsPage() {
                   entityLabel="lead"
                   onClick={() => setIsBulkEmailOpen(true)}
                 />
+                {/* Stage automation — disabled for now, not needed yet. Re-enable by uncommenting.
                 {hasAccess('leads:write') && isMongoObjectIdString(selectedPipelineId) && (
                   <CrmButton
                     variant="icon"
@@ -1569,6 +1604,7 @@ export default function LeadsPage() {
                     leftIcon={<CrmIcon.GitBranch size={16} aria-hidden />}
                   />
                 )}
+                */}
                   </>
                 }
                 canExport={hasAccess('leads:export')}
@@ -1785,29 +1821,6 @@ export default function LeadsPage() {
                     title="Days (N)"
                   />
                 ) : null}
-                <div className="group relative inline-flex shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmailSentFilter((f) => (f === 'not-sent' ? 'all' : 'not-sent'));
-                      setPage(1);
-                    }}
-                    className={cn(
-                      CRM_TOOLBAR_CHIP,
-                      emailSentFilter === 'not-sent' && CRM_TOOLBAR_CHIP_ACTIVE,
-                    )}
-                    aria-pressed={emailSentFilter === 'not-sent'}
-                    aria-label="Show only leads with no outbound email sent yet"
-                  >
-                    <CrmIcon.MailPlus size={14} aria-hidden />
-                    Outreach
-                  </button>
-                  <span className={CRM_ICON_FILTER_TIP} role="tooltip">
-                    {emailSentFilter === 'not-sent'
-                      ? 'Showing leads with no outbound email sent. Click again to clear.'
-                      : 'Show only leads you have not emailed yet — ready for outreach. Click to turn on.'}
-                  </span>
-                </div>
                 <div className={CRM_TOOLBAR_ICON_GROUP} role="group" aria-label="Email reply filters">
                   {(['all', 'replied', 'not-replied'] as const).map((mode) => {
                     const replyTip =
@@ -1866,6 +1879,39 @@ export default function LeadsPage() {
               </>
             }
           />
+
+          {leadCategoryTabs.length > 0 && (
+            <div
+              className="flex items-center gap-1 overflow-x-auto px-4 pt-2.5 pb-1 shrink-0"
+              role="tablist"
+              aria-label="Lead type"
+            >
+              {[{ _id: '__all__', label: 'All Leads' }, ...leadCategoryTabs].map((tab) => {
+                const isAll = tab._id === '__all__';
+                const isActive = isAll ? !activeLeadCategory : activeLeadCategory === tab.label;
+                return (
+                  <button
+                    key={tab._id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => {
+                      setActiveLeadCategory(isAll ? '' : tab.label);
+                      setPage(1);
+                    }}
+                    className={cn(
+                      'shrink-0 rounded-[var(--radius-md)] px-3 py-1.5 text-sm font-semibold transition-colors',
+                      isActive
+                        ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                        : 'text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="flex-1 overflow-auto custom-scrollbar">
             {loading ? (
@@ -2362,6 +2408,8 @@ export default function LeadsPage() {
         }}
       />
 
+      {/* Stage automation — disabled for now, not needed yet. Re-enable by uncommenting
+          (and the matching "Stage rules" button above).
       <LeadStageRulesPanel
         isOpen={stageRulesPanelOpen}
         onClose={() => setStageRulesPanelOpen(false)}
@@ -2378,6 +2426,7 @@ export default function LeadsPage() {
           invalidateCrmAfterMutation('leads', 'workspace', 'attention');
         }}
       />
+      */}
     </div>
   );
 }

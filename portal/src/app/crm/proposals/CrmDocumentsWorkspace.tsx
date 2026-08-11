@@ -19,7 +19,6 @@ import {
   ScrollText,
   Search,
   Trash2,
-  UserCircle,
   Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,7 +30,6 @@ import RichTextEditor from '@/components/suite/editors/RichTextEditor';
 import { fetchCrmPipelines } from "@/lib/crm/shared/pipelines-api";
 import ProposalPipelineBoard from "./ProposalPipelineBoard";
 import {
-  buildCvResumeHtml,
   buildItConsultingProposalHtml,
   buildQuotationHtml,
   documentTemplatesForKind,
@@ -227,14 +225,24 @@ function Dropdown({ value, onChange, options }: {
 export function CrmDocumentsWorkspace({
   mode = "proposals",
 }: {
-  mode?: "proposals" | "contracts";
+  mode?: "proposals" | "quotations" | "contracts";
 }) {
   const isContracts = mode === "contracts";
+  const isQuotations = mode === "quotations";
+  /** Each module is locked to a single document kind — mirrors the Contracts workspace. */
+  const lockedKind: DocumentKind = isContracts
+    ? "contract"
+    : isQuotations
+      ? "quotation"
+      : "proposal";
+  const moduleNounSingular = isContracts ? "contract" : isQuotations ? "quotation" : "proposal";
+  const moduleNounPlural = isContracts ? "contracts" : isQuotations ? "quotations" : "proposals";
+  const moduleTitle = isContracts ? "Contracts" : isQuotations ? "Quotations" : "Proposals";
+  const pipelineType = isContracts ? "contracts" : isQuotations ? "quotations" : "proposals";
   const openComposer = useEmailComposerStore((s) => s.openComposer);
   const [rows, setRows] = useState<ProposalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [kindFilter, setKindFilter] = useState<string>("");
   const [viewMode, setViewMode] = useState<"list" | "board">("list");
   const [pipelines, setPipelines] = useState<ProposalPipeline[]>([]);
   const [pipelineFilter, setPipelineFilter] = useState<string>("");
@@ -273,13 +281,6 @@ export function CrmDocumentsWorkspace({
   const [tplQuoteClient, setTplQuoteClient] = useState("");
   const [tplQuoteLines, setTplQuoteLines] = useState("");
   const [tplQuoteTotal, setTplQuoteTotal] = useState("");
-  const [tplCvFullName, setTplCvFullName] = useState("");
-  const [tplCvHeadline, setTplCvHeadline] = useState("");
-  const [tplCvSummary, setTplCvSummary] = useState("");
-  const [tplCvExperience, setTplCvExperience] = useState("");
-  const [tplCvSkills, setTplCvSkills] = useState("");
-  const [tplCvEducation, setTplCvEducation] = useState("");
-  const [tplCvCerts, setTplCvCerts] = useState("");
   /** IT template — one line per bullet / tier */
   const [tplCommercialPackages, setTplCommercialPackages] = useState("");
   const [tplPaymentMilestones, setTplPaymentMilestones] = useState("");
@@ -355,8 +356,7 @@ export function CrmDocumentsWorkspace({
     setLoading(true);
     try {
       const q = new URLSearchParams();
-      const kind = isContracts ? "contract" : kindFilter;
-      if (kind) q.set("kind", kind);
+      q.set("kind", lockedKind);
       if (search.trim()) q.set("q", search.trim());
       if (pipelineFilter) q.set("pipeline", pipelineFilter);
       const res = await fetch(`${CRM_API_URL}/crm/proposals?${q.toString()}`, {
@@ -368,9 +368,7 @@ export function CrmDocumentsWorkspace({
           res.status === 401
             ? "Sign in again."
             : res.status === 403
-              ? isContracts
-                ? "You may not have CRM permission to view contracts."
-                : "You may not have CRM permission to view proposals."
+              ? `You may not have CRM permission to view ${moduleNounPlural}.`
               : `Server returned ${res.status}.`;
         throw new Error(hint);
       }
@@ -393,19 +391,19 @@ export function CrmDocumentsWorkspace({
       const detail = e instanceof Error ? e.message : "";
       toast.error(
         detail
-          ? `Could not load ${isContracts ? "contracts" : "proposals"} — ${detail}`
-          : `Could not load ${isContracts ? "contracts" : "proposals"}`,
+          ? `Could not load ${moduleNounPlural} — ${detail}`
+          : `Could not load ${moduleNounPlural}`,
       );
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, kindFilter, search, pipelineFilter, isContracts]);
+  }, [authHeaders, lockedKind, search, pipelineFilter, moduleNounPlural]);
 
   useEffect(() => {
     void (async () => {
       const token = getCrmAuthToken();
-      const list = await fetchCrmPipelines(isContracts ? "contracts" : "proposals", token);
+      const list = await fetchCrmPipelines(pipelineType, token);
       const normalized: ProposalPipeline[] = list.map((p) => ({
         _id: String(p._id),
         name: String(p.name || "Pipeline"),
@@ -421,7 +419,7 @@ export function CrmDocumentsWorkspace({
         return def?._id || "";
       });
     })();
-  }, [isContracts]);
+  }, [pipelineType]);
 
   const activePipeline =
     pipelines.find((p) => p._id === pipelineFilter) ||
@@ -506,15 +504,13 @@ export function CrmDocumentsWorkspace({
       pipeline: pipe?._id,
       stage: defaultStage,
       issuerProfile:
-        kind === "cv"
-          ? "freelancer"
-          : kind === "contract"
-            ? contractAiDefaultIssuer === "freelancer"
-              ? "freelancer"
-              : "agency"
-            : proposalAiDefaultIssuer === "freelancer"
-              ? "freelancer"
-              : "agency",
+        kind === "contract"
+          ? contractAiDefaultIssuer === "freelancer"
+            ? "freelancer"
+            : "agency"
+          : proposalAiDefaultIssuer === "freelancer"
+            ? "freelancer"
+            : "agency",
       title: kind === "contract" ? "Service agreement" : "",
       bodyHtml: "<p></p>",
     });
@@ -535,13 +531,6 @@ export function CrmDocumentsWorkspace({
     setTplCommercialsHtml("");
     setCommercialsInputMode("lines");
     setSelectedCommercialsPresetId(PRICING_MILESTONE_PRESETS[0]?.id ?? "standard_mobile_tiers");
-    setTplCvFullName("");
-    setTplCvHeadline("");
-    setTplCvSummary("");
-    setTplCvExperience("");
-    setTplCvSkills("");
-    setTplCvEducation("");
-    setTplCvCerts("");
     setAiSourceModule("leads");
     setAiSourceEntityId("");
     setAiSourceQuery("");
@@ -707,26 +696,6 @@ export function CrmDocumentsWorkspace({
         subject: d.subject || `Quotation: ${tplQuoteTitle || d.title || "Services"}`,
       }));
       toast.success("Quotation template inserted.");
-    } else if (templateId === "cv_resume") {
-      const html = buildCvResumeHtml({
-        fullName: tplCvFullName || draft.title || "Your name",
-        headline: tplCvHeadline || "",
-        summary:
-          tplCvSummary ||
-          "Two or three sentences on your focus, strengths, and what you are looking for next.",
-        experienceLines: tplCvExperience.trim() || undefined,
-        skillsLines: tplCvSkills.trim() || undefined,
-        educationLines: tplCvEducation.trim() || undefined,
-        certificationsLines: tplCvCerts.trim() || undefined,
-      });
-      setDraft((d) => ({
-        ...d,
-        kind: "cv",
-        title: d.title || tplCvFullName || "CV / Resume",
-        bodyHtml: html,
-        subject: d.subject || `CV: ${tplCvFullName || d.title || "Resume"}`,
-      }));
-      toast.success("CV template inserted — edit in the rich editor or add blocks from the library.");
     }
   };
 
@@ -1061,13 +1030,6 @@ export function CrmDocumentsWorkspace({
     }
   };
 
-  const kindLabel = (k: string) => {
-    if (k === "cv") return "CV / resume";
-    if (k === "quotation") return "Quotation";
-    if (k === "contract") return "Contract";
-    return "Proposal";
-  };
-
   const statusBadge = (s: string) => {
     const map: Record<string, string> = {
       draft: "bg-slate-100 text-slate-700",
@@ -1084,45 +1046,22 @@ export function CrmDocumentsWorkspace({
     <div className={`${CRM_LIST_PAGE} mx-auto w-full max-w-6xl space-y-6 pb-8 md:pb-10`}>
       <CrmPageHeader
         bordered={false}
-        title={isContracts ? "Contracts" : "Proposals & CVs"}
+        title={moduleTitle}
         description={
           isContracts
             ? "Create and manage client contracts with customizable pipeline stages. List or board view — move contracts through Draft → Signed like deals and leads."
-            : "Quick setup: client, brief, then one-click standard proposal or AI from CRM. Advanced template fields stay optional. PDF, Word, and Excel are generated on download or send."
+            : isQuotations
+              ? "Create and send quotations with their own pipeline stages. List or board view — move quotations through Draft → Accepted like deals and leads."
+              : "Quick setup: client, brief, then one-click standard proposal or AI from CRM. Advanced template fields stay optional. PDF, Word, and Excel are generated on download or send."
         }
         icon={<ScrollText className="h-5 w-5" aria-hidden />}
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },
-          { label: isContracts ? "Contracts" : "Proposals & CVs" },
+          { label: moduleTitle },
         ]}
         actions={
           <CrmHeaderTools
             leading={
-              isContracts ? (
-                <>
-                  <CrmButton
-                    variant="secondary"
-                    onClick={() => setBlocksDialogOpen(true)}
-                    leftIcon={<Blocks className="h-4 w-4" />}
-                  >
-                    Content library
-                  </CrmButton>
-                  <CrmButton
-                    variant="secondary"
-                    onClick={() => setBrandingDialogOpen(true)}
-                    leftIcon={<Palette className="h-4 w-4" />}
-                  >
-                    Branding
-                  </CrmButton>
-                  <CrmButton
-                    variant="primary"
-                    onClick={() => openNew("contract")}
-                    leftIcon={<Plus className="h-4 w-4" />}
-                  >
-                    New contract
-                  </CrmButton>
-                </>
-              ) : (
               <>
                 <CrmButton
                   variant="secondary"
@@ -1139,28 +1078,13 @@ export function CrmDocumentsWorkspace({
                   Branding
                 </CrmButton>
                 <CrmButton
-                  variant="secondary"
-                  onClick={() => openNew("proposal")}
+                  variant="primary"
+                  onClick={() => openNew(lockedKind)}
                   leftIcon={<Plus className="h-4 w-4" />}
                 >
-                  New proposal
-                </CrmButton>
-                <CrmButton
-                  variant="primary"
-                  onClick={() => openNew("quotation")}
-                  leftIcon={<FileText className="h-4 w-4" />}
-                >
-                  New quotation
-                </CrmButton>
-                <CrmButton
-                  variant="secondary"
-                  onClick={() => openNew("cv")}
-                  leftIcon={<UserCircle className="h-4 w-4" />}
-                >
-                  New CV
+                  New {moduleNounSingular}
                 </CrmButton>
               </>
-              )
             }
           />
         }
@@ -1179,18 +1103,6 @@ export function CrmDocumentsWorkspace({
           />
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
-          {!isContracts ? (
-            <Dropdown
-              value={kindFilter || "__all__"}
-              onChange={(v) => setKindFilter(v === "__all__" ? "" : v)}
-              options={[
-                { value: '__all__', label: 'All kinds' },
-                { value: 'proposal', label: 'Proposals' },
-                { value: 'quotation', label: 'Quotations' },
-                { value: 'cv', label: 'CV / Resume' },
-              ]}
-            />
-          ) : null}
           {pipelines.length > 0 ? (
             <Dropdown
               value={pipelineFilter || "__all__"}
@@ -1251,19 +1163,15 @@ export function CrmDocumentsWorkspace({
           </div>
         ) : rows.length === 0 ? (
           <div className="py-16 text-center text-sm text-[var(--primary-muted)]">
-            {isContracts
-              ? "No contracts yet. Create a contract from a template or start blank."
-              : "No documents yet. Create a proposal, quotation, or CV from a template or start blank."}
+            {`No ${moduleNounPlural} yet. Create a ${moduleNounSingular} from a template or start blank.`}
           </div>
         ) : viewMode === "board" ? (
           <ProposalPipelineBoard
             stages={activeStages}
             rows={rows}
             movingId={movingStageId}
-            entityLabel={isContracts ? "contract" : "proposal"}
-            settingsPipelinesLabel={
-              isContracts ? "Contract Pipelines" : "Proposal Pipelines"
-            }
+            entityLabel={moduleNounSingular}
+            settingsPipelinesLabel={`${moduleTitle.slice(0, -1)} Pipelines`}
             onOpen={(row) => openEdit(row as ProposalRow)}
             onMoveStage={(row, stage) => void moveProposalStage(row as ProposalRow, stage)}
           />
@@ -1273,7 +1181,6 @@ export function CrmDocumentsWorkspace({
               <thead>
                 <tr>
                   <th>Title</th>
-                  {!isContracts ? <th>Kind</th> : null}
                   <th>Stage</th>
                   <th>Client</th>
                   {isContracts ? <th>Value</th> : null}
@@ -1285,7 +1192,6 @@ export function CrmDocumentsWorkspace({
                 {rows.map((r) => (
                   <tr key={r._id}>
                     <td><span className="crm-list-name">{r.title}</span></td>
-                    {!isContracts ? <td>{kindLabel(r.kind)}</td> : null}
                     <td>
                       <span
                         className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusBadge(r.status)}`}
@@ -1399,13 +1305,11 @@ export function CrmDocumentsWorkspace({
             <DialogTitle className="text-[var(--text-main)]">
               {editingId
                 ? "Edit document"
-                : draft.kind === "cv"
-                  ? "New CV / resume"
-                  : draft.kind === "quotation"
-                    ? "New quotation"
-                    : draft.kind === "contract"
-                      ? "New contract"
-                      : "New proposal"}
+                : draft.kind === "quotation"
+                  ? "New quotation"
+                  : draft.kind === "contract"
+                    ? "New contract"
+                    : "New proposal"}
             </DialogTitle>
             <DialogDescription className="text-[var(--primary-muted)]">
               {composeStep === "quick" && !editingId ? (
@@ -1418,8 +1322,6 @@ export function CrmDocumentsWorkspace({
                   Edit your contract in the editor. Use advanced options for AI re-draft or legal review before
                   signing.
                 </>
-              ) : draft.kind === "cv" ? (
-                <>Edit your CV in the editor. Use advanced options for template fields and content blocks.</>
               ) : (
                 <>Edit your proposal in the editor. Download PDF or Word after saving.</>
               )}
@@ -1476,17 +1378,15 @@ export function CrmDocumentsWorkspace({
                       }
                     />
                   </div>
-                  {draft.kind !== "cv" ? (
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label className="text-[var(--text-main)]">Brief (optional)</Label>
-                      <textarea
-                        value={aiClientNeeds}
-                        onChange={(e) => setAiClientNeeds(e.target.value)}
-                        placeholder="What they need, timeline, budget, key features… Used for AI and standard templates."
-                        className="min-h-[88px] w-full rounded-md border border-[var(--border-color)] bg-white p-3 text-sm"
-                      />
-                    </div>
-                  ) : null}
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-[var(--text-main)]">Brief (optional)</Label>
+                    <textarea
+                      value={aiClientNeeds}
+                      onChange={(e) => setAiClientNeeds(e.target.value)}
+                      placeholder="What they need, timeline, budget, key features… Used for AI and standard templates."
+                      className="min-h-[88px] w-full rounded-md border border-[var(--border-color)] bg-white p-3 text-sm"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -1501,36 +1401,6 @@ export function CrmDocumentsWorkspace({
                       <span className="text-sm font-semibold text-[var(--text-main)]">AI contract</span>
                       <span className="text-xs text-[var(--text-muted)]">
                         From a linked CRM record. Legal review required.
-                      </span>
-                    </button>
-                  ) : draft.kind === "cv" ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const name = draft.title.trim() || "Your name";
-                        const html = buildCvResumeHtml({
-                          fullName: name,
-                          headline: "",
-                          summary:
-                            "Two or three sentences on your focus, strengths, and what you are looking for next.",
-                        });
-                        setTplCvFullName(name);
-                        setDraft((d) => ({
-                          ...d,
-                          kind: "cv",
-                          title: name,
-                          bodyHtml: html,
-                          subject: d.subject || `CV: ${name}`,
-                        }));
-                        goToEditor();
-                        toast.success("CV template inserted.");
-                      }}
-                      className="flex flex-col items-start gap-2 rounded-lg border-2 border-[var(--hs-link)] bg-[#f0fbfc] p-4 text-left transition hover:bg-[#e6f4f7] sm:col-span-3"
-                    >
-                      <UserCircle className="h-5 w-5 text-[var(--hs-link)]" />
-                      <span className="text-sm font-semibold text-[var(--text-main)]">CV template</span>
-                      <span className="text-xs text-[var(--text-muted)]">
-                        Inserts a structured resume — edit sections in the next step.
                       </span>
                     </button>
                   ) : draft.kind === "quotation" ? (
@@ -1585,7 +1455,7 @@ export function CrmDocumentsWorkspace({
                   )}
                 </div>
 
-                {draft.kind !== "cv" && draft.kind !== "quotation" ? (
+                {draft.kind !== "quotation" ? (
                   <div className="rounded-md border border-[var(--border-color)] bg-white p-3 space-y-3">
                     <button
                       type="button"
@@ -1758,12 +1628,10 @@ export function CrmDocumentsWorkspace({
                           <SelectContent>
                             {isContracts ? (
                               <SelectItem value="contract">Contract</SelectItem>
+                            ) : isQuotations ? (
+                              <SelectItem value="quotation">Quotation</SelectItem>
                             ) : (
-                              <>
-                                <SelectItem value="proposal">Proposal</SelectItem>
-                                <SelectItem value="quotation">Quotation</SelectItem>
-                                <SelectItem value="cv">CV / Resume</SelectItem>
-                              </>
+                              <SelectItem value="proposal">Proposal</SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -2031,54 +1899,7 @@ export function CrmDocumentsWorkspace({
                   </p>
                 </div>
               </div>
-              {draft.kind === "contract" ? null : draft.kind === "cv" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Input
-                    placeholder="Full name"
-                    value={tplCvFullName}
-                    onChange={(e) => setTplCvFullName(e.target.value)}
-                    className="rounded-md border-[var(--border-color)] bg-white"
-                  />
-                  <Input
-                    placeholder="Headline (e.g. Senior React Native developer)"
-                    value={tplCvHeadline}
-                    onChange={(e) => setTplCvHeadline(e.target.value)}
-                    className="rounded-md border-[var(--border-color)] bg-white"
-                  />
-                  <textarea
-                    placeholder="Professional summary — paragraphs welcome"
-                    value={tplCvSummary}
-                    onChange={(e) => setTplCvSummary(e.target.value)}
-                    className="sm:col-span-2 min-h-[88px] rounded-md border border-[var(--border-color)] bg-white p-2 text-sm"
-                  />
-                  <textarea
-                    placeholder={
-                      "Experience — one bullet per line (optional)\ne.g. Lead Engineer — Acme (2022–present) — shipped …"
-                    }
-                    value={tplCvExperience}
-                    onChange={(e) => setTplCvExperience(e.target.value)}
-                    className="sm:col-span-2 min-h-[96px] rounded-md border border-[var(--border-color)] bg-white p-2 text-sm font-mono text-sm"
-                  />
-                  <textarea
-                    placeholder={"Skills — one line per group or bullet\ne.g. Mobile: React Native, Expo"}
-                    value={tplCvSkills}
-                    onChange={(e) => setTplCvSkills(e.target.value)}
-                    className="sm:col-span-2 min-h-[72px] rounded-md border border-[var(--border-color)] bg-white p-2 text-sm font-mono text-sm"
-                  />
-                  <textarea
-                    placeholder={"Education — one per line\ne.g. B.Tech — IIT — 2018"}
-                    value={tplCvEducation}
-                    onChange={(e) => setTplCvEducation(e.target.value)}
-                    className="sm:col-span-2 min-h-[64px] rounded-md border border-[var(--border-color)] bg-white p-2 text-sm font-mono text-sm"
-                  />
-                  <textarea
-                    placeholder="Certifications — one per line (optional)"
-                    value={tplCvCerts}
-                    onChange={(e) => setTplCvCerts(e.target.value)}
-                    className="sm:col-span-2 min-h-[56px] rounded-md border border-[var(--border-color)] bg-white p-2 text-sm font-mono text-sm"
-                  />
-                </div>
-              ) : draft.kind === "proposal" ? (
+              {draft.kind === "contract" ? null : draft.kind === "proposal" ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Input
                     placeholder="Project title (headline)"
@@ -2294,7 +2115,7 @@ export function CrmDocumentsWorkspace({
             <div className="rounded-md border border-[var(--surface-dim)] bg-[var(--background)] p-3 space-y-2">
               <Label className="text-[var(--text-main)] text-sm font-semibold">Reusable content</Label>
               <p className="text-xs text-[var(--primary-muted)]">
-                Append a saved block from your library (portfolio, payment terms, CV sections, etc.). Manage blocks with{" "}
+                Append a saved block from your library (portfolio, payment terms, legal snippets, etc.). Manage blocks with{" "}
                 <button
                   type="button"
                   className="text-[var(--hs-link)] font-semibold underline-offset-2 hover:underline"

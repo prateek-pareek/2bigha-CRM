@@ -56,11 +56,20 @@ export default function CRMFilterBar({ module, filters, onChange, onClear, onPro
           const prop = customFieldToFilterProperty(cf);
           return { ...prop, label: `${prop.label} (custom)` };
         });
-        // Avoid duplicate keys if a static field somehow shares a key.
+        // Avoid showing the same property twice: once as a built-in field (e.g. the new
+        // Lead Type / Group fields) and again as a legacy custom field someone created
+        // with the same name before the built-in existed. Match by key AND by normalized
+        // label, since the custom field's key rarely matches the built-in key exactly.
         const staticKeys = new Set(staticProps.map((p) => p.key));
+        const normalizeLabel = (l: string) => l.trim().toLowerCase();
+        const staticLabels = new Set(staticProps.map((p) => normalizeLabel(p.label)));
         const merged = [
           ...staticProps,
-          ...cfProps.filter((p) => !staticKeys.has(p.key)),
+          ...cfProps.filter(
+            (p) =>
+              !staticKeys.has(p.key) &&
+              !staticLabels.has(normalizeLabel(p.label.replace(/\s*\(custom\)$/, ''))),
+          ),
         ];
         setProperties(merged);
         onPropertiesReady?.(merged);

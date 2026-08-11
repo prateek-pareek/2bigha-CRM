@@ -76,6 +76,15 @@ export function mergeDateRangeFilter(
   ];
 }
 
+/** Lead-type tab bar (All Leads / Reference / Investor / Lead / Buyer lead, etc.) — empty label = "All". */
+export function mergeLeadCategoryFilter(
+  filters: FilterCriteria[],
+  leadCategory: string,
+): FilterCriteria[] {
+  if (!leadCategory) return filters;
+  return [...filters, { property: 'leadCategory', operator: 'equals', value: leadCategory }];
+}
+
 /** Normalize list API payloads that always return `{ data, total }` after scale hardening. */
 export function unwrapCrmListPayload<T>(payload: unknown): {
   data: T[];

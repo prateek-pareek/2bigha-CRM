@@ -11,7 +11,6 @@ export const PROPOSAL_BLOCK_CATEGORIES = [
   'scope_boilerplate',
   'legal',
   'commercials',
-  'cv_section',
   'other',
 ] as const;
 

@@ -207,10 +207,9 @@ ${PAYMENT_BLOCK}
 export const TEMPLATE_OPTIONS = [
   { id: "it_proposal", label: "IT consulting — full proposal" },
   { id: "quotation", label: "Quotation — summary + payment" },
-  { id: "cv_resume", label: "CV / Resume — structured sections" },
 ] as const;
 
-export type DocumentKind = "proposal" | "quotation" | "cv" | "contract";
+export type DocumentKind = "proposal" | "quotation" | "contract";
 
 /** Insert buttons shown in the editor depend on document kind. */
 export function documentTemplatesForKind(kind: DocumentKind) {
@@ -220,59 +219,7 @@ export function documentTemplatesForKind(kind: DocumentKind) {
   if (kind === "quotation") {
     return TEMPLATE_OPTIONS.filter((t) => t.id === "quotation");
   }
-  if (kind === "cv") {
-    return TEMPLATE_OPTIONS.filter((t) => t.id === "cv_resume");
-  }
   return TEMPLATE_OPTIONS.filter((t) => t.id === "it_proposal");
-}
-
-export type CvResumeVars = {
-  fullName: string;
-  headline: string;
-  summary: string;
-  experienceLines?: string;
-  skillsLines?: string;
-  educationLines?: string;
-  certificationsLines?: string;
-};
-
-/** Starter HTML for freelancer CVs; content is stored as HTML — PDF/XLSX are generated on demand. */
-export function buildCvResumeHtml(v: CvResumeVars): string {
-  const name = esc(v.fullName || "Your name");
-  const headline = esc(v.headline || "");
-  const summary = paragraphs(
-    v.summary ||
-      "Two or three sentences on your focus, strengths, and what you are looking for next.",
-  );
-  const expBlock =
-    linesToUl(v.experienceLines) ??
-    `<ul><li><strong>Role title — Company</strong> (dates)<br/>Impact, stack, and scope in one or two lines.</li></ul>`;
-  const skillsBlock =
-    linesToUl(v.skillsLines) ??
-    `<ul><li>e.g. React Native · TypeScript · NestJS · MongoDB · AWS</li></ul>`;
-  const eduBlock =
-    linesToUl(v.educationLines) ??
-    `<ul><li>Degree / programme — Institution — year</li></ul>`;
-  const certLines = linesToUl(v.certificationsLines);
-
-  return `
-<div class="cv-root">
-<h1 style="font-size:22pt;margin:0 0 4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:var(--text-main);">${name}</h1>
-<p style="margin:0 0 18px;font-size:11pt;color:#425b76;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">${headline}</p>
-<h2 style="font-size:11pt;text-transform:uppercase;letter-spacing:0.08em;color:var(--hs-link);border-bottom:1px solid var(--surface-dim);padding-bottom:4px;margin:20px 0 10px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Summary</h2>
-${summary}
-<h2 style="font-size:11pt;text-transform:uppercase;letter-spacing:0.08em;color:var(--hs-link);border-bottom:1px solid var(--surface-dim);padding-bottom:4px;margin:20px 0 10px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Experience</h2>
-${expBlock}
-<h2 style="font-size:11pt;text-transform:uppercase;letter-spacing:0.08em;color:var(--hs-link);border-bottom:1px solid var(--surface-dim);padding-bottom:4px;margin:20px 0 10px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Skills</h2>
-${skillsBlock}
-<h2 style="font-size:11pt;text-transform:uppercase;letter-spacing:0.08em;color:var(--hs-link);border-bottom:1px solid var(--surface-dim);padding-bottom:4px;margin:20px 0 10px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Education</h2>
-${eduBlock}
-${
-  certLines
-    ? `<h2 style="font-size:11pt;text-transform:uppercase;letter-spacing:0.08em;color:var(--hs-link);border-bottom:1px solid var(--surface-dim);padding-bottom:4px;margin:20px 0 10px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Certifications</h2>${certLines}`
-    : ""
-}
-</div>`.trim();
 }
 
 /** Presets for section 4 (commercial tiers + payment milestones) and optional delivery hints. */

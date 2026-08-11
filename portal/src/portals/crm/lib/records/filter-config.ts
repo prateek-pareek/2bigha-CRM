@@ -73,6 +73,14 @@ export const BUILTIN_FILTER_OPTIONS: Record<string, string[]> = {
   callStatus: ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'],
 };
 
+/**
+ * `leadCategory` ("Lead Type") and `group` are admin-configurable (see
+ * /crm/settings/lead-picklists), so they're intentionally left out of
+ * BUILTIN_FILTER_OPTIONS above — FilterValueSelector already falls back to
+ * `/crm/distinct-values` for select-type properties with no builtin list,
+ * which picks up whatever labels are actually in use.
+ */
+
 const DATE_KEYS = new Set([
   'createdAt',
   'expectedClosureDate',
@@ -103,6 +111,8 @@ const SELECT_KEYS = new Set([
   'pricingType',
   'platformEngagementStatus',
   'callStatus',
+  'leadCategory',
+  'group',
 ]);
 
 /** ObjectId / array / non-filterable layout keys */

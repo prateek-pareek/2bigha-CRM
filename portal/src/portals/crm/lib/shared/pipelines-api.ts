@@ -7,7 +7,13 @@ import { getCrmAuthToken } from "@/lib/crm/api";
 export type CrmPipelineRow = { _id: string; name?: string; [key: string]: unknown };
 
 export async function fetchCrmPipelines(
-  type: "leads" | "deals" | "platform_opportunities" | "proposals" | "contracts",
+  type:
+    | "leads"
+    | "deals"
+    | "platform_opportunities"
+    | "proposals"
+    | "quotations"
+    | "contracts",
   token?: string | null,
 ): Promise<CrmPipelineRow[]> {
   const auth = token ?? getCrmAuthToken();

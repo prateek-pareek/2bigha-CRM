@@ -23,9 +23,12 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
  leads: [
   { label: 'First Name', key: 'firstName' },
   { label: 'Last Name', key: 'lastName' },
+  { label: 'Role (OWNER/AGENT/USER — creates/links a Client)', key: 'role' },
   { label: 'Email', key: 'email' },
   { label: 'Mobile No', key: 'mobileNo' },
   { label: 'Phone', key: 'phone' },
+  { label: 'WhatsApp Number (on the linked Client)', key: 'whatsappNumber' },
+  { label: 'Address (on the linked Client)', key: 'address' },
   { label: 'Organization / Company name', key: 'organization' },
   { label: 'HubSpot company ID (match imported company)', key: 'hubspotCompanyId' },
   { label: 'HubSpot contact ID (optional, for linking)', key: 'hubspotContactId' },
@@ -34,6 +37,9 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'Annual Revenue', key: 'annualRevenue' },
   { label: 'Industry', key: 'industry' },
   { label: 'Status', key: 'status' },
+  { label: 'Group (Seller/Buyer — see Settings)', key: 'group' },
+  { label: 'Lead Type (Reference/Investor/Lead/Buyer lead — see Settings)', key: 'leadCategory' },
+  { label: 'Lead Source', key: 'source' },
  ],
  contacts: [
   { label: 'First Name', key: 'firstName' },
@@ -154,7 +160,7 @@ function applyHubSpotHints(
   if (!out.email) out.email = pick('Email', 'Work Email', 'Email Address');
   if (!out.phone && (type === 'contacts' || type === 'leads'))
     out.phone = pick('Phone Number', 'Phone', 'Work phone');
-  if (!out.mobileNo) out.mobileNo = pick('Mobile Phone', 'Mobile phone');
+  if (!out.mobileNo) out.mobileNo = pick('Mobile Phone', 'Mobile phone', 'Contact Number', 'Phone');
   if (!out.organization && (type === 'contacts' || type === 'leads'))
     out.organization = pick(
       'Company Name',
@@ -190,7 +196,58 @@ function applyHubSpotHints(
     out.contactEmail = pick('Associated Contact', 'Contact Email', 'Primary Contact Email');
   if (!out.hubspotContactId && type === 'deals')
     out.hubspotContactId = pick('Associated Contact IDs', 'Contact ID');
+  if (type === 'leads') {
+    if (!out.role) out.role = pick('Role', 'User Type');
+    if (!out.whatsappNumber) out.whatsappNumber = pick('WhatsApp Number', 'WhatsApp', 'Whatsapp Number');
+    if (!out.address) out.address = pick('Address', 'City, State');
+    if (!out.group) out.group = pick('Group', 'Group Name');
+    if (!out.leadCategory) out.leadCategory = pick('Lead Type', 'Lead Category');
+    if (!out.source) out.source = pick('Lead Source', 'Source');
+  }
   return out;
+}
+
+/** CSV column headers + one example row, matching the leads Role/WhatsApp/Group/Lead Type flow. */
+const LEADS_TEMPLATE_HEADERS = [
+  'First Name',
+  'Last Name',
+  'Role',
+  'Email',
+  'Contact Number',
+  'WhatsApp Number',
+  'Group',
+  'Address',
+  'Website',
+  'Lead Type',
+  'Lead Source',
+];
+const LEADS_TEMPLATE_EXAMPLE = [
+  'Shagun',
+  'Mishra',
+  'OWNER/AGENT/USER',
+  'sapnashagun@example.com',
+  '+919876543210',
+  '+919876543210',
+  'Seller',
+  '123 Street Gurgaon Haryana India 122017',
+  'https://example.com',
+  'Lead',
+  'Email',
+];
+
+function downloadLeadsCsvTemplate() {
+  const csv = [LEADS_TEMPLATE_HEADERS, LEADS_TEMPLATE_EXAMPLE]
+    .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
+    .join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'leads-import-template.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export default function ImportModal({ isOpen, onClose, onSuccess, type }: ImportModalProps) {
@@ -435,6 +492,21 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
          <p className="text-lg font-black text-text-main tracking-tight">Drop your file here or browse</p>
          <p className="text-sm font-medium text-text-muted mt-2">Support .xlsx, .csv (Max 10MB)</p>
         </div>
+
+        {type === 'leads' && (
+         <div className="flex items-center justify-center">
+          <button
+           type="button"
+           onClick={(e) => {
+            e.stopPropagation();
+            downloadLeadsCsvTemplate();
+           }}
+           className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
+          >
+           <FileText size={14} className="text-primary/70" /> Download CSV Template
+          </button>
+         </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
          <div className="p-5 bg-surface-dim rounded-[var(--radius-md)] border border-[var(--border-color)]">

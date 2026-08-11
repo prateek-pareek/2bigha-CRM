@@ -47,6 +47,12 @@ export default function CrmImportProgressTracker() {
             failedCount: data.failedCount ?? 0,
             status: data.status,
             error: data.error,
+            createdCount: data.createdCount ?? 0,
+            mergedCount: data.mergedCount ?? 0,
+            replacedCount: data.replacedCount ?? 0,
+            skippedCount: data.skippedCount ?? 0,
+            existingClientCount: data.existingClientCount ?? 0,
+            invalidRoleCount: data.invalidRoleCount ?? 0,
           });
 
           if (data.status === 'completed' && !notifiedRef.current.has(job.jobId)) {
@@ -59,11 +65,15 @@ export default function CrmImportProgressTracker() {
             const replaced = data.replacedCount ?? 0;
             const skipped = data.skippedCount ?? 0;
             const failed = data.failedCount ?? 0;
+            const existingClients = data.existingClientCount ?? 0;
+            const invalidRoles = data.invalidRoleCount ?? 0;
             const parts: string[] = [];
-            if (created > 0) parts.push(`${created} created`);
+            if (created > 0) parts.push(`${created} added`);
             if (merged > 0) parts.push(`${merged} merged`);
             if (replaced > 0) parts.push(`${replaced} replaced`);
             if (skipped > 0) parts.push(`${skipped} duplicates skipped`);
+            if (existingClients > 0) parts.push(`${existingClients} already existing users`);
+            if (invalidRoles > 0) parts.push(`${invalidRoles} invalid roles defaulted to USER`);
             if (failed > 0) parts.push(`${failed} failed`);
             toast.success(
               parts.length > 0
@@ -131,7 +141,14 @@ export default function CrmImportProgressTracker() {
                     {job.status === 'processing'
                       ? `${job.processed} / ${job.total} rows`
                       : job.status === 'completed'
-                        ? `${job.successCount} updated${job.failedCount > 0 ? `, ${job.failedCount} failed` : ''}`
+                        ? [
+                            `${job.successCount} updated`,
+                            job.existingClientCount ? `${job.existingClientCount} already existing users` : null,
+                            job.skippedCount ? `${job.skippedCount} skipped` : null,
+                            job.failedCount > 0 ? `${job.failedCount} failed` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(', ')
                         : job.error || 'Something went wrong'}
                   </p>
                 </div>

@@ -112,6 +112,16 @@ export default function RealtimeManager() {
             }
         });
 
+        socket.on('whatsapp:message', (payload: any) => {
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                    new CustomEvent('crm:realtime-event', {
+                        detail: { event: 'whatsapp:message', payload },
+                    }),
+                );
+            }
+        });
+
         return () => {
             if (socketRef.current) {
                 socketRef.current.disconnect();

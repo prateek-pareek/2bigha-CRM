@@ -634,14 +634,14 @@ export class CRMController {
   }
 
   @Post('import/preview')
-  @Permissions('admin:manage')
+  @Permissions('admin:manage', 'leads:import')
   @UseInterceptors(FileInterceptor('file'))
   async getImportPreview(@UploadedFile() file: any) {
     return { headers: this.crmService.getFileHeaders(file.buffer) };
   }
 
   @Post('import/:type')
-  @Permissions('admin:manage')
+  @Permissions('admin:manage', 'leads:import')
   @UseInterceptors(FileInterceptor('file'))
   async importData(
     @Param('type') type: string,
@@ -661,7 +661,7 @@ export class CRMController {
   }
 
   @Get('import/jobs/:jobId')
-  @Permissions('admin:manage')
+  @Permissions('admin:manage', 'leads:import')
   getImportJob(@Param('jobId') jobId: string) {
     return this.crmService.getImportJobStatus(jobId);
   }

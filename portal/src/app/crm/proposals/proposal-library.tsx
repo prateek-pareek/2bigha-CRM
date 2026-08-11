@@ -534,10 +534,10 @@ export function ProposalBlocksManagerDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-[min(48rem,calc(100vw-2rem))] max-h-[90vh] flex flex-col rounded-md border-[var(--border-color)]">
           <DialogHeader>
-            <DialogTitle className="text-[var(--text-main)]">Reusable proposal &amp; CV content</DialogTitle>
+            <DialogTitle className="text-[var(--text-main)]">Reusable proposal content</DialogTitle>
             <DialogDescription className="text-[var(--primary-muted)]">
-              Build a library of portfolio blurbs, payment terms, CV sections, legal snippets, and more. Insert them from
-              any proposal, quotation, or CV while editing.
+              Build a library of portfolio blurbs, payment terms, legal snippets, and more. Insert them from
+              any proposal, quotation, or contract while editing.
             </DialogDescription>
           </DialogHeader>
 

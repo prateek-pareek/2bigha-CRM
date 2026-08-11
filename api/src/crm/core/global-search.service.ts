@@ -282,12 +282,15 @@ export class GlobalSearchService {
     limit: number,
     maxTimeMS: number,
   ) {
-    const regexFilter = buildTokenAndFilter(['name', 'email'], query);
+    const regexFilter = buildTokenAndFilter(
+      ['name', 'email', 'phone', 'whatsappNumber'],
+      query,
+    );
     return this.searchWithTextThenRegex(
       this.clientModel as Model<unknown>,
       textQ,
       regexFilter,
-      { _id: 1, name: 1, email: 1 },
+      { _id: 1, name: 1, email: 1, phone: 1, whatsappNumber: 1, role: 1 },
       limit,
       maxTimeMS,
     );

@@ -127,7 +127,6 @@ function labelForCategory(id: string): string {
     scope_boilerplate: 'Scope boilerplate',
     legal: 'Legal & IP',
     commercials: 'Commercials & pricing',
-    cv_section: 'CV / resume section',
     other: 'Other',
   };
   return map[id] ?? id;

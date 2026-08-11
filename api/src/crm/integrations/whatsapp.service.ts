@@ -6,6 +6,7 @@ import {
   WhatsAppMessageDocument,
 } from '../schemas/whatsapp-message.schema';
 import { Integration } from '../schemas/integration.schema';
+import { RealtimeGateway } from '../../realtime/realtime.gateway';
 
 const META_API = 'https://graph.facebook.com/v18.0';
 
@@ -46,7 +47,24 @@ export class WhatsAppService {
     private messageModel: Model<WhatsAppMessageDocument>,
     @InjectModel(Integration.name, 'crmConnection')
     private integrationModel: Model<any>,
+    private readonly realtimeGateway: RealtimeGateway,
   ) {}
+
+  /**
+   * Pushes a live update to every connected CRM user (the 'ALL' room every
+   * client joins on connect — see RealtimeManager.tsx) so the WhatsApp chat
+   * UI can update instantly instead of waiting on its poll interval. Mirrors
+   * the `deal-chat:message` / `crm:inbox:refresh` pattern used elsewhere.
+   */
+  private emitWhatsAppEvent(waId: string, message: WhatsAppMessageDocument): void {
+    try {
+      this.realtimeGateway.server
+        ?.to('ALL')
+        .emit('whatsapp:message', { waId, message });
+    } catch (e: any) {
+      this.logger.error(`WhatsApp realtime emit error: ${e?.message}`);
+    }
+  }
 
   private async getConfig(): Promise<{
     apiKey: string;
@@ -112,7 +130,7 @@ export class WhatsAppService {
       }
 
       const msgId = data?.messages?.[0]?.id;
-      await this.messageModel.create({
+      const saved = await this.messageModel.create({
         waId: phone,
         direction: 'outbound',
         body,
@@ -123,6 +141,7 @@ export class WhatsAppService {
         status: 'sent',
         meta: data,
       });
+      this.emitWhatsAppEvent(phone, saved);
 
       return { success: true, messageId: msgId };
     } catch (e: any) {
@@ -196,7 +215,7 @@ export class WhatsAppService {
         String(params.bodyPreview || '').trim() ||
         `[Template] ${templateName} (${language})`;
 
-      await this.messageModel.create({
+      const saved = await this.messageModel.create({
         waId: phone,
         direction: 'outbound',
         body,
@@ -216,6 +235,7 @@ export class WhatsAppService {
           },
         },
       });
+      this.emitWhatsAppEvent(phone, saved);
 
       return { success: true, messageId: msgId };
     } catch (e: any) {
@@ -346,13 +366,14 @@ export class WhatsAppService {
     body: string,
     messageId: string,
   ): Promise<void> {
-    await this.messageModel.create({
+    const saved = await this.messageModel.create({
       waId,
       direction: 'inbound',
       body,
       messageId,
       status: 'delivered',
     });
+    this.emitWhatsAppEvent(waId, saved);
   }
 
   async getConversations(

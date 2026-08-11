@@ -33,7 +33,13 @@ export class PipelineController {
   )
   findAllPipelines(
     @Query('type')
-    type?: 'deals' | 'leads' | 'platform_opportunities' | 'proposals' | 'contracts',
+    type?:
+      | 'deals'
+      | 'leads'
+      | 'platform_opportunities'
+      | 'proposals'
+      | 'quotations'
+      | 'contracts',
   ) {
     return this.pipelinesService.findAll(type);
   }

@@ -235,6 +235,10 @@ export class CRMService {
       mergedCount: number;
       replacedCount: number;
       createdCount: number;
+      /** Rows where the Role/WhatsApp/Address columns matched an existing Client by phone or email. */
+      existingClientCount: number;
+      /** Rows whose Role column wasn't OWNER/AGENT/USER — defaulted to USER. */
+      invalidRoleCount: number;
       duplicateStrategy: ImportDuplicateStrategy;
       error?: string;
       createdAt: number;
@@ -1532,6 +1536,67 @@ export class CRMService {
   }
 
   /**
+   * Strips the client-routing-only columns (Role/WhatsApp/Address) from a lead import row
+   * once `resolveImportClientId` has consumed them — separate from `stripImportRoutingFields`
+   * because those same column names are legitimate target fields when importing INTO clients.
+   */
+  private stripLeadImportClientRoutingFields(d: Record<string, any>): void {
+    delete d.role;
+    delete d.whatsappNumber;
+    delete d.address;
+  }
+
+  private readonly CLIENT_ROLE_OPTIONS = ['OWNER', 'AGENT', 'USER'];
+
+  /**
+   * Bulk-import counterpart to the Add Lead "search or create a client" step: find an
+   * existing Client by phone/email, or create one from the Role/WhatsApp/Address columns.
+   * Returns null (no-op) when the row has none of those columns, so plain lead-only CSVs
+   * (no Role/WhatsApp/Address) behave exactly as before this feature existed.
+   */
+  private async resolveImportClientId(
+    mappedData: Record<string, any>,
+  ): Promise<{ clientId: Types.ObjectId; wasExisting: boolean; invalidRole: boolean } | null> {
+    const hasRoutingColumn =
+      mappedData.role != null ||
+      mappedData.whatsappNumber != null ||
+      mappedData.address != null;
+    if (!hasRoutingColumn) return null;
+
+    const rawRole = String(mappedData.role ?? '').trim().toUpperCase();
+    const invalidRole = rawRole !== '' && !this.CLIENT_ROLE_OPTIONS.includes(rawRole);
+    const role = this.CLIENT_ROLE_OPTIONS.includes(rawRole) ? rawRole : 'USER';
+
+    const email = String(mappedData.email ?? '').trim();
+    const phone = this.sanitizePhone(mappedData.mobileNo ?? mappedData.phone);
+    const name =
+      `${mappedData.firstName || ''} ${mappedData.lastName || ''}`.trim() || 'Unknown';
+
+    const matchOr: Record<string, unknown>[] = [];
+    if (email && email.includes('@')) matchOr.push({ email: this.emailRegexForMatch(email) });
+    if (phone) matchOr.push({ phone });
+    const existing = matchOr.length
+      ? await this.clientModel.findOne({ $or: matchOr }).exec()
+      : null;
+
+    if (existing) {
+      return { clientId: existing._id as Types.ObjectId, wasExisting: true, invalidRole };
+    }
+
+    const created = await this.clientModel.create({
+      name,
+      email: email || undefined,
+      phone: phone || undefined,
+      whatsappNumber: mappedData.whatsappNumber
+        ? String(mappedData.whatsappNumber).trim()
+        : undefined,
+      address: mappedData.address ? String(mappedData.address).trim() : undefined,
+      role,
+    });
+    return { clientId: created._id as Types.ObjectId, wasExisting: false, invalidRole };
+  }
+
+  /**
    * Resolve company for import: explicit Mongo id, HubSpot company id on Organization.customFields,
    * or create/find by company name (HubSpot "Company name" / Associated Company).
    */
@@ -2706,6 +2771,10 @@ export class CRMService {
       if (rawId && Types.ObjectId.isValid(String(rawId))) {
         dto.createdBy = new Types.ObjectId(String(rawId));
       }
+      // Denormalized so "search by Created By / agent name" doesn't need a $lookup.
+      if (user.firstName || user.lastName) {
+        dto.createdByName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      }
     }
 
     // Final sanitization for ObjectId fields
@@ -2718,6 +2787,25 @@ export class CRMService {
         if (oid) dto.relatedService = oid;
         else delete dto.relatedService;
       }
+    }
+    // Add Lead client-selection step: link the picked/created Client, if any.
+    if (dto.clientId !== undefined) {
+      const v = dto.clientId;
+      if (v === null || v === '') delete dto.clientId;
+      else {
+        const oid = this.toObjectIdSafe(v);
+        if (oid) dto.clientId = oid;
+        else delete dto.clientId;
+      }
+    }
+    if (typeof dto.leadCategory === 'string') {
+      dto.leadCategory = dto.leadCategory.trim() || undefined;
+    }
+    if (typeof dto.group === 'string') {
+      dto.group = dto.group.trim() || undefined;
+    }
+    if (typeof dto.notes === 'string') {
+      dto.notes = dto.notes.trim() || undefined;
     }
     if (dto.phone) dto.phone = this.sanitizePhone(dto.phone);
     if (dto.mobileNo) dto.mobileNo = this.sanitizePhone(dto.mobileNo);
@@ -2743,6 +2831,13 @@ export class CRMService {
     );
 
     const lead = await new this.leadModel(dto).save();
+
+    // 0. Link the Client picked/created in the Add Lead client-selection step (optional).
+    if (dto.clientId) {
+      await this.clientModel
+        .updateOne({ _id: dto.clientId }, { $addToSet: { associatedLeads: lead._id } })
+        .exec();
+    }
 
     // 1. Link Organization
     if (dto.organization && dto.organization.trim()) {
@@ -2967,7 +3062,7 @@ export class CRMService {
               'platformClientLabel',
               'jobTitle',
             ]
-          : ['firstName', 'lastName', 'email'];
+          : ['firstName', 'lastName', 'email', 'source', 'leadCategory', 'createdByName'];
       filter = this.appendCrmTextSearchFilter(
         filter,
         listOpts.search,
@@ -2992,7 +3087,7 @@ export class CRMService {
     );
     const skip = (page - 1) * pageSize;
     const outreachSelect =
-      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy customFields leadScore mobileNo phone recordId relatedService twitterHandle';
+      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields leadScore mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source';
     const [data, count] = await Promise.all([
       this.leadModel
         .find(filter)
@@ -7740,6 +7835,8 @@ export class CRMService {
       mergedCount: 0,
       replacedCount: 0,
       createdCount: 0,
+      existingClientCount: 0,
+      invalidRoleCount: 0,
       duplicateStrategy: strategy,
       createdAt: Date.now(),
     });
@@ -7781,6 +7878,8 @@ export class CRMService {
       mergedCount: job.mergedCount,
       replacedCount: job.replacedCount,
       createdCount: job.createdCount,
+      existingClientCount: job.existingClientCount,
+      invalidRoleCount: job.invalidRoleCount,
       duplicateStrategy: job.duplicateStrategy,
       error: job.error,
       progress:
@@ -7879,7 +7978,16 @@ export class CRMService {
             customFields.hubspot_contact_id = String(hsLeadContact).trim();
           }
           const leadOrgId = await this.resolveImportOrganizationId(mappedData);
+          const leadClient = await this.resolveImportClientId(mappedData);
+          if (leadClient) {
+            mappedData.clientId = leadClient.clientId;
+            if (job) {
+              if (leadClient.wasExisting) job.existingClientCount++;
+              if (leadClient.invalidRole) job.invalidRoleCount++;
+            }
+          }
           this.stripImportRoutingFields(mappedData);
+          this.stripLeadImportClientRoutingFields(mappedData);
           const leadRequestedRid =
             mappedData.recordId != null &&
               String(mappedData.recordId).trim() !== ''

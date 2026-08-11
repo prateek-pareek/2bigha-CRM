@@ -12,6 +12,7 @@ export type CrmPipelineType =
   | 'leads'
   | 'platform_opportunities'
   | 'proposals'
+  | 'quotations'
   | 'contracts';
 
 @Injectable()
@@ -47,6 +48,8 @@ export class PipelinesService implements OnModuleInit {
       filter.type = 'platform_opportunities';
     } else if (type === 'proposals') {
       filter.type = 'proposals';
+    } else if (type === 'quotations') {
+      filter.type = 'quotations';
     } else if (type === 'contracts') {
       filter.type = 'contracts';
     }
@@ -142,6 +145,19 @@ export class PipelinesService implements OnModuleInit {
       await this.create({
         name: 'Standard Proposals',
         type: 'proposals',
+        categoryType: 'it_consulting',
+        isDefault: true,
+        stages: DEFAULT_PROPOSAL_PIPELINE_STAGES.map((s) => ({ ...s })),
+      });
+    }
+
+    const quotationCount = await this.pipelineModel.countDocuments({
+      type: 'quotations',
+    });
+    if (quotationCount === 0) {
+      await this.create({
+        name: 'Standard Quotations',
+        type: 'quotations',
         categoryType: 'it_consulting',
         isDefault: true,
         stages: DEFAULT_PROPOSAL_PIPELINE_STAGES.map((s) => ({ ...s })),

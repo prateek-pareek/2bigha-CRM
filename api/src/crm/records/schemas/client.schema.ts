@@ -22,6 +22,26 @@ export class Client {
   @Prop()
   phone: string;
 
+  /** WhatsApp contact number, if different from `phone`. */
+  @Prop()
+  whatsappNumber?: string;
+
+  /** Free-text mailing address (city/state, per the Add Lead "create new user" form). */
+  @Prop()
+  address?: string;
+
+  /** Profile photo URL uploaded when creating this client from the Add Lead flow. */
+  @Prop()
+  photoUrl?: string;
+
+  /**
+   * CRM-side role label for this contact (Add Lead "User Type" field) — OWNER/AGENT/USER.
+   * Distinct from `User.role` (app login/permissions role); this only classifies the
+   * client record itself and has no bearing on authentication.
+   */
+  @Prop({ enum: ['OWNER', 'AGENT', 'USER'] })
+  role?: string;
+
   @Prop({ type: Types.ObjectId, ref: 'Organization' })
   organization: Types.ObjectId;
 

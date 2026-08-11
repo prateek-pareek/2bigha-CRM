@@ -19,6 +19,14 @@ export interface TrackedCrmImport {
   status: CrmImportJobStatus;
   error?: string;
   onSuccess?: () => void;
+  createdCount?: number;
+  mergedCount?: number;
+  replacedCount?: number;
+  skippedCount?: number;
+  /** Leads-only: rows whose Role/WhatsApp/Address matched an existing Client. */
+  existingClientCount?: number;
+  /** Leads-only: rows whose Role column wasn't OWNER/AGENT/USER (defaulted to USER). */
+  invalidRoleCount?: number;
 }
 
 interface CrmImportStore {

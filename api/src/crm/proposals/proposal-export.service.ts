@@ -220,11 +220,9 @@ function buildStyledDocumentHtml(input: {
   const kindLabel =
     input.kind === 'quotation'
       ? 'Quotation'
-      : input.kind === 'cv'
-        ? 'CV / Resume'
-        : input.kind === 'contract'
-          ? 'Contract'
-          : 'Proposal';
+      : input.kind === 'contract'
+        ? 'Contract'
+        : 'Proposal';
   const total =
     input.totalAmount != null && Number.isFinite(Number(input.totalAmount))
       ? new Intl.NumberFormat('en-IN', {
@@ -566,8 +564,6 @@ export class ProposalExportService {
         ? 'Quotation'
         : p.kind === 'contract'
           ? 'Contract'
-          : p.kind === 'cv'
-          ? 'CV / Resume'
           : 'Proposal';
     const rows: (string | number)[][] = [
       ['Field', 'Value'],

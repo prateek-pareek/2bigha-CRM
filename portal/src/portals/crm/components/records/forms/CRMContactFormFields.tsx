@@ -484,11 +484,11 @@ export default function CRMContactFormFields({
 
   return (
     <div className="space-y-3">
-      {groups.map((group, index) => (
+      {groups.map((group) => (
         <CrmFormSection
           key={group.section}
           title={SECTION_LABEL[group.section]}
-          defaultOpen={index === 0}
+          collapsible={false}
         >
           <CrmFormGrid>
             {group.keys.map((key, i) => {

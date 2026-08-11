@@ -22,8 +22,12 @@ export class ProposalsService {
     private pipelineModel: Model<PipelineDocument>,
   ) {}
 
-  private pipelineTypeForKind(kind?: string | null): 'proposals' | 'contracts' {
-    return kind === 'contract' ? 'contracts' : 'proposals';
+  private pipelineTypeForKind(
+    kind?: string | null,
+  ): 'proposals' | 'quotations' | 'contracts' {
+    if (kind === 'contract') return 'contracts';
+    if (kind === 'quotation') return 'quotations';
+    return 'proposals';
   }
 
   private statusFromStage(kind: string | undefined | null, stage?: string | null) {
@@ -145,11 +149,9 @@ export class ProposalsService {
       kind:
         data.kind === 'quotation'
           ? 'quotation'
-          : data.kind === 'cv'
-            ? 'cv'
-            : data.kind === 'contract'
-              ? 'contract'
-              : 'proposal',
+          : data.kind === 'contract'
+            ? 'contract'
+            : 'proposal',
       issuerProfile:
         data.issuerProfile === 'freelancer' ? 'freelancer' : 'agency',
       status: data.status || 'draft',

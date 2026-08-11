@@ -9,7 +9,7 @@ export class CrmProposal {
   @Prop({ required: true })
   title: string;
 
-  @Prop({ required: true, enum: ['proposal', 'quotation', 'cv', 'contract'] })
+  @Prop({ required: true, enum: ['proposal', 'quotation', 'contract'] })
   kind: string;
 
   /** PDF/DOCX letterhead: company (logo + footer) vs personal details */

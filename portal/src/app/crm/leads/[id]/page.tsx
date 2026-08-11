@@ -30,6 +30,7 @@ import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
 import CrmRecordOwnerCard from '@/components/crm/records/detail/CrmRecordOwnerCard';
+import LeadOnboardingChecklistCard from '@/components/crm/records/detail/LeadOnboardingChecklistCard';
 import CrmRecordPipelineStatus from '@/components/crm/records/detail/CrmRecordPipelineStatus';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
 import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
@@ -877,6 +878,13 @@ export default function LeadDetailPage() {
         </div>
 
         <aside className="space-y-4 lg:min-w-0">
+          {entityId ? (
+            <LeadOnboardingChecklistCard
+              leadId={entityId}
+              progress={lead.checklistProgress}
+              onUpdated={() => void fetchLead()}
+            />
+          ) : null}
           <CrmXOutreachPanel
             entityType="Lead"
             entityId={entityId}

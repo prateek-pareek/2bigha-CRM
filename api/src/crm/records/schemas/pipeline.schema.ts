@@ -10,7 +10,13 @@ export class Pipeline {
   name: string; // e.g., 'Standard Sales', 'Implementation', 'Partnership'
 
   @Prop({ default: 'deals', index: true })
-  type: 'deals' | 'leads' | 'platform_opportunities' | 'proposals' | 'contracts';
+  type:
+    | 'deals'
+    | 'leads'
+    | 'platform_opportunities'
+    | 'proposals'
+    | 'quotations'
+    | 'contracts';
 
   @Prop({
     default: 'it_consulting',

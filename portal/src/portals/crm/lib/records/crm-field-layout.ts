@@ -43,6 +43,11 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'stage', label: 'Stage' },
   { key: 'status', label: 'Status (legacy)' },
   { key: 'callStatus', label: 'Call Status' },
+  /** Add Lead "Lead Type" (Reference/Investor/Lead/Buyer lead) — options managed in Settings. */
+  { key: 'leadCategory', label: 'Lead Type' },
+  /** Add Lead "Group" (Seller/Buyer) — options managed in Settings. */
+  { key: 'group', label: 'Group' },
+  { key: 'notes', label: 'Notes' },
   { key: 'leadScore', label: 'Lead score', recordOnly: true },
   { key: 'createdAt', label: 'Created', recordOnly: true },
 ];

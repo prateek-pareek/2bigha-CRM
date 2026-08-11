@@ -195,6 +195,10 @@ const LEAD_MERGE_SCALAR = [
   'territory',
   'image',
   'recordId',
+  'clientId',
+  'leadCategory',
+  'group',
+  'notes',
 ] as const;
 
 const CONTACT_MERGE_SCALAR = [

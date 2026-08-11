@@ -130,6 +130,48 @@ export class Lead {
   @Prop({ type: Types.ObjectId, ref: 'ServiceOffering', index: true })
   relatedService?: Types.ObjectId;
 
+  /**
+   * The Client record picked/created in the "Add Lead" client-selection step.
+   * Optional — leads created via the plain form (no client search) leave this unset.
+   */
+  @Prop({ type: Types.ObjectId, ref: 'Client', index: true })
+  clientId?: Types.ObjectId;
+
+  /**
+   * Business classification shown as lead-list tabs (Reference/Investor/Lead/Buyer lead).
+   * Value is the `label` of an active `LeadPicklistOption` with listKey 'leadCategory'.
+   * Distinct from `leadType`, which is an internal standard/platform flag.
+   */
+  @Prop({ trim: true, index: true })
+  leadCategory?: string;
+
+  /**
+   * Seller/Buyer-style grouping shown in the "Group" filter and Set Activity/View Lead cards.
+   * Value is the `label` of an active `LeadPicklistOption` with listKey 'group'.
+   */
+  @Prop({ trim: true, index: true })
+  group?: string;
+
+  /** Free-text note captured on the Add Lead / Edit Lead form. */
+  @Prop()
+  notes?: string;
+
+  /**
+   * Onboarding checklist state for this lead — keyed by the `label` of an active
+   * `LeadPicklistOption` with listKey 'checklistItem' (see Settings > Lead Type & Group).
+   * Absent/false = not done. Shown on the Lead detail page only.
+   */
+  @Prop({ type: Object, default: {} })
+  checklistProgress?: Record<string, boolean>;
+
+  /**
+   * Denormalized creator display name, set alongside `createdBy` at creation time so
+   * "search by Created By / agent name" doesn't require a $lookup on every query.
+   * Leads created before this field existed simply won't match a Created-By search.
+   */
+  @Prop({ trim: true })
+  createdByName?: string;
+
   @Prop()
   image: string;
 
@@ -222,6 +264,12 @@ LeadSchema.index({ sharedWith: 1, createdAt: -1 });
 LeadSchema.index({ email: 1, createdAt: -1 });
 /** Platform opportunities list (Upwork, Freelancer, etc.). */
 LeadSchema.index({ leadType: 1, createdAt: -1 });
+/** Lead-type tab bar (All Leads/Reference/Investor/Lead/Buyer lead). */
+LeadSchema.index({ leadCategory: 1, createdAt: -1 });
+/** "Group" filter. */
+LeadSchema.index({ group: 1, createdAt: -1 });
+/** Add Lead client-selection step: list leads already linked to a given client. */
+LeadSchema.index({ clientId: 1, createdAt: -1 });
 /** Header global search (`$text` with regex fallback). */
 LeadSchema.index(
   {

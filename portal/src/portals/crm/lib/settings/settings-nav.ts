@@ -12,6 +12,7 @@ import {
   GitMerge,
   Layout,
   LayoutDashboard,
+  ListChecks,
   Mail,
   MailX,
   MessageCircle,
@@ -82,6 +83,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         href: "/crm/settings/whatsapp-templates",
         icon: MessageCircle,
       },
+      /* Disabled for now, not needed yet. Re-enable by uncommenting.
       {
         name: "AI Outreach",
         description: "Positioning, tone, and guardrails for Claude draft emails.",
@@ -100,6 +102,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         href: "/crm/settings/ai-contract",
         icon: ScrollText,
       },
+      */
       {
         name: "Snippets",
         description: "Reusable text — copy anywhere or insert in email.",
@@ -131,6 +134,12 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         description: "Create dynamic properties for CRM modules.",
         href: "/crm/settings/custom-fields",
         icon: Layout,
+      },
+      {
+        name: "Lead Type, Group & Checklist",
+        description: "Manage Lead Type, Group, and onboarding checklist options.",
+        href: "/crm/settings/lead-picklists",
+        icon: ListChecks,
       },
       {
         name: "Custom objects",
@@ -182,12 +191,14 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         href: "/crm/settings/audit-logs",
         icon: Shield,
       },
+      /* Disabled for now, not needed yet. Re-enable by uncommenting.
       {
         name: "Wiki",
         description: "Attach PM wiki spaces or pages for quick access.",
         href: "/crm/settings/wiki",
         icon: BookOpen,
       },
+      */
       {
         name: "Data Migration",
         description:
