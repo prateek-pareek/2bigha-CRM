@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Mail,
   MailX,
+  MessageCircle,
   ScrollText,
   Share2,
   Shield,
@@ -74,6 +75,12 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         description: "Create reusable email templates for outreach and follow-ups.",
         href: "/crm/settings/email-templates",
         icon: Mail,
+      },
+      {
+        name: "WhatsApp Templates",
+        description: "Sync approved Meta templates and send them from Inbox chat.",
+        href: "/crm/settings/whatsapp-templates",
+        icon: MessageCircle,
       },
       {
         name: "AI Outreach",

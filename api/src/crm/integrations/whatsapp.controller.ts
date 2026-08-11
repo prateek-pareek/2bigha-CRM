@@ -37,6 +37,20 @@ export class WhatsAppController {
     return this.whatsappService.getUniqueContacts();
   }
 
+  @Get('templates')
+  @Permissions('inbox:read', 'leads:read', 'contacts:read', 'activities:read')
+  getTemplates(@Query('refresh') refresh?: string) {
+    const shouldRefresh =
+      refresh === '1' || refresh === 'true' || refresh === 'yes';
+    return this.whatsappService.listTemplates({ refresh: shouldRefresh });
+  }
+
+  @Post('templates/sync')
+  @Permissions('inbox:write', 'leads:write', 'contacts:write')
+  syncTemplates() {
+    return this.whatsappService.syncTemplates();
+  }
+
   @Post('send')
   @Permissions('leads:write', 'contacts:write', 'inbox:write')
   sendMessage(
@@ -51,5 +65,37 @@ export class WhatsAppController {
       body.module,
       body.entityId,
     );
+  }
+
+  @Post('send-template')
+  @Permissions('leads:write', 'contacts:write', 'inbox:write')
+  sendTemplate(
+    @Request() req: any,
+    @Body()
+    body: {
+      to: string;
+      name: string;
+      language: string;
+      components?: Array<{
+        type: string;
+        sub_type?: string;
+        index?: string | number;
+        parameters?: Array<{ type: string; text?: string; [key: string]: any }>;
+      }>;
+      bodyPreview?: string;
+      module?: string;
+      entityId?: string;
+    },
+  ) {
+    return this.whatsappService.sendTemplateMessage({
+      to: body.to,
+      name: body.name,
+      language: body.language,
+      components: body.components,
+      bodyPreview: body.bodyPreview,
+      userId: req.user?.userId,
+      module: body.module,
+      entityId: body.entityId,
+    });
   }
 }

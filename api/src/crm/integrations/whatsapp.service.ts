@@ -9,6 +9,34 @@ import { Integration } from '../schemas/integration.schema';
 
 const META_API = 'https://graph.facebook.com/v18.0';
 
+export type WhatsAppTemplateComponent = {
+  type?: string;
+  format?: string;
+  text?: string;
+  example?: Record<string, any>;
+  buttons?: Array<Record<string, any>>;
+};
+
+export type WhatsAppCachedTemplate = {
+  id?: string;
+  name: string;
+  status: string;
+  language: string;
+  category?: string;
+  components?: WhatsAppTemplateComponent[];
+};
+
+export type WhatsAppTemplateSendComponent = {
+  type: string;
+  sub_type?: string;
+  index?: string | number;
+  parameters?: Array<{
+    type: string;
+    text?: string;
+    [key: string]: any;
+  }>;
+};
+
 @Injectable()
 export class WhatsAppService {
   private readonly logger = new Logger(WhatsAppService.name);
@@ -23,6 +51,7 @@ export class WhatsAppService {
   private async getConfig(): Promise<{
     apiKey: string;
     phoneNumberId: string;
+    businessAccountId?: string;
   } | null> {
     const config = await this.integrationModel
       .findOne({ type: 'whatsapp' })
@@ -30,7 +59,13 @@ export class WhatsAppService {
       .exec();
     if (!config?.apiKey || !config?.phoneNumberId || !config?.isActive)
       return null;
-    return { apiKey: config.apiKey, phoneNumberId: config.phoneNumberId };
+    return {
+      apiKey: config.apiKey,
+      phoneNumberId: config.phoneNumberId,
+      businessAccountId: config.businessAccountId
+        ? String(config.businessAccountId)
+        : undefined,
+    };
   }
 
   async sendMessage(
@@ -93,6 +128,216 @@ export class WhatsAppService {
     } catch (e: any) {
       this.logger.error(`WhatsApp send error: ${e?.message}`);
       return { success: false, error: e?.message || 'Send failed' };
+    }
+  }
+
+  async sendTemplateMessage(params: {
+    to: string;
+    name: string;
+    language: string;
+    components?: WhatsAppTemplateSendComponent[];
+    bodyPreview?: string;
+    userId?: string;
+    module?: string;
+    entityId?: string;
+  }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const config = await this.getConfig();
+    if (!config)
+      return { success: false, error: 'WhatsApp not configured or inactive' };
+
+    const phone = params.to.replace(/\D/g, '');
+    if (phone.length < 10)
+      return { success: false, error: 'Invalid phone number' };
+
+    const templateName = String(params.name || '').trim();
+    const language = String(params.language || '').trim();
+    if (!templateName || !language) {
+      return { success: false, error: 'Template name and language are required' };
+    }
+
+    try {
+      const res = await fetch(`${META_API}/${config.phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: phone,
+          type: 'template',
+          template: {
+            name: templateName,
+            language: { code: language },
+            ...(params.components?.length
+              ? { components: params.components }
+              : {}),
+          },
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        this.logger.error(
+          `WhatsApp template send failed: ${JSON.stringify(data)}`,
+        );
+        return {
+          success: false,
+          error:
+            data?.error?.message ||
+            data?.error?.error_user_msg ||
+            'Template send failed',
+        };
+      }
+
+      const msgId = data?.messages?.[0]?.id;
+      const body =
+        String(params.bodyPreview || '').trim() ||
+        `[Template] ${templateName} (${language})`;
+
+      await this.messageModel.create({
+        waId: phone,
+        direction: 'outbound',
+        body,
+        messageId: msgId,
+        sentBy: params.userId ? new Types.ObjectId(params.userId) : undefined,
+        module: params.module,
+        entityId: params.entityId
+          ? new Types.ObjectId(params.entityId)
+          : undefined,
+        status: 'sent',
+        meta: {
+          ...data,
+          template: {
+            name: templateName,
+            language,
+            components: params.components || [],
+          },
+        },
+      });
+
+      return { success: true, messageId: msgId };
+    } catch (e: any) {
+      this.logger.error(`WhatsApp template send error: ${e?.message}`);
+      return { success: false, error: e?.message || 'Template send failed' };
+    }
+  }
+
+  async listTemplates(options: {
+    refresh?: boolean;
+  } = {}): Promise<{
+    templates: WhatsAppCachedTemplate[];
+    syncedAt?: string | null;
+    error?: string;
+  }> {
+    if (options.refresh) {
+      const synced = await this.syncTemplates();
+      if (!synced.success) {
+        return {
+          templates: synced.templates || [],
+          syncedAt: synced.syncedAt || null,
+          error: synced.error,
+        };
+      }
+      return {
+        templates: synced.templates || [],
+        syncedAt: synced.syncedAt || null,
+      };
+    }
+
+    const doc = await this.integrationModel
+      .findOne({ type: 'whatsapp' })
+      .lean()
+      .exec();
+    const templates = Array.isArray(doc?.templates) ? doc.templates : [];
+    return {
+      templates,
+      syncedAt: doc?.templatesSyncedAt
+        ? new Date(doc.templatesSyncedAt).toISOString()
+        : null,
+    };
+  }
+
+  async syncTemplates(): Promise<{
+    success: boolean;
+    templates?: WhatsAppCachedTemplate[];
+    syncedAt?: string;
+    error?: string;
+  }> {
+    const config = await this.getConfig();
+    if (!config) {
+      return { success: false, error: 'WhatsApp not configured or inactive' };
+    }
+    if (!config.businessAccountId) {
+      return {
+        success: false,
+        error:
+          'Business Account ID (WABA) is required to sync templates. Add it in WhatsApp integration settings.',
+      };
+    }
+
+    try {
+      const templates: WhatsAppCachedTemplate[] = [];
+      let url: string | null =
+        `${META_API}/${config.businessAccountId}/message_templates` +
+        `?fields=name,status,language,category,components,id&limit=100`;
+
+      while (url) {
+        const res: Response = await fetch(url, {
+          headers: { Authorization: `Bearer ${config.apiKey}` },
+        });
+        const data: any = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          this.logger.error(
+            `WhatsApp template sync failed: ${JSON.stringify(data)}`,
+          );
+          return {
+            success: false,
+            error:
+              data?.error?.message ||
+              data?.error?.error_user_msg ||
+              'Failed to sync templates from Meta',
+          };
+        }
+
+        const page = Array.isArray(data?.data) ? data.data : [];
+        for (const row of page) {
+          templates.push({
+            id: row.id ? String(row.id) : undefined,
+            name: String(row.name || ''),
+            status: String(row.status || ''),
+            language: String(row.language || ''),
+            category: row.category ? String(row.category) : undefined,
+            components: Array.isArray(row.components) ? row.components : [],
+          });
+        }
+
+        url = data?.paging?.next ? String(data.paging.next) : null;
+      }
+
+      const syncedAt = new Date();
+      await this.integrationModel.updateOne(
+        { type: 'whatsapp' },
+        {
+          $set: {
+            templates,
+            templatesSyncedAt: syncedAt,
+          },
+        },
+      );
+
+      return {
+        success: true,
+        templates,
+        syncedAt: syncedAt.toISOString(),
+      };
+    } catch (e: any) {
+      this.logger.error(`WhatsApp template sync error: ${e?.message}`);
+      return {
+        success: false,
+        error: e?.message || 'Failed to sync templates',
+      };
     }
   }
 

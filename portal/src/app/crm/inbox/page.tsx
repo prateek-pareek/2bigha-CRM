@@ -8,7 +8,7 @@ import {
   MoreHorizontal, MoreVertical, ChevronRight, ChevronLeft, ChevronDown, Loader2, Plus, ArrowLeft, Image as ImageIcon,
   RefreshCw, Star, CheckCircle2, XCircle, Clock, Settings, Link2, Pencil, Filter,
   MessageCircle, Phone, ExternalLink, RotateCcw, Reply, ReplyAll, Forward, X, CalendarRange,
-  Building2, Briefcase, Users, Archive, Sparkles, FolderOpen, Square,
+  Building2, Briefcase, Users, Archive, Sparkles, FolderOpen, Square, AlertTriangle,
 } from 'lucide-react';
 import { CRM_API_URL } from '@/lib/crm/config';
 import Pagination from '@/components/suite/shell/Pagination';
@@ -19,6 +19,7 @@ import {
   CrmEmailActivityAttachments,
   CrmEmailActivityBody,
 } from '@/components/crm/inbox/CrmEmailActivityMedia';
+import WhatsAppTemplatePicker from '@/components/crm/inbox/WhatsAppTemplatePicker';
 import { CrmBreadcrumb, CrmButton } from "@/components/crm/ui";
 import { toast } from 'sonner';
 import "@/app/crm/crm-hubspot.css";
@@ -120,6 +121,55 @@ interface WhatsAppMessage {
 interface WhatsAppContact {
   waId: string;
   lastMessageAt: string;
+}
+
+const WA_CUSTOMER_CARE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const WA_WINDOW_WARN_MS = 60 * 60 * 1000; // warn under 1 hour
+
+function formatWaWindowCountdown(ms: number): string {
+  if (ms <= 0) return '0m';
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes}m`;
+  return `${hours}h ${minutes}m`;
+}
+
+function getWhatsAppCareWindow(messages: WhatsAppMessage[], nowMs: number) {
+  const lastInbound = messages
+    .filter((m) => m.direction === 'inbound' && m.createdAt)
+    .reduce<Date | null>((latest, m) => {
+      const d = new Date(m.createdAt);
+      if (Number.isNaN(d.getTime())) return latest;
+      if (!latest || d > latest) return d;
+      return latest;
+    }, null);
+
+  if (!lastInbound) {
+    return {
+      status: 'no_inbound' as const,
+      lastInboundAt: null as Date | null,
+      expiresAt: null as Date | null,
+      remainingMs: 0,
+    };
+  }
+
+  const expiresAt = new Date(lastInbound.getTime() + WA_CUSTOMER_CARE_WINDOW_MS);
+  const remainingMs = expiresAt.getTime() - nowMs;
+  if (remainingMs <= 0) {
+    return {
+      status: 'expired' as const,
+      lastInboundAt: lastInbound,
+      expiresAt,
+      remainingMs: 0,
+    };
+  }
+  return {
+    status: remainingMs <= WA_WINDOW_WARN_MS ? ('expiring_soon' as const) : ('open' as const),
+    lastInboundAt: lastInbound,
+    expiresAt,
+    remainingMs,
+  };
 }
 
 const INBOX_ICON_FILTER_TIP =
@@ -326,7 +376,34 @@ export default function CRMInboxPage() {
   const [selectedWaId, setSelectedWaId] = useState<string | null>(null);
   const [waNewMessage, setWaNewMessage] = useState('');
   const [waSending, setWaSending] = useState(false);
-  const [waConfig, setWaConfig] = useState<{ isActive?: boolean } | null>(null);
+  const [waConfig, setWaConfig] = useState<{
+    isActive?: boolean;
+    apiKey?: string;
+    phoneNumberId?: string;
+    businessAccountId?: string;
+  } | null>(null);
+  const [waTemplatePickerOpen, setWaTemplatePickerOpen] = useState(false);
+  const [waNewChatOpen, setWaNewChatOpen] = useState(false);
+  const [waNewChatPhone, setWaNewChatPhone] = useState('');
+  const [waNowMs, setWaNowMs] = useState(() => Date.now());
+
+  const waConfigured = Boolean(
+    waConfig?.isActive && waConfig?.apiKey && waConfig?.phoneNumberId,
+  );
+
+  const setInboxSource = useCallback(
+    (next: Source) => {
+      setSource(next);
+      setSelectedEmail(null);
+      setSelectedWaId(null);
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === 'whatsapp') params.set('source', 'whatsapp');
+      else params.delete('source');
+      const qs = params.toString();
+      router.replace(qs ? `/crm/inbox?${qs}` : '/crm/inbox', { scroll: false });
+    },
+    [router, searchParams],
+  );
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   /** `YYYY-MM-DD` from native date inputs; filtered on server by message `date` */
   const [dateFrom, setDateFrom] = useState('');
@@ -1046,6 +1123,16 @@ export default function CRMInboxPage() {
 
   const handleWaSend = async () => {
     if (!selectedWaId || !waNewMessage.trim()) return;
+    const careWindow = getWhatsAppCareWindow(waMessages, Date.now());
+    if (careWindow.status === 'expired' || careWindow.status === 'no_inbound') {
+      toast.error(
+        careWindow.status === 'no_inbound'
+          ? 'No customer message yet — send an approved template to start the conversation.'
+          : '24-hour messaging window expired — send an approved template instead.',
+      );
+      setWaTemplatePickerOpen(true);
+      return;
+    }
     setWaSending(true);
     const token = localStorage.getItem('token');
     try {
@@ -1079,6 +1166,18 @@ export default function CRMInboxPage() {
     void fetchAccounts();
     void fetchWaConfig();
   }, [fetchAccounts, fetchWaConfig]);
+
+  useEffect(() => {
+    const next =
+      sourceParam && ['my-inbox', 'whatsapp'].includes(sourceParam)
+        ? sourceParam
+        : 'my-inbox';
+    if (next !== source) {
+      setSource(next);
+      setSelectedEmail(null);
+      setSelectedWaId(null);
+    }
+  }, [sourceParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (source === 'whatsapp') {
@@ -1191,6 +1290,20 @@ export default function CRMInboxPage() {
     () => waMessages.slice(-visibleWaMessageCount).reverse(),
     [waMessages, visibleWaMessageCount],
   );
+
+  const waCareWindow = useMemo(
+    () => getWhatsAppCareWindow(waMessages, waNowMs),
+    [waMessages, waNowMs],
+  );
+  const waFreeformAllowed =
+    waCareWindow.status === 'open' || waCareWindow.status === 'expiring_soon';
+
+  useEffect(() => {
+    if (source !== 'whatsapp' || !selectedWaId) return;
+    setWaNowMs(Date.now());
+    const id = window.setInterval(() => setWaNowMs(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, [source, selectedWaId, waMessages.length]);
 
   const labelFilteredEmails = activeCustomLabelFilter
     ? inboxFiltered.filter((e) => emailLabels[e._id] === activeCustomLabelFilter)
@@ -1598,14 +1711,13 @@ export default function CRMInboxPage() {
                 </h4>
                 <nav className="space-y-0.5">
                   {[
-                    { id: "my-inbox", label: "My Inbox", icon: Inbox },
+                    { id: "my-inbox", label: "Email", icon: Mail },
+                    { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
                   ].map((s) => (
                     <button
                       key={s.id}
                       onClick={() => {
-                        setSource(s.id as Source);
-                        setSelectedEmail(null);
-                        setSelectedWaId(null);
+                        setInboxSource(s.id as Source);
                       }}
                       className={cn(
                         "flex w-full items-center gap-3 px-4 py-2.5 rounded-[var(--radius-md)] text-xs font-semibold transition-all group",
@@ -1877,6 +1989,32 @@ export default function CRMInboxPage() {
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              {source === 'whatsapp' && waConfigured && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setWaNewChatOpen(true)}
+                    className="flex h-8 items-center gap-1.5 rounded-full border border-border bg-white px-3 text-xs font-semibold text-text-main hover:bg-slate-50"
+                    title="New chat"
+                  >
+                    <Plus size={14} /> New chat
+                  </button>
+                  <Link
+                    href="/crm/settings/whatsapp-templates"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]"
+                    title="WhatsApp templates"
+                  >
+                    <FileText size={15} />
+                  </Link>
+                  <Link
+                    href="/crm/settings/integrations/whatsapp"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]"
+                    title="WhatsApp settings"
+                  >
+                    <Settings size={15} />
+                  </Link>
+                </>
+              )}
               <div className="relative flex h-9 w-full max-w-[220px] items-stretch overflow-hidden rounded-md border border-[var(--border-color)] bg-white">
                 <span className="flex items-center border-r border-[var(--border-color)] px-2.5 text-[var(--text-muted)]">
                   <Search size={14} />
@@ -2020,13 +2158,38 @@ export default function CRMInboxPage() {
               </div>
             ) : source === 'whatsapp' ? (
               <div className="divide-y divide-border/20">
-                {waContacts.length === 0 ? (
+                {!waConfigured ? (
+                  <div className="p-16 text-center">
+                    <div className="w-20 h-20 bg-[var(--surface-dim)] rounded-full flex items-center justify-center mx-auto mb-6">
+                      <MessageCircle size={32} className="text-text-muted opacity-20" />
+                    </div>
+                    <h3 className="text-xs font-semibold text-text-main">WhatsApp not connected</h3>
+                    <p className="text-xs text-text-muted mt-2 leading-relaxed max-w-[260px] mx-auto">
+                      Connect your Meta WhatsApp Business account to chat with customers here.
+                    </p>
+                    <Link
+                      href="/crm/settings/integrations/whatsapp"
+                      className="mt-5 inline-flex items-center gap-2 rounded-[var(--radius-md)] bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                    >
+                      <Settings size={14} /> Configure WhatsApp
+                    </Link>
+                  </div>
+                ) : waContacts.length === 0 ? (
                   <div className="p-16 text-center">
                     <div className="w-20 h-20 bg-[var(--surface-dim)] rounded-full flex items-center justify-center mx-auto mb-6">
                       <MessageCircle size={32} className="text-text-muted opacity-20" />
                     </div>
                     <h3 className="text-xs font-semibold text-text-main">No conversations</h3>
-                    <p className="text-xs text-text-muted mt-2 leading-relaxed">Incoming customer messages will appear here once WhatsApp is configured.</p>
+                    <p className="text-xs text-text-muted mt-2 leading-relaxed">
+                      Incoming messages appear here, or start a chat with a phone number.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setWaNewChatOpen(true)}
+                      className="mt-5 inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-border bg-white px-4 py-2.5 text-xs font-semibold text-text-main hover:bg-slate-50"
+                    >
+                      <Plus size={14} /> New chat
+                    </button>
                   </div>
                 ) : (
                   waContacts.map((c) => {
@@ -2852,7 +3015,70 @@ export default function CRMInboxPage() {
                         <p className="text-xs font-black text-emerald-600 uppercase tracking-[0.2em]">WhatsApp Active</p>
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setWaTemplatePickerOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                    >
+                      <FileText size={14} /> Use template
+                    </button>
                   </div>
+
+                  {waCareWindow.status === 'open' && (
+                    <div className="flex items-center gap-2 border-b border-emerald-100 bg-emerald-50/80 px-6 py-2.5 text-xs font-semibold text-emerald-800">
+                      <Clock size={14} className="shrink-0" />
+                      Free-form replies open — window expires in {formatWaWindowCountdown(waCareWindow.remainingMs)}
+                      {waCareWindow.expiresAt
+                        ? ` (${waCareWindow.expiresAt.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })})`
+                        : ''}
+                    </div>
+                  )}
+                  {waCareWindow.status === 'expiring_soon' && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-xs font-semibold text-amber-900">
+                      <span className="inline-flex items-center gap-2">
+                        <AlertTriangle size={14} className="shrink-0" />
+                        Messaging window expires in {formatWaWindowCountdown(waCareWindow.remainingMs)}. Reply soon, or prepare a template.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setWaTemplatePickerOpen(true)}
+                        className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-100"
+                      >
+                        Use template
+                      </button>
+                    </div>
+                  )}
+                  {waCareWindow.status === 'expired' && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rose-200 bg-rose-50 px-6 py-2.5 text-xs font-semibold text-rose-900">
+                      <span className="inline-flex items-center gap-2">
+                        <AlertTriangle size={14} className="shrink-0" />
+                        24-hour messaging window expired. Free-form text is blocked — send an approved template.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setWaTemplatePickerOpen(true)}
+                        className="rounded-md border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-900 hover:bg-rose-100"
+                      >
+                        Send template
+                      </button>
+                    </div>
+                  )}
+                  {waCareWindow.status === 'no_inbound' && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-6 py-2.5 text-xs font-semibold text-slate-700">
+                      <span className="inline-flex items-center gap-2">
+                        <Clock size={14} className="shrink-0" />
+                        No customer message yet. Outside the care window, start with an approved template.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setWaTemplatePickerOpen(true)}
+                        className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-800 hover:bg-slate-100"
+                      >
+                        Send template
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex-1 overflow-y-auto overscroll-contain p-8 space-y-6 bg-[var(--surface-dim)]/10 custom-scrollbar pattern-dots">
                     {renderedWaMessages.length < waMessages.length && (
                       <button
@@ -2878,27 +3104,55 @@ export default function CRMInboxPage() {
                             "block mt-2 text-[9px] font-semibold",
                             msg.direction === 'outbound' ? 'text-white/50' : 'text-text-muted/60'
                           )}>
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(msg.createdAt).toLocaleString([], {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
                           </span>
                         </div>
                       </div>
                     ))}
                   </div>
                   <div className="shrink-0 border-t border-border p-6 bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.02)]">
+                    {!waFreeformAllowed && (
+                      <p className="mb-3 text-center text-[11px] font-semibold text-text-muted">
+                        Free-form reply disabled until a customer messages you (or while the 24h window is closed). Use a template to continue.
+                      </p>
+                    )}
                     <div className="flex gap-3 max-w-4xl mx-auto">
+                      <button
+                        type="button"
+                        onClick={() => setWaTemplatePickerOpen(true)}
+                        className={cn(
+                          "flex h-14 shrink-0 items-center gap-2 rounded-[var(--radius-md)] border px-4 text-xs font-semibold",
+                          !waFreeformAllowed
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                            : "border-border bg-white text-text-main hover:bg-slate-50",
+                        )}
+                        title="Send template"
+                      >
+                        <FileText size={16} /> Template
+                      </button>
                       <div className="flex-1 relative">
                         <input
                           type="text"
-                          placeholder="Type your reply here..."
+                          placeholder={
+                            waFreeformAllowed
+                              ? "Type your reply here..."
+                              : "Window closed — use a template"
+                          }
                           value={waNewMessage}
+                          disabled={!waFreeformAllowed || waSending}
                           onChange={(e) => setWaNewMessage(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleWaSend()}
-                          className="h-14 w-full rounded-[var(--radius-md)] bg-slate-100/50 border-none px-6 text-sm font-medium text-text-main outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all shadow-inner"
+                          className="h-14 w-full rounded-[var(--radius-md)] bg-slate-100/50 border-none px-6 text-sm font-medium text-text-main outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all shadow-inner disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </div>
                       <CrmButton
                         variant="primary"
-                        disabled={waSending || !waNewMessage.trim()}
+                        disabled={waSending || !waFreeformAllowed || !waNewMessage.trim()}
                         onClick={handleWaSend}
                         className="h-14 w-14 rounded-[var(--radius-md)] p-0 bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
                       >
@@ -2994,6 +3248,65 @@ export default function CRMInboxPage() {
           void fetchInboxEmails();
         }}
       />
+
+      <WhatsAppTemplatePicker
+        open={waTemplatePickerOpen && !!selectedWaId}
+        to={selectedWaId || ''}
+        onClose={() => setWaTemplatePickerOpen(false)}
+        onSent={() => {
+          if (selectedWaId) {
+            void fetchWaMessages(selectedWaId);
+            void fetchWaContacts();
+          }
+        }}
+      />
+
+      {waNewChatOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-[var(--radius-md)] border border-border bg-white p-6 shadow-2xl">
+            <h3 className="text-sm font-bold text-text-main">Start WhatsApp chat</h3>
+            <p className="mt-1 text-xs text-text-muted">
+              Enter the full phone number with country code. Outside the 24-hour window, use a template to message first.
+            </p>
+            <input
+              value={waNewChatPhone}
+              onChange={(e) => setWaNewChatPhone(e.target.value)}
+              placeholder="e.g. 919876543210"
+              className="mt-4 h-11 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setWaNewChatOpen(false);
+                  setWaNewChatPhone('');
+                }}
+                className="rounded-[var(--radius-md)] px-4 py-2 text-xs font-semibold text-text-muted hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <CrmButton
+                variant="primary"
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => {
+                  const phone = waNewChatPhone.replace(/\D/g, '');
+                  if (phone.length < 10) {
+                    toast.error('Enter a valid phone number with country code');
+                    return;
+                  }
+                  setSelectedWaId(phone);
+                  setWaMessages([]);
+                  setWaNewChatOpen(false);
+                  setWaNewChatPhone('');
+                  setWaTemplatePickerOpen(true);
+                }}
+              >
+                Continue
+              </CrmButton>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
