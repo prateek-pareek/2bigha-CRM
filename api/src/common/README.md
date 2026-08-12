@@ -12,7 +12,7 @@ api-hrms/src/
     mail/            # outbound email
     realtime/        # websockets / gateway
     redis/           # cache
-    cloudinary/      # media uploads
+    storage/         # media uploads (local server disk)
     search/          # cross-product search
     trash/           # soft-delete trash
     teams-bot/       # Teams integration helpers

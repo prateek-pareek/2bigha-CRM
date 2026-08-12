@@ -12,7 +12,7 @@ export function publicApiBaseUrl(): string {
 
 /**
  * Turn relative upload paths into absolute URLs for blog syndication, OG tags, and public CMS.
- * Cloudinary and other absolute URLs are returned unchanged.
+ * Already-absolute URLs are returned unchanged.
  */
 export function resolvePublicMediaUrl(
   url: string | undefined | null,
@@ -20,10 +20,6 @@ export function resolvePublicMediaUrl(
   const u = String(url ?? '').trim();
   if (!u) return undefined;
   if (/^https?:\/\//i.test(u)) {
-    // Force HTTPS for Cloudinary to avoid mixed-content blocking on external sites
-    if (u.includes('res.cloudinary.com') && u.startsWith('http://')) {
-      return u.replace('http://', 'https://');
-    }
     return u;
   }
   if (u.startsWith('//')) return `https:${u}`;

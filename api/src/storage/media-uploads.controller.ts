@@ -13,33 +13,35 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { createReadStream, existsSync } from 'fs';
+import { join } from 'path';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CloudinaryService } from './cloudinary.service';
+import { StorageService, UPLOADS_DIR } from './storage.service';
 import { parseMaxFileBytes } from './file-upload.util';
 import { parseUploadContext, parseUploadPreset } from './image-optimize.util';
 import { DeleteImageDto } from './dto/delete-image.dto';
 
 /**
- * Platform-wide image upload (CRM, PM, HRMS, Social, Wiki).
- * Images are resized/compressed before Cloudinary or local storage.
+ * Platform-wide image/file upload (CRM, PM, HRMS, Social, Wiki).
+ * Images are resized/compressed, then stored on this server's local disk.
  */
 @Controller('uploads')
 export class MediaUploadsController {
-  constructor(private readonly cloudinary: CloudinaryService) {}
+  constructor(private readonly storage: StorageService) {}
 
   @Get('limits')
   @UseGuards(JwtAuthGuard)
   getLimits() {
-    return this.cloudinary.getLimits();
+    return this.storage.getLimits();
   }
 
   /** @deprecated use GET /uploads/limits */
   @Get('image/limits')
   @UseGuards(JwtAuthGuard)
   getImageLimits() {
-    return this.cloudinary.getLimits();
+    return this.storage.getLimits();
   }
 
   @Post('image')
@@ -61,7 +63,7 @@ export class MediaUploadsController {
   ) {
     const folder = parseUploadContext(context);
     const optimizePreset = parseUploadPreset(preset);
-    return this.cloudinary.uploadFile(file, folder, { preset: optimizePreset });
+    return this.storage.uploadFile(file, folder, { preset: optimizePreset });
   }
 
   @Post('file')
@@ -77,47 +79,39 @@ export class MediaUploadsController {
     @Query('context') context?: string,
   ) {
     const folder = parseUploadContext(context);
-    return this.cloudinary.uploadDocument(file, folder);
+    return this.storage.uploadDocument(file, folder);
   }
 
   @Delete('image')
   @UseGuards(JwtAuthGuard)
   async deleteImage(@Body() body: DeleteImageDto) {
-    return this.cloudinary.deleteImage({
-      url: body.url,
-      publicId: body.publicId,
-    });
+    return this.storage.deleteImage({ url: body.url });
   }
 
   @Delete('file')
   @UseGuards(JwtAuthGuard)
   async deleteFile(@Body() body: DeleteImageDto) {
-    return this.cloudinary.deleteMedia({
-      url: body.url,
-      publicId: body.publicId,
-      kind: 'file',
-    });
+    return this.storage.deleteMedia({ url: body.url, kind: 'file' });
   }
 
   @Get(':filename')
   async serveImage(@Param('filename') filename: string, @Res() res: Response) {
-    const upload = await this.cloudinary.getLocalUpload(filename);
-    if (!upload) {
-      throw new NotFoundException('File not found');
-    }
-    res.setHeader('Content-Type', upload.mimeType);
-    res.setHeader('Content-Length', upload.size);
-    res.send(upload.data);
+    await this.streamUpload(filename, res);
   }
 
   @Get('files/:filename')
   async serveFile(@Param('filename') filename: string, @Res() res: Response) {
-    const upload = await this.cloudinary.getLocalUpload(`files/${filename}`);
-    if (!upload) {
+    await this.streamUpload(`files/${filename}`, res);
+  }
+
+  private async streamUpload(filename: string, res: Response): Promise<void> {
+    const upload = await this.storage.getLocalUpload(filename);
+    const fullPath = join(UPLOADS_DIR, filename);
+    if (!upload || !existsSync(fullPath)) {
       throw new NotFoundException('File not found');
     }
     res.setHeader('Content-Type', upload.mimeType);
     res.setHeader('Content-Length', upload.size);
-    res.send(upload.data);
+    createReadStream(fullPath).pipe(res);
   }
 }

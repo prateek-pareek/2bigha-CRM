@@ -15,7 +15,7 @@ import { CRMUsersModule } from './crm-users/crm-users.module';
 import { TrashModule } from './trash/trash.module';
 import { TeamsBotModule } from './teams-bot/teams-bot.module';
 import { RedisModule } from './redis/redis.module';
-import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { StorageModule } from './storage/storage.module';
 import { AnthropicModule } from './integrations/anthropic/anthropic.module';
 import { DataIntelligenceModule } from './crm/data-intelligence/data-intelligence.module';
 import { WhatsAppTemplatesModule } from './crm/whatsapp-templates/whatsapp-templates.module';
@@ -31,7 +31,7 @@ import {
   imports: [
     ScheduleModule.forRoot(),
     RedisModule,
-    CloudinaryModule,
+    StorageModule,
     AnthropicModule,
     ConfigModule.forRoot({
       isGlobal: true,

@@ -4,12 +4,12 @@ import { Trash, TrashSchema } from './schemas/trash.schema';
 import { TrashService } from './trash.service';
 import { TrashController } from './trash.controller';
 
-import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Trash.name, schema: TrashSchema }]),
-    CloudinaryModule,
+    StorageModule,
   ],
   providers: [TrashService],
   controllers: [TrashController],

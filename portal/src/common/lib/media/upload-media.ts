@@ -28,7 +28,7 @@ export type FileUploadResponse = {
   mimeType: string;
   size: number;
   publicId?: string;
-  storage?: "cloudinary" | "local";
+  storage?: "local";
   kind: "file";
 };
 
@@ -41,9 +41,6 @@ export function isManagedMediaUrl(url: string): boolean {
   const u = url.trim();
   if (!u) return false;
   if (isManagedUploadUrl(u)) return true;
-  if (u.includes("res.cloudinary.com") && u.includes("/raw/upload/")) {
-    return /\/mathionix\//.test(u);
-  }
   if (u.includes("/uploads/files/")) return true;
   return false;
 }

@@ -17,7 +17,7 @@ import type { ImageUploadPreset } from "@/lib/media/optimize-image-client";
 type Props = {
   value: string;
   onChange: (url: string) => void;
-  /** CRM, PM, HRMS, social, wiki — organizes Cloudinary folders */
+  /** CRM, PM, HRMS, social, wiki — organizes server-disk upload folders */
   context?: MediaUploadContext;
   preset?: ImageUploadPreset;
   disabled?: boolean;
@@ -29,8 +29,8 @@ type Props = {
 };
 
 /**
- * Reusable image picker: compress in browser → upload to Cloudinary (or local fallback).
- * Removing or replacing an image deletes it from Cloudinary / local storage.
+ * Reusable image picker: compress in browser → upload to this server's local disk.
+ * Removing or replacing an image deletes it from local server storage.
  */
 export function ImageUploadField({
   value,

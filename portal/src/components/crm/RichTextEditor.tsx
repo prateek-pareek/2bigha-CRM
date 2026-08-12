@@ -99,14 +99,14 @@ interface RichTextEditorProps {
   /** Fired on Ctrl+Enter / Cmd+Enter (e.g. post comment). */
   onModEnter?: () => void;
   onEscape?: () => void;
-  /** Cloudinary folder: mathionix/{context}/ (default crm) */
+  /** Server disk folder: uploads/{context}/ (default crm) */
   imageUploadContext?: MediaUploadContext;
   imageUploadPreset?: ImageUploadPreset;
   /** When true, uploaded/pasted images insert at the caret (recommended for blog body). */
   insertImageAtCursor?: boolean;
   /** Allow clipboard image paste and upload into the editor body. */
   enableImagePaste?: boolean;
-  /** When true, images removed from the document are deleted from Cloudinary (default). */
+  /** When true, images removed from the document are deleted from local server storage (default). */
   deleteRemovedImages?: boolean;
   /** Classes on the outer shell (toolbar + body). */
   shellClassName?: string;
@@ -1067,7 +1067,7 @@ export default function RichTextEditor({
               </div>
               <div className="p-4 space-y-4">
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Upload to Cloudinary or paste an image URL. Images are optimized before upload.
+                  Upload an image or paste an image URL. Images are optimized before upload.
                 </p>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-400 ml-1">Image URL</label>

@@ -3,7 +3,9 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as express from 'express';
+import { existsSync, createReadStream } from 'fs';
 import { join } from 'path';
+import { UPLOADS_DIR } from './storage/storage.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -16,20 +18,20 @@ async function bootstrap() {
     }
     try {
       const upload = await uploadModel.findOne({ filename: urlPath }).exec();
-      if (upload) {
+      const fullPath = join(UPLOADS_DIR, urlPath);
+      if (upload && existsSync(fullPath)) {
         res.setHeader('Content-Type', upload.mimeType);
         res.setHeader('Content-Length', upload.size);
-        
+
         if (req.query.download === 'true') {
           const filename = upload.originalName || urlPath.split('/').pop() || 'file';
           res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         }
-        
-        const dataBuffer = upload.data && upload.data.buffer ? Buffer.from(upload.data.buffer) : Buffer.from(upload.data);
-        return res.send(dataBuffer);
+
+        return createReadStream(fullPath).pipe(res);
       }
     } catch (err) {
-      console.error('Error serving upload from database:', err);
+      console.error('Error serving upload from local disk:', err);
     }
     next();
   });

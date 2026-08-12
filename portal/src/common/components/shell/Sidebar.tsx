@@ -344,11 +344,38 @@ const crmGroups = [
                     { name: 'Calendar', href: '/crm/workspace/calendar', icon: CrmNavIcon.Calendar, permission: 'workspace-calendar:read' },
                     { name: 'Call Workspace', href: '/crm/workspace/calls', icon: CrmNavIcon.Phone, permission: 'workspace-calls:read' },
                     { name: 'Notes', href: '/crm/notes', icon: CrmNavIcon.Notes, permission: 'activities:read' },
-                    { name: 'Task board', href: '/crm/tasks', icon: CrmNavIcon.CheckCircle, permission: 'activities:read' },
                     { name: 'Call Logs', href: '/crm/calls', icon: CrmNavIcon.Phone, permission: 'activities:read' },
                     { name: 'Notifications', href: '/crm/notifications', icon: CrmNavIcon.Bell, permission: 'dashboard:read' },
                 ],
             },
+        ],
+    },
+    {
+        name: 'Property',
+        items: [
+            {
+                name: 'Property Listings',
+                href: '/crm/property-listings',
+                icon: CrmNavIcon.Home,
+                permission: 'property_listings:read',
+            },
+        ],
+    },
+    {
+        name: 'Prospecting',
+        items: [
+            { name: 'Leads', href: '/crm/leads', icon: CrmNavIcon.Leads, permission: 'leads:read' },
+            { name: 'Task board', href: '/crm/tasks', icon: CrmNavIcon.CheckCircle, permission: 'activities:read' },
+        ],
+    },
+    {
+        name: 'Records',
+        items: [
+            { name: 'Contacts', href: '/crm/contacts', icon: CrmNavIcon.Contacts, permission: 'contacts:read' },
+            { name: 'Companies', href: '/crm/organizations', icon: CrmNavIcon.Companies, permission: 'organizations:read' },
+            { name: 'Website leads', href: '/crm/website-leads', icon: CrmNavIcon.World, permission: 'leads:read' },
+            { name: 'Clients', href: '/crm/clients', icon: CrmNavIcon.UserCheck, permission: 'clients:read', adminOnly: true },
+            { name: 'Segments', href: '/crm/segments', icon: CrmNavIcon.Layers, permission: 'leads:read' },
         ],
     },
     {
@@ -367,60 +394,9 @@ const crmGroups = [
         ],
     },
     {
-        name: 'Property',
+        name: 'Commercials',
         items: [
-            {
-                name: 'Property Listings',
-                href: '/crm/property-listings',
-                icon: CrmNavIcon.Home,
-                permission: 'property_listings:read',
-            },
-        ],
-    },
-    {
-        name: 'Reports',
-        items: [
-            {
-                name: 'Reports',
-                href: '/crm/reports/overview',
-                icon: CrmNavIcon.Analytics,
-                permission: 'dashboard:read',
-                children: reportNavChildren,
-            },
-        ],
-    },
-    {
-        name: 'Sales AI',
-        items: [
-            {
-                name: 'Sales AI',
-                href: '/crm/copilot',
-                icon: CrmNavIcon.Bot,
-                permission: 'dashboard:read',
-                children: [
-                    { name: 'Sales Copilot', href: '/crm/copilot', icon: CrmNavIcon.Bot, permission: 'dashboard:read' },
-                    { name: 'Data intelligence', href: '/crm/intelligence', icon: CrmNavIcon.Sparkles, permission: 'dashboard:read' },
-                    { name: 'Sales agents', href: '/crm/agents/inbox', icon: CrmNavIcon.Bot, permission: 'dashboard:read' },
-                    { name: 'Agent activity', href: '/crm/agents/activity', icon: CrmNavIcon.Bot, permission: 'dashboard:read' },
-                ],
-            },
-        ],
-    },
-    {
-        name: 'Records',
-        items: [
-            { name: 'Contacts', href: '/crm/contacts', icon: CrmNavIcon.Contacts, permission: 'contacts:read' },
-            { name: 'Companies', href: '/crm/organizations', icon: CrmNavIcon.Companies, permission: 'organizations:read' },
             { name: 'Deals', href: '/crm/deals', icon: CrmNavIcon.Deals, permission: 'deals:read' },
-            { name: 'Leads', href: '/crm/leads', icon: CrmNavIcon.Leads, permission: 'leads:read' },
-            { name: 'Website leads', href: '/crm/website-leads', icon: CrmNavIcon.World, permission: 'leads:read' },
-            { name: 'Clients', href: '/crm/clients', icon: CrmNavIcon.UserCheck, permission: 'clients:read', adminOnly: true },
-            { name: 'Segments', href: '/crm/segments', icon: CrmNavIcon.Layers, permission: 'leads:read' },
-        ],
-    },
-    {
-        name: 'Outreach',
-        items: [
             {
                 name: 'Proposals',
                 href: '/crm/proposals',
@@ -439,10 +415,45 @@ const crmGroups = [
                 icon: CrmNavIcon.FileText,
                 permission: 'proposals:read',
             },
+        ],
+    },
+    {
+        name: 'Outreach',
+        items: [
             { name: 'Outreach', href: '/crm/outreach', icon: CrmNavIcon.Activities, permission: 'outreach:read' },
             { name: 'Email campaigns', href: '/crm/campaigns', icon: CrmNavIcon.Mail, permission: 'outreach:read' },
         ],
     },
+    {
+        name: 'Reports',
+        items: [
+            {
+                name: 'Reports',
+                href: '/crm/reports/overview',
+                icon: CrmNavIcon.Analytics,
+                permission: 'dashboard:read',
+                children: reportNavChildren,
+            },
+        ],
+    },
+    // Hidden from sidebar per request — do not remove, kept for future re-enable.
+    // {
+    //     name: 'Sales AI',
+    //     items: [
+    //         {
+    //             name: 'Sales AI',
+    //             href: '/crm/copilot',
+    //             icon: CrmNavIcon.Bot,
+    //             permission: 'dashboard:read',
+    //             children: [
+    //                 { name: 'Sales Copilot', href: '/crm/copilot', icon: CrmNavIcon.Bot, permission: 'dashboard:read' },
+    //                 { name: 'Data intelligence', href: '/crm/intelligence', icon: CrmNavIcon.Sparkles, permission: 'dashboard:read' },
+    //                 { name: 'Sales agents', href: '/crm/agents/inbox', icon: CrmNavIcon.Bot, permission: 'dashboard:read' },
+    //                 { name: 'Agent activity', href: '/crm/agents/activity', icon: CrmNavIcon.Bot, permission: 'dashboard:read' },
+    //             ],
+    //         },
+    //     ],
+    // },
     {
         name: 'Settings',
         items: [
@@ -1004,8 +1015,13 @@ export default function Sidebar({
                                                         </>
                                                     )}
                                                 </button>
-                                                {menuOpen && !isCollapsed && !locked ? (
-                                                    <div className={cn('ml-3 space-y-0.5 border-l pl-2', subBorderCls)}>
+                                                <div
+                                                    className={cn(
+                                                        'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+                                                        menuOpen && !isCollapsed && !locked ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+                                                    )}
+                                                >
+                                                    <div className={cn('min-h-0 ml-3 space-y-0.5 border-l pl-2', subBorderCls)}>
                                                         {(() => {
                                                             const leafHrefs = children.flatMap((c) => {
                                                                 if (
@@ -1076,10 +1092,15 @@ export default function Sidebar({
                                                                                 )}
                                                                             />
                                                                         </button>
-                                                                        {nestedOpen ? (
+                                                                        <div
+                                                                            className={cn(
+                                                                                'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+                                                                                nestedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+                                                                            )}
+                                                                        >
                                                                             <div
                                                                                 className={cn(
-                                                                                    'ml-3 space-y-0.5 border-l pl-2',
+                                                                                    'min-h-0 ml-3 space-y-0.5 border-l pl-2',
                                                                                     subBorderCls,
                                                                                 )}
                                                                             >
@@ -1110,7 +1131,6 @@ export default function Sidebar({
                                                                                                             ? '#'
                                                                                                             : gc.href
                                                                                                     }
-                                                                                                    prefetch={false}
                                                                                                     onClick={(e) => {
                                                                                                         if (gcLocked) {
                                                                                                             e.preventDefault();
@@ -1145,7 +1165,7 @@ export default function Sidebar({
                                                                                     },
                                                                                 )}
                                                                             </div>
-                                                                        ) : null}
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             }
@@ -1163,7 +1183,6 @@ export default function Sidebar({
                                                                 <div key={child.name} className="relative group">
                                                                     <Link
                                                                         href={childLocked ? '#' : child.href}
-                                                                        prefetch={false}
                                                                         onClick={(e) => {
                                                                             if (childLocked) {
                                                                                 e.preventDefault();
@@ -1197,7 +1216,7 @@ export default function Sidebar({
                                                         });
                                                         })()}
                                                     </div>
-                                                ) : null}
+                                                </div>
                                             </div>
                                         );
                                     }
@@ -1220,7 +1239,6 @@ export default function Sidebar({
                                         <div key={item.name} className="relative group">
                                             <Link
                                                 href={locked ? '#' : item.href}
-                                                prefetch={false}
                                                 title={isCollapsed ? item.name : undefined}
                                                 onClick={(e) => {
                                                     if (locked) {

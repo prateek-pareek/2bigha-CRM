@@ -13,7 +13,7 @@ export type ImageUploadResponse = {
   url: string;
   filename: string;
   publicId?: string;
-  storage?: "cloudinary" | "local";
+  storage?: "local";
   width?: number;
   height?: number;
   originalBytes?: number;
@@ -22,7 +22,7 @@ export type ImageUploadResponse = {
 };
 
 export type UploadImageOptions = {
-  /** Product area — stored under mathionix/{context}/ on Cloudinary */
+  /** Product area — stored under uploads/{context}/ on this server */
   context?: MediaUploadContext;
   /** Size/quality preset: avatar (512px), inline (1280), cover (2048), default (1920) */
   preset?: ImageUploadPreset;
@@ -142,21 +142,16 @@ export function extractManagedImageUrlsFromHtml(html: string): string[] {
   return [...urls];
 }
 
-/** True if URL is from our API /uploads or Cloudinary mathionix folder. */
+/** True if URL is from our API — served from this server's local /uploads storage. */
 export function isManagedUploadUrl(url: string): boolean {
   const u = url.trim();
   if (!u) return false;
-  if (u.includes("/uploads/") && !u.includes("res.cloudinary.com")) {
+  if (u.includes("/uploads/")) {
     try {
       const path = u.startsWith("http") ? new URL(u).pathname : u;
       return /^\/uploads\/[^/?#]+$/.test(path);
     } catch {
       return /^\/uploads\/[^/?#]+$/.test(u);
-    }
-  }
-  if (u.includes("res.cloudinary.com")) {
-    if (u.includes("/image/upload/") || u.includes("/raw/upload/")) {
-      return /\/mathionix\//.test(u);
     }
   }
   if (u.includes("/uploads/files/")) return true;
@@ -165,12 +160,12 @@ export function isManagedUploadUrl(url: string): boolean {
 
 export type DeleteImageResponse = {
   deleted: boolean;
-  storage?: "cloudinary" | "local";
+  storage?: "local";
   reason?: string;
 };
 
 /**
- * Remove image from Cloudinary (or local ./uploads). No-op for external URLs.
+ * Remove image from local server storage (./uploads). No-op for external URLs.
  * Call when the user removes/replaces an image in the UI.
  */
 export async function deleteUploadedImage(

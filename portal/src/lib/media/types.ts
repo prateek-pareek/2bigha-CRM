@@ -1,4 +1,4 @@
-/** Product area — Cloudinary folder: mathionix/{context}/ */
+/** Product area — server disk folder: uploads/{context}/ */
 export type MediaUploadContext = "crm" | "social" | "hrms" | "pm" | "wiki" | "uploads";
 
 export type MediaAttachment = {
@@ -8,6 +8,6 @@ export type MediaAttachment = {
   mimeType: string;
   size?: number;
   publicId?: string;
-  storage?: "cloudinary" | "local";
+  storage?: "local";
   kind: "image" | "file";
 };

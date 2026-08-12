@@ -23,7 +23,7 @@ import { InboxEmail, InboxEmailDocument } from '../schemas/inbox-email.schema';
 import { InboxRule, InboxRuleDocument } from '../schemas/inbox-rules.schema';
 import { Email, EmailDocument } from '../schemas/email.schema';
 import { CRMUser, CRMUserDocument } from '../crm-users/schemas/user.schema';
-import { Upload, UploadDocument } from '../../cloudinary/schemas/upload.schema';
+import { Upload, UploadDocument } from '../../storage/schemas/upload.schema';
 import { WebsiteLead, WebsiteLeadDocument } from '../schemas/website-lead.schema';
 
 import { EmailTrackingService } from '../email/email-tracking.service';

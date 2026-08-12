@@ -60,7 +60,7 @@ function canvasToBlob(
 }
 
 /**
- * Resize & compress in the browser before upload (saves bandwidth + Cloudinary storage).
+ * Resize & compress in the browser before upload (saves bandwidth + server storage).
  * GIFs are returned unchanged (animation preserved; server enforces size cap).
  */
 export async function optimizeImageFileClient(

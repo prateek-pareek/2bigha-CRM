@@ -20,9 +20,8 @@ describe('resolvePublicMediaUrl', () => {
     );
   });
 
-  it('leaves Cloudinary URLs unchanged', () => {
-    const url =
-      'https://res.cloudinary.com/demo/image/upload/v1/mathionix/social/photo.jpg';
+  it('leaves already-absolute URLs unchanged', () => {
+    const url = 'https://example.com/some/external/photo.jpg';
     expect(resolvePublicMediaUrl(url)).toBe(url);
   });
 });

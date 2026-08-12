@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Trash, TrashDocument } from './schemas/trash.schema';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class TrashService {
@@ -10,7 +10,7 @@ export class TrashService {
 
   constructor(
     @InjectModel(Trash.name) private trashModel: Model<TrashDocument>,
-    private cloudinaryService: CloudinaryService,
+    private storageService: StorageService,
   ) {}
 
   async moveToTrash(
@@ -45,17 +45,18 @@ export class TrashService {
   private async cleanupMedia(data: any): Promise<void> {
     if (!data) return;
     const strData = typeof data === 'string' ? data : JSON.stringify(data);
-    const urlRegex = /https?:\/\/(?:res\.cloudinary\.com)[^\s"'<>]+/g;
+    // Matches both absolute (https://host/uploads/...) and relative (/uploads/...) local storage URLs.
+    const urlRegex = /(?:https?:\/\/[^\s"'<>]+)?\/uploads\/[^\s"'<>]+/g;
     const urls = strData.match(urlRegex) || [];
-    
+
     // Deduplicate
     const uniqueUrls = [...new Set(urls)];
 
     for (const url of uniqueUrls) {
       try {
-        await this.cloudinaryService.deleteMedia({ url });
+        await this.storageService.deleteMedia({ url });
       } catch (err) {
-        this.logger.warn(`Failed to cleanup cloudinary media: ${url}. Error: ${(err as Error).message}`);
+        this.logger.warn(`Failed to cleanup local media: ${url}. Error: ${(err as Error).message}`);
       }
     }
   }
