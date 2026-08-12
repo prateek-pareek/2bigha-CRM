@@ -367,6 +367,17 @@ const crmGroups = [
         ],
     },
     {
+        name: 'Property',
+        items: [
+            {
+                name: 'Property Listings',
+                href: '/crm/property-listings',
+                icon: CrmNavIcon.Home,
+                permission: 'property_listings:read',
+            },
+        ],
+    },
+    {
         name: 'Reports',
         items: [
             {
@@ -403,7 +414,6 @@ const crmGroups = [
             { name: 'Deals', href: '/crm/deals', icon: CrmNavIcon.Deals, permission: 'deals:read' },
             { name: 'Leads', href: '/crm/leads', icon: CrmNavIcon.Leads, permission: 'leads:read' },
             { name: 'Website leads', href: '/crm/website-leads', icon: CrmNavIcon.World, permission: 'leads:read' },
-            { name: 'Property Listings', href: '/crm/property-listings', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
             { name: 'Clients', href: '/crm/clients', icon: CrmNavIcon.UserCheck, permission: 'clients:read', adminOnly: true },
             { name: 'Segments', href: '/crm/segments', icon: CrmNavIcon.Layers, permission: 'leads:read' },
         ],

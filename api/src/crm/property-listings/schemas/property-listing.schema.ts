@@ -116,6 +116,9 @@ export class PropertyListing {
   @Prop({ type: Object, default: {} })
   customFields: Record<string, unknown>;
 
+  @Prop({ type: Types.ObjectId, ref: 'Lead', index: true })
+  leadId?: Types.ObjectId;
+
   @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   createdBy?: Types.ObjectId;
 

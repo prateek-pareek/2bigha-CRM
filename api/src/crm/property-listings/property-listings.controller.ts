@@ -28,6 +28,12 @@ export class PropertyListingsController {
     return this.listingsService.findAll(query);
   }
 
+  @Get('stats')
+  @Permissions('property_listings:read')
+  stats() {
+    return this.listingsService.stats();
+  }
+
   @Get(':id')
   @Permissions('property_listings:read')
   findOne(@Param('id') id: string) {

@@ -16,6 +16,7 @@ export interface PropertyListingListQuery {
   status?: string;
   propertyType?: string;
   listedFor?: string;
+  leadId?: string;
 }
 
 @Injectable()
@@ -32,6 +33,10 @@ export class PropertyListingsService {
     return this.listingModel.create({
       ...dto,
       listedDate: dto.listedDate ? new Date(dto.listedDate) : new Date(),
+      leadId:
+        dto.leadId && Types.ObjectId.isValid(dto.leadId)
+          ? new Types.ObjectId(dto.leadId)
+          : undefined,
       createdBy:
         userId && Types.ObjectId.isValid(userId)
           ? new Types.ObjectId(userId)
@@ -56,6 +61,9 @@ export class PropertyListingsService {
     if (query.status) filter.status = query.status;
     if (query.propertyType) filter.propertyType = query.propertyType;
     if (query.listedFor) filter.listedFor = query.listedFor;
+    if (query.leadId && Types.ObjectId.isValid(query.leadId)) {
+      filter.leadId = new Types.ObjectId(query.leadId);
+    }
 
     const search = String(query.search || '').trim();
     if (search) {
@@ -76,6 +84,53 @@ export class PropertyListingsService {
     ]);
 
     return { data, total, page, pageSize };
+  }
+
+  /** Snapshot counts + portfolio value powering the list page KPI row. */
+  async stats(): Promise<{
+    total: number;
+    byStatus: Record<string, number>;
+    totalValue: number;
+    availableValue: number;
+  }> {
+    // `applyCrmSoftDeletePlugin` only hooks find/findOne/countDocuments —
+    // aggregate() bypasses it, so exclude soft-deleted docs explicitly here.
+    const notDeleted = { $match: { isDeleted: { $ne: true } } };
+
+    const [byStatusRows, totals] = await Promise.all([
+      this.listingModel.aggregate([
+        notDeleted,
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      this.listingModel.aggregate([
+        notDeleted,
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            totalValue: { $sum: '$price' },
+            availableValue: {
+              $sum: {
+                $cond: [{ $eq: ['$status', 'Available'] }, '$price', 0],
+              },
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const byStatus: Record<string, number> = {};
+    for (const row of byStatusRows) {
+      byStatus[String(row._id || 'Unknown')] = row.count;
+    }
+    const t = totals[0] || { total: 0, totalValue: 0, availableValue: 0 };
+
+    return {
+      total: t.total || 0,
+      byStatus,
+      totalValue: t.totalValue || 0,
+      availableValue: t.availableValue || 0,
+    };
   }
 
   async findOne(id: string): Promise<PropertyListingDocument> {

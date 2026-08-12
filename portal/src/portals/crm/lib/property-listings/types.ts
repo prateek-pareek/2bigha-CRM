@@ -40,6 +40,7 @@ export interface PropertyListingRecord {
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
+  leadId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +73,23 @@ export function statusTone(status: string): string {
   return "bg-slate-50 text-slate-600 border-slate-200";
 }
 
+/** Maps a listing status to the shared `CrmStatusBadge` tone palette. */
+export type PropertyStatusBadgeTone = "success" | "warning" | "info" | "neutral";
+export function statusBadgeTone(status: string): PropertyStatusBadgeTone {
+  const s = status.toLowerCase();
+  if (s === "available") return "success";
+  if (s === "under offer") return "warning";
+  if (s === "sold" || s === "rented") return "info";
+  return "neutral";
+}
+
+export interface PropertyListingStats {
+  total: number;
+  byStatus: Record<string, number>;
+  totalValue: number;
+  availableValue: number;
+}
+
 export function formatPrice(price: number, currency = "INR"): string {
   try {
     return new Intl.NumberFormat("en-IN", {
@@ -86,4 +104,18 @@ export function formatPrice(price: number, currency = "INR"): string {
 
 export function formatAddress(p: Pick<PropertyListingRecord, "address" | "city" | "state">): string {
   return [p.address, p.city, p.state].filter(Boolean).join(", ") || "—";
+}
+
+/** Compact currency for KPI tiles, e.g. "₹1.2Cr" / "₹85L" via Intl compact notation. */
+export function formatCompactPrice(price: number, currency = "INR"): string {
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency,
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(price);
+  } catch {
+    return formatPrice(price, currency);
+  }
 }

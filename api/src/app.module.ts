@@ -19,6 +19,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AnthropicModule } from './integrations/anthropic/anthropic.module';
 import { DataIntelligenceModule } from './crm/data-intelligence/data-intelligence.module';
 import { WhatsAppTemplatesModule } from './crm/whatsapp-templates/whatsapp-templates.module';
+import { WhatsAppLinksModule } from './crm/whatsapp-links/whatsapp-links.module';
 import { PropertyListingsModule } from './crm/property-listings/property-listings.module';
 import { mongoConnectionLabel } from './common/mongo-connection-label.util';
 import {
@@ -65,6 +66,7 @@ import {
     CRMModule,
     DataIntelligenceModule,
     WhatsAppTemplatesModule,
+    WhatsAppLinksModule,
     PropertyListingsModule,
     RealtimeModule,
     MailModule,

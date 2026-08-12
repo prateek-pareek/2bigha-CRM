@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsIn,
+  IsMongoId,
   IsNumber,
   IsOptional,
   IsString,
@@ -117,4 +118,8 @@ export class CreatePropertyListingDto {
 
   @IsOptional()
   customFields?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsMongoId()
+  leadId?: string;
 }

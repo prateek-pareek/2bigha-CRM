@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Check,
   CheckCheck,
+  Link2,
   Loader2,
   MessageCircle,
   Paperclip,
@@ -20,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { CrmButton } from "@/components/crm/ui";
 import WhatsAppTemplatePicker from "@/components/crm/inbox/WhatsAppTemplatePicker";
 import WhatsAppNavTabs from "@/components/crm/whatsapp/WhatsAppNavTabs";
+import LinkLeadModal from "@/components/crm/whatsapp/LinkLeadModal";
 import {
   formatWaWindowCountdown,
   getWhatsAppCareWindow,
@@ -100,6 +103,8 @@ export default function WhatsAppChatsPage() {
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [newChatPhone, setNewChatPhone] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [linkedLead, setLinkedLead] = useState<{ leadId: string; leadName: string } | null>(null);
+  const [linkLeadModalOpen, setLinkLeadModalOpen] = useState(false);
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -149,6 +154,29 @@ export default function WhatsAppChatsPage() {
   useEffect(() => {
     void loadContacts();
   }, [loadContacts]);
+
+  useEffect(() => {
+    if (!selectedWaId) {
+      setLinkedLead(null);
+      return;
+    }
+    let cancelled = false;
+    const token = localStorage.getItem("token");
+    fetch(`${CRM_API_URL}/crm/whatsapp-links/by-wa/${encodeURIComponent(selectedWaId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (cancelled) return;
+        setLinkedLead(body?.leadId ? { leadId: body.leadId, leadName: body.leadName || "Lead" } : null);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkedLead(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedWaId]);
 
   useEffect(() => {
     if (!selectedWaId) {
@@ -372,7 +400,25 @@ export default function WhatsAppChatsPage() {
                   >
                     <User size={16} />
                   </div>
-                  <p className="text-sm font-semibold">{formatPhone(selectedWaId)}</p>
+                  <div>
+                    <p className="text-sm font-semibold">{formatPhone(selectedWaId)}</p>
+                    {linkedLead ? (
+                      <Link
+                        href={`/crm/leads/${linkedLead.leadId}`}
+                        className="flex items-center gap-1 text-[11px] text-white/80 hover:text-white hover:underline"
+                      >
+                        <Link2 size={10} /> {linkedLead.leadName}
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setLinkLeadModalOpen(true)}
+                        className="flex items-center gap-1 text-[11px] text-white/70 hover:text-white hover:underline"
+                      >
+                        <Link2 size={10} /> Link to lead
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <CrmButton
                   variant="secondary"
@@ -531,6 +577,15 @@ export default function WhatsAppChatsPage() {
           void loadContacts();
         }}
       />
+
+      {selectedWaId && (
+        <LinkLeadModal
+          open={linkLeadModalOpen}
+          onClose={() => setLinkLeadModalOpen(false)}
+          waId={selectedWaId}
+          onSuccess={(lead) => setLinkedLead(lead)}
+        />
+      )}
     </div>
   );
 }

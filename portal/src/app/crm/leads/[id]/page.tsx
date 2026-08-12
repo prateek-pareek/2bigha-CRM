@@ -17,6 +17,10 @@ import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
 import { contactWhatsappUrl, contactLinkedInProfileUrl, contactLinkedInSourceUrl } from '@/lib/crm/crm-messaging-links';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import LeadAssociationsPanel from '@/components/crm/records/associations/LeadAssociationsPanel';
+import LeadPropertiesPanel from '@/components/crm/records/associations/LeadPropertiesPanel';
+import AddPropertyModal from '@/components/crm/records/detail/AddPropertyModal';
+import LeadWhatsAppPanel from '@/components/crm/records/associations/LeadWhatsAppPanel';
+import LinkWhatsAppModal from '@/components/crm/records/detail/LinkWhatsAppModal';
 import { CRMLeadCompanySidebarCard } from '@/components/crm/records/associations/CRMCompanySidebarCard';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
@@ -77,6 +81,10 @@ export default function LeadDetailPage() {
   const [followUpRefreshKey, setFollowUpRefreshKey] = useState(0);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const [isAddPropertyModalOpen, setIsAddPropertyModalOpen] = useState(false);
+  const [propertiesRefreshKey, setPropertiesRefreshKey] = useState(0);
+  const [isLinkWhatsAppModalOpen, setIsLinkWhatsAppModalOpen] = useState(false);
+  const [whatsappLinksRefreshKey, setWhatsappLinksRefreshKey] = useState(0);
   const [activityType, setActivityType] = useState('Activity');
   const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; name: string; type?: string; options?: string[] }[]>([]);
   const [pipelines, setPipelines] = useState<any[]>([]);
@@ -359,6 +367,7 @@ export default function LeadDetailPage() {
   const hasEmail = Boolean(String(lead.email || '').trim());
   const hasPhone = Boolean(String(lead.phone || lead.mobile || '').trim());
   const leadPhone = String(lead.phone || lead.mobile || '').trim();
+  const leadMobileNo = String(lead.mobileNo || '').trim();
   const displayName = `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Lead';
   const initials = `${(lead.firstName?.[0] || '').toUpperCase()}${(lead.lastName?.[0] || '').toUpperCase()}` || '?';
   const locationLine = [lead.city, lead.state, lead.country, lead.address]
@@ -467,6 +476,13 @@ export default function LeadDetailPage() {
       icon: <Calendar size={14} />,
       title: 'Schedule meeting',
       onClick: () => setIsMeetingModalOpen(true),
+    },
+    {
+      id: 'add-property',
+      label: 'Property',
+      icon: <Building2 size={14} />,
+      title: 'Add a property linked to this lead',
+      onClick: () => setIsAddPropertyModalOpen(true),
     },
   );
 
@@ -920,6 +936,20 @@ export default function LeadDetailPage() {
             />
           ) : null}
           {entityId ? (
+            <LeadPropertiesPanel
+              leadId={entityId}
+              refreshKey={propertiesRefreshKey}
+              onAddClick={() => setIsAddPropertyModalOpen(true)}
+            />
+          ) : null}
+          {entityId ? (
+            <LeadWhatsAppPanel
+              leadId={entityId}
+              refreshKey={whatsappLinksRefreshKey}
+              onAttachClick={() => setIsLinkWhatsAppModalOpen(true)}
+            />
+          ) : null}
+          {entityId ? (
             <CrmRecordSegmentsPanel
               module="leads"
               entityId={entityId}
@@ -984,6 +1014,22 @@ export default function LeadDetailPage() {
         onSuccess={() => {
           void fetchActivities();
         }}
+      />
+      <AddPropertyModal
+        open={isAddPropertyModalOpen}
+        onClose={() => setIsAddPropertyModalOpen(false)}
+        leadId={entityId}
+        leadName={`${lead.firstName || ''} ${lead.lastName || ''}`.trim()}
+        onSuccess={() => setPropertiesRefreshKey((k) => k + 1)}
+      />
+      <LinkWhatsAppModal
+        open={isLinkWhatsAppModalOpen}
+        onClose={() => setIsLinkWhatsAppModalOpen(false)}
+        leadId={entityId}
+        leadName={`${lead.firstName || ''} ${lead.lastName || ''}`.trim()}
+        leadPhone={leadPhone}
+        leadMobileNo={leadMobileNo}
+        onSuccess={() => setWhatsappLinksRefreshKey((k) => k + 1)}
       />
       <FollowUpSequenceModal
         open={isFollowUpSeqOpen}
