@@ -75,6 +75,12 @@ export class VoiceCallingService {
             ? config.providers.elevenlabs.apiKey || ''
             : maskSecret(config.providers.elevenlabs.apiKey),
         },
+        kommuno: {
+          ...config.providers.kommuno,
+          apiKey: reveal
+            ? config.providers.kommuno.apiKey || ''
+            : maskSecret(config.providers.kommuno.apiKey),
+        },
       },
     };
 
@@ -89,6 +95,11 @@ export class VoiceCallingService {
           config.providers.elevenlabs.apiKey &&
           config.providers.elevenlabs.agentId &&
           config.providers.elevenlabs.agentPhoneNumberId
+        ),
+        kommuno: !!(
+          config.providers.kommuno.apiKey &&
+          config.providers.kommuno.apiUrl &&
+          config.providers.kommuno.callerId
         ),
       },
     };
@@ -121,6 +132,10 @@ export class VoiceCallingService {
           ...prev.providers.elevenlabs,
           ...(body.config?.providers?.elevenlabs || {}),
         },
+        kommuno: {
+          ...prev.providers.kommuno,
+          ...(body.config?.providers?.kommuno || {}),
+        },
       },
     });
 
@@ -136,6 +151,10 @@ export class VoiceCallingService {
     next.providers.elevenlabs.apiKey = this.preserveSecret(
       body.config?.providers?.elevenlabs?.apiKey,
       prev.providers.elevenlabs.apiKey,
+    );
+    next.providers.kommuno.apiKey = this.preserveSecret(
+      body.config?.providers?.kommuno?.apiKey,
+      prev.providers.kommuno.apiKey,
     );
 
     const activeProvider = next.activeProvider;
@@ -233,6 +252,8 @@ export class VoiceCallingService {
       result = await this.callViaReadymode(config, toNumber, dto);
     } else if (provider === 'elevenlabs') {
       result = await this.callViaElevenLabs(config, toNumber, dto);
+    } else if (provider === 'kommuno') {
+      result = await this.callViaKommuno(config, toNumber, dto);
     } else {
       throw new BadRequestException(`Unknown provider: ${provider}`);
     }
@@ -437,6 +458,78 @@ export class VoiceCallingService {
     };
   }
 
+  /**
+   * Kommuno (kommuno.in) outbound click-to-call.
+   *
+   * TODO: placeholder implementation — Kommuno hasn't shared API docs yet.
+   * Request shape below follows the common Indian cloud-telephony pattern
+   * (bearer/API-key auth, JSON POST with agent + customer number and a
+   * registered caller ID) used elsewhere in this file for Readymode. Once
+   * Kommuno sends their actual API reference, update:
+   *   - the auth header/scheme (currently assumes `Authorization: Bearer <apiKey>`)
+   *   - the request payload field names
+   *   - the response field names used to read back call id / status below
+   */
+  private async callViaKommuno(
+    config: VoiceCallingConfig,
+    toNumber: string,
+    dto: InitiateVoiceCallDto,
+  ) {
+    const km = config.providers.kommuno;
+    const apiUrl = String(km.apiUrl || '').trim();
+    const apiKey = String(km.apiKey || '').trim();
+    const callerId = String(km.callerId || '').trim();
+    const agentPhone = normalizeE164(String(km.agentPhone || ''));
+
+    if (!apiUrl || !apiKey || !callerId) {
+      throw new BadRequestException(
+        'Kommuno API URL, API key, and Caller ID are required. Waiting on API docs from Kommuno — see Settings → Integrations → Voice calling.',
+      );
+    }
+
+    const payload = {
+      caller_id: callerId,
+      customer_number: toNumber,
+      agent_number: agentPhone || undefined,
+      lead_name: dto.leadName,
+      related_to: dto.relatedTo,
+      related_type: dto.relatedType || 'Lead',
+      source: 'mathionix-crm',
+    };
+
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    let data: any = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
+    if (!res.ok) {
+      const msg =
+        data?.message || data?.error || text?.slice(0, 200) || `Kommuno error ${res.status}`;
+      this.logger.error(`Kommuno call failed: ${msg}`);
+      throw new BadRequestException(msg);
+    }
+
+    return {
+      provider: 'kommuno' as const,
+      externalId: String(data?.call_id || data?.id || ''),
+      status: String(data?.status || 'submitted'),
+      message: agentPhone
+        ? `Ringing your phone (${agentPhone}); answer to connect to ${toNumber}.`
+        : `Call submitted to Kommuno for ${toNumber}.`,
+      raw: data,
+    };
+  }
+
   private isProviderConfigured(provider: VoiceProviderId, config: VoiceCallingConfig): boolean {
     if (provider === 'twilio') {
       const t = config.providers.twilio;
@@ -450,6 +543,10 @@ export class VoiceCallingService {
       const e = config.providers.elevenlabs;
       return !!(e.apiKey && e.agentId && e.agentPhoneNumberId);
     }
+    if (provider === 'kommuno') {
+      const k = config.providers.kommuno;
+      return !!(k.apiKey && k.apiUrl && k.callerId);
+    }
     return false;
   }
 
@@ -457,6 +554,7 @@ export class VoiceCallingService {
     const active =
       raw?.activeProvider === 'readymode' ||
       raw?.activeProvider === 'elevenlabs' ||
+      raw?.activeProvider === 'kommuno' ||
       raw?.activeProvider === 'twilio'
         ? raw.activeProvider
         : DEFAULT_VOICE_CALLING_CONFIG.activeProvider;
@@ -474,6 +572,10 @@ export class VoiceCallingService {
         elevenlabs: {
           ...DEFAULT_VOICE_CALLING_CONFIG.providers.elevenlabs,
           ...(raw?.providers?.elevenlabs || {}),
+        },
+        kommuno: {
+          ...DEFAULT_VOICE_CALLING_CONFIG.providers.kommuno,
+          ...(raw?.providers?.kommuno || {}),
         },
       },
     };
@@ -498,6 +600,7 @@ export class VoiceCallingService {
             'config.providers.twilio.enabled': false,
             'config.providers.readymode.enabled': false,
             'config.providers.elevenlabs.enabled': false,
+            'config.providers.kommuno.enabled': false,
           },
         },
       )

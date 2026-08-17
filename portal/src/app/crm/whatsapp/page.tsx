@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  Building2,
   Check,
   CheckCheck,
   Link2,
   Loader2,
   MessageCircle,
   Paperclip,
+  Phone,
   Plus,
   Search,
   Send,
@@ -23,6 +25,8 @@ import { CrmButton } from "@/components/crm/ui";
 import WhatsAppTemplatePicker from "@/components/crm/inbox/WhatsAppTemplatePicker";
 import WhatsAppNavTabs from "@/components/crm/whatsapp/WhatsAppNavTabs";
 import LinkLeadModal from "@/components/crm/whatsapp/LinkLeadModal";
+import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
+import AddPropertyModal from "@/components/crm/records/detail/AddPropertyModal";
 import {
   formatWaWindowCountdown,
   getWhatsAppCareWindow,
@@ -105,6 +109,8 @@ export default function WhatsAppChatsPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [linkedLead, setLinkedLead] = useState<{ leadId: string; leadName: string } | null>(null);
   const [linkLeadModalOpen, setLinkLeadModalOpen] = useState(false);
+  const [callModalOpen, setCallModalOpen] = useState(false);
+  const [addPropertyModalOpen, setAddPropertyModalOpen] = useState(false);
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -420,13 +426,31 @@ export default function WhatsAppChatsPage() {
                     )}
                   </div>
                 </div>
-                <CrmButton
-                  variant="secondary"
-                  onClick={() => setTemplatePickerOpen(true)}
-                  className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
-                >
-                  Send template
-                </CrmButton>
+                <div className="flex items-center gap-2">
+                  <CrmButton
+                    variant="secondary"
+                    onClick={() => setAddPropertyModalOpen(true)}
+                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
+                    title="Add property"
+                  >
+                    <Building2 size={14} /> Add property
+                  </CrmButton>
+                  <CrmButton
+                    variant="secondary"
+                    onClick={() => setCallModalOpen(true)}
+                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
+                    title="Call via IVR"
+                  >
+                    <Phone size={14} /> Call
+                  </CrmButton>
+                  <CrmButton
+                    variant="secondary"
+                    onClick={() => setTemplatePickerOpen(true)}
+                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
+                  >
+                    Send template
+                  </CrmButton>
+                </div>
               </div>
 
               <div
@@ -584,6 +608,26 @@ export default function WhatsAppChatsPage() {
           onClose={() => setLinkLeadModalOpen(false)}
           waId={selectedWaId}
           onSuccess={(lead) => setLinkedLead(lead)}
+        />
+      )}
+
+      {selectedWaId && (
+        <CallLeadModal
+          open={callModalOpen}
+          onClose={() => setCallModalOpen(false)}
+          phone={formatPhone(selectedWaId)}
+          leadId={linkedLead?.leadId}
+          leadName={linkedLead?.leadName}
+          relatedType="Lead"
+        />
+      )}
+
+      {selectedWaId && (
+        <AddPropertyModal
+          open={addPropertyModalOpen}
+          onClose={() => setAddPropertyModalOpen(false)}
+          leadId={linkedLead?.leadId}
+          leadName={linkedLead?.leadName}
         />
       )}
     </div>

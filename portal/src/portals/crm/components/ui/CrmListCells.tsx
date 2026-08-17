@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { crmStageAccent } from "@/lib/crm/stage-accent";
-import { CrmIcon } from "@/lib/crm/shared/icons";
+import { CrmIcon, CrmNavIcon } from "@/lib/crm/shared/icons";
 import { CrmKanbanAvatar, crmKanbanAvatarTone } from "./CrmKanban";
 
 /** CRMS list status pill — solid colored badge (`.badge-status` 12/500) */
@@ -222,6 +222,8 @@ type CrmTableActionMenuProps = {
   onDelete?: () => void;
   onClone?: () => void;
   onEmail?: () => void;
+  onCall?: () => void;
+  onWhatsApp?: () => void;
   className?: string;
 };
 
@@ -231,6 +233,8 @@ export function CrmTableActionMenu({
   onDelete,
   onClone,
   onEmail,
+  onCall,
+  onWhatsApp,
   className,
 }: CrmTableActionMenuProps) {
   return (
@@ -265,6 +269,26 @@ export function CrmTableActionMenu({
             >
               <CrmIcon.Mail size={13} className="text-[#2f80ed]" />
               Email
+            </button>
+          ) : null}
+          {onCall ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+              onClick={onCall}
+            >
+              <CrmIcon.PhoneCall size={13} className="text-[#2f80ed]" />
+              Call
+            </button>
+          ) : null}
+          {onWhatsApp ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+              onClick={onWhatsApp}
+            >
+              <CrmNavIcon.WhatsApp size={13} className="text-[#25d366]" />
+              WhatsApp
             </button>
           ) : null}
           {onClone ? (

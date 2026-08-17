@@ -18,6 +18,12 @@ import { Permissions } from '../crm-users/permissions.decorator';
 export class WhatsAppLinksController {
   constructor(private readonly linksService: WhatsAppLinksService) {}
 
+  @Get()
+  @Permissions('inbox:read', 'leads:read')
+  listAll() {
+    return this.linksService.listAll();
+  }
+
   @Get('by-wa/:waId')
   @Permissions('inbox:read', 'leads:read')
   findByWaId(@Param('waId') waId: string) {
@@ -30,6 +36,12 @@ export class WhatsAppLinksController {
     return this.linksService.findByLeadId(leadId);
   }
 
+  @Get('by-assignee/:assigneeId')
+  @Permissions('inbox:read')
+  findByAssignee(@Param('assigneeId') assigneeId: string) {
+    return this.linksService.findByAssignee(assigneeId);
+  }
+
   @Post()
   @Permissions('leads:write', 'inbox:write')
   link(@Request() req: any, @Body() body: { waId: string; leadId: string }) {
@@ -40,5 +52,17 @@ export class WhatsAppLinksController {
   @Permissions('leads:write', 'inbox:write')
   unlink(@Param('waId') waId: string) {
     return this.linksService.unlink(waId);
+  }
+
+  @Post(':waId/assign')
+  @Permissions('inbox:write', 'leads:write')
+  assign(@Request() req: any, @Param('waId') waId: string, @Body('assigneeId') assigneeId: string) {
+    return this.linksService.assign(waId, assigneeId, req.user?.userId);
+  }
+
+  @Delete(':waId/assign')
+  @Permissions('inbox:write', 'leads:write')
+  unassign(@Param('waId') waId: string) {
+    return this.linksService.unassign(waId);
   }
 }

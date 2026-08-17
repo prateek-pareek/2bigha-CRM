@@ -244,6 +244,11 @@ export default function WhatsAppTemplatesPage() {
                         From Meta
                       </span>
                     )}
+                    {t.aisensyCampaignName && (
+                      <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                        AiSensy: {t.aisensyCampaignName}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-text-muted">
                     {t.language} · {t.category}

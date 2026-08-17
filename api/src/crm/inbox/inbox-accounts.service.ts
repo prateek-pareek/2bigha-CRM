@@ -15,6 +15,9 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { PassThrough, Readable } from 'stream';
 import { randomBytes } from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { UPLOADS_DIR } from '../../storage/storage.service';
 import {
   UserEmailAccount,
   UserEmailAccountDocument,
@@ -6250,12 +6253,21 @@ export class InboxAccountsService {
       const upload = await this.uploadModel.findOne({ filename: filepath }).exec();
       if (upload) {
         const cid = `img-${Date.now()}-${Math.round(Math.random() * 1e6)}@mathionix.local`;
-        
+
+        const diskPath = join(UPLOADS_DIR, upload.filename);
+        let dataBuffer: Buffer;
+        try {
+          dataBuffer = readFileSync(diskPath);
+        } catch {
+          // File missing on disk — leave the original <img src> untouched rather than
+          // rewriting it to a cid with no matching attachment.
+          continue;
+        }
+
         const escapedPath = filepath.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
         const replaceRegex = new RegExp(`(?:https?:\\/\\/[^/]+)?\\/uploads\\/${escapedPath}`, 'gi');
         body = body.replace(replaceRegex, `cid:${cid}`);
 
-        const dataBuffer = upload.data && upload.data.buffer ? Buffer.from(upload.data.buffer) : Buffer.from(upload.data);
         attachments.push({
           filename: upload.originalName || filepath.split('/').pop() || 'image.webp',
           content: dataBuffer,

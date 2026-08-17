@@ -54,6 +54,8 @@ import Pagination from '@/components/suite/shell/Pagination';
 import { usePermissions } from '@/hooks/usePermissions';
 import CRMCalendarView from '@/components/crm/calendar/CRMCalendarView';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
+import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
+import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
 import LeadCreatePanel from '@/components/crm/records/create/LeadCreatePanel';
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
@@ -126,7 +128,7 @@ import {
   CrmKanbanAvatar,
   crmKanbanAvatarTone,
 } from '@/components/crm/ui';
-import { CrmIcon } from '@/lib/crm/shared/icons';
+import { CrmIcon, CrmNavIcon } from '@/lib/crm/shared/icons';
 import { CRM_LIST_PAGE, CRM_MENU_ITEM, CRM_TOOLBAR_SELECT, CRM_TOOLBAR_ICON_GROUP, CRM_TOOLBAR_ICON_BTN, CRM_TOOLBAR_ICON_BTN_ACTIVE, CRM_TOOLBAR_CHIP, CRM_TOOLBAR_CHIP_ACTIVE, CRM_BTN_MANAGE_COLUMNS } from '@/lib/crm/ui';
 
 const ImportModal = dynamic(() => import('@/components/crm/records/create/ImportModal'), { ssr: false });
@@ -286,6 +288,7 @@ export default function LeadsPage() {
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [isLeadPanelOpen, setIsLeadPanelOpen] = useState(false);
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
+  const [callLead, setCallLead] = useState<Lead | null>(null);
   const [isBulkEmailOpen, setIsBulkEmailOpen] = useState(false);
   const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
@@ -2020,6 +2023,26 @@ export default function LeadsPage() {
                                   >
                                     <Check size={10} strokeWidth={4} className={selectedIds.has(lead._id) ? 'opacity-100' : 'opacity-40 text-[var(--text-muted)]'} />
                                   </button>
+                                  {(lead.mobileNo || lead.phone) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setCallLead(lead)}
+                                      className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-emerald-50 hover:text-emerald-600"
+                                      aria-label="Call lead"
+                                    >
+                                      <Phone size={13} />
+                                    </button>
+                                  ) : null}
+                                  {contactWhatsappUrl(lead) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')}
+                                      className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-emerald-50 hover:text-emerald-600"
+                                      aria-label="Message on WhatsApp"
+                                    >
+                                      <CrmNavIcon.WhatsApp size={13} />
+                                    </button>
+                                  ) : null}
                                   {hasAccess('leads:delete') ? (
                                     <button
                                       type="button"
@@ -2187,6 +2210,16 @@ export default function LeadsPage() {
                             <td className="crm-table-actions">
                               <CrmTableActionMenu
                                 onEdit={() => router.push(`/crm/leads/${lead._id}`)}
+                                onCall={
+                                  (lead.mobileNo || lead.phone)
+                                    ? () => setCallLead(lead)
+                                    : undefined
+                                }
+                                onWhatsApp={
+                                  contactWhatsappUrl(lead)
+                                    ? () => window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')
+                                    : undefined
+                                }
                                 onDelete={
                                   hasAccess('leads:delete')
                                     ? () => handleDelete(lead._id)
@@ -2374,6 +2407,14 @@ export default function LeadsPage() {
         module="leads"
         entityId={emailLead?._id}
         crmInboxMode
+      />
+      <CallLeadModal
+        open={!!callLead}
+        onClose={() => setCallLead(null)}
+        phone={callLead?.mobileNo || callLead?.phone}
+        leadId={callLead?._id}
+        leadName={`${callLead?.firstName || ''} ${callLead?.lastName || ''}`.trim()}
+        relatedType="Lead"
       />
       <SendEmailModal
         isOpen={isBulkEmailOpen && selectedIds.size > 0}

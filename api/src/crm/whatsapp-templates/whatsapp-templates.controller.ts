@@ -58,6 +58,21 @@ export class WhatsAppTemplatesController {
     return this.templatesService.submit(id);
   }
 
+  @Post(':id/aisensy-link')
+  @Permissions('settings:write')
+  linkAiSensy(
+    @Param('id') id: string,
+    @Body('aisensyCampaignName') aisensyCampaignName: string,
+  ) {
+    return this.templatesService.linkAiSensyCampaign(id, aisensyCampaignName);
+  }
+
+  @Post(':id/status')
+  @Permissions('settings:write')
+  setStatus(@Param('id') id: string, @Body('status') status: string) {
+    return this.templatesService.setStatus(id, status as any);
+  }
+
   @Post('sync')
   @Permissions('settings:write')
   sync() {

@@ -36,6 +36,21 @@ export class Integration {
   @Prop({ default: true })
   isActive: boolean;
 
+  /**
+   * Which WhatsApp send path the `type: 'whatsapp'` doc's `apiKey` (and
+   * friends) belong to. 'meta' talks to the Graph API directly using
+   * `phoneNumberId`/`businessAccountId`; 'aisensy' talks to AiSensy's
+   * Campaign API using just `apiKey` (+ optional `sourceLabel`) — see
+   * WhatsAppService and AiSensyClient. Only meaningful when `type ===
+   * 'whatsapp'`; default 'meta' keeps existing configs working unchanged.
+   */
+  @Prop({ enum: ['meta', 'aisensy'], default: 'meta' })
+  provider?: 'meta' | 'aisensy';
+
+  /** Attribution tag sent as AiSensy's `source` field on every campaign send. */
+  @Prop()
+  sourceLabel?: string;
+
   @Prop({
     enum: ['oauth', 'api_key', 'webhook', 'manual'],
   })

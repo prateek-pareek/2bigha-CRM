@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Loader2, RefreshCw, Send, Trash2 } from "lucide-react";
+import { ChevronLeft, Link2, Loader2, RefreshCw, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,8 @@ export default function WhatsAppTemplateDetailPage() {
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [aisensyCampaignName, setAisensyCampaignName] = useState("");
+  const [linkingAiSensy, setLinkingAiSensy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +52,7 @@ export default function WhatsAppTemplateDetailPage() {
         return;
       }
       setTemplate(data);
+      setAisensyCampaignName(data.aisensyCampaignName || "");
       setDraft(
         componentsToDraft(
           { name: data.name, language: data.language, category: data.category },
@@ -145,6 +148,59 @@ export default function WhatsAppTemplateDetailPage() {
     }
   };
 
+  const linkAiSensy = async () => {
+    if (!aisensyCampaignName.trim()) {
+      toast.error("Enter the AiSensy campaign name");
+      return;
+    }
+    setLinkingAiSensy(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/whatsapp-templates/${id}/aisensy-link`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ aisensyCampaignName: aisensyCampaignName.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message || "Failed to map AiSensy campaign");
+        return;
+      }
+      toast.success("Mapped to AiSensy campaign");
+      setTemplate(data);
+    } catch {
+      toast.error("Failed to map AiSensy campaign");
+    } finally {
+      setLinkingAiSensy(false);
+    }
+  };
+
+  const setAisensyStatus = async (status: string) => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/whatsapp-templates/${id}/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message || "Failed to update status");
+        return;
+      }
+      toast.success(`Marked as ${status}`);
+      setTemplate(data);
+    } catch {
+      toast.error("Failed to update status");
+    }
+  };
+
   const remove = async () => {
     if (!confirm("Delete this draft template?")) return;
     const token = localStorage.getItem("token");
@@ -237,6 +293,47 @@ export default function WhatsAppTemplateDetailPage() {
           This template was created directly in Meta Business Manager — it&apos;s shown here read-only.
         </div>
       )}
+
+      <div className="rounded-[var(--radius-md)] border border-border bg-white p-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-text-main">
+          <Link2 size={14} /> AiSensy campaign mapping
+        </div>
+        <p className="mt-1 text-xs text-text-muted">
+          AiSensy has no public API to create or check the approval of templates — create &amp; approve
+          this template in the AiSensy dashboard first, then map the Campaign name it&apos;s attached to
+          here. WhatsApp campaigns and inbox sends via AiSensy use this mapping.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            value={aisensyCampaignName}
+            onChange={(e) => setAisensyCampaignName(e.target.value)}
+            placeholder="AiSensy campaign name"
+            className="h-9 min-w-[220px] flex-1 rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+          />
+          <CrmButton
+            variant="secondary"
+            disabled={linkingAiSensy}
+            onClick={() => void linkAiSensy()}
+            className="h-9 gap-2"
+          >
+            {linkingAiSensy && <Loader2 size={14} className="animate-spin" />}
+            Save mapping
+          </CrmButton>
+          {template.source === "aisensy" && (
+            <select
+              value={template.status}
+              onChange={(e) => void setAisensyStatus(e.target.value)}
+              className="h-9 rounded-[var(--radius-md)] border border-border px-2 text-xs font-semibold text-text-main outline-none"
+            >
+              {["DRAFT", "PENDING", "APPROVED", "REJECTED", "PAUSED", "DISABLED"].map((s) => (
+                <option key={s} value={s}>
+                  Mark as {s}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
 
       <TemplateComponentsBuilder draft={draft} onChange={setDraft} disabled={!editable} />
 

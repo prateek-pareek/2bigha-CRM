@@ -20,6 +20,7 @@ import { AnthropicModule } from './integrations/anthropic/anthropic.module';
 import { DataIntelligenceModule } from './crm/data-intelligence/data-intelligence.module';
 import { WhatsAppTemplatesModule } from './crm/whatsapp-templates/whatsapp-templates.module';
 import { WhatsAppLinksModule } from './crm/whatsapp-links/whatsapp-links.module';
+import { WhatsAppCampaignsModule } from './crm/whatsapp-campaigns/whatsapp-campaigns.module';
 import { PropertyListingsModule } from './crm/property-listings/property-listings.module';
 import { mongoConnectionLabel } from './common/mongo-connection-label.util';
 import {
@@ -67,6 +68,7 @@ import {
     DataIntelligenceModule,
     WhatsAppTemplatesModule,
     WhatsAppLinksModule,
+    WhatsAppCampaignsModule,
     PropertyListingsModule,
     RealtimeModule,
     MailModule,

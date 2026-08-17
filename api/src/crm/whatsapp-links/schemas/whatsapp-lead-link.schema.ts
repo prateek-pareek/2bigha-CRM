@@ -12,17 +12,30 @@ export type WhatsAppLeadLinkDocument = WhatsAppLeadLink & Document;
  * self-contained (create/move/remove without touching the Lead document).
  * One `waId` maps to at most one Lead (unique); a Lead may have more than
  * one linked number.
+ *
+ * Also doubles as the per-conversation "agent assignment" record (`assignee`)
+ * — there's no separate Conversation entity in this module (see
+ * WhatsAppService.getUniqueContacts), and a number can be triaged/assigned
+ * to an agent before it's ever linked to a Lead, so `leadId` is optional and
+ * a bare assignee-only row is a valid state.
  */
 @Schema({ timestamps: true, collection: 'whatsapp_lead_links' })
 export class WhatsAppLeadLink {
   @Prop({ required: true, unique: true, index: true })
   waId: string;
 
-  @Prop({ required: true, type: Types.ObjectId, ref: 'Lead', index: true })
-  leadId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Lead', index: true })
+  leadId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   linkedBy?: Types.ObjectId;
+
+  /** CRM user this WhatsApp conversation is assigned to for triage/ownership. */
+  @Prop({ type: Types.ObjectId, ref: 'CRMUser', index: true })
+  assignee?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
+  assignedBy?: Types.ObjectId;
 }
 
 export const WhatsAppLeadLinkSchema =

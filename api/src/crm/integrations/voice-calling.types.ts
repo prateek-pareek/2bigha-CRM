@@ -1,6 +1,6 @@
 export const VOICE_CALLING_INTEGRATION_TYPE = 'voice-calling';
 
-export type VoiceProviderId = 'twilio' | 'readymode' | 'elevenlabs';
+export type VoiceProviderId = 'twilio' | 'readymode' | 'elevenlabs' | 'kommuno';
 
 export type TwilioVoiceConfig = {
   enabled?: boolean;
@@ -37,12 +37,39 @@ export type ElevenLabsVoiceConfig = {
   agentPhoneNumberId?: string;
 };
 
+/**
+ * Kommuno (kommuno.in) — Indian cloud telephony provider.
+ *
+ * TODO: Kommuno's API docs/credentials haven't been shared yet. The fields
+ * below are a best-guess shape modeled on the Readymode/Twilio configs
+ * (generic click-to-call: API key + endpoint + caller ID, optional agent
+ * bridge). Update field names, the request payload in
+ * `callViaKommuno` (voice-calling.service.ts), and `isProviderConfigured`
+ * once Kommuno sends their actual API reference.
+ */
+export type KommunoVoiceConfig = {
+  enabled?: boolean;
+  /** Kommuno API key / auth token */
+  apiKey?: string;
+  /** Click-to-call / outbound API endpoint provided by Kommuno for this account */
+  apiUrl?: string;
+  /** Virtual/toll-free number registered with Kommuno, shown as caller ID */
+  callerId?: string;
+  /**
+   * Optional agent phone for click-to-call: Kommuno rings the agent first,
+   * then bridges to the lead (mirrors Twilio's agentPhone behavior). Leave
+   * blank if Kommuno should dial the lead directly.
+   */
+  agentPhone?: string;
+};
+
 export type VoiceCallingConfig = {
   activeProvider: VoiceProviderId;
   providers: {
     twilio: TwilioVoiceConfig;
     readymode: ReadymodeVoiceConfig;
     elevenlabs: ElevenLabsVoiceConfig;
+    kommuno: KommunoVoiceConfig;
   };
 };
 
@@ -56,6 +83,7 @@ export const DEFAULT_VOICE_CALLING_CONFIG: VoiceCallingConfig = {
       apiUrl: '',
     },
     elevenlabs: { enabled: false },
+    kommuno: { enabled: false, apiUrl: '' },
   },
 };
 

@@ -28,7 +28,6 @@ import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityC
 import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookPanel';
 import SalesAgentRecordPanel from '@/components/crm/sales/SalesAgentRecordPanel';
 import CrmPlaybookRecommendedBanner from '@/components/crm/automation/playbooks/CrmPlaybookRecommendedBanner';
-import CrmXOutreachPanel from '@/components/crm/sales/CrmXOutreachPanel';
 import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
@@ -901,13 +900,6 @@ export default function LeadDetailPage() {
               onUpdated={() => void fetchLead()}
             />
           ) : null}
-          <CrmXOutreachPanel
-            entityType="Lead"
-            entityId={entityId}
-            record={lead}
-            onHandleSaved={() => void fetchLead()}
-            onDmLogged={() => void fetchActivities()}
-          />
           <FollowUpSequenceCard
             entityType="Lead"
             entityId={entityId}

@@ -10,7 +10,8 @@ import {
     Edit2,
     Calendar,
     GripVertical,
-    Loader2,
+    AlertTriangle,
+    User,
 } from 'lucide-react';
 import CrmSlidePanelShell from '@/components/crm/shell/CrmSlidePanelShell';
 import { CRM_API_URL } from '@/lib/crm/config';
@@ -32,6 +33,8 @@ import {
   CrmKanbanMetaRow,
   CrmKanbanMetaList,
   CrmKanbanCardFooter,
+  CrmKanbanAvatar,
+  crmKanbanAvatarTone,
 } from '@/components/crm/ui';
 import { CRM_LIST_PAGE } from '@/lib/crm/ui';
 import { crmStageAccent } from '@/lib/crm/stage-accent';
@@ -80,6 +83,28 @@ function taskPersonLabel(p: TaskPerson | string | undefined): string {
     return formatCrmUserLabel(p);
 }
 
+function taskPersonInitials(p: TaskPerson | string | undefined): string {
+    const label = taskPersonLabel(p);
+    if (!label) return '';
+    return label
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() || '')
+        .join('');
+}
+
+/** Due date has passed and the task isn't already in the terminal "Done" column. */
+function isTaskOverdue(task: Task): boolean {
+    const due = task.metadata?.dueDate;
+    if (!due || task.status === 'Done') return false;
+    const dueDate = new Date(due);
+    if (Number.isNaN(dueDate.getTime())) return false;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    return dueDate.getTime() < startOfToday.getTime();
+}
+
 function TaskCard({ task, onClick, onDelete, onEdit }: { task: Task; onClick: () => void; onDelete: () => void; onEdit: () => void }) {
     const {
         attributes,
@@ -96,10 +121,12 @@ function TaskCard({ task, onClick, onDelete, onEdit }: { task: Task; onClick: ()
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.3 : 1,
         zIndex: isDragging ? 100 : 1,
         ['--crm-stage-accent' as string]: crmStageAccent(task.status || 'Backlog'),
     };
+
+    const overdue = isTaskOverdue(task);
+    const assigneeLabel = taskPersonLabel(task.assignee as TaskPerson);
 
     return (
         <CrmKanbanCard
@@ -110,14 +137,21 @@ function TaskCard({ task, onClick, onDelete, onEdit }: { task: Task; onClick: ()
             onClick={onClick}
             stageKey={task.status || 'Backlog'}
             className={cn(
-                'cursor-grab active:cursor-grabbing',
-                isDragging && 'opacity-30',
+                'cursor-grab active:cursor-grabbing transition-[transform,box-shadow,opacity] duration-150',
+                isDragging
+                    ? 'rotate-1 scale-[1.03] opacity-95 shadow-2xl ring-2 ring-[var(--primary)]/30'
+                    : overdue && 'ring-1 ring-rose-200',
             )}
         >
             <CrmKanbanCardHead
                 initials={(task.title?.[0] || 'T').toUpperCase()}
                 title={<span className="line-clamp-2 whitespace-normal">{task.title || 'Untitled Task'}</span>}
-                trailing={<GripVertical className="h-3.5 w-3.5 text-[var(--text-muted)]/40 group-hover:text-[var(--text-muted)] transition-colors shrink-0" />}
+                trailing={
+                    <GripVertical
+                        aria-label="Drag to move task"
+                        className="h-3.5 w-3.5 text-[var(--text-muted)]/40 group-hover:text-[var(--text-muted)] transition-colors shrink-0"
+                    />
+                }
             />
             {task.content ? (
                 <CrmKanbanMetaList>
@@ -130,28 +164,37 @@ function TaskCard({ task, onClick, onDelete, onEdit }: { task: Task; onClick: ()
             ) : null}
             <CrmKanbanCardFooter
                 left={
-                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                        {task.metadata?.priority && (
-                            <span className={cn(
-                                "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                                task.metadata.priority === 'High' ? "bg-rose-100 text-rose-600" :
-                                    task.metadata.priority === 'Medium' ? "bg-amber-100 text-amber-600" :
-                                        "bg-emerald-100 text-emerald-600"
-                            )}>
-                                {task.metadata.priority}
-                            </span>
-                        )}
-                        {task.metadata?.dueDate && (
-                            <span className="text-[10px] font-semibold text-[var(--text-muted)] inline-flex items-center gap-1">
-                                <Calendar size={11} strokeWidth={2} />
-                                {new Date(task.metadata.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                            </span>
-                        )}
-                        {taskPersonLabel(task.assignee as TaskPerson) ? (
-                            <span className="text-[10px] font-semibold text-primary truncate">
-                                → {taskPersonLabel(task.assignee as TaskPerson)}
-                            </span>
-                        ) : null}
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span title={assigneeLabel || 'Unassigned'} className="shrink-0">
+                            <CrmKanbanAvatar
+                                size="sm"
+                                tone={assigneeLabel ? crmKanbanAvatarTone(assigneeLabel) : undefined}
+                                className={!assigneeLabel ? 'border-dashed text-[var(--text-muted)]/60' : undefined}
+                            >
+                                {taskPersonInitials(task.assignee as TaskPerson) || <User size={11} strokeWidth={2} />}
+                            </CrmKanbanAvatar>
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            {task.metadata?.priority && (
+                                <span className={cn(
+                                    "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                                    task.metadata.priority === 'High' ? "bg-rose-100 text-rose-600" :
+                                        task.metadata.priority === 'Medium' ? "bg-amber-100 text-amber-600" :
+                                            "bg-emerald-100 text-emerald-600"
+                                )}>
+                                    {task.metadata.priority}
+                                </span>
+                            )}
+                            {task.metadata?.dueDate && (
+                                <span className={cn(
+                                    "text-[10px] font-semibold inline-flex items-center gap-1",
+                                    overdue ? "text-rose-600" : "text-[var(--text-muted)]",
+                                )}>
+                                    {overdue ? <AlertTriangle size={11} strokeWidth={2.25} /> : <Calendar size={11} strokeWidth={2} />}
+                                    {new Date(task.metadata.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 }
                 actions={
@@ -185,11 +228,23 @@ function BoardColumn({ column, tasks, onTaskClick, onAddClick, onDeleteTask, onE
         data: { type: 'Column', columnName: column.name }
     });
 
+    const overdueCount = tasks.filter(isTaskOverdue).length;
+
     return (
         <CrmKanbanColumn
             title={column.name}
             stageKey={column.name}
-            count={tasks.length}
+            summary={
+                <span className="inline-flex items-center gap-1.5">
+                    <span>{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
+                    {overdueCount > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-600">
+                            <AlertTriangle size={10} strokeWidth={2.5} />
+                            {overdueCount} overdue
+                        </span>
+                    )}
+                </span>
+            }
             onAdd={onAddClick}
             style={{ minHeight: 320 }}
             className={cn(isOver && 'ring-2 ring-primary/30')}
@@ -202,10 +257,17 @@ function BoardColumn({ column, tasks, onTaskClick, onAddClick, onDeleteTask, onE
                 )}
             >
                 {tasks.length === 0 ? (
-                    <div className="mt-3 h-32 flex flex-col items-center justify-center border-2 border-dashed border-[var(--border-color)] rounded-[var(--radius-md)] opacity-40">
-                        <Clock size={24} className="mb-2 text-text-muted" strokeWidth={1.5} />
-                        <p className="text-xs font-bold text-text-muted">No tasks</p>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={onAddClick}
+                        className="group mt-3 flex h-32 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border-2 border-dashed border-[var(--border-color)] text-[var(--text-muted)] transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                    >
+                        <Clock size={22} className="opacity-50 group-hover:opacity-100" strokeWidth={1.5} />
+                        <p className="text-xs font-bold">No tasks yet</p>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold opacity-0 transition-opacity group-hover:opacity-100">
+                            <Plus size={12} strokeWidth={3} /> Add task
+                        </span>
+                    </button>
                 ) : (
                     <SortableContext items={tasks.map(t => t._id)} strategy={verticalListSortingStrategy}>
                         {tasks.map((task) => (
@@ -237,6 +299,29 @@ function BoardColumn({ column, tasks, onTaskClick, onAddClick, onDeleteTask, onE
                 )}
             </div>
         </CrmKanbanColumn>
+    );
+}
+
+/** Column-shaped shimmer so the board keeps its layout while the first fetch resolves. */
+function TaskBoardSkeleton() {
+    return (
+        <div className="flex h-full items-start gap-4 overflow-x-auto pb-4">
+            {TASK_COLUMNS.map((column) => (
+                <div
+                    key={column.name}
+                    className="flex w-[300px] max-w-[300px] shrink-0 flex-col gap-3 rounded-[5px] border border-[var(--border-color)] p-2"
+                >
+                    <div className="h-14 animate-pulse rounded-[5px] bg-[var(--surface-dim)]" />
+                    {[0, 1].map((i) => (
+                        <div
+                            key={i}
+                            className="h-28 animate-pulse rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-dim)]"
+                            style={{ animationDelay: `${i * 100}ms` }}
+                        />
+                    ))}
+                </div>
+            ))}
+        </div>
     );
 }
 
@@ -567,12 +652,7 @@ export default function TasksPage() {
 
             <div className="flex-1 min-h-0 relative">
                 {loading ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-card/60 z-50 rounded-[var(--radius-md)]">
-                        <div className="flex flex-col items-center gap-4">
-                            <Loader2 size={40} className="animate-spin text-primary" strokeWidth={2.5} />
-                            <p className="text-xs font-bold text-text-muted">Loading tasks...</p>
-                        </div>
-                    </div>
+                    <TaskBoardSkeleton />
                 ) : (
                     <DndContext
                         sensors={sensors}

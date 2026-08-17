@@ -15,7 +15,7 @@ import { CRM_API_URL } from "@/lib/crm/config";
 import { CrmButton } from "@/components/crm/ui";
 import { cn } from "@/lib/utils";
 
-type VoiceProviderId = "twilio" | "readymode" | "elevenlabs";
+type VoiceProviderId = "twilio" | "readymode" | "elevenlabs" | "kommuno";
 
 type VoiceConfig = {
   activeProvider: VoiceProviderId;
@@ -39,6 +39,13 @@ type VoiceConfig = {
       apiKey?: string;
       agentId?: string;
       agentPhoneNumberId?: string;
+    };
+    kommuno: {
+      enabled?: boolean;
+      apiKey?: string;
+      apiUrl?: string;
+      callerId?: string;
+      agentPhone?: string;
     };
   };
 };
@@ -67,6 +74,12 @@ const PROVIDERS: {
     blurb: "AI voice agent outbound calls (via ElevenLabs + Twilio number).",
     docs: "https://elevenlabs.io/docs/api-reference/twilio/outbound-call",
   },
+  {
+    id: "kommuno",
+    name: "Kommuno",
+    blurb: "Indian cloud telephony / click-to-call. API details pending from Kommuno.",
+    docs: "https://kommuno.in",
+  },
 ];
 
 const INP =
@@ -85,6 +98,7 @@ const emptyConfig = (): VoiceConfig => ({
       authHeaderName: "Authorization",
     },
     elevenlabs: { enabled: false, apiKey: "", agentId: "", agentPhoneNumberId: "" },
+    kommuno: { enabled: false, apiKey: "", apiUrl: "", callerId: "", agentPhone: "" },
   },
 });
 
@@ -117,6 +131,10 @@ export default function VoiceCallingIntegrationPage() {
             elevenlabs: {
               ...emptyConfig().providers.elevenlabs,
               ...data.config.providers?.elevenlabs,
+            },
+            kommuno: {
+              ...emptyConfig().providers.kommuno,
+              ...data.config.providers?.kommuno,
             },
           },
         });
@@ -188,7 +206,7 @@ export default function VoiceCallingIntegrationPage() {
             >
               Readymode
             </a>
-            , or ElevenLabs as the active provider.
+            , ElevenLabs, or Kommuno as the active provider.
           </p>
         </div>
       </div>
@@ -541,6 +559,114 @@ export default function VoiceCallingIntegrationPage() {
                 </code>
                 . Link a Twilio number in the ElevenLabs phone numbers dashboard first.
               </p>
+            </div>
+          )}
+
+          {tab === "kommuno" && (
+            <div className="space-y-4">
+              <p className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <Info size={14} className="mt-0.5 shrink-0" />
+                Kommuno API docs/credentials are pending. Fields below are a placeholder shape —
+                update them once Kommuno shares their API reference.
+              </p>
+              <label className="inline-flex items-center gap-2 text-xs font-semibold">
+                <input
+                  type="checkbox"
+                  checked={!!config.providers.kommuno.enabled}
+                  onChange={(e) =>
+                    setConfig((c) => ({
+                      ...c,
+                      providers: {
+                        ...c.providers,
+                        kommuno: { ...c.providers.kommuno, enabled: e.target.checked },
+                      },
+                    }))
+                  }
+                />
+                Enable Kommuno
+              </label>
+              <div>
+                <label className={LBL}>API URL (click-to-call endpoint)</label>
+                <input
+                  className={INP}
+                  value={config.providers.kommuno.apiUrl || ""}
+                  onChange={(e) =>
+                    setConfig((c) => ({
+                      ...c,
+                      providers: {
+                        ...c.providers,
+                        kommuno: { ...c.providers.kommuno, apiUrl: e.target.value },
+                      },
+                    }))
+                  }
+                  placeholder="https://…"
+                />
+              </div>
+              <div>
+                <label className={LBL}>API key / token</label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <input
+                    type="password"
+                    className={cn(INP, "pl-9")}
+                    value={config.providers.kommuno.apiKey || ""}
+                    onChange={(e) =>
+                      setConfig((c) => ({
+                        ...c,
+                        providers: {
+                          ...c.providers,
+                          kommuno: { ...c.providers.kommuno, apiKey: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={LBL}>Caller ID (virtual number)</label>
+                  <input
+                    className={INP}
+                    value={config.providers.kommuno.callerId || ""}
+                    onChange={(e) =>
+                      setConfig((c) => ({
+                        ...c,
+                        providers: {
+                          ...c.providers,
+                          kommuno: { ...c.providers.kommuno, callerId: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder="+9198…"
+                  />
+                </div>
+                <div>
+                  <label className={LBL}>Your phone (click-to-call, optional)</label>
+                  <input
+                    className={INP}
+                    value={config.providers.kommuno.agentPhone || ""}
+                    onChange={(e) =>
+                      setConfig((c) => ({
+                        ...c,
+                        providers: {
+                          ...c.providers,
+                          kommuno: { ...c.providers.kommuno, agentPhone: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder="+9198…"
+                  />
+                </div>
+              </div>
+              <a
+                href="https://kommuno.in"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
+              >
+                Kommuno website <ExternalLink size={12} />
+              </a>
             </div>
           )}
         </div>

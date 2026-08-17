@@ -42,7 +42,7 @@ const EMPTY_DRAFT: Draft = {
 type Props = {
   open: boolean;
   onClose: () => void;
-  leadId: string;
+  leadId?: string;
   leadName?: string;
   onSuccess?: (property: any) => void;
 };
@@ -93,7 +93,7 @@ export default function AddPropertyModal({ open, onClose, leadId, leadName, onSu
           areaSqft: draft.areaSqft ? Number(draft.areaSqft) : undefined,
           status: draft.status,
           description: draft.description.trim() || undefined,
-          leadId,
+          ...(leadId ? { leadId } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -122,7 +122,7 @@ export default function AddPropertyModal({ open, onClose, leadId, leadName, onSu
             <div>
               <h3 className="text-sm font-semibold text-[var(--text-main)]">Add property</h3>
               <p className="text-xs text-[var(--text-muted)]">
-                {leadName ? `Linked to ${leadName}` : "Linked to this lead"}
+                {leadName ? `Linked to ${leadName}` : leadId ? "Linked to this lead" : "Not linked to a lead"}
               </p>
             </div>
           </div>

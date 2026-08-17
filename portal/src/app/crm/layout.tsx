@@ -3,7 +3,7 @@
 import AppShell from "@/components/suite/shell/AppShell";
 import { usePermissions } from "@/hooks/usePermissions";
 import LazyGlobalEmailComposer from "@/components/crm/email/composer/LazyGlobalEmailComposer";
-import { SalesCopilotWidget } from "@/components/crm/sales/SalesCopilotWidget";
+// import { SalesCopilotWidget } from "@/components/crm/sales/SalesCopilotWidget"; // floating AI button hidden — see below
 import CrmPrefetch from "@/components/crm/shell/CrmPrefetch";
 import { CrmThemeCustomizer } from "@/components/crm/ui/CrmThemeCustomizer";
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
@@ -100,7 +100,8 @@ export default function CRMLayout({
       <AppShell>{children}</AppShell>
       <CrmPrefetch />
       <LazyGlobalEmailComposer />
-      <SalesCopilotWidget />
+      {/* Sales Copilot floating AI button hidden for now — keep component, just don't render it */}
+      {/* <SalesCopilotWidget /> */}
       <CrmThemeCustomizer />
     </div>
   );

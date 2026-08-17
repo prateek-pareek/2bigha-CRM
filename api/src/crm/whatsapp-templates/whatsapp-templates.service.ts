@@ -10,6 +10,7 @@ import { Model, Types } from 'mongoose';
 import {
   WhatsAppTemplate,
   WhatsAppTemplateDocument,
+  WhatsAppTemplateStatus,
 } from './schemas/whatsapp-template.schema';
 import { Integration } from '../integrations/schemas/integration.schema';
 import { CreateWhatsAppTemplateDto } from './dto/create-whatsapp-template.dto';
@@ -220,6 +221,50 @@ export class WhatsAppTemplatesService {
     }
     await this.templateModel.deleteOne({ _id: template._id }).exec();
     return { success: true };
+  }
+
+  /**
+   * Records which AiSensy dashboard Campaign this template maps to. There's
+   * no confirmed public AiSensy endpoint to create/submit a template or
+   * check its approval status (see AiSensyClient's doc comment) — so this
+   * is a manual mapping step, not a network call. A DRAFT template moving
+   * into this state is nudged to PENDING so it doesn't look silently
+   * unfinished; flip it to APPROVED yourself (via `setStatus`) once you've
+   * confirmed in AiSensy's dashboard that the campaign is live.
+   */
+  async linkAiSensyCampaign(
+    id: string,
+    aisensyCampaignName: string,
+  ): Promise<WhatsAppTemplateDocument> {
+    const name = String(aisensyCampaignName || '').trim();
+    if (!name) {
+      throw new BadRequestException('aisensyCampaignName is required');
+    }
+    const template = await this.findOne(id);
+    template.aisensyCampaignName = name;
+    template.source = 'aisensy';
+    if (template.status === 'DRAFT') template.status = 'PENDING';
+    template.lastError = undefined;
+    await template.save();
+    return template;
+  }
+
+  /**
+   * Manually flips a template's status — used for the `aisensy` source
+   * where approval happens in AiSensy's own dashboard and can't be polled
+   * via API, so the operator confirms it here instead of an automated sync.
+   */
+  async setStatus(
+    id: string,
+    status: WhatsAppTemplateStatus,
+  ): Promise<WhatsAppTemplateDocument> {
+    const template = await this.findOne(id);
+    template.status = status;
+    if (status === 'APPROVED' && !template.approvedAt) {
+      template.approvedAt = new Date();
+    }
+    await template.save();
+    return template;
   }
 
   /** Submit a local draft to Meta for review via the message_templates create endpoint. */

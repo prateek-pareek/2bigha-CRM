@@ -9,6 +9,8 @@ import { ContactCreatePanel } from '@/components/crm/records/create/LeadCreatePa
 import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
 import CRMSavedViews, { SavedViewData } from '@/components/crm/segments/CRMSavedViews';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
+import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
+import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
 import { BulkEmailToolbarButton } from '@/components/crm/email/composer/BulkEmailToolbarButton';
 import { buildBulkEmailRecipients } from '@/lib/crm/bulk-email';
 import Pagination from '@/components/suite/shell/Pagination';
@@ -64,6 +66,7 @@ interface Contact {
   lastName: string;
   email: string;
   phone: string;
+  mobileNo?: string;
   organization?: any;
   jobTitle: string;
   createdAt: string;
@@ -154,6 +157,7 @@ export default function ContactsPage() {
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [emailContact, setEmailContact] = useState<Contact | null>(null);
+  const [callContact, setCallContact] = useState<Contact | null>(null);
   const [isBulkEmailOpen, setIsBulkEmailOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -775,6 +779,16 @@ export default function ContactsPage() {
                       <CrmTableActionMenu
                         onEdit={() => router.push(`/crm/contacts/${contact._id}`)}
                         onEmail={contact.email ? () => setEmailContact(contact) : undefined}
+                        onCall={
+                          (contact.mobileNo || contact.phone)
+                            ? () => setCallContact(contact)
+                            : undefined
+                        }
+                        onWhatsApp={
+                          contactWhatsappUrl(contact)
+                            ? () => window.open(contactWhatsappUrl(contact)!, '_blank', 'noopener,noreferrer')
+                            : undefined
+                        }
                         onDelete={
                           isAdmin
                             ? () => { setSelectedIds(new Set([contact._id])); setShowConfirmDelete(true); }
@@ -903,6 +917,16 @@ export default function ContactsPage() {
                       <CrmTableActionMenu
                         onEdit={() => router.push(`/crm/contacts/${contact._id}`)}
                         onEmail={contact.email ? () => setEmailContact(contact) : undefined}
+                        onCall={
+                          (contact.mobileNo || contact.phone)
+                            ? () => setCallContact(contact)
+                            : undefined
+                        }
+                        onWhatsApp={
+                          contactWhatsappUrl(contact)
+                            ? () => window.open(contactWhatsappUrl(contact)!, '_blank', 'noopener,noreferrer')
+                            : undefined
+                        }
                         onDelete={
                           isAdmin ? () => { setSelectedIds(new Set([contact._id])); setShowConfirmDelete(true); } : undefined
                         }
@@ -1034,6 +1058,14 @@ export default function ContactsPage() {
         recipientName={emailContact ? `${emailContact.firstName} ${emailContact.lastName}` : ''}
         module="contacts"
         entityId={emailContact?._id}
+      />
+      <CallLeadModal
+        open={!!callContact}
+        onClose={() => setCallContact(null)}
+        phone={callContact?.mobileNo || callContact?.phone}
+        leadId={callContact?._id}
+        leadName={callContact ? `${callContact.firstName} ${callContact.lastName}`.trim() : ''}
+        relatedType="Contact"
       />
       <SendEmailModal
         isOpen={isBulkEmailOpen && selectedIds.size > 0}

@@ -25,7 +25,6 @@ import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailT
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
 import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookPanel';
 import CrmPlaybookRecommendedBanner from '@/components/crm/automation/playbooks/CrmPlaybookRecommendedBanner';
-import CrmXOutreachPanel from '@/components/crm/sales/CrmXOutreachPanel';
 import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
@@ -525,13 +524,6 @@ export default function ContactDetailPage() {
         </div>
 
         <aside className="space-y-5 lg:min-w-0">
-          <CrmXOutreachPanel
-            entityType="Contact"
-            entityId={entityId}
-            record={contact}
-            onHandleSaved={() => void fetchContact()}
-            onDmLogged={() => void fetchActivities()}
-          />
           <FollowUpSequenceCard
             entityType="Contact"
             entityId={entityId}

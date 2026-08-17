@@ -8,13 +8,13 @@ import { CRM_API_URL } from "@/lib/crm/config";
 import { CrmButton } from "@/components/crm/ui";
 import { cn } from "@/lib/utils";
 
-type VoiceProviderId = "twilio" | "readymode" | "elevenlabs";
+type VoiceProviderId = "twilio" | "readymode" | "elevenlabs" | "kommuno";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   phone?: string | null;
-  leadId: string;
+  leadId?: string;
   leadName?: string;
   relatedType?: "Lead" | "Contact";
   onSuccess?: () => void;
@@ -79,8 +79,7 @@ export default function CallLeadModal({
         },
         body: JSON.stringify({
           toNumber: toNumber.trim(),
-          relatedTo: leadId,
-          relatedType,
+          ...(leadId ? { relatedTo: leadId, relatedType } : {}),
           leadName,
           ...(provider ? { provider } : {}),
         }),
@@ -161,7 +160,7 @@ export default function CallLeadModal({
               Provider (optional override)
             </label>
             <div className="flex flex-wrap gap-2">
-              {(["", "twilio", "readymode", "elevenlabs"] as const).map((id) => (
+              {(["", "twilio", "readymode", "elevenlabs", "kommuno"] as const).map((id) => (
                 <button
                   key={id || "default"}
                   type="button"

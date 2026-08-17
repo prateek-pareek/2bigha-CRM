@@ -372,8 +372,9 @@ const crmGroups = [
         name: 'Records',
         items: [
             { name: 'Contacts', href: '/crm/contacts', icon: CrmNavIcon.Contacts, permission: 'contacts:read' },
-            { name: 'Companies', href: '/crm/organizations', icon: CrmNavIcon.Companies, permission: 'organizations:read' },
-            { name: 'Website leads', href: '/crm/website-leads', icon: CrmNavIcon.World, permission: 'leads:read' },
+            // Hidden for now — do not remove. Re-enable by uncommenting.
+            // { name: 'Companies', href: '/crm/organizations', icon: CrmNavIcon.Companies, permission: 'organizations:read' },
+            // { name: 'Website leads', href: '/crm/website-leads', icon: CrmNavIcon.World, permission: 'leads:read' },
             { name: 'Clients', href: '/crm/clients', icon: CrmNavIcon.UserCheck, permission: 'clients:read', adminOnly: true },
             { name: 'Segments', href: '/crm/segments', icon: CrmNavIcon.Layers, permission: 'leads:read' },
         ],
@@ -389,6 +390,7 @@ const crmGroups = [
                 children: [
                     { name: 'Chats', href: '/crm/whatsapp', icon: CrmNavIcon.Message, permission: 'inbox:read' },
                     { name: 'Templates', href: '/crm/whatsapp/templates', icon: CrmNavIcon.FileText, permission: 'inbox:read' },
+                    { name: 'Campaigns', href: '/crm/whatsapp/campaigns', icon: Megaphone, permission: 'inbox:read' },
                 ],
             },
         ],

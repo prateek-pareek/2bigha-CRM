@@ -7,6 +7,7 @@ import {
 } from '../schemas/whatsapp-message.schema';
 import { Integration } from '../schemas/integration.schema';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
+import { AiSensyClient } from './aisensy-client.util';
 
 const META_API = 'https://graph.facebook.com/v18.0';
 
@@ -70,20 +71,46 @@ export class WhatsAppService {
     apiKey: string;
     phoneNumberId: string;
     businessAccountId?: string;
+    provider: 'meta' | 'aisensy';
+    sourceLabel?: string;
   } | null> {
     const config = await this.integrationModel
       .findOne({ type: 'whatsapp' })
       .lean()
       .exec();
-    if (!config?.apiKey || !config?.phoneNumberId || !config?.isActive)
-      return null;
+    if (!config?.apiKey || !config?.isActive) return null;
+    const provider: 'meta' | 'aisensy' =
+      config.provider === 'aisensy' ? 'aisensy' : 'meta';
+    // phoneNumberId only matters for the Meta path.
+    if (provider === 'meta' && !config.phoneNumberId) return null;
     return {
       apiKey: config.apiKey,
       phoneNumberId: config.phoneNumberId,
       businessAccountId: config.businessAccountId
         ? String(config.businessAccountId)
         : undefined,
+      provider,
+      sourceLabel: config.sourceLabel ? String(config.sourceLabel) : undefined,
     };
+  }
+
+  /**
+   * Flattens Meta-style template `components` (the shape
+   * `sendTemplateMessage` accepts and the inbox's template picker builds via
+   * `buildComponents()`) into the plain ordered `templateParams: string[]`
+   * AiSensy's Campaign API expects — i.e. every BODY/HEADER component's
+   * `parameters[].text`, in order.
+   */
+  private flattenParamsForAiSensy(
+    components?: WhatsAppTemplateSendComponent[],
+  ): string[] {
+    const out: string[] = [];
+    for (const component of components || []) {
+      for (const param of component.parameters || []) {
+        if (typeof param?.text === 'string') out.push(param.text);
+      }
+    }
+    return out;
   }
 
   async sendMessage(
@@ -100,6 +127,18 @@ export class WhatsAppService {
     const phone = to.replace(/\D/g, '');
     if (phone.length < 10)
       return { success: false, error: 'Invalid phone number' };
+
+    if (config.provider === 'aisensy') {
+      // AiSensy's public API is campaign/template-scoped only (see
+      // AiSensyClient's doc comment) — there's no confirmed endpoint for a
+      // free-text session reply, so we can't honor an arbitrary `body`
+      // here yet. Send a template instead via sendTemplateMessage().
+      return {
+        success: false,
+        error:
+          "Free-text replies aren't supported via AiSensy yet — send a template message instead (AiSensy's API is template/campaign-only).",
+      };
+    }
 
     try {
       const res = await fetch(`${META_API}/${config.phoneNumberId}/messages`, {
@@ -172,6 +211,50 @@ export class WhatsAppService {
     const language = String(params.language || '').trim();
     if (!templateName || !language) {
       return { success: false, error: 'Template name and language are required' };
+    }
+
+    if (config.provider === 'aisensy') {
+      // For AiSensy, `params.name` is expected to be the AiSensy dashboard
+      // Campaign name this template maps to (WhatsAppTemplate.aisensyCampaignName)
+      // — see AiSensyClient's doc comment for why there's no template-id
+      // lookup here.
+      const client = new AiSensyClient(config.apiKey);
+      const result = await client.sendCampaignMessage({
+        destination: phone,
+        campaignName: templateName,
+        source: config.sourceLabel,
+        templateParams: this.flattenParamsForAiSensy(params.components),
+      });
+
+      const body =
+        String(params.bodyPreview || '').trim() ||
+        `[Template] ${templateName} (${language})`;
+
+      if (!result.success) {
+        this.logger.error(`AiSensy template send failed: ${result.error}`);
+        return { success: false, error: result.error || 'Template send failed' };
+      }
+
+      const msgId = result.raw?.messageId ? String(result.raw.messageId) : undefined;
+      const saved = await this.messageModel.create({
+        waId: phone,
+        direction: 'outbound',
+        body,
+        messageId: msgId,
+        sentBy: params.userId ? new Types.ObjectId(params.userId) : undefined,
+        module: params.module,
+        entityId: params.entityId
+          ? new Types.ObjectId(params.entityId)
+          : undefined,
+        status: 'sent',
+        meta: {
+          ...result.raw,
+          provider: 'aisensy',
+          template: { name: templateName, language, components: params.components || [] },
+        },
+      });
+      this.emitWhatsAppEvent(phone, saved);
+      return { success: true, messageId: msgId };
     }
 
     try {
@@ -288,6 +371,13 @@ export class WhatsAppService {
     const config = await this.getConfig();
     if (!config) {
       return { success: false, error: 'WhatsApp not configured or inactive' };
+    }
+    if (config.provider === 'aisensy') {
+      return {
+        success: false,
+        error:
+          "AiSensy doesn't expose a public template-list API — manage & approve templates in the AiSensy dashboard, then map each one to a Campaign name under Settings → WhatsApp templates.",
+      };
     }
     if (!config.businessAccountId) {
       return {

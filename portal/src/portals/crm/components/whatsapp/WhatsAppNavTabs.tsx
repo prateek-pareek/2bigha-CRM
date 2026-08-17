@@ -1,18 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { MessageCircle, FileText } from "lucide-react";
+import { MessageCircle, FileText, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  active: "chats" | "templates";
+  active: "chats" | "templates" | "campaigns";
 };
 
-/** Sub-nav shared by the two pages under the top-level "WhatsApp" sidebar item. */
+/** Sub-nav shared by the pages under the top-level "WhatsApp" sidebar item. */
 export default function WhatsAppNavTabs({ active }: Props) {
   const tabs = [
     { id: "chats" as const, label: "Chats", href: "/crm/whatsapp", icon: MessageCircle },
     { id: "templates" as const, label: "Templates", href: "/crm/whatsapp/templates", icon: FileText },
+    { id: "campaigns" as const, label: "Campaigns", href: "/crm/whatsapp/campaigns", icon: Megaphone },
   ];
 
   return (

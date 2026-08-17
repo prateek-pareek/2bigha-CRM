@@ -17,7 +17,7 @@ export type WhatsAppTemplateCategory =
   | 'UTILITY'
   | 'AUTHENTICATION';
 
-export type WhatsAppTemplateSource = 'local' | 'meta';
+export type WhatsAppTemplateSource = 'local' | 'meta' | 'aisensy';
 
 /**
  * A WhatsApp message template — either authored locally and submitted to
@@ -70,8 +70,19 @@ export class WhatsAppTemplate {
   @Prop()
   qualityScore?: string; // Meta's quality_score.score, when returned
 
-  @Prop({ enum: ['local', 'meta'], default: 'local' })
+  @Prop({ enum: ['local', 'meta', 'aisensy'], default: 'local' })
   source: WhatsAppTemplateSource;
+
+  /**
+   * The Campaign name this template maps to in the AiSensy dashboard
+   * (Manage → Campaigns) — required to send this template via AiSensy's
+   * Campaign API (see AiSensyClient). AiSensy doesn't expose a public
+   * create/approve-template endpoint, so unlike `submit()` (Meta), linking
+   * this is a manual step: create & get the template approved in AiSensy's
+   * dashboard first, then record the mapping here.
+   */
+  @Prop()
+  aisensyCampaignName?: string;
 
   @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   createdBy?: Types.ObjectId;

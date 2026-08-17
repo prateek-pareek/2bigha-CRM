@@ -22,7 +22,8 @@ export interface WhatsAppTemplateRecord {
   metaTemplateId?: string;
   rejectionReason?: string;
   qualityScore?: string;
-  source: "local" | "meta";
+  source: "local" | "meta" | "aisensy";
+  aisensyCampaignName?: string;
   submittedAt?: string;
   approvedAt?: string;
   lastSyncedAt?: string;
