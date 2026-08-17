@@ -28,6 +28,15 @@ function pipelineIdEq(a: unknown, b: unknown): boolean {
   return String(a ?? '') === String(b ?? '');
 }
 
+/** Formats an ISO date string/Date for a native `<input type="datetime-local">`'s `defaultValue` (local time, no seconds/timezone). */
+function toLocalDatetimeInputValue(value?: string | Date | null): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Ensures edit forms can show a selected value before org/contact lists finish loading or for legacy rows. */
 function crmSelectOptionsWithLegacyValue(
   base: { label: string; value: string }[],
@@ -550,6 +559,14 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
         payload.sourceMetadata = sourceMetadata;
       }
       if (payload.relatedService === '') payload.relatedService = null;
+      if (payload.nextFollowUpAt) {
+        // Input value is a bare "YYYY-MM-DDTHH:mm" (browser-local, no timezone) —
+        // resolve it in the browser's local time before sending as UTC ISO.
+        const parsed = new Date(payload.nextFollowUpAt);
+        payload.nextFollowUpAt = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+      } else if (payload.nextFollowUpAt === '') {
+        payload.nextFollowUpAt = null;
+      }
     }
 
     if (type === 'Contact') {
@@ -713,7 +730,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                     </div>
                   </div>
                 )}
-                {(sl('pipeline') || sl('stage') || sl('status') || sl('leadOwner') || sl('source')) && (
+                {(sl('pipeline') || sl('stage') || sl('status') || sl('leadOwner') || sl('source') || sl('nextFollowUpAt')) && (
                   <div className="bg-[#fafbfc] rounded-[3px] p-4 border border-[#dfe1e6]">
                     <h4 className="text-xs font-semibold text-[#5e6c84] mb-4">Lead Information</h4>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-4">
@@ -760,6 +777,14 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                         ) : (
                           <FormItem label="Lead Owner" name="leadOwner" defaultValue={initialData.leadOwner} placeholder="First Last" />
                         ))}
+                      {sl('nextFollowUpAt') && (
+                        <FormItem
+                          label="Next Follow-up Date & Time"
+                          name="nextFollowUpAt"
+                          type="datetime-local"
+                          defaultValue={toLocalDatetimeInputValue(initialData.nextFollowUpAt)}
+                        />
+                      )}
                       {sl('source') && (
                         <div className="col-span-2 space-y-1">
                           <FormItem

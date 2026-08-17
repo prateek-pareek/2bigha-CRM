@@ -186,6 +186,18 @@ export default function CRMLeadRecordFields({
         return lead.stage || '—';
       case 'status':
         return lead.status || '—';
+      case 'nextFollowUpAt': {
+        if (!lead.nextFollowUpAt) return '—';
+        const due = new Date(lead.nextFollowUpAt);
+        const overdue = due.getTime() < Date.now();
+        return (
+          <div className={`flex items-center gap-2 ${overdue ? 'text-red-600' : ''}`}>
+            <Calendar size={16} className="shrink-0" />
+            {due.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+            {overdue ? <span className="text-xs font-bold uppercase">Overdue</span> : null}
+          </div>
+        );
+      }
       case 'createdAt':
         return (
           <div className="flex items-center gap-2 text-text-muted font-medium text-sm">
@@ -253,6 +265,7 @@ export default function CRMLeadRecordFields({
       pipeline: 'Pipeline',
       stage: 'Stage',
       status: 'Status',
+      nextFollowUpAt: 'Next Follow-up',
       leadScore: 'Lead score',
       createdAt: 'Created',
     };

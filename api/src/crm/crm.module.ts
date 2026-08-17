@@ -116,6 +116,7 @@ import { VoiceCallingService } from './integrations/voice-calling.service';
 import { VoiceCallingController } from './integrations/voice-calling.controller';
 import { WhatsAppController } from './integrations/whatsapp.controller';
 import { WhatsAppWebhookController } from './integrations/whatsapp-webhook.controller';
+import { AiSensyWebhookController } from './integrations/aisensy-webhook.controller';
 import { Workflow, WorkflowSchema } from './schemas/workflow.schema';
 import {
   WorkflowExecution,
@@ -215,6 +216,7 @@ import { InboxPushService } from './inbox/inbox-push.service';
 import { InboxPushController } from './inbox/inbox-push.controller';
 import { InboxIdleService } from './inbox/inbox-idle.service';
 import { CrmCalendarCronService } from './calendar/crm-calendar-cron.service';
+import { LeadFollowUpReminderCronService } from './records/lead-followup-reminder-cron.service';
 import { CrmCalendarSyncService } from './calendar/crm-calendar-sync.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { User, UserSchema } from '../users/schemas/user.schema';
@@ -427,6 +429,7 @@ import {
     EmailUnsubscribeController,
     WhatsAppController,
     WhatsAppWebhookController,
+    AiSensyWebhookController,
     WorkflowsController,
     LeadEngagementAutomationController,
     DealEngagementAutomationController,
@@ -497,6 +500,7 @@ import {
     InboxClassificationService,
     InboxSyncCronService,
     CrmCalendarCronService,
+    LeadFollowUpReminderCronService,
     CrmCalendarSyncService,
     InboxIdleService,
     InboxPushService,

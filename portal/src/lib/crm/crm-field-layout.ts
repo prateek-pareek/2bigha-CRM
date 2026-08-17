@@ -43,6 +43,7 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'stage', label: 'Stage' },
   { key: 'status', label: 'Status (legacy)' },
   { key: 'callStatus', label: 'Call Status' },
+  { key: 'nextFollowUpAt', label: 'Next Follow-up' },
   { key: 'leadScore', label: 'Lead score', recordOnly: true },
   { key: 'createdAt', label: 'Created', recordOnly: true },
 ];

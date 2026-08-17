@@ -2807,6 +2807,10 @@ export class CRMService {
     if (typeof dto.notes === 'string') {
       dto.notes = dto.notes.trim() || undefined;
     }
+    if (dto.nextFollowUpAt !== undefined) {
+      const parsed = dto.nextFollowUpAt ? new Date(dto.nextFollowUpAt) : null;
+      dto.nextFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
+    }
     if (dto.phone) dto.phone = this.sanitizePhone(dto.phone);
     if (dto.mobileNo) dto.mobileNo = this.sanitizePhone(dto.mobileNo);
     if (dto.twitterHandle !== undefined) {
@@ -3203,6 +3207,12 @@ export class CRMService {
     if (dto.twitterHandle !== undefined) {
       const h = normalizeTwitterHandle(dto.twitterHandle);
       dto.twitterHandle = h || undefined;
+    }
+    if (dto.nextFollowUpAt !== undefined) {
+      const parsed = dto.nextFollowUpAt ? new Date(dto.nextFollowUpAt) : null;
+      dto.nextFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+      // A changed/cleared follow-up date needs a fresh reminder cycle.
+      dto.followUpReminderSentAt = null;
     }
 
     const leadAssocKeys = [

@@ -157,6 +157,20 @@ export class Lead {
   notes?: string;
 
   /**
+   * Optional date/time to follow up with this lead. Drives the reminder
+   * notification fired by LeadFollowUpReminderCronService (see crm/records/lead-followup-reminder-cron.service.ts).
+   */
+  @Prop()
+  nextFollowUpAt?: Date;
+
+  /**
+   * Bookkeeping only — timestamp the follow-up reminder was last sent.
+   * Cleared whenever `nextFollowUpAt` changes so a new reminder fires for the new date.
+   */
+  @Prop()
+  followUpReminderSentAt?: Date;
+
+  /**
    * Onboarding checklist state for this lead — keyed by the `label` of an active
    * `LeadPicklistOption` with listKey 'checklistItem' (see Settings > Lead Type & Group).
    * Absent/false = not done. Shown on the Lead detail page only.
@@ -260,6 +274,8 @@ LeadSchema.index({ leadOwner: 1, createdAt: -1 });
 LeadSchema.index({ createdBy: 1, createdAt: -1 });
 /** Fast path for "shared with me" scoped lists. */
 LeadSchema.index({ sharedWith: 1, createdAt: -1 });
+/** Follow-up reminder cron scans for due/upcoming nextFollowUpAt. */
+LeadSchema.index({ nextFollowUpAt: 1 });
 /** Helps email-based search and dedupe checks on huge datasets. */
 LeadSchema.index({ email: 1, createdAt: -1 });
 /** Platform opportunities list (Upwork, Freelancer, etc.). */
