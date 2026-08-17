@@ -1146,8 +1146,13 @@ export class ReportingService {
           f[ownerField] = owner;
         }
       }
-      
-      if (customFilters && customFilters.length > 0) {
+
+      // The Overview report's property filter only exposes Deals-module fields
+      // (see CRMFilterBar module="deals" in ReportsShell), so only apply it to
+      // deal-domain queries. Applying it to the Lead/count queries too would match
+      // against fields Leads don't have (stage values, dealValue, …) and silently
+      // zero out lead-derived numbers whenever any filter is active.
+      if (ownerField === 'dealOwner' && customFilters && customFilters.length > 0) {
         const ands = [];
         for (const crit of customFilters.slice(0, 20)) {
           if (!crit.property || !crit.operator) continue;

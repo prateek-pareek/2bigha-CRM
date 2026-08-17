@@ -179,12 +179,20 @@ export default function ReportsShell({ slug, onRefresh, children }: ReportsShell
       />
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <CRMFilterBar
-          module="deals"
-          filters={filters}
-          onChange={setFilters}
-          onClear={() => setFilters([])}
-        />
+        {/*
+          Property filtering only flows into the Overview report's `/crm/dashboard`
+          call (see ReportsShellContext.filters below) — every other report page
+          ignores it. Restricting the control to Overview avoids showing a "Deals"
+          field picker on Lead/Email/Forecast pages where it silently does nothing.
+        */}
+        {slug === "overview" && (
+          <CRMFilterBar
+            module="deals"
+            filters={filters}
+            onChange={setFilters}
+            onClear={() => setFilters([])}
+          />
+        )}
         <Dropdown
           value={period === "custom" ? "custom" : period}
           onChange={setPeriod}
