@@ -1,6 +1,25 @@
 const AISENSY_API_BASE =
   process.env.AISENSY_API_BASE_URL || 'https://backend.aisensy.com';
 
+/**
+ * AiSensy's "Project API" — a separate surface from the Campaign API base
+ * above, hit only by `sendSessionMessage()`. Per AiSensy's Project API docs
+ * (https://aisensy.stoplight.io/docs/project-api/effdec8a4894f-send-message):
+ * `POST {base}/project-apis/v1/project/{projectId}/messages`, authenticated
+ * via the `X-AiSensy-Project-API-Pwd` header, body shaped like Meta's own
+ * Cloud API (`messaging_product`/`recipient_type`/`to`/`type`/`text.body`).
+ * This is the only confirmed way to send a free-text/session WhatsApp
+ * message through AiSensy — the Campaign API above is template-only.
+ *
+ * The `projectId` + "Project API Password" are a distinct credential pair
+ * from the Campaign API key (found under AiSensy → a project's Settings →
+ * API, not the account-level Manage page) — not verified end-to-end against
+ * live AiSensy traffic yet, so treat send failures here as a signal to
+ * double check those credentials before assuming this client is wrong.
+ */
+const AISENSY_PROJECT_API_BASE =
+  process.env.AISENSY_PROJECT_API_BASE_URL || 'https://apis.aisensy.com';
+
 export type AiSensySendParams = {
   /** Digits-only destination phone number, e.g. "919876543210". */
   destination: string;
@@ -47,19 +66,93 @@ export type AiSensySendResult = {
  *    named "Campaign" there. This module only stores that mapping
  *    (`WhatsAppTemplate.aisensyCampaignName`) — see whatsapp-templates
  *    service's `linkAiSensyCampaign()`.
- *  - There is no confirmed free-text/session-message endpoint, so outbound
- *    replies to an aisensy-provider number are template-only for now (see
- *    the `provider === 'aisensy'` branch in `WhatsAppService.sendMessage`).
+ *  - Free-text/session-message sends go through a *different* AiSensy
+ *    surface — the Project API (see `sendSessionMessage()` and
+ *    `AISENSY_PROJECT_API_BASE` below), which needs its own `projectId` +
+ *    "Project API Password" credential pair, not the Campaign API key
+ *    above. Until those are configured, outbound replies to an
+ *    aisensy-provider number stay template-only (see the
+ *    `provider === 'aisensy'` branch in `WhatsAppService.sendMessage`).
  *  - The inbound webhook payload shape (delivery/read status, replies) is
  *    not published — `aisensy-webhook.controller.ts` logs the raw payload
  *    and does a best-effort parse so it's easy to tighten up once real
  *    traffic / AiSensy's own docs for the account are in hand.
  *
- * Revisit all three once real AiSensy credentials are available — the send
- * call below is the one part that's confirmed correct against public docs.
+ * Revisit the last two once real AiSensy credentials are available — the
+ * campaign-send call below is the one part fully confirmed against public
+ * docs; `sendSessionMessage()`'s Project API shape is inferred from AiSensy's
+ * Stoplight reference and not yet exercised against live traffic.
  */
 export class AiSensyClient {
-  constructor(private readonly apiKey: string) {}
+  constructor(
+    private readonly apiKey: string,
+    /** Project API credentials — only needed for `sendSessionMessage()`. */
+    private readonly projectApi?: { projectId: string; projectApiPassword: string },
+  ) {}
+
+  /**
+   * Sends a free-text/session WhatsApp message via AiSensy's Project API.
+   * Requires `projectId`/`projectApiPassword` to have been passed to the
+   * constructor (Settings → Integrations → WhatsApp → AiSensy). Unlike
+   * `sendCampaignMessage`, this only works within WhatsApp's 24h customer
+   * service window (i.e. the recipient must have messaged in recently) —
+   * that's a WhatsApp platform rule, not an AiSensy-specific one.
+   */
+  async sendSessionMessage(params: {
+    destination: string;
+    body: string;
+  }): Promise<AiSensySendResult> {
+    if (!this.projectApi?.projectId || !this.projectApi?.projectApiPassword) {
+      return {
+        success: false,
+        error:
+          'AiSensy Project API credentials are not configured — add Project ID and Project API Password under Settings → Integrations → WhatsApp to enable free-text sends.',
+      };
+    }
+    const destination = String(params.destination || '').replace(/\D/g, '');
+    if (destination.length < 10) {
+      return { success: false, error: 'Invalid destination phone number' };
+    }
+    const body = String(params.body || '').trim();
+    if (!body) return { success: false, error: 'Message body is required' };
+
+    try {
+      const res = await fetch(
+        `${AISENSY_PROJECT_API_BASE}/project-apis/v1/project/${encodeURIComponent(this.projectApi.projectId)}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-AiSensy-Project-API-Pwd': this.projectApi.projectApiPassword,
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: destination,
+            type: 'text',
+            text: { body },
+          }),
+        },
+      );
+
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success === false || data?.error) {
+        return {
+          success: false,
+          raw: data,
+          error:
+            data?.error?.message ||
+            data?.message ||
+            data?.error ||
+            `AiSensy session send failed (HTTP ${res.status})`,
+        };
+      }
+      return { success: true, raw: data };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'AiSensy session send error' };
+    }
+  }
 
   async sendCampaignMessage(
     params: AiSensySendParams,

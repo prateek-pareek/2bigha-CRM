@@ -318,13 +318,52 @@ export class WhatsAppCampaignsService {
   }
 
   /**
+   * Safety net for the in-process send loop described on `executeCampaign()`
+   * — a server restart mid-send leaves a campaign parked in `status:
+   * 'sending'` with recipients still `pending` and no code left running to
+   * finish them. Every minute, pick up any such campaign whose `updatedAt`
+   * hasn't moved in STALE_AFTER_MS (i.e. nothing has completed a send
+   * recently, since every send updates the doc) and re-launch it.
+   *
+   * This is a heuristic, not a distributed lock: on a multi-instance
+   * deployment two instances could both decide the same campaign is stale at
+   * once. Acceptable here (this CRM runs a single API instance) but
+   * revisit with a proper lock/queue if that changes.
+   */
+  private static readonly STALE_AFTER_MS = 3 * 60 * 1000;
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async resumeStuckCampaigns() {
+    const staleBefore = new Date(Date.now() - WhatsAppCampaignsService.STALE_AFTER_MS);
+    const stuck = await this.campaignModel
+      .find({
+        status: 'sending',
+        updatedAt: { $lte: staleBefore },
+        recipients: { $elemMatch: { status: 'pending' } },
+      })
+      .limit(5)
+      .exec();
+    for (const camp of stuck) {
+      const lastProgress = (camp as unknown as { updatedAt?: Date }).updatedAt;
+      this.logger.warn(
+        `Campaign ${camp._id} looked stuck in 'sending' (no progress since ${lastProgress?.toISOString()}) — resuming.`,
+      );
+      void this.executeCampaign(String(camp._id)).catch((e) =>
+        this.logger.error(`Stuck campaign ${camp._id} failed to resume: ${e?.message || e}`),
+      );
+    }
+  }
+
+  /**
    * Sends the campaign's pending recipients one at a time, spaced out per
    * `throttlePerMinute`, checking the campaign's live status between every
    * send so a `pause()`/`cancel()` call takes effect promptly instead of
    * only at the next launch. Runs fire-and-forget from launch()/resume()/
    * the scheduler — this is in-process, not a durable job queue, so a
-   * server restart mid-send leaves the remaining recipients `pending` for a
-   * manual resume rather than picking back up automatically.
+   * server restart mid-send leaves the remaining recipients `pending` until
+   * `resumeStuckCampaigns()` (below) notices no progress has been made in a
+   * while and re-launches it; that's a heuristic safety net, not a true
+   * job queue with delivery guarantees.
    */
   private async executeCampaign(campaignId: string): Promise<void> {
     const config = await this.getAiSensyConfig();

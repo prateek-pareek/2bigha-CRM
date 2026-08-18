@@ -14,6 +14,9 @@ export default function WhatsAppIntegrationPage() {
     phoneNumberId: '',
     businessAccountId: '',
     sourceLabel: '2Bigha CRM',
+    appSecret: '',
+    aisensyProjectId: '',
+    aisensyProjectApiPassword: '',
     isActive: false,
   });
   const [loading, setLoading] = useState(false);
@@ -148,44 +151,92 @@ export default function WhatsAppIntegrationPage() {
               </div>
 
               {isMeta ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-text-muted px-1">Phone Number ID</label>
-                    <input
-                      type="text"
-                      className="w-full px-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
-                      placeholder="1234567890..."
-                      value={config.phoneNumberId}
-                      onChange={(e) => setConfig({ ...config, phoneNumberId: e.target.value })}
-                    />
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-text-muted px-1">Phone Number ID</label>
+                      <input
+                        type="text"
+                        className="w-full px-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
+                        placeholder="1234567890..."
+                        value={config.phoneNumberId}
+                        onChange={(e) => setConfig({ ...config, phoneNumberId: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-text-muted px-1">Business Account ID</label>
+                      <input
+                        type="text"
+                        className="w-full px-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
+                        placeholder="0987654321..."
+                        value={config.businessAccountId}
+                        onChange={(e) => setConfig({ ...config, businessAccountId: e.target.value })}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-text-muted px-1">Business Account ID</label>
-                    <input
-                      type="text"
-                      className="w-full px-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
-                      placeholder="0987654321..."
-                      value={config.businessAccountId}
-                      onChange={(e) => setConfig({ ...config, businessAccountId: e.target.value })}
-                    />
+                    <label className="text-xs font-black text-text-muted px-1">App Secret</label>
+                    <div className="relative">
+                      <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
+                      <input
+                        type="password"
+                        className="w-full pl-12 pr-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
+                        placeholder="From Meta App Dashboard → Settings → Basic"
+                        value={config.appSecret}
+                        onChange={(e) => setConfig({ ...config, appSecret: e.target.value })}
+                      />
+                    </div>
+                    <p className="px-1 text-[11px] text-text-muted">
+                      Used to verify that inbound webhook messages genuinely came from Meta. Strongly
+                      recommended — without it, the webhook accepts any POST unverified.
+                    </p>
                   </div>
-                </div>
+                </>
               ) : (
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-text-muted px-1">Source label</label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
-                    placeholder="2Bigha CRM"
-                    value={config.sourceLabel}
-                    onChange={(e) => setConfig({ ...config, sourceLabel: e.target.value })}
-                  />
+                <>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-text-muted px-1">Source label</label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
+                      placeholder="2Bigha CRM"
+                      value={config.sourceLabel}
+                      onChange={(e) => setConfig({ ...config, sourceLabel: e.target.value })}
+                    />
+                    <p className="px-1 text-[11px] text-text-muted">
+                      Sent as AiSensy&apos;s attribution tag on every campaign send. Templates &amp; their
+                      approval still happen manually in the AiSensy dashboard — map each one to a campaign
+                      under WhatsApp → Templates.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-text-muted px-1">Project ID (optional)</label>
+                      <input
+                        type="text"
+                        className="w-full px-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
+                        placeholder="From AiSensy project Settings → API"
+                        value={config.aisensyProjectId}
+                        onChange={(e) => setConfig({ ...config, aisensyProjectId: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-text-muted px-1">Project API Password (optional)</label>
+                      <input
+                        type="password"
+                        className="w-full px-4 py-3 bg-surface-dim border border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-[var(--primary)]/15 outline-none transition-all"
+                        placeholder="Separate from the Campaign API key above"
+                        value={config.aisensyProjectApiPassword}
+                        onChange={(e) => setConfig({ ...config, aisensyProjectApiPassword: e.target.value })}
+                      />
+                    </div>
+                  </div>
                   <p className="px-1 text-[11px] text-text-muted">
-                    Sent as AiSensy&apos;s attribution tag on every campaign send. Templates &amp; their
-                    approval still happen manually in the AiSensy dashboard — map each one to a campaign
-                    under WhatsApp → Templates.
+                    Enables free-text replies from the WhatsApp inbox (AiSensy&apos;s Project API — a
+                    different credential pair than the Campaign API key above). Leave blank to keep
+                    replies template-only.
                   </p>
-                </div>
+                </>
               )}
             </div>
 
@@ -209,7 +260,7 @@ export default function WhatsAppIntegrationPage() {
             </div>
           </form>
 
-          {isMeta && (
+          {(isMeta || (config.aisensyProjectId && config.aisensyProjectApiPassword)) && (
             <div className="bg-emerald-50 border border-emerald-100 rounded-[var(--crm-radius-ui)] p-8">
               <h3 className="text-lg font-black text-emerald-900 mb-2 uppercase tracking-tight">Test Integration</h3>
               <p className="text-emerald-700 text-sm font-medium mb-6">Send a test message to verify your credentials are correct.</p>
@@ -229,16 +280,23 @@ export default function WhatsAppIntegrationPage() {
                   {testing ? 'Sending...' : <><Send size={16} /> Send Test</>}
                 </button>
               </div>
+              {!isMeta && (
+                <p className="text-emerald-700/80 text-[11px] font-medium mt-4">
+                  Note: this only works within WhatsApp&apos;s 24h customer-service window (the recipient
+                  must have messaged your number recently) — that&apos;s a WhatsApp platform rule.
+                </p>
+              )}
             </div>
           )}
 
-          {!isMeta && (
+          {!isMeta && !(config.aisensyProjectId && config.aisensyProjectApiPassword) && (
             <div className="bg-amber-50 border border-amber-100 rounded-[var(--crm-radius-ui)] p-8">
-              <h3 className="text-lg font-black text-amber-900 mb-2 uppercase tracking-tight">Test send isn&apos;t wired up yet</h3>
+              <h3 className="text-lg font-black text-amber-900 mb-2 uppercase tracking-tight">Test send needs Project API credentials</h3>
               <p className="text-amber-800 text-sm font-medium">
-                AiSensy&apos;s API is campaign/template-scoped — there&apos;s no generic test-message
-                endpoint. Once a template is mapped to a campaign under WhatsApp → Templates, send it from
-                the WhatsApp inbox or a Campaign to verify the connection.
+                Without a Project ID + Project API Password above, AiSensy only supports
+                campaign/template-scoped sends — there&apos;s no generic test-message endpoint. Add those
+                two fields to enable a test send here, or map a template to a campaign under WhatsApp →
+                Templates and send it from the WhatsApp inbox or a Campaign instead.
               </p>
             </div>
           )}

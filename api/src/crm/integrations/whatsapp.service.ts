@@ -73,6 +73,8 @@ export class WhatsAppService {
     businessAccountId?: string;
     provider: 'meta' | 'aisensy';
     sourceLabel?: string;
+    aisensyProjectId?: string;
+    aisensyProjectApiPassword?: string;
   } | null> {
     const config = await this.integrationModel
       .findOne({ type: 'whatsapp' })
@@ -91,6 +93,12 @@ export class WhatsAppService {
         : undefined,
       provider,
       sourceLabel: config.sourceLabel ? String(config.sourceLabel) : undefined,
+      aisensyProjectId: config.aisensyProjectId
+        ? String(config.aisensyProjectId)
+        : undefined,
+      aisensyProjectApiPassword: config.aisensyProjectApiPassword
+        ? String(config.aisensyProjectApiPassword)
+        : undefined,
     };
   }
 
@@ -129,15 +137,44 @@ export class WhatsAppService {
       return { success: false, error: 'Invalid phone number' };
 
     if (config.provider === 'aisensy') {
-      // AiSensy's public API is campaign/template-scoped only (see
-      // AiSensyClient's doc comment) — there's no confirmed endpoint for a
-      // free-text session reply, so we can't honor an arbitrary `body`
-      // here yet. Send a template instead via sendTemplateMessage().
-      return {
-        success: false,
-        error:
-          "Free-text replies aren't supported via AiSensy yet — send a template message instead (AiSensy's API is template/campaign-only).",
-      };
+      // Free-text sends go through AiSensy's separate Project API, which
+      // needs its own projectId/projectApiPassword credential pair (see
+      // AiSensyClient.sendSessionMessage's doc comment). Without those
+      // configured, fall back to the old template-only guidance.
+      if (!config.aisensyProjectId || !config.aisensyProjectApiPassword) {
+        return {
+          success: false,
+          error:
+            "Free-text replies need AiSensy's Project API credentials — add a Project ID and Project API Password under Settings → Integrations → WhatsApp, or send a template message instead.",
+        };
+      }
+
+      const client = new AiSensyClient(config.apiKey, {
+        projectId: config.aisensyProjectId,
+        projectApiPassword: config.aisensyProjectApiPassword,
+      });
+      const result = await client.sendSessionMessage({ destination: phone, body });
+      if (!result.success) {
+        this.logger.error(`AiSensy session send failed: ${result.error}`);
+        return { success: false, error: result.error || 'Send failed' };
+      }
+
+      const msgId = result.raw?.messages?.[0]?.id
+        ? String(result.raw.messages[0].id)
+        : undefined;
+      const saved = await this.messageModel.create({
+        waId: phone,
+        direction: 'outbound',
+        body,
+        messageId: msgId,
+        sentBy: userId ? new Types.ObjectId(userId) : undefined,
+        module,
+        entityId: entityId ? new Types.ObjectId(entityId) : undefined,
+        status: 'sent',
+        meta: { ...result.raw, provider: 'aisensy' },
+      });
+      this.emitWhatsAppEvent(phone, saved);
+      return { success: true, messageId: msgId };
     }
 
     try {
@@ -449,6 +486,41 @@ export class WhatsAppService {
         error: e?.message || 'Failed to sync templates',
       };
     }
+  }
+
+  /**
+   * Applies a delivery/read/failed receipt from the provider's webhook to
+   * the previously-saved outbound message (matched by `messageId`) and
+   * pushes a realtime update so the inbox's tick marks refresh live.
+   * `status` is normalized to the schema's enum — an unrecognized value is
+   * logged and dropped rather than persisted, so a provider quirk can't
+   * silently poison the field with junk.
+   */
+  async updateMessageStatus(
+    messageId: string,
+    status: string,
+    meta?: Record<string, any>,
+  ): Promise<void> {
+    const normalized = String(status || '').toLowerCase();
+    if (!['sent', 'delivered', 'read', 'failed'].includes(normalized)) {
+      this.logger.warn(`Ignoring unrecognized WhatsApp status "${status}" for ${messageId}`);
+      return;
+    }
+
+    const message = await this.messageModel.findOne({ messageId }).exec();
+    if (!message) return; // status update for a message we don't have (or an inbound echo)
+
+    // Never downgrade — a late/out-of-order 'sent' receipt shouldn't
+    // overwrite an already-recorded 'delivered'/'read'.
+    const rank = { sent: 0, delivered: 1, read: 2, failed: 3 } as const;
+    if ((rank[message.status as keyof typeof rank] ?? 0) > rank[normalized as keyof typeof rank]) {
+      return;
+    }
+
+    message.status = normalized;
+    if (meta) message.meta = { ...(message.meta || {}), lastStatusEvent: meta };
+    await message.save();
+    this.emitWhatsAppEvent(message.waId, message);
   }
 
   async saveIncoming(
