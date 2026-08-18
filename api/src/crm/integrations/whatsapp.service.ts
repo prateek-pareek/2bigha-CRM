@@ -8,6 +8,7 @@ import {
 import { Integration } from '../schemas/integration.schema';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { AiSensyClient } from './aisensy-client.util';
+import { StorageService } from '../../storage/storage.service';
 
 const META_API = 'https://graph.facebook.com/v18.0';
 
@@ -49,6 +50,7 @@ export class WhatsAppService {
     @InjectModel(Integration.name, 'crmConnection')
     private integrationModel: Model<any>,
     private readonly realtimeGateway: RealtimeGateway,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -527,6 +529,11 @@ export class WhatsAppService {
     waId: string,
     body: string,
     messageId: string,
+    attachment?: {
+      type: 'image' | 'document' | 'video' | 'audio';
+      url: string;
+      filename?: string;
+    },
   ): Promise<void> {
     const saved = await this.messageModel.create({
       waId,
@@ -534,6 +541,30 @@ export class WhatsAppService {
       body,
       messageId,
       status: 'delivered',
+      attachment,
+    });
+    this.emitWhatsAppEvent(waId, saved);
+  }
+
+  async saveOutgoingWebhook(
+    waId: string,
+    body: string,
+    messageId: string,
+    attachment?: {
+      type: 'image' | 'document' | 'video' | 'audio';
+      url: string;
+      filename?: string;
+    },
+  ): Promise<void> {
+    const existing = await this.messageModel.findOne({ messageId }).exec();
+    if (existing) return;
+    const saved = await this.messageModel.create({
+      waId,
+      direction: 'outbound',
+      body,
+      messageId,
+      status: 'sent',
+      attachment,
     });
     this.emitWhatsAppEvent(waId, saved);
   }
@@ -572,5 +603,90 @@ export class WhatsAppService {
       ])
       .exec();
     return agg;
+  }
+
+  async handleMediaMessage(
+    waId: string,
+    mediaId: string,
+    type: 'image' | 'document' | 'video' | 'audio',
+    caption?: string,
+    messageId?: string,
+  ): Promise<void> {
+    const config = await this.getConfig();
+    if (!config) {
+      this.logger.error('WhatsApp not configured or inactive; skipping media download');
+      return;
+    }
+
+    try {
+      // 1. Get temporary media URL from Meta Graph API
+      const mediaRes = await fetch(`${META_API}/${mediaId}`, {
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+      });
+      const mediaData = await mediaRes.json().catch(() => ({}));
+      if (!mediaRes.ok || !mediaData.url) {
+        this.logger.error(`Failed to fetch Meta media url for id ${mediaId}: ${JSON.stringify(mediaData)}`);
+        return;
+      }
+
+      // 2. Download the binary stream/buffer
+      const fileRes = await fetch(mediaData.url, {
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+      });
+      if (!fileRes.ok) {
+        this.logger.error(`Failed to download Meta media file from url`);
+        return;
+      }
+      const buffer = Buffer.from(await fileRes.arrayBuffer());
+
+      // 3. Save it to local storage
+      const mime = mediaData.mime_type || this.mimeFromType(type);
+      const ext = mime.split('/')[1]?.split(';')[0] || this.extFromType(type);
+      const filename = `wa_${mediaId}_${Date.now()}.${ext}`;
+      
+      let uploadResult: any;
+      if (type === 'image') {
+        uploadResult = await this.storageService.uploadBuffer(buffer, {
+          originalName: filename,
+          mime,
+          ext,
+          subfolder: 'uploads',
+          skipOptimize: true,
+        });
+      } else {
+        const mockFile: any = {
+          buffer,
+          originalname: filename,
+          mimetype: mime,
+        };
+        uploadResult = await this.storageService.uploadDocument(mockFile);
+      }
+
+      const attachment = {
+        type,
+        url: uploadResult.url,
+        filename: uploadResult.originalName || filename,
+      };
+
+      const body = caption || `[${type.toUpperCase()}]`;
+
+      await this.saveIncoming(waId, body, messageId || `meta_${mediaId}`, attachment);
+    } catch (e: any) {
+      this.logger.error(`Error handling media message ${mediaId}: ${e?.message}`);
+    }
+  }
+
+  private mimeFromType(type: string): string {
+    if (type === 'image') return 'image/jpeg';
+    if (type === 'video') return 'video/mp4';
+    if (type === 'audio') return 'audio/aac';
+    return 'application/octet-stream';
+  }
+
+  private extFromType(type: string): string {
+    if (type === 'image') return 'jpg';
+    if (type === 'video') return 'mp4';
+    if (type === 'audio') return 'aac';
+    return 'bin';
   }
 }

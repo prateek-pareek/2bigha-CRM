@@ -7,6 +7,7 @@ import {
   Building2,
   Check,
   CheckCheck,
+  FileText,
   Link2,
   Loader2,
   MessageCircle,
@@ -39,6 +40,11 @@ interface WhatsAppMessage {
   body: string;
   createdAt: string;
   status?: string;
+  attachment?: {
+    type: "image" | "document" | "video" | "audio";
+    url: string;
+    filename?: string;
+  };
 }
 
 interface WhatsAppContact {
@@ -466,38 +472,87 @@ export default function WhatsAppChatsPage() {
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    {messages.map((m) => (
-                      <div
-                        key={m._id}
-                        className={cn(
-                          "flex",
-                          m.direction === "outbound" ? "justify-end" : "justify-start",
-                        )}
-                      >
+                    {messages.map((m) => {
+                      const attachmentUrl = m.attachment?.url
+                        ? m.attachment.url.startsWith("http")
+                          ? m.attachment.url
+                          : `${CRM_API_URL}${m.attachment.url}`
+                        : "";
+                      return (
                         <div
+                          key={m._id}
                           className={cn(
-                            "relative max-w-[75%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]",
-                            m.direction === "outbound"
-                              ? "rounded-tr-none text-[#111b21]"
-                              : "rounded-tl-none bg-white text-[#111b21]",
+                            "flex",
+                            m.direction === "outbound" ? "justify-end" : "justify-start",
                           )}
-                          style={
-                            m.direction === "outbound"
-                              ? { backgroundColor: WA_OUTGOING_BUBBLE }
-                              : undefined
-                          }
                         >
-                          {m.body}
-                          <span className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-[#667781]">
-                            {new Date(m.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                            {m.direction === "outbound" && <StatusTicks status={m.status} />}
-                          </span>
+                          <div
+                            className={cn(
+                              "relative max-w-[75%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]",
+                              m.direction === "outbound"
+                                ? "rounded-tr-none text-[#111b21]"
+                                : "rounded-tl-none bg-white text-[#111b21]",
+                            )}
+                            style={
+                              m.direction === "outbound"
+                                ? { backgroundColor: WA_OUTGOING_BUBBLE }
+                                : undefined
+                            }
+                          >
+                            {m.attachment && (
+                              <div className="mb-2 max-w-sm">
+                                {m.attachment.type === "image" && (
+                                  <div className="overflow-hidden rounded-md">
+                                    <img
+                                      src={attachmentUrl}
+                                      alt={m.attachment.filename || "Image"}
+                                      className="max-h-60 w-full object-cover cursor-pointer hover:opacity-95 transition"
+                                      onClick={() => window.open(attachmentUrl, "_blank")}
+                                    />
+                                  </div>
+                                )}
+                                {m.attachment.type === "video" && (
+                                  <div className="overflow-hidden rounded-md bg-black">
+                                    <video src={attachmentUrl} controls className="max-h-60 w-full" />
+                                  </div>
+                                )}
+                                {m.attachment.type === "audio" && (
+                                  <div className="p-1">
+                                    <audio src={attachmentUrl} controls className="max-w-full" />
+                                  </div>
+                                )}
+                                {m.attachment.type === "document" && (
+                                  <div className="flex items-center gap-2 rounded-md bg-black/5 p-2 text-xs">
+                                    <FileText size={18} className="text-slate-500 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate font-semibold text-[#111b21]">
+                                        {m.attachment.filename || "Document"}
+                                      </p>
+                                      <a
+                                        href={attachmentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-sky-600 hover:underline"
+                                      >
+                                        Download
+                                      </a>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {m.body && <div>{m.body}</div>}
+                            <span className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-[#667781]">
+                              {new Date(m.createdAt).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                              {m.direction === "outbound" && <StatusTicks status={m.status} />}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <div ref={threadEndRef} />
                   </div>
                 )}

@@ -80,7 +80,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
       {
         name: "WhatsApp Templates",
         description: "Sync approved Meta templates and send them from Inbox chat.",
-        href: "/crm/settings/whatsapp-templates",
+        href: "/crm/whatsapp/templates",
         icon: MessageCircle,
       },
       /* Disabled for now, not needed yet. Re-enable by uncommenting.

@@ -31,6 +31,20 @@ export class WhatsAppMessage {
 
   @Prop({ type: Object })
   meta?: Record<string, any>;
+
+  @Prop({
+    type: {
+      type: { type: String, enum: ['image', 'document', 'video', 'audio'] },
+      url: { type: String },
+      filename: { type: String },
+    },
+    _id: false,
+  })
+  attachment?: {
+    type: 'image' | 'document' | 'video' | 'audio';
+    url: string;
+    filename?: string;
+  };
 }
 
 export const WhatsAppMessageSchema =

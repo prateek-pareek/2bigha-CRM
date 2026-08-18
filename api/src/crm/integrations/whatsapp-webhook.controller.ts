@@ -102,11 +102,23 @@ export class WhatsAppWebhookController {
 
           const messages = value?.messages || [];
           for (const msg of messages) {
+            const from = msg.from;
+            const id = msg.id;
+
             if (msg.type === 'text') {
-              const from = msg.from;
               const text = msg.text?.body || '';
-              const id = msg.id;
               await this.whatsappService.saveIncoming(String(from), text, id);
+            } else if (['image', 'document', 'video', 'audio'].includes(msg.type)) {
+              const mediaObj = msg[msg.type];
+              if (mediaObj?.id) {
+                void this.whatsappService.handleMediaMessage(
+                  String(from),
+                  String(mediaObj.id),
+                  msg.type,
+                  msg.caption,
+                  id,
+                ).catch((err) => this.logger.error(`Media download failed: ${err.message}`));
+              }
             }
           }
 

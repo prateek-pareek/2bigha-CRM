@@ -63,18 +63,33 @@ export default function WhatsAppTemplatePicker({
     setLoading(true);
     const token = localStorage.getItem("token");
     try {
+      if (refresh) {
+        await fetch(`${CRM_API_URL}/crm/whatsapp-templates/sync`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+
       const res = await fetch(
-        `${CRM_API_URL}/crm/whatsapp/templates${refresh ? "?refresh=1" : ""}`,
+        `${CRM_API_URL}/crm/whatsapp-templates`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => []);
       if (!res.ok) {
-        toast.error(data?.error || data?.message || "Failed to load templates");
+        toast.error("Failed to load templates");
         return;
       }
-      if (data.error) toast.error(data.error);
-      setTemplates(Array.isArray(data.templates) ? data.templates : []);
-      setSyncedAt(data.syncedAt || null);
+      const mapped = (Array.isArray(data) ? data : []).map((t: any) => ({
+        ...t,
+        id: t.id || t._id,
+      }));
+      setTemplates(mapped);
+
+      const maxSync = mapped.reduce((max: number, t: any) => {
+        const time = t.lastSyncedAt ? new Date(t.lastSyncedAt).getTime() : 0;
+        return time > max ? time : max;
+      }, 0);
+      setSyncedAt(maxSync ? new Date(maxSync).toISOString() : null);
     } catch {
       toast.error("Failed to load templates");
     } finally {
@@ -86,7 +101,7 @@ export default function WhatsAppTemplatePicker({
     setSyncing(true);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/whatsapp/templates/sync`, {
+      const res = await fetch(`${CRM_API_URL}/crm/whatsapp-templates/sync`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -95,9 +110,8 @@ export default function WhatsAppTemplatePicker({
         toast.error(data?.error || "Sync failed");
         return;
       }
-      setTemplates(Array.isArray(data.templates) ? data.templates : []);
-      setSyncedAt(data.syncedAt || null);
-      toast.success(`Synced ${data.templates?.length ?? 0} templates`);
+      toast.success(`Synced ${data.synced ?? 0} templates`);
+      await loadTemplates(false);
     } catch {
       toast.error("Sync failed");
     } finally {

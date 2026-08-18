@@ -52,11 +52,21 @@ export class AiSensyWebhookController {
     try {
       const inbound = this.extractInbound(body);
       if (inbound) {
-        await this.whatsappService.saveIncoming(
-          inbound.waId,
-          inbound.text,
-          inbound.messageId,
-        );
+        if (inbound.sender === 'AGENT' || inbound.sender === 'ASSISTANT') {
+          await this.whatsappService.saveOutgoingWebhook(
+            inbound.waId,
+            inbound.text,
+            inbound.messageId,
+            inbound.attachment,
+          );
+        } else {
+          await this.whatsappService.saveIncoming(
+            inbound.waId,
+            inbound.text,
+            inbound.messageId,
+            inbound.attachment,
+          );
+        }
         return;
       }
 
@@ -80,7 +90,7 @@ export class AiSensyWebhookController {
   }
 
   /**
-   * Best-effort extraction of {waId, text, messageId} from an unconfirmed
+   * Best-effort extraction of {waId, text, messageId, sender, attachment} from an unconfirmed
    * payload shape. Tries a handful of field names seen across common WABA
    * BSP webhook conventions (AiSensy's own, and the wider Meta-partner
    * ecosystem it's built on) — narrow this down to AiSensy's actual shape
@@ -88,25 +98,78 @@ export class AiSensyWebhookController {
    */
   private extractInbound(
     body: any,
-  ): { waId: string; text: string; messageId: string } | null {
-    // AiSensy is a WABA BSP built directly on Meta's Cloud API, so beyond
-    // AiSensy's own (unpublished) shape, it's plausible some accounts get the
-    // raw Meta Cloud API webhook forwarded near-verbatim — the same
-    // `entry[].changes[].value.messages[]` shape whatsapp-webhook.controller
-    // parses. Check that nested shape first since it's unambiguous when
-    // present, then fall through to the flatter field-name guesses.
-    const metaValue = body?.entry?.[0]?.changes?.[0]?.value;
-    const metaMessage = metaValue?.messages?.[0];
-    if (metaMessage?.from && (metaMessage.text?.body || metaMessage.type === 'text')) {
-      const waId = String(metaMessage.from).replace(/\D/g, '');
-      const text = String(metaMessage.text?.body || '').trim();
-      if (waId.length >= 10 && text) {
-        return { waId, text, messageId: String(metaMessage.id || `aisensy_${Date.now()}`) };
+  ): {
+    waId: string;
+    text: string;
+    messageId: string;
+    sender: string;
+    attachment?: {
+      type: 'image' | 'document' | 'video' | 'audio';
+      url: string;
+      filename?: string;
+    };
+  } | null {
+    // 1. Check official AiSensy "message.created" topic
+    if (body?.topic === 'message.created' && body?.data) {
+      const data = body.data;
+      const rawPhone = data.contact?.phoneNumber || data.contact?.phone || data.from;
+      const waId = String(rawPhone || '').replace(/\D/g, '');
+      const messageId = String(data.messageId || data.id || `aisensy_${Date.now()}`);
+      const sender = String(data.sender || 'USER').toUpperCase();
+
+      if (waId.length >= 10) {
+        let text = '';
+        let attachment: any = undefined;
+
+        if (['image', 'document', 'video', 'audio'].includes(data.type)) {
+          attachment = {
+            type: data.type,
+            url: data.media?.url || (data.content?.startsWith('http') ? data.content : ''),
+            filename: data.media?.filename || data.filename || undefined,
+          };
+          text = data.caption || (!data.content?.startsWith('http') ? data.content : '') || `[${data.type.toUpperCase()}]`;
+        } else {
+          text = data.content || '';
+        }
+
+        return { waId, text, messageId, sender, attachment };
       }
     }
 
-    const candidates = [body, body?.data, body?.payload, body?.message, body?.entry?.[0]];
+    // 2. Fallback to Meta Cloud API webhook forwarded shape
+    const metaValue = body?.entry?.[0]?.changes?.[0]?.value;
+    const metaMessage = metaValue?.messages?.[0];
+    if (metaMessage?.from) {
+      const waId = String(metaMessage.from).replace(/\D/g, '');
+      const messageId = String(metaMessage.id);
+      const sender = 'USER';
 
+      if (waId.length >= 10) {
+        let text = '';
+        let attachment: any = undefined;
+
+        if (metaMessage.type === 'text') {
+          text = String(metaMessage.text?.body || '').trim();
+        } else if (['image', 'document', 'video', 'audio'].includes(metaMessage.type)) {
+          const mediaObj = metaMessage[metaMessage.type];
+          if (mediaObj?.id) {
+            attachment = {
+              type: metaMessage.type,
+              url: `meta_media://${mediaObj.id}`, // Placeholder prefix to resolve later
+              filename: mediaObj.filename || undefined,
+            };
+            text = metaMessage.caption || `[${metaMessage.type.toUpperCase()}]`;
+          }
+        }
+
+        if (text || attachment) {
+          return { waId, text, messageId, sender, attachment };
+        }
+      }
+    }
+
+    // 3. Fallback to candidate fields
+    const candidates = [body, body?.data, body?.payload, body?.message, body?.entry?.[0]];
     for (const c of candidates) {
       if (!c) continue;
       const rawPhone =
@@ -121,9 +184,10 @@ export class AiSensyWebhookController {
       const waId = String(rawPhone || '').replace(/\D/g, '');
       const text = String(rawText || '').trim();
       if (waId.length >= 10 && text) {
-        return { waId, text, messageId: String(rawId || `aisensy_${Date.now()}`) };
+        return { waId, text, messageId: String(rawId || `aisensy_${Date.now()}`), sender: 'USER' };
       }
     }
+
     return null;
   }
 
@@ -134,6 +198,16 @@ export class AiSensyWebhookController {
    * no message text to key off of.
    */
   private extractStatusUpdate(body: any): { messageId: string; status: string } | null {
+    if (body?.topic === 'message.status.updated' && body?.data) {
+      const data = body.data;
+      const rawId = data.messageId || data.id;
+      const rawStatus = data.status || data.messageStatus || data.event;
+      const status = String(rawStatus || '').toLowerCase();
+      if (rawId && ['sent', 'delivered', 'read', 'failed'].includes(status)) {
+        return { messageId: String(rawId), status };
+      }
+    }
+
     const metaStatus = body?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0];
     if (metaStatus?.id && metaStatus?.status) {
       return { messageId: String(metaStatus.id), status: String(metaStatus.status) };
