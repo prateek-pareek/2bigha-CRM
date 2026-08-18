@@ -37,7 +37,7 @@ export class WhatsAppCampaignsController {
   }
 
   @Post()
-  @Permissions('outreach:read', 'inbox:write')
+  @Permissions('outreach:write', 'inbox:write')
   create(
     @Request() req: { user: { userId: string } },
     @Body() body: Record<string, unknown>,
@@ -49,7 +49,7 @@ export class WhatsAppCampaignsController {
   }
 
   @Patch(':id')
-  @Permissions('outreach:read', 'inbox:write')
+  @Permissions('outreach:write', 'inbox:write')
   update(
     @Request() req: { user: { userId: string } },
     @Param('id') id: string,
@@ -63,31 +63,31 @@ export class WhatsAppCampaignsController {
   }
 
   @Delete(':id')
-  @Permissions('outreach:read', 'inbox:write')
+  @Permissions('outreach:write', 'inbox:write')
   remove(@Request() req: { user: { userId: string } }, @Param('id') id: string) {
     return this.campaignsService.remove(req.user.userId, id);
   }
 
   @Post(':id/launch')
-  @Permissions('outreach:read', 'inbox:write')
+  @Permissions('outreach:write', 'inbox:write')
   launch(@Request() req: { user: { userId: string } }, @Param('id') id: string) {
     return this.campaignsService.launch(req.user.userId, id);
   }
 
   @Post(':id/pause')
-  @Permissions('outreach:read', 'inbox:write')
+  @Permissions('outreach:write', 'inbox:write')
   pause(@Request() req: { user: { userId: string } }, @Param('id') id: string) {
     return this.campaignsService.pause(req.user.userId, id);
   }
 
   @Post(':id/resume')
-  @Permissions('outreach:read', 'inbox:write')
+  @Permissions('outreach:write', 'inbox:write')
   resume(@Request() req: { user: { userId: string } }, @Param('id') id: string) {
     return this.campaignsService.resume(req.user.userId, id);
   }
 
   @Post(':id/cancel')
-  @Permissions('outreach:read', 'inbox:write')
+  @Permissions('outreach:write', 'inbox:write')
   cancel(@Request() req: { user: { userId: string } }, @Param('id') id: string) {
     return this.campaignsService.cancel(req.user.userId, id);
   }
