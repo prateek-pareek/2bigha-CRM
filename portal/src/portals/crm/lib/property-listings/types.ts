@@ -17,6 +17,8 @@ export type PropertyListingStatus =
 
 export type PropertyListingFor = "Sale" | "Rent";
 
+export type PropertyListingApprovalStatus = "Pending" | "Approved" | "Rejected";
+
 export interface PropertyListingRecord {
   _id: string;
   title: string;
@@ -33,6 +35,7 @@ export interface PropertyListingRecord {
   bathrooms?: number;
   areaSqft?: number;
   status: PropertyListingStatus;
+  approvalStatus: PropertyListingApprovalStatus;
   description?: string;
   images: string[];
   amenities: string[];
@@ -81,6 +84,20 @@ export function statusBadgeTone(status: string): PropertyStatusBadgeTone {
   if (s === "under offer") return "warning";
   if (s === "sold" || s === "rented") return "info";
   return "neutral";
+}
+
+export const PROPERTY_APPROVAL_STATUSES: PropertyListingApprovalStatus[] = [
+  "Pending",
+  "Approved",
+  "Rejected",
+];
+
+/** Maps an approval status to the shared `CrmStatusBadge` tone palette. */
+export function approvalStatusBadgeTone(status: string): PropertyStatusBadgeTone {
+  const s = status.toLowerCase();
+  if (s === "approved") return "success";
+  if (s === "rejected") return "neutral";
+  return "warning";
 }
 
 export interface PropertyListingStats {

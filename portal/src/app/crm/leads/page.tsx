@@ -55,6 +55,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import CRMCalendarView from '@/components/crm/calendar/CRMCalendarView';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
+import LeadActivityPopup from '@/components/crm/records/detail/LeadActivityPopup';
+import WebsiteLeadsPanel from '@/components/crm/records/list/WebsiteLeadsPanel';
 import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
 import LeadCreatePanel from '@/components/crm/records/create/LeadCreatePanel';
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
@@ -118,6 +120,7 @@ import {
   CrmListStatusBadge,
   CrmTableCheck,
   CrmTableActionMenu,
+  CrmHoverActionIcon,
   CrmKanbanBoard,
   CrmKanbanColumn,
   CrmKanbanCard,
@@ -289,6 +292,8 @@ export default function LeadsPage() {
   const [isLeadPanelOpen, setIsLeadPanelOpen] = useState(false);
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
   const [callLead, setCallLead] = useState<Lead | null>(null);
+  const [activityLead, setActivityLead] = useState<Lead | null>(null);
+  const [showWebsiteLeads, setShowWebsiteLeads] = useState(false);
   const [isBulkEmailOpen, setIsBulkEmailOpen] = useState(false);
   const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
@@ -1677,6 +1682,19 @@ export default function LeadsPage() {
                   onShowMine={() => { setShowMyLeadsOnly(true); setPage(1); }}
                   onClearAll={() => { setSearch(''); setFilters([]); setDateRange(null); }}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowWebsiteLeads((prev) => !prev)}
+                  aria-pressed={showWebsiteLeads}
+                  className={cn(
+                    'shrink-0 rounded-[var(--radius-md)] px-3 py-1.5 text-sm font-semibold transition-colors',
+                    showWebsiteLeads
+                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                      : 'border border-[var(--border-color)] text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
+                  )}
+                >
+                  Website Leads
+                </button>
                 {viewMode === 'list' && hasAccess('leads:write') ? (
                   <button
                     type="button"
@@ -1781,7 +1799,7 @@ export default function LeadsPage() {
                           }}
                           className={cn(
                             CRM_TOOLBAR_ICON_BTN,
-                            emailOpenFilterMode === mode && CRM_TOOLBAR_ICON_BTN_ACTIVE,
+                            mode !== 'all' && emailOpenFilterMode === mode && CRM_TOOLBAR_ICON_BTN_ACTIVE,
                           )}
                           aria-pressed={emailOpenFilterMode === mode}
                           aria-label={openTip}
@@ -1842,7 +1860,7 @@ export default function LeadsPage() {
                           }}
                           className={cn(
                             CRM_TOOLBAR_ICON_BTN,
-                            emailReplyFilter === mode && CRM_TOOLBAR_ICON_BTN_ACTIVE,
+                            mode !== 'all' && emailReplyFilter === mode && CRM_TOOLBAR_ICON_BTN_ACTIVE,
                           )}
                           aria-pressed={emailReplyFilter === mode}
                           aria-label={replyTip}
@@ -1917,7 +1935,9 @@ export default function LeadsPage() {
           )}
 
           <div className="flex-1 overflow-auto custom-scrollbar">
-            {loading ? (
+            {showWebsiteLeads ? (
+              <WebsiteLeadsPanel />
+            ) : loading ? (
               <div className="w-full h-64 flex items-center justify-center"><Loader2 size={40} className="animate-spin text-text-muted" /></div>
             ) : viewMode === 'kanban' ? (
               <CrmKanbanBoard
@@ -2122,9 +2142,12 @@ export default function LeadsPage() {
                             ariaLabel={isAllPaginatedSelected ? 'Deselect all' : 'Select all'}
                           />
                         </th>
+                        <th className="crm-table-actions sticky top-0 z-10 text-left text-[13px] font-semibold text-[#1f2020]">
+                          Action
+                        </th>
                         {visibleCols.map(col => (
-                          <th 
-                            key={col.key} 
+                          <th
+                            key={col.key}
                             className={cn(
                               'sticky top-0 z-10 cursor-grab active:cursor-grabbing',
                               dragOverColKey === col.key && 'relative z-20 border-l-2 border-primary bg-primary/5',
@@ -2180,9 +2203,6 @@ export default function LeadsPage() {
                             <span className="pointer-events-none">{col.label}</span>
                           </th>
                         ))}
-                        <th className="crm-table-actions sticky top-0 z-10 text-right text-[13px] font-semibold text-[#1f2020]">
-                          Action
-                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2206,27 +2226,50 @@ export default function LeadsPage() {
                                 ariaLabel={selectedIds.has(lead._id) ? 'Deselect lead' : 'Select lead'}
                               />
                             </td>
-                            {visibleCols.map(col => <td key={col.key}>{renderCell(lead, col.key)}</td>)}
                             <td className="crm-table-actions">
-                              <CrmTableActionMenu
-                                onEdit={() => router.push(`/crm/leads/${lead._id}`)}
-                                onCall={
-                                  (lead.mobileNo || lead.phone)
-                                    ? () => setCallLead(lead)
-                                    : undefined
-                                }
-                                onWhatsApp={
-                                  contactWhatsappUrl(lead)
-                                    ? () => window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')
-                                    : undefined
-                                }
-                                onDelete={
-                                  hasAccess('leads:delete')
-                                    ? () => handleDelete(lead._id)
-                                    : undefined
-                                }
-                              />
+                              <div className="flex items-center justify-start gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                {(lead.mobileNo || lead.phone) ? (
+                                  <CrmHoverActionIcon
+                                    icon={<CrmIcon.PhoneCall size={12} />}
+                                    label="Call"
+                                    value={(lead.mobileNo || lead.phone)!}
+                                    tone="primary"
+                                    onClick={() => setCallLead(lead)}
+                                  />
+                                ) : null}
+                                {contactWhatsappUrl(lead) ? (
+                                  <CrmHoverActionIcon
+                                    icon={<CrmNavIcon.WhatsApp size={12} />}
+                                    label="WhatsApp"
+                                    value={(lead.mobileNo || lead.phone)!}
+                                    tone="whatsapp"
+                                    onClick={() =>
+                                      window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')
+                                    }
+                                  />
+                                ) : null}
+                                <CrmTableActionMenu
+                                  menuAlign="left"
+                                  onEdit={() => router.push(`/crm/leads/${lead._id}`)}
+                                  onNotes={() => setActivityLead(lead)}
+                                  onReassign={
+                                    hasAccess('leads:write')
+                                      ? () => {
+                                          setSelectedIds(new Set([lead._id]));
+                                          setAssignOwner('');
+                                          setAssignOpen(true);
+                                        }
+                                      : undefined
+                                  }
+                                  onDelete={
+                                    hasAccess('leads:delete')
+                                      ? () => handleDelete(lead._id)
+                                      : undefined
+                                  }
+                                />
+                              </div>
                             </td>
+                            {visibleCols.map(col => <td key={col.key}>{renderCell(lead, col.key)}</td>)}
                           </tr>
                         ))
                       )}
@@ -2399,6 +2442,12 @@ export default function LeadsPage() {
           type="leads"
         />
       )}
+      <LeadActivityPopup
+        open={!!activityLead}
+        onClose={() => setActivityLead(null)}
+        lead={activityLead}
+        onUpdated={() => void fetchLeadsList(selectedPipelineId || null)}
+      />
       <SendEmailModal
         isOpen={!!emailLead}
         onClose={() => setEmailLead(null)}

@@ -14,6 +14,7 @@ export interface PropertyListingListQuery {
   pageSize?: string | number;
   search?: string;
   status?: string;
+  approvalStatus?: string;
   propertyType?: string;
   listedFor?: string;
   leadId?: string;
@@ -59,6 +60,7 @@ export class PropertyListingsService {
 
     const filter: Record<string, unknown> = {};
     if (query.status) filter.status = query.status;
+    if (query.approvalStatus) filter.approvalStatus = query.approvalStatus;
     if (query.propertyType) filter.propertyType = query.propertyType;
     if (query.listedFor) filter.listedFor = query.listedFor;
     if (query.leadId && Types.ObjectId.isValid(query.leadId)) {

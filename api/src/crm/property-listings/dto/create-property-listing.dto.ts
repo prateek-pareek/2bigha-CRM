@@ -27,6 +27,8 @@ const LISTING_STATUSES = [
   'Off Market',
 ] as const;
 
+const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected'] as const;
+
 export class CreatePropertyListingDto {
   @IsString()
   title: string;
@@ -85,6 +87,10 @@ export class CreatePropertyListingDto {
   @IsOptional()
   @IsIn(LISTING_STATUSES)
   status?: (typeof LISTING_STATUSES)[number];
+
+  @IsOptional()
+  @IsIn(APPROVAL_STATUSES)
+  approvalStatus?: (typeof APPROVAL_STATUSES)[number];
 
   @IsOptional()
   @IsString()

@@ -80,13 +80,51 @@ function NewPropertyListingPageContent() {
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
-  const save = async () => {
-    if (!draft.title.trim()) {
-      toast.error("Title is required");
-      return;
-    }
+  const validate = (): string | null => {
+    if (!draft.title.trim()) return "Title is required";
+    if (draft.title.trim().length > 200) return "Title must be 200 characters or fewer";
+
     if (!draft.price.trim() || Number.isNaN(Number(draft.price))) {
-      toast.error("A valid price is required");
+      return "A valid price is required";
+    }
+    if (Number(draft.price) < 0) return "Price cannot be negative";
+
+    for (const [label, value] of [
+      ["Bedrooms", draft.bedrooms],
+      ["Bathrooms", draft.bathrooms],
+      ["Area (sqft)", draft.areaSqft],
+    ] as const) {
+      if (!value.trim()) continue;
+      if (Number.isNaN(Number(value)) || Number(value) < 0) {
+        return `${label} must be a valid non-negative number`;
+      }
+    }
+
+    if (draft.contactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.contactEmail.trim())) {
+      return "Contact email looks invalid";
+    }
+
+    if (draft.contactPhone.trim()) {
+      const digits = draft.contactPhone.replace(/\D/g, "");
+      if (digits.length < 7 || digits.length > 15) {
+        return "Contact phone must have between 7 and 15 digits";
+      }
+    }
+
+    const imageUrls = draft.images
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const badUrl = imageUrls.find((u) => !/^https?:\/\/\S+$/i.test(u));
+    if (badUrl) return `Image URL looks invalid: ${badUrl}`;
+
+    return null;
+  };
+
+  const save = async () => {
+    const error = validate();
+    if (error) {
+      toast.error(error);
       return;
     }
     setSaving(true);

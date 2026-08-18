@@ -10,7 +10,10 @@ import {
   Clock3,
   Home,
   MapPin,
+  MoreVertical,
+  Pencil,
   Ruler,
+  Trash2,
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,14 +38,28 @@ import {
   type CrmViewMode,
 } from "@/components/crm/ui";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   PROPERTY_STATUSES,
   formatAddress,
   formatCompactPrice,
   formatPrice,
   statusBadgeTone,
+  approvalStatusBadgeTone,
   type PropertyListingRecord,
   type PropertyListingStats,
 } from "@/lib/crm/property-listings/types";
+
+const APPROVAL_TABS = [
+  { key: "Listing", label: "Listing", param: "Approved" },
+  { key: "Pending", label: "Pending approval", param: "Pending" },
+  { key: "Rejected", label: "Rejected", param: "Rejected" },
+] as const;
+type ApprovalTabKey = (typeof APPROVAL_TABS)[number]["key"];
 
 const VIEW_MODE_KEY = "crm_property_listings_view_mode_v1";
 
@@ -110,9 +127,32 @@ function PropertyCard({
           <CrmStatusBadge tone={statusBadgeTone(listing.status)} variant="solid">
             {listing.status}
           </CrmStatusBadge>
+          {listing.approvalStatus !== "Approved" ? (
+            <CrmStatusBadge tone={approvalStatusBadgeTone(listing.approvalStatus)} variant="solid">
+              {listing.approvalStatus}
+            </CrmStatusBadge>
+          ) : null}
         </div>
         <div className="absolute right-2 top-2" onClick={(e) => e.stopPropagation()}>
-          <CrmTableActionMenu onEdit={onClick} onDelete={onDelete} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Row actions"
+                className="crm-table-action-btn inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)]"
+              >
+                <MoreVertical size={12} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onClick} className="gap-2">
+                <Pencil size={13} className="text-[#2f80ed]" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDelete} className="gap-2 text-[#ef1e1e]">
+                <Trash2 size={13} /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -161,6 +201,7 @@ export default function PropertyListingsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [approvalTab, setApprovalTab] = useState<ApprovalTabKey>("Listing");
   const [listedForFilter, setListedForFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<CrmViewMode>("grid");
   const [listings, setListings] = useState<PropertyListingRecord[]>([]);
@@ -192,6 +233,10 @@ export default function PropertyListingsPage() {
       if (search.trim()) params.set("search", search.trim());
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (listedForFilter !== "all") params.set("listedFor", listedForFilter);
+      params.set(
+        "approvalStatus",
+        APPROVAL_TABS.find((t) => t.key === approvalTab)?.param || "Approved",
+      );
 
       const res = await fetch(`${CRM_API_URL}/crm/property-listings?${params}`, {
         headers: authHeaders(),
@@ -209,7 +254,7 @@ export default function PropertyListingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, statusFilter, listedForFilter]);
+  }, [page, pageSize, search, statusFilter, listedForFilter, approvalTab]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -233,7 +278,7 @@ export default function PropertyListingsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, listedForFilter]);
+  }, [search, statusFilter, listedForFilter, approvalTab]);
 
   const remove = async (id: string) => {
     if (!confirm("Delete this property listing?")) return;
@@ -283,6 +328,19 @@ export default function PropertyListingsPage() {
         }
         className="mb-4"
       />
+
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {APPROVAL_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setApprovalTab(tab.key)}
+            className={cn(CRM_TOOLBAR_CHIP, approvalTab === tab.key && CRM_TOOLBAR_CHIP_ACTIVE)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <CrmKpiCard label="Total listings" value={stats?.total ?? total} icon={<Building2 size={17} />} />
@@ -443,7 +501,14 @@ export default function PropertyListingsPage() {
                     </CrmListMutedText>
                   </td>
                   <td>
-                    <CrmStatusBadge tone={statusBadgeTone(p.status)}>{p.status}</CrmStatusBadge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <CrmStatusBadge tone={statusBadgeTone(p.status)}>{p.status}</CrmStatusBadge>
+                      {p.approvalStatus !== "Approved" ? (
+                        <CrmStatusBadge tone={approvalStatusBadgeTone(p.approvalStatus)}>
+                          {p.approvalStatus}
+                        </CrmStatusBadge>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="crm-table-actions" onClick={(e) => e.stopPropagation()}>
                     <CrmTableActionMenu

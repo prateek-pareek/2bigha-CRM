@@ -23,6 +23,8 @@ export type PropertyListingStatus =
 
 export type PropertyListingFor = 'Sale' | 'Rent';
 
+export type PropertyListingApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
+
 /**
  * A real-estate property listing — standalone module (not tied to
  * Lead/Client/Pipeline). Follows the `WhatsAppTemplate` schema conventions:
@@ -92,6 +94,15 @@ export class PropertyListing {
   })
   status: PropertyListingStatus;
 
+  /** Approval gate — only 'Approved' listings show in the default Listing view. UI-only for now; enforcement in other modules (public site, lead-linked pickers) comes in a later pass. */
+  @Prop({
+    required: true,
+    enum: ['Pending', 'Approved', 'Rejected'],
+    default: 'Pending',
+    index: true,
+  })
+  approvalStatus: PropertyListingApprovalStatus;
+
   @Prop({ trim: true })
   description?: string;
 
@@ -138,6 +149,7 @@ applyCrmSoftDeletePlugin(PropertyListingSchema);
 
 PropertyListingSchema.index({ isDeleted: 1, createdAt: -1 });
 PropertyListingSchema.index({ status: 1, createdAt: -1 });
+PropertyListingSchema.index({ approvalStatus: 1, createdAt: -1 });
 PropertyListingSchema.index({ propertyType: 1, createdAt: -1 });
 PropertyListingSchema.index({ listedFor: 1, status: 1 });
 PropertyListingSchema.index(
