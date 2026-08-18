@@ -114,6 +114,10 @@ import {
 import { WhatsAppService } from './integrations/whatsapp.service';
 import { VoiceCallingService } from './integrations/voice-calling.service';
 import { VoiceCallingController } from './integrations/voice-calling.controller';
+import { CallLog, CallLogSchema } from './ivr/schemas/call-log.schema';
+import { IvrService } from './ivr/ivr.service';
+import { IvrController } from './ivr/ivr.controller';
+import { KommunoWebhookController } from './ivr/kommuno-webhook.controller';
 import { WhatsAppController } from './integrations/whatsapp.controller';
 import { WhatsAppWebhookController } from './integrations/whatsapp-webhook.controller';
 import { AiSensyWebhookController } from './integrations/aisensy-webhook.controller';
@@ -399,6 +403,7 @@ import {
         { name: CrmAssociation.name, schema: CrmAssociationSchema },
         { name: CrmObjectType.name, schema: CrmObjectTypeSchema },
         { name: CrmObjectRecord.name, schema: CrmObjectRecordSchema },
+        { name: CallLog.name, schema: CallLogSchema },
       ],
       'crmConnection',
     ),
@@ -420,6 +425,8 @@ import {
     AuditLogController,
     IntegrationsController,
     VoiceCallingController,
+    IvrController,
+    KommunoWebhookController,
     PipelineController,
     PaymentTermsController,
     PortalController,
@@ -516,6 +523,7 @@ import {
     EmailTrackingService,
     WhatsAppService,
     VoiceCallingService,
+    IvrService,
     EmailIntelligenceService,
     WebsiteEmailExtractorService,
     EmailProviderRegistry,
