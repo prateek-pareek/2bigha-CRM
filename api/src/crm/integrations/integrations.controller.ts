@@ -63,15 +63,30 @@ export class IntegrationsController {
     return this.integrationModel.findOne({ type: 'whatsapp' }).exec();
   }
 
+  /** Fields a caller may set on the `type: 'whatsapp'` Integration doc — an
+   * explicit allowlist so a loose/careless request body can't clobber
+   * internal bookkeeping fields like `templates`/`templatesSyncedAt`. */
+  private static readonly WHATSAPP_CONFIG_FIELDS = [
+    'provider',
+    'apiKey',
+    'phoneNumberId',
+    'businessAccountId',
+    'sourceLabel',
+    'appSecret',
+    'aisensyProjectId',
+    'aisensyProjectApiPassword',
+    'isActive',
+  ] as const;
+
   @Post('whatsapp')
   @Permissions('settings:write')
   async saveWhatsAppConfig(@Body() data: any) {
+    const update: Record<string, any> = { type: 'whatsapp' };
+    for (const field of IntegrationsController.WHATSAPP_CONFIG_FIELDS) {
+      if (data?.[field] !== undefined) update[field] = data[field];
+    }
     return this.integrationModel
-      .findOneAndUpdate(
-        { type: 'whatsapp' },
-        { ...data, type: 'whatsapp' },
-        { upsert: true, new: true },
-      )
+      .findOneAndUpdate({ type: 'whatsapp' }, update, { upsert: true, new: true })
       .exec();
   }
 

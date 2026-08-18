@@ -55,7 +55,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import CRMCalendarView from '@/components/crm/calendar/CRMCalendarView';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
-import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
+import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import LeadCreatePanel from '@/components/crm/records/create/LeadCreatePanel';
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
@@ -1168,6 +1168,14 @@ export default function LeadsPage() {
     }
   };
 
+  /** Opens the lead's WhatsApp thread inside the CRM inbox (not an external
+   *  wa.me deep link) so the message actually gets logged against the lead
+   *  instead of happening entirely outside the CRM. */
+  const openLeadWhatsApp = (lead: Lead) => {
+    const waId = contactWhatsappWaId(lead);
+    if (waId) router.push(`/crm/whatsapp?wa=${encodeURIComponent(waId)}`);
+  };
+
   const handleDelete = async (id: string) => {
     if (!window.confirm('Move this lead to Trash? Only an admin can restore it.')) return;
     try {
@@ -2036,7 +2044,7 @@ export default function LeadsPage() {
                                   {contactWhatsappUrl(lead) ? (
                                     <button
                                       type="button"
-                                      onClick={() => window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')}
+                                      onClick={() => openLeadWhatsApp(lead)}
                                       className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-emerald-50 hover:text-emerald-600"
                                       aria-label="Message on WhatsApp"
                                     >
@@ -2217,7 +2225,7 @@ export default function LeadsPage() {
                                 }
                                 onWhatsApp={
                                   contactWhatsappUrl(lead)
-                                    ? () => window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')
+                                    ? () => openLeadWhatsApp(lead)
                                     : undefined
                                 }
                                 onDelete={

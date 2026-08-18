@@ -51,6 +51,28 @@ export class Integration {
   @Prop()
   sourceLabel?: string;
 
+  /**
+   * Meta App Secret (App Dashboard → Settings → Basic) — used to verify the
+   * `X-Hub-Signature-256` header on inbound `webhooks/whatsapp` POSTs so
+   * only genuine Meta traffic is trusted. Meta-provider only; optional but
+   * strongly recommended (see WhatsAppWebhookController).
+   */
+  @Prop()
+  appSecret?: string;
+
+  /**
+   * AiSensy "Project API" credentials — a separate surface from the
+   * Campaign API (`apiKey` above): it's the only confirmed way to send a
+   * free-text/session WhatsApp message via AiSensy. Both optional; without
+   * them, free-text sends stay disabled for the aisensy provider and only
+   * template/campaign sends work. See AiSensyClient.sendSessionMessage().
+   */
+  @Prop()
+  aisensyProjectId?: string;
+
+  @Prop()
+  aisensyProjectApiPassword?: string;
+
   @Prop({
     enum: ['oauth', 'api_key', 'webhook', 'manual'],
   })
