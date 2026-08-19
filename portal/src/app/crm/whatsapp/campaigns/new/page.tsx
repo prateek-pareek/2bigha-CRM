@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Loader2, Search, User, X } from "lucide-react";
+import { ChevronLeft, Loader2, Plus, Search, User, X } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { CrmButton } from "@/components/crm/ui";
@@ -44,6 +44,8 @@ export default function NewWhatsAppCampaignPage() {
   const [scheduledAt, setScheduledAt] = useState("");
   const [throttlePerMinute, setThrottlePerMinute] = useState(60);
   const [submitting, setSubmitting] = useState(false);
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaFilename, setMediaFilename] = useState("");
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t._id === templateId) || null,
@@ -53,6 +55,24 @@ export default function NewWhatsAppCampaignPage() {
     () => (selectedTemplate ? extractSlots(selectedTemplate).filter((s) => s.componentType === "BODY").length : 0),
     [selectedTemplate],
   );
+  const bodySlots = useMemo(() => {
+    if (!selectedTemplate) return [];
+    return extractSlots(selectedTemplate).filter((s) => s.componentType === "BODY");
+  }, [selectedTemplate]);
+  const bodyText = useMemo(() => {
+    if (!selectedTemplate) return "";
+    const body = selectedTemplate.components?.find(
+      (c) => String(c.type).toUpperCase() === "BODY"
+    );
+    return body?.text || "";
+  }, [selectedTemplate]);
+  const hasMediaHeader = useMemo(() => {
+    if (!selectedTemplate) return false;
+    const header = selectedTemplate.components?.find(
+      (c) => String(c.type).toUpperCase() === "HEADER"
+    );
+    return header ? ["IMAGE", "VIDEO", "DOCUMENT"].includes(String(header.format).toUpperCase()) : false;
+  }, [selectedTemplate]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -114,6 +134,24 @@ export default function NewWhatsAppCampaignPage() {
     ]);
   };
 
+  const addCustomRecipient = (numberStr: string) => {
+    const waId = numberStr.replace(/\D/g, "");
+    if (waId.length < 10) {
+      toast.error("Enter a valid phone number with country code (at least 10 digits)");
+      return;
+    }
+    if (recipients.some((r) => r.waId === waId)) {
+      toast.error("Already added");
+      return;
+    }
+    const name = `Custom Recipient (+${waId})`;
+    setRecipients((prev) => [
+      ...prev,
+      { leadId: "", name, waId, templateParams: Array.from({ length: bodySlotCount }, () => "") },
+    ]);
+    setLeadSearch("");
+  };
+
   const removeRecipient = (waId: string) => {
     setRecipients((prev) => prev.filter((r) => r.waId !== waId));
   };
@@ -135,6 +173,10 @@ export default function NewWhatsAppCampaignPage() {
     }
     if (!templateId) {
       toast.error("Pick a template mapped to an AiSensy campaign");
+      return;
+    }
+    if (hasMediaHeader && !mediaUrl.trim()) {
+      toast.error("Header Media URL is required for this template type");
       return;
     }
     if (!recipients.length) {
@@ -162,6 +204,8 @@ export default function NewWhatsAppCampaignPage() {
           throttlePerMinute,
           sendNow,
           scheduledAt: !sendNow && scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+          mediaUrl: hasMediaHeader ? mediaUrl.trim() : undefined,
+          mediaFilename: hasMediaHeader ? mediaFilename.trim() : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -236,11 +280,48 @@ export default function NewWhatsAppCampaignPage() {
               ))}
             </select>
           )}
+
+          {hasMediaHeader && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                  Header Media URL (Required)
+                </label>
+                <input
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                  placeholder="e.g. https://example.com/image.jpg"
+                  className="h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                  Header File Name (Optional)
+                </label>
+                <input
+                  value={mediaFilename}
+                  onChange={(e) => setMediaFilename(e.target.value)}
+                  placeholder="e.g. banner.jpg"
+                  className="h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+            </div>
+          )}
+
           {bodySlotCount > 0 && (
             <p className="text-[11px] text-text-muted">
               This template has {bodySlotCount} variable{bodySlotCount === 1 ? "" : "s"} — fill them in
               per recipient below.
             </p>
+          )}
+
+          {selectedTemplate && bodyText && (
+            <div className="rounded-[var(--radius-md)] border border-border bg-slate-50 p-3.5 text-xs leading-relaxed text-text-main whitespace-pre-wrap mt-2">
+              <span className="block text-[10px] font-bold uppercase tracking-wide text-text-muted mb-1">
+                Template Preview
+              </span>
+              {bodyText}
+            </div>
           )}
         </div>
       </div>
@@ -259,35 +340,53 @@ export default function NewWhatsAppCampaignPage() {
           />
         </div>
         {leadSearch.trim() && (
-          <div className="max-h-48 overflow-y-auto rounded-[var(--radius-md)] border border-border">
+          <div className="max-h-48 overflow-y-auto rounded-[var(--radius-md)] border border-border bg-white shadow-sm">
+            {leadSearch.replace(/\D/g, "").length >= 10 && (
+              <button
+                type="button"
+                onClick={() => addCustomRecipient(leadSearch)}
+                className="flex w-full items-center gap-3 border-b border-border/40 bg-emerald-50/50 px-3 py-2 text-left hover:bg-emerald-50 text-emerald-700 font-semibold"
+              >
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                  <Plus size={12} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs">Add manual number: &quot;+{leadSearch.replace(/\D/g, "")}&quot;</p>
+                </div>
+              </button>
+            )}
+
             {searchingLeads ? (
               <div className="flex items-center justify-center gap-2 p-4 text-xs text-text-muted">
                 <Loader2 size={13} className="animate-spin" /> Searching…
               </div>
-            ) : leadResults.length === 0 ? (
-              <p className="p-4 text-center text-xs text-text-muted">No leads found.</p>
             ) : (
-              leadResults.map((lead) => {
-                const leadName = `${lead.firstName || ""} ${lead.lastName || ""}`.trim() || "Lead";
-                return (
-                  <button
-                    key={lead._id}
-                    type="button"
-                    onClick={() => addRecipient(lead)}
-                    className="flex w-full items-center gap-3 border-b border-border/40 px-3 py-2 text-left hover:bg-slate-50"
-                  >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
-                      <User size={12} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-text-main">{leadName}</p>
-                      <p className="truncate text-[11px] text-text-muted">
-                        {lead.mobileNo || lead.phone || lead.email || "No phone"}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })
+              <>
+                {leadResults.map((lead) => {
+                  const leadName = `${lead.firstName || ""} ${lead.lastName || ""}`.trim() || "Lead";
+                  return (
+                    <button
+                      key={lead._id}
+                      type="button"
+                      onClick={() => addRecipient(lead)}
+                      className="flex w-full items-center gap-3 border-b border-border/40 px-3 py-2 text-left hover:bg-slate-50"
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
+                        <User size={12} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text-main">{leadName}</p>
+                        <p className="truncate text-[11px] text-text-muted">
+                          {lead.mobileNo || lead.phone || lead.email || "No phone"}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+                {leadResults.length === 0 && (
+                  <p className="p-4 text-center text-xs text-text-muted">No matching leads found.</p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -316,7 +415,7 @@ export default function NewWhatsAppCampaignPage() {
                         key={i}
                         value={val}
                         onChange={(e) => updateParam(r.waId, i, e.target.value)}
-                        placeholder={`{{${i + 1}}}`}
+                        placeholder={bodySlots[i]?.example ? `e.g. ${bodySlots[i].example}` : `{{${i + 1}}}`}
                         className="h-8 rounded-[var(--radius-md)] border border-border px-2 text-xs outline-none focus:ring-2 focus:ring-emerald-500/20"
                       />
                     ))}

@@ -85,6 +85,8 @@ export class WhatsAppController {
       bodyPreview?: string;
       module?: string;
       entityId?: string;
+      mediaUrl?: string;
+      mediaFilename?: string;
     },
   ) {
     return this.whatsappService.sendTemplateMessage({
@@ -96,6 +98,8 @@ export class WhatsAppController {
       userId: req.user?.userId,
       module: body.module,
       entityId: body.entityId,
+      mediaUrl: body.mediaUrl,
+      mediaFilename: body.mediaFilename,
     });
   }
 }

@@ -563,6 +563,7 @@ import {
     AssociationsService,
     CustomObjectsService,
     CRMUsersModule,
+    WhatsAppService,
     // Re-exported so sibling modules (e.g. WhatsAppTemplatesModule) can
     // inject already-registered models (Integration, etc.) on
     // 'crmConnection' without re-registering them via their own

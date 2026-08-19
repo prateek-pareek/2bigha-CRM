@@ -259,6 +259,40 @@ export class WhatsAppTemplatesService {
     template.source = 'aisensy';
     if (template.status === 'DRAFT') template.status = 'PENDING';
     template.lastError = undefined;
+
+    const config = await this.integrationModel
+      .findOne({ type: 'whatsapp' })
+      .lean()
+      .exec();
+
+    // Auto-create live campaign on AiSensy Project
+    if (config?.provider === 'aisensy' && config.aisensyProjectId && config.aisensyProjectApiPassword) {
+      try {
+        const url = `https://apis.aisensy.com/project-apis/v1/project/${config.aisensyProjectId}/campaign/api`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-AiSensy-Project-API-Pwd': String(config.aisensyProjectApiPassword),
+          },
+          body: JSON.stringify({
+            template_name: template.name,
+            campaign_name: name,
+          }),
+        });
+        const data: any = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.logger.log(`Automatically created live API campaign "${name}" for template "${template.name}" on AiSensy.`);
+          template.status = 'APPROVED';
+        } else {
+          this.logger.warn(`AiSensy campaign creation response (warning/duplicate): ${JSON.stringify(data)}`);
+        }
+      } catch (err: any) {
+        this.logger.error(`Failed to auto-create campaign on AiSensy: ${err?.message}`);
+      }
+    }
+
     await template.save();
     return template;
   }
@@ -524,11 +558,127 @@ export class WhatsAppTemplatesService {
       return { success: false, error: 'WhatsApp not configured or inactive' };
     }
     if (config.provider === 'aisensy') {
-      return {
-        success: false,
-        error:
-          "AiSensy doesn't expose a public template-list API — manage & approve templates in the AiSensy dashboard, then map each one to a Campaign name under Settings → WhatsApp templates.",
-      };
+      if (!config.aisensyProjectId || !config.aisensyProjectApiPassword) {
+        throw new BadRequestException(
+          'AiSensy Project ID and Project API Password are required to sync templates.',
+        );
+      }
+      try {
+        let synced = 0;
+        let hasMore = true;
+        let after: string | undefined = undefined;
+
+        const reverseLanguageMap: Record<string, string> = {
+          'english': 'en',
+          'english (us)': 'en_US',
+          'english (uk)': 'en_GB',
+          'hindi': 'hi',
+          'spanish': 'es',
+          'portuguese': 'pt',
+        };
+
+        while (hasMore) {
+          let url = `https://apis.aisensy.com/project-apis/v1/project/${config.aisensyProjectId}/wa_template?limit=100`;
+          if (after) url += `&after=${after}`;
+          
+          const res = await fetch(url, {
+            headers: {
+              'Accept': 'application/json',
+              'X-AiSensy-Project-API-Pwd': config.aisensyProjectApiPassword || '',
+            }
+          });
+          const data: any = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const errorMessage = data?.message || data?.error || 'Failed to sync templates from AiSensy';
+            this.logger.error(`AiSensy template sync failed: ${JSON.stringify(data)}`);
+            return { success: false, error: errorMessage };
+          }
+
+          const page = Array.isArray(data?.template) ? data.template : [];
+          for (const row of page) {
+            const langLower = String(row.language || '').toLowerCase();
+            const language = reverseLanguageMap[langLower] || langLower.substring(0, 2);
+            const name = String(row.name || '');
+            const status = String(row.status || 'PENDING');
+            const metaId = row.template_id ? String(row.template_id) : undefined;
+
+            const components: any[] = [];
+            components.push({
+              type: 'BODY',
+              text: row.text || '',
+              example: row.sample_text && row.sample_text !== row.text ? {
+                body_text: [
+                  (row.sample_text.match(/\[(.*?)\]/g) || []).map((v: string) => v.slice(1, -1))
+                ]
+              } : undefined
+            });
+
+            if (row.footer_text) {
+              components.push({ type: 'FOOTER', text: row.footer_text });
+            }
+
+            if (row.header_text) {
+              components.push({ type: 'HEADER', format: 'TEXT', text: row.header_text });
+            } else if (['IMAGE', 'VIDEO', 'FILE', 'LOCATION'].includes(row.type)) {
+              components.push({ type: 'HEADER', format: row.type === 'FILE' ? 'DOCUMENT' : row.type });
+            }
+
+            if (Array.isArray(row.buttons) && row.buttons.length > 0) {
+              components.push({
+                type: 'BUTTONS',
+                buttons: row.buttons.map((b: any) => ({
+                  type: b.type === 'Phone Number' ? 'PHONE_NUMBER' : (b.type === 'URL' ? 'URL' : 'QUICK_REPLY'),
+                  text: b.button_title || b.text || '',
+                  url: b.type === 'URL' ? b.button_value : undefined,
+                  phone_number: b.type === 'Phone Number' ? b.button_value : undefined,
+                }))
+              });
+            }
+
+            const matchFilter = metaId
+              ? { $or: [{ metaTemplateId: metaId }, { name, language }] }
+              : { name, language };
+
+            const existing = await this.templateModel.findOne(matchFilter).exec();
+            const wasApproved = existing?.status === 'APPROVED';
+
+            await this.templateModel.updateOne(
+              { name, language }, // Always match/upsert on unique name + language
+              {
+                $set: {
+                  name,
+                  language,
+                  category: row.category || existing?.category || 'UTILITY',
+                  components,
+                  status,
+                  metaTemplateId: metaId,
+                  rejectionReason: row.rejected_reason || undefined,
+                  lastSyncedAt: new Date(),
+                  source: 'aisensy',
+                  aisensyCampaignName: name,
+                  ...(status === 'APPROVED' && !wasApproved
+                    ? { approvedAt: new Date() }
+                    : {}),
+                },
+              },
+              { upsert: true },
+            );
+            synced += 1;
+          }
+
+          if (page.length < 100) {
+            hasMore = false;
+          } else {
+            after = page[page.length - 1].id;
+          }
+        }
+
+        return { success: true, synced };
+
+      } catch (e: any) {
+        this.logger.error(`AiSensy template sync error: ${e?.message}`);
+        return { success: false, error: e?.message || 'Failed to sync templates' };
+      }
     }
     if (!config.businessAccountId) {
       return {
