@@ -235,19 +235,51 @@ const LEADS_TEMPLATE_EXAMPLE = [
   'Email',
 ];
 
-function downloadLeadsCsvTemplate() {
-  const csv = [LEADS_TEMPLATE_HEADERS, LEADS_TEMPLATE_EXAMPLE]
+/** CSV column headers + one example row, matching the contacts Job Title/Organization/Source flow. */
+const CONTACTS_TEMPLATE_HEADERS = [
+  'First Name',
+  'Last Name',
+  'Email',
+  'Contact Number',
+  'Job Title',
+  'Organization / Company Name',
+  'Website',
+  'LinkedIn URL',
+  'Lead Source',
+];
+const CONTACTS_TEMPLATE_EXAMPLE = [
+  'Riya',
+  'Kapoor',
+  'riya.kapoor@example.com',
+  '+919876543210',
+  'Marketing Manager',
+  'Example Realty Pvt Ltd',
+  'https://example.com',
+  'https://linkedin.com/in/riyakapoor',
+  'Referral',
+];
+
+function downloadCsvTemplate(headers: string[], example: string[], filename: string) {
+  const csv = [headers, example]
     .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
     .join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'leads-import-template.csv';
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadLeadsCsvTemplate() {
+  downloadCsvTemplate(LEADS_TEMPLATE_HEADERS, LEADS_TEMPLATE_EXAMPLE, 'leads-import-template.csv');
+}
+
+function downloadContactsCsvTemplate() {
+  downloadCsvTemplate(CONTACTS_TEMPLATE_HEADERS, CONTACTS_TEMPLATE_EXAMPLE, 'contacts-import-template.csv');
 }
 
 export default function ImportModal({ isOpen, onClose, onSuccess, type }: ImportModalProps) {
@@ -493,13 +525,14 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
          <p className="text-sm font-medium text-text-muted mt-2">Support .xlsx, .csv (Max 10MB)</p>
         </div>
 
-        {type === 'leads' && (
+        {(type === 'leads' || type === 'contacts') && (
          <div className="flex items-center justify-center">
           <button
            type="button"
            onClick={(e) => {
             e.stopPropagation();
-            downloadLeadsCsvTemplate();
+            if (type === 'leads') downloadLeadsCsvTemplate();
+            else downloadContactsCsvTemplate();
            }}
            className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
           >
