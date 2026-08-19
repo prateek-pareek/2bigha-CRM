@@ -2044,35 +2044,45 @@ export default function LeadsPage() {
                                     <Check size={10} strokeWidth={4} className={selectedIds.has(lead._id) ? 'opacity-100' : 'opacity-40 text-[var(--text-muted)]'} />
                                   </button>
                                   {(lead.mobileNo || lead.phone) ? (
-                                    <button
-                                      type="button"
+                                    <CrmHoverActionIcon
+                                      icon={<CrmIcon.PhoneCall size={12} />}
+                                      label="Call"
+                                      value={(lead.mobileNo || lead.phone)!}
+                                      tone="primary"
                                       onClick={() => setCallLead(lead)}
-                                      className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-emerald-50 hover:text-emerald-600"
-                                      aria-label="Call lead"
-                                    >
-                                      <Phone size={13} />
-                                    </button>
+                                      className="h-6 w-6 border-transparent shadow-none hover:bg-emerald-50 hover:text-emerald-600"
+                                    />
                                   ) : null}
                                   {contactWhatsappUrl(lead) ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')}
-                                      className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-emerald-50 hover:text-emerald-600"
-                                      aria-label="Message on WhatsApp"
-                                    >
-                                      <CrmNavIcon.WhatsApp size={13} />
-                                    </button>
+                                    <CrmHoverActionIcon
+                                      icon={<CrmNavIcon.WhatsApp size={12} />}
+                                      label="WhatsApp"
+                                      value={(lead.mobileNo || lead.phone)!}
+                                      tone="whatsapp"
+                                      onClick={() =>
+                                        window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')
+                                      }
+                                      className="h-6 w-6 border-transparent shadow-none hover:bg-emerald-50"
+                                    />
                                   ) : null}
-                                  {hasAccess('leads:delete') ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDelete(lead._id)}
-                                      className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-rose-50 hover:text-rose-500"
-                                      aria-label="Delete lead"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  ) : null}
+                                  <CrmTableActionMenu
+                                    menuAlign="right"
+                                    onNotes={() => setActivityLead(lead)}
+                                    onReassign={
+                                      hasAccess('leads:write')
+                                        ? () => {
+                                            setSelectedIds(new Set([lead._id]));
+                                            setAssignOwner('');
+                                            setAssignOpen(true);
+                                          }
+                                        : undefined
+                                    }
+                                    onDelete={
+                                      hasAccess('leads:delete')
+                                        ? () => handleDelete(lead._id)
+                                        : undefined
+                                    }
+                                  />
                                 </div>
                               }
                             />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { crmStageAccent } from "@/lib/crm/stage-accent";
@@ -245,105 +245,131 @@ export function CrmTableActionMenu({
   className,
   menuAlign = "right",
 }: CrmTableActionMenuProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const runAndClose = (fn?: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpen(false);
+    fn?.();
+  };
+
   return (
-    <div className={cn("crm-table-action-menu relative inline-flex", className)}>
-      <details className="group/menu relative">
-        <summary
-          className="crm-table-action-btn list-none inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] marker:content-none [&::-webkit-details-marker]:hidden"
-          onClick={(e) => e.stopPropagation()}
+    <div ref={containerRef} className={cn("crm-table-action-menu relative inline-flex", className)}>
+      <div className="group/menu relative">
+        <button
+          type="button"
+          className="crm-table-action-btn inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)]"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
           aria-label="Row actions"
         >
           <CrmIcon.DotsVertical size={12} />
-        </summary>
-        <div
-          className={cn(
-            "absolute top-full z-40 mt-1 min-w-[140px] rounded-[5px] border border-[#e2e8f0] bg-white py-1 shadow-[var(--crm-shadow-raised)]",
-            menuAlign === "left" ? "left-0" : "right-0",
-          )}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {onEdit ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
-              onClick={onEdit}
-            >
-              <CrmIcon.Pencil size={13} className="text-[#2f80ed]" />
-              Edit
-            </button>
-          ) : null}
-          {onEmail ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
-              onClick={onEmail}
-            >
-              <CrmIcon.Mail size={13} className="text-[#2f80ed]" />
-              Email
-            </button>
-          ) : null}
-          {onCall ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
-              onClick={onCall}
-            >
-              <CrmIcon.PhoneCall size={13} className="text-[#2f80ed]" />
-              Call
-            </button>
-          ) : null}
-          {onWhatsApp ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
-              onClick={onWhatsApp}
-            >
-              <CrmNavIcon.WhatsApp size={13} className="text-[#25d366]" />
-              WhatsApp
-            </button>
-          ) : null}
-          {onNotes ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
-              onClick={onNotes}
-            >
-              <CrmIcon.Activity size={13} className="text-[#2f80ed]" />
-              Notes &amp; follow-up
-            </button>
-          ) : null}
-          {onReassign ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
-              onClick={onReassign}
-            >
-              <CrmIcon.Users size={13} className="text-[#2f80ed]" />
-              Reassign
-            </button>
-          ) : null}
-          {onClone ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
-              onClick={onClone}
-            >
-              <CrmIcon.Copy size={13} className="text-[#2f80ed]" />
-              Clone
-            </button>
-          ) : null}
-          {onDelete ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
-              onClick={onDelete}
-            >
-              <CrmIcon.Trash size={13} className="text-[#ef1e1e]" />
-              Delete
-            </button>
-          ) : null}
-        </div>
-      </details>
+        </button>
+        {open ? (
+          <div
+            className={cn(
+              "absolute top-full z-40 mt-1 min-w-[140px] rounded-[5px] border border-[#e2e8f0] bg-white py-1 shadow-[var(--crm-shadow-raised)]",
+              menuAlign === "left" ? "left-0" : "right-0",
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {onEdit ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onEdit)}
+              >
+                <CrmIcon.Pencil size={13} className="text-[#2f80ed]" />
+                Edit
+              </button>
+            ) : null}
+            {onEmail ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onEmail)}
+              >
+                <CrmIcon.Mail size={13} className="text-[#2f80ed]" />
+                Email
+              </button>
+            ) : null}
+            {onCall ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onCall)}
+              >
+                <CrmIcon.PhoneCall size={13} className="text-[#2f80ed]" />
+                Call
+              </button>
+            ) : null}
+            {onWhatsApp ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onWhatsApp)}
+              >
+                <CrmNavIcon.WhatsApp size={13} className="text-[#25d366]" />
+                WhatsApp
+              </button>
+            ) : null}
+            {onNotes ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onNotes)}
+              >
+                <CrmIcon.Activity size={13} className="text-[#2f80ed]" />
+                Notes &amp; follow-up
+              </button>
+            ) : null}
+            {onReassign ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onReassign)}
+              >
+                <CrmIcon.Users size={13} className="text-[#2f80ed]" />
+                Reassign
+              </button>
+            ) : null}
+            {onClone ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onClone)}
+              >
+                <CrmIcon.Copy size={13} className="text-[#2f80ed]" />
+                Clone
+              </button>
+            ) : null}
+            {onDelete ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onDelete)}
+              >
+                <CrmIcon.Trash size={13} className="text-[#ef1e1e]" />
+                Delete
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
