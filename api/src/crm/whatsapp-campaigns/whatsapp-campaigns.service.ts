@@ -17,6 +17,7 @@ import { Lead, LeadDocument } from '../records/schemas/lead.schema';
 import { Integration } from '../integrations/schemas/integration.schema';
 import { AiSensyClient } from '../integrations/aisensy-client.util';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
+import { WhatsAppService } from '../integrations/whatsapp.service';
 
 type RecipientInput = {
   waId?: string;
@@ -41,6 +42,7 @@ export class WhatsAppCampaignsService {
     @InjectModel(Integration.name, 'crmConnection')
     private integrationModel: Model<any>,
     private readonly templatesService: WhatsAppTemplatesService,
+    private readonly whatsappService: WhatsAppService,
   ) {}
 
   private async getAiSensyConfig(): Promise<{
@@ -131,6 +133,8 @@ export class WhatsAppCampaignsService {
       scheduledAt?: string;
       throttlePerMinute?: number;
       sendNow?: boolean;
+      mediaUrl?: string;
+      mediaFilename?: string;
     },
   ) {
     if (!Types.ObjectId.isValid(data.templateId)) {
@@ -143,6 +147,29 @@ export class WhatsAppCampaignsService {
       throw new BadRequestException(
         'This template has no AiSensy campaign mapped — set one on the template first, or pass aisensyCampaignName explicitly.',
       );
+    }
+
+    // Auto-create API campaign on AiSensy to guarantee it exists
+    const configIntegration = await this.integrationModel.findOne({ type: 'whatsapp' }).lean().exec();
+    if (configIntegration?.provider === 'aisensy' && configIntegration.aisensyProjectId && configIntegration.aisensyProjectApiPassword) {
+      try {
+        const url = `https://apis.aisensy.com/project-apis/v1/project/${configIntegration.aisensyProjectId}/campaign/api`;
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-AiSensy-Project-API-Pwd': String(configIntegration.aisensyProjectApiPassword),
+          },
+          body: JSON.stringify({
+            template_name: template.name,
+            campaign_name: aisensyCampaignName,
+          }),
+        });
+        this.logger.log(`Ensured live API campaign "${aisensyCampaignName}" exists on AiSensy for template "${template.name}".`);
+      } catch (err: any) {
+        this.logger.error(`Failed to auto-create campaign on AiSensy: ${err?.message}`);
+      }
     }
 
     const recipients = await this.normalizeRecipients(data.recipients || []);
@@ -174,6 +201,8 @@ export class WhatsAppCampaignsService {
         ? Math.min(1000, Math.floor(data.throttlePerMinute))
         : 60,
       totalRecipients: recipients.length,
+      mediaUrl: data.mediaUrl,
+      mediaFilename: data.mediaFilename,
     });
 
     if (data.sendNow) {
@@ -372,6 +401,8 @@ export class WhatsAppCampaignsService {
     let doc = await this.campaignModel.findById(campaignId).exec();
     if (!doc) throw new NotFoundException('Campaign not found');
 
+    const template = await this.templatesService.findOne(doc.templateId.toString());
+
     const delayMs = Math.max(1, Math.round(60000 / doc.throttlePerMinute));
 
     for (const rec of doc.recipients) {
@@ -391,12 +422,42 @@ export class WhatsAppCampaignsService {
           userName: target.name,
           source: config.sourceLabel,
           templateParams: target.templateParams,
+          media: doc.mediaUrl ? {
+            url: doc.mediaUrl,
+            filename: doc.mediaFilename || 'file'
+          } : undefined
         });
         if (result.success) {
           target.status = 'sent';
           target.sentAt = new Date();
           target.providerMessageId = result.raw?.messageId ? String(result.raw.messageId) : undefined;
           doc.sentCount += 1;
+
+          // Log campaign message into chat history
+          try {
+            const bodyComp = template.components?.find((c: any) => String(c.type).toUpperCase() === 'BODY');
+            let bodyText = bodyComp?.text || '';
+            if (Array.isArray(target.templateParams)) {
+              target.templateParams.forEach((param, i) => {
+                bodyText = bodyText.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, 'g'), param);
+              });
+            }
+
+            await this.whatsappService.logOutboundMessage({
+              phone: target.waId,
+              body: bodyText,
+              messageId: target.providerMessageId,
+              sentBy: doc.createdBy,
+              module: 'whatsapp-campaigns',
+              entityId: doc._id,
+              mediaUrl: doc.mediaUrl,
+              mediaFilename: doc.mediaFilename,
+              rawPayload: result.raw,
+              templateName: template.name,
+            });
+          } catch (err: any) {
+            this.logger.error(`Failed to log campaign message in chat history: ${err?.message}`);
+          }
         } else {
           target.status = 'failed';
           target.errorMessage = result.error || 'Send failed';
@@ -455,5 +516,89 @@ export class WhatsAppCampaignsService {
           }))
         : [],
     };
+  }
+
+  private async getProjectConfig(): Promise<{ projectId: string; pwd: string }> {
+    const config = await this.integrationModel
+      .findOne({ type: 'whatsapp' })
+      .lean()
+      .exec();
+    if (!config?.aisensyProjectId || !config?.aisensyProjectApiPassword || config.provider !== 'aisensy') {
+      throw new BadRequestException(
+        'AiSensy is not configured as the active WhatsApp provider with Project credentials.',
+      );
+    }
+    return {
+      projectId: String(config.aisensyProjectId),
+      pwd: String(config.aisensyProjectApiPassword),
+    };
+  }
+
+  async getLiveCampaigns() {
+    const { projectId, pwd } = await this.getProjectConfig();
+    const res = await fetch(`https://apis.aisensy.com/project-apis/v1/project/${projectId}/campaign/api`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'X-AiSensy-Project-API-Pwd': pwd,
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new BadRequestException(data?.message || data?.error || 'Failed to fetch campaigns from AiSensy');
+    }
+    return data;
+  }
+
+  async createLiveCampaign(body: Record<string, unknown>) {
+    const { projectId, pwd } = await this.getProjectConfig();
+    const res = await fetch(`https://apis.aisensy.com/project-apis/v1/project/${projectId}/campaign/api`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-AiSensy-Project-API-Pwd': pwd,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new BadRequestException(data?.message || data?.error || 'Failed to create campaign in AiSensy');
+    }
+    return data;
+  }
+
+  async getLiveCampaignDetails(campaignId: string) {
+    const { projectId, pwd } = await this.getProjectConfig();
+    const res = await fetch(`https://apis.aisensy.com/project-apis/v1/project/${projectId}/campaign/${campaignId}/details`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'X-AiSensy-Project-API-Pwd': pwd,
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new BadRequestException(data?.message || data?.error || 'Failed to fetch campaign details from AiSensy');
+    }
+    return data;
+  }
+
+  async getLiveCampaignAnalytics(campaignId: string) {
+    const { projectId, pwd } = await this.getProjectConfig();
+    const res = await fetch(`https://apis.aisensy.com/project-apis/v1/project/${projectId}/campaign/${campaignId}/analytics`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-AiSensy-Project-API-Pwd': pwd,
+      },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new BadRequestException(data?.message || data?.error || 'Failed to fetch campaign analytics from AiSensy');
+    }
+    return data;
   }
 }

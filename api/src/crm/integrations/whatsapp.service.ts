@@ -237,6 +237,8 @@ export class WhatsAppService {
     userId?: string;
     module?: string;
     entityId?: string;
+    mediaUrl?: string;
+    mediaFilename?: string;
   }): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const config = await this.getConfig();
     if (!config)
@@ -263,6 +265,10 @@ export class WhatsAppService {
         campaignName: templateName,
         source: config.sourceLabel,
         templateParams: this.flattenParamsForAiSensy(params.components),
+        media: params.mediaUrl ? {
+          url: params.mediaUrl,
+          filename: params.mediaFilename || 'file'
+        } : undefined,
       });
 
       const body =
@@ -286,6 +292,11 @@ export class WhatsAppService {
           ? new Types.ObjectId(params.entityId)
           : undefined,
         status: 'sent',
+        attachment: params.mediaUrl ? {
+          type: 'image',
+          url: params.mediaUrl,
+          filename: params.mediaFilename
+        } : undefined,
         meta: {
           ...result.raw,
           provider: 'aisensy',
@@ -412,11 +423,119 @@ export class WhatsAppService {
       return { success: false, error: 'WhatsApp not configured or inactive' };
     }
     if (config.provider === 'aisensy') {
-      return {
-        success: false,
-        error:
-          "AiSensy doesn't expose a public template-list API — manage & approve templates in the AiSensy dashboard, then map each one to a Campaign name under Settings → WhatsApp templates.",
-      };
+      if (!config.aisensyProjectId || !config.aisensyProjectApiPassword) {
+        return {
+          success: false,
+          error: 'AiSensy Project ID and Project API Password are required to sync templates.',
+        };
+      }
+      try {
+        const templates: WhatsAppCachedTemplate[] = [];
+        let hasMore = true;
+        let after: string | undefined = undefined;
+
+        const reverseLanguageMap: Record<string, string> = {
+          'english': 'en',
+          'english (us)': 'en_US',
+          'english (uk)': 'en_GB',
+          'hindi': 'hi',
+          'spanish': 'es',
+          'portuguese': 'pt',
+        };
+
+        while (hasMore) {
+          let url = `https://apis.aisensy.com/project-apis/v1/project/${config.aisensyProjectId}/wa_template?limit=100`;
+          if (after) url += `&after=${after}`;
+          
+          const res = await fetch(url, {
+            headers: {
+              'Accept': 'application/json',
+              'X-AiSensy-Project-API-Pwd': config.aisensyProjectApiPassword || '',
+            }
+          });
+          const data: any = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const errorMessage = data?.message || data?.error || 'Failed to sync templates from AiSensy';
+            this.logger.error(`AiSensy template sync failed: ${JSON.stringify(data)}`);
+            return { success: false, error: errorMessage };
+          }
+
+          const page = Array.isArray(data?.template) ? data.template : [];
+          for (const row of page) {
+            const langLower = String(row.language || '').toLowerCase();
+            const language = reverseLanguageMap[langLower] || langLower.substring(0, 2);
+
+            const components: any[] = [];
+            components.push({
+              type: 'BODY',
+              text: row.text || '',
+              example: row.sample_text && row.sample_text !== row.text ? {
+                body_text: [
+                  (row.sample_text.match(/\[(.*?)\]/g) || []).map((v: string) => v.slice(1, -1))
+                ]
+              } : undefined
+            });
+
+            if (row.footer_text) {
+              components.push({ type: 'FOOTER', text: row.footer_text });
+            }
+
+            if (row.header_text) {
+              components.push({ type: 'HEADER', format: 'TEXT', text: row.header_text });
+            } else if (['IMAGE', 'VIDEO', 'FILE', 'LOCATION'].includes(row.type)) {
+              components.push({ type: 'HEADER', format: row.type === 'FILE' ? 'DOCUMENT' : row.type });
+            }
+
+            if (Array.isArray(row.buttons) && row.buttons.length > 0) {
+              components.push({
+                type: 'BUTTONS',
+                buttons: row.buttons.map((b: any) => ({
+                  type: b.type === 'Phone Number' ? 'PHONE_NUMBER' : (b.type === 'URL' ? 'URL' : 'QUICK_REPLY'),
+                  text: b.button_title || b.text || '',
+                  url: b.type === 'URL' ? b.button_value : undefined,
+                  phone_number: b.type === 'Phone Number' ? b.button_value : undefined,
+                }))
+              });
+            }
+
+            templates.push({
+              id: row.template_id || row.id || undefined,
+              name: String(row.name || ''),
+              status: String(row.status || ''),
+              language,
+              category: row.category ? String(row.category) : undefined,
+              components,
+            });
+          }
+
+          if (page.length < 100) {
+            hasMore = false;
+          } else {
+            after = page[page.length - 1].id;
+          }
+        }
+
+        const syncedAt = new Date();
+        await this.integrationModel.updateOne(
+          { type: 'whatsapp' },
+          {
+            $set: {
+              templates,
+              templatesSyncedAt: syncedAt,
+            },
+          },
+        );
+
+        return {
+          success: true,
+          templates,
+          syncedAt: syncedAt.toISOString(),
+        };
+
+      } catch (e: any) {
+        this.logger.error(`AiSensy template sync error: ${e?.message}`);
+        return { success: false, error: e?.message || 'Failed to sync templates' };
+      }
     }
     if (!config.businessAccountId) {
       return {
@@ -688,5 +807,42 @@ export class WhatsAppService {
     if (type === 'video') return 'mp4';
     if (type === 'audio') return 'aac';
     return 'bin';
+  }
+
+  async logOutboundMessage(params: {
+    phone: string;
+    body: string;
+    messageId?: string;
+    sentBy?: Types.ObjectId;
+    module?: string;
+    entityId?: Types.ObjectId;
+    mediaUrl?: string;
+    mediaFilename?: string;
+    rawPayload?: any;
+    templateName?: string;
+  }): Promise<WhatsAppMessageDocument> {
+    const phone = params.phone.replace(/\D/g, '');
+    const saved = await this.messageModel.create({
+      waId: phone,
+      direction: 'outbound',
+      body: params.body,
+      messageId: params.messageId,
+      sentBy: params.sentBy,
+      module: params.module,
+      entityId: params.entityId,
+      status: 'sent',
+      attachment: params.mediaUrl ? {
+        type: 'image',
+        url: params.mediaUrl,
+        filename: params.mediaFilename
+      } : undefined,
+      meta: {
+        ...params.rawPayload,
+        provider: 'aisensy',
+        template: params.templateName ? { name: params.templateName } : undefined
+      },
+    });
+    this.emitWhatsAppEvent(phone, saved);
+    return saved;
   }
 }
