@@ -17,7 +17,7 @@ export class WhatsAppMessage {
   @Prop()
   messageId?: string; // Meta message ID
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   sentBy?: Types.ObjectId;
 
   @Prop({ type: String })

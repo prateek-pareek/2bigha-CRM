@@ -44,14 +44,21 @@ export class WhatsAppTemplatesService {
 
   private async getWhatsAppConfig(): Promise<{
     apiKey: string;
-    phoneNumberId: string;
+    phoneNumberId?: string;
     businessAccountId?: string;
+    provider?: 'meta' | 'aisensy';
+    aisensyProjectId?: string;
+    aisensyProjectApiPassword?: string;
   } | null> {
     const config = await this.integrationModel
       .findOne({ type: 'whatsapp' })
       .lean()
       .exec();
-    if (!config?.apiKey || !config?.phoneNumberId || !config?.isActive) {
+    if (!config?.apiKey || !config?.isActive) {
+      return null;
+    }
+    const provider = config.provider === 'aisensy' ? 'aisensy' : 'meta';
+    if (provider === 'meta' && !config.phoneNumberId) {
       return null;
     }
     return {
@@ -59,6 +66,13 @@ export class WhatsAppTemplatesService {
       phoneNumberId: config.phoneNumberId,
       businessAccountId: config.businessAccountId
         ? String(config.businessAccountId)
+        : undefined,
+      provider,
+      aisensyProjectId: config.aisensyProjectId
+        ? String(config.aisensyProjectId)
+        : undefined,
+      aisensyProjectApiPassword: config.aisensyProjectApiPassword
+        ? String(config.aisensyProjectApiPassword)
         : undefined,
     };
   }
@@ -280,6 +294,160 @@ export class WhatsAppTemplatesService {
     if (!config) {
       throw new BadRequestException('WhatsApp integration is not configured or inactive');
     }
+
+    if (config.provider === 'aisensy') {
+      if (!config.aisensyProjectId || !config.aisensyProjectApiPassword) {
+        throw new BadRequestException(
+          "AiSensy Project ID and Project API Password are required to submit templates. Add them in Settings → Integrations → WhatsApp.",
+        );
+      }
+
+      // Map local template to AiSensy wa_template POST payload
+      const bodyComp = template.components.find((c: any) => String(c.type).toUpperCase() === 'BODY');
+      const text = bodyComp?.text || '';
+      const examples = bodyComp?.example?.body_text?.[0] || [];
+      const fallbackExamples = [
+        'John Doe',
+        'Meadows Villa',
+        'August 25',
+        '11:00 AM',
+        'representative',
+        '2Bigha Services',
+      ];
+      let sample_text = text;
+      const matches = text.match(/\{\{\s*\d+\s*\}\}/g) || [];
+      for (const match of matches) {
+        const num = parseInt(match.replace(/\D/g, ''), 10);
+        const val = examples[num - 1] || fallbackExamples[num - 1] || 'value';
+        sample_text = sample_text.replace(match, `[${val}]`);
+      }
+
+      const headerComp = template.components.find((c: any) => String(c.type).toUpperCase() === 'HEADER');
+      const footerComp = template.components.find((c: any) => String(c.type).toUpperCase() === 'FOOTER');
+      const buttonsComp = template.components.find((c: any) => String(c.type).toUpperCase() === 'BUTTONS');
+
+      let type = 'TEXT';
+      let header_type: string | undefined = undefined;
+      if (headerComp) {
+        const format = String(headerComp.format || '').toUpperCase();
+        if (format === 'IMAGE') {
+          type = 'IMAGE';
+          header_type = 'IMAGE';
+        } else if (format === 'VIDEO') {
+          type = 'VIDEO';
+          header_type = 'VIDEO';
+        } else if (format === 'DOCUMENT') {
+          type = 'FILE';
+          header_type = 'VIDEO';
+        } else if (format === 'TEXT') {
+          header_type = 'TEXT';
+        }
+      }
+
+      let languageMap: Record<string, string> = {
+        'en': 'English',
+        'en_us': 'English',
+        'en_gb': 'English',
+        'hi': 'Hindi',
+        'es': 'Spanish',
+        'pt': 'Portuguese',
+      };
+      const langKey = String(template.language || '').toLowerCase().replace('_', '-');
+      const langName = languageMap[langKey] || languageMap[langKey.split('-')[0]] || 'English';
+
+      const category = String(template.category || 'MARKETING').toUpperCase();
+
+      let message_action_type: string | undefined = undefined;
+      let call_to_action: any[] | undefined = undefined;
+      let quick_replies: string[] | undefined = undefined;
+
+      if (buttonsComp && Array.isArray(buttonsComp.buttons)) {
+        const btns = buttonsComp.buttons;
+        const hasUrlOrPhone = btns.some((b: any) => ['URL', 'PHONE_NUMBER'].includes(String(b.type).toUpperCase()));
+        const hasQuickReply = btns.some((b: any) => String(b.type).toUpperCase() === 'QUICK_REPLY');
+
+        if (hasUrlOrPhone && hasQuickReply) {
+          message_action_type = 'All';
+        } else if (hasUrlOrPhone) {
+          message_action_type = 'CTA';
+        } else if (hasQuickReply) {
+          message_action_type = 'QuickReplies';
+        }
+
+        if (hasUrlOrPhone) {
+          call_to_action = btns
+            .filter((b: any) => ['URL', 'PHONE_NUMBER'].includes(String(b.type).toUpperCase()))
+            .map((b: any) => ({
+              type: String(b.type).toUpperCase() === 'PHONE_NUMBER' ? 'Phone Number' : 'URL',
+              button_title: b.text || 'Action',
+              button_value: b.url || b.phoneNumber || b.phone_number || '',
+            }));
+        }
+        if (hasQuickReply) {
+          quick_replies = btns
+            .filter((b: any) => String(b.type).toUpperCase() === 'QUICK_REPLY')
+            .map((b: any) => b.text || 'Reply');
+        }
+      }
+
+      const payload: any = {
+        label: template.name,
+        category,
+        type,
+        language: langName,
+        name: template.name,
+        text,
+        sample_text,
+      };
+
+      if (header_type) payload.header_type = header_type;
+      if (headerComp?.text && header_type === 'TEXT') payload.header_text = headerComp.text;
+      if (footerComp?.text) payload.footer_text = footerComp.text;
+      if (message_action_type) payload.message_action_type = message_action_type;
+      if (call_to_action) payload.call_to_action = call_to_action;
+      if (quick_replies) payload.quick_replies = quick_replies;
+      console.log('AiSensy Submit Payload:', JSON.stringify(payload, null, 2));
+      try {
+        const res = await fetch(
+          `https://apis.aisensy.com/project-apis/v1/project/${config.aisensyProjectId}/wa_template`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-AiSensy-Project-API-Pwd': config.aisensyProjectApiPassword || '',
+            },
+            body: JSON.stringify(payload),
+          },
+        );
+
+        const data: any = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          const errorMessage =
+            data?.message ||
+            data?.error ||
+            'Failed to submit template to AiSensy';
+          this.logger.error(`AiSensy template submit failed: ${JSON.stringify(data)}`);
+          template.status = 'REJECTED';
+          template.lastError = errorMessage;
+          await template.save();
+          throw new BadRequestException(errorMessage);
+        }
+
+        template.status = 'PENDING';
+        template.aisensyCampaignName = template.name;
+        template.submittedAt = new Date();
+        template.lastError = undefined;
+        await template.save();
+        return template;
+      } catch (e: any) {
+        this.logger.error(`AiSensy template submit error: ${e?.message}`);
+        if (e instanceof BadRequestException) throw e;
+        throw new BadRequestException(e?.message || 'AiSensy submit failed');
+      }
+    }
+
     if (!config.businessAccountId) {
       throw new BadRequestException(
         'Business Account ID (WABA) is required to submit templates. Add it in WhatsApp integration settings.',
@@ -354,6 +522,13 @@ export class WhatsAppTemplatesService {
     const config = await this.getWhatsAppConfig();
     if (!config) {
       return { success: false, error: 'WhatsApp not configured or inactive' };
+    }
+    if (config.provider === 'aisensy') {
+      return {
+        success: false,
+        error:
+          "AiSensy doesn't expose a public template-list API — manage & approve templates in the AiSensy dashboard, then map each one to a Campaign name under Settings → WhatsApp templates.",
+      };
     }
     if (!config.businessAccountId) {
       return {
