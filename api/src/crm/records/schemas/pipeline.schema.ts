@@ -16,7 +16,8 @@ export class Pipeline {
     | 'platform_opportunities'
     | 'proposals'
     | 'quotations'
-    | 'contracts';
+    | 'contracts'
+    | 'legal';
 
   @Prop({
     default: 'it_consulting',

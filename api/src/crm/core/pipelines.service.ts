@@ -13,7 +13,8 @@ export type CrmPipelineType =
   | 'platform_opportunities'
   | 'proposals'
   | 'quotations'
-  | 'contracts';
+  | 'contracts'
+  | 'legal';
 
 @Injectable()
 export class PipelinesService implements OnModuleInit {
@@ -52,6 +53,8 @@ export class PipelinesService implements OnModuleInit {
       filter.type = 'quotations';
     } else if (type === 'contracts') {
       filter.type = 'contracts';
+    } else if (type === 'legal') {
+      filter.type = 'legal';
     }
     return this.pipelineModel.find(filter).sort({ createdAt: 1 }).exec();
   }
@@ -174,6 +177,36 @@ export class PipelinesService implements OnModuleInit {
         categoryType: 'it_consulting',
         isDefault: true,
         stages: DEFAULT_CONTRACT_PIPELINE_STAGES.map((s) => ({ ...s })),
+      });
+    }
+
+    const legalCount = await this.pipelineModel.countDocuments({
+      type: 'legal',
+    });
+    if (legalCount === 0) {
+      await this.create({
+        name: 'Legal Case Pipeline',
+        type: 'legal',
+        categoryType: 'it_consulting',
+        isDefault: true,
+        stages: [
+          { name: 'Intake', probability: 10, order: 1, isDefault: true },
+          {
+            name: 'Document Review',
+            probability: 30,
+            order: 2,
+            isDefault: false,
+          },
+          { name: 'Drafting', probability: 50, order: 3, isDefault: false },
+          { name: 'Negotiation', probability: 70, order: 4, isDefault: false },
+          {
+            name: 'Signed / Closed',
+            probability: 100,
+            order: 5,
+            isDefault: false,
+          },
+          { name: 'Terminated', probability: 0, order: 6, isDefault: false },
+        ],
       });
     }
 

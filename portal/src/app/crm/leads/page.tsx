@@ -113,7 +113,6 @@ import {
   CrmTableShell,
   CrmTable,
   CrmListPersonCell,
-  CrmListOrgCell,
   CrmListOwnerCell,
   CrmListStatusBadge,
   CrmTableCheck,
@@ -170,7 +169,6 @@ const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'name', label: 'Name' },
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
-  { key: 'organization', label: 'Organization' },
   { key: 'status', label: 'Status' },
   { key: 'stage', label: 'Stage' },
   { key: 'callStatus', label: 'Call Status' },
@@ -1474,7 +1472,6 @@ export default function LeadsPage() {
       }
       case 'email': return <span className="text-sm text-[#707070]">{lead.email || '—'}</span>;
       case 'phone': return <span className="text-sm text-[#707070]">{lead.mobileNo || lead.phone || '—'}</span>;
-      case 'organization': return <CrmListOrgCell name={lead.organization || '—'} />;
       case 'source': return <span className="text-sm text-[#707070]">{lead.source || '—'}</span>;
       case 'priority': return <span className="text-sm text-[#707070]">{lead.priority || '—'}</span>;
       case 'leadOwner': return <CrmListOwnerCell name={lead.leadOwner || ''} />;

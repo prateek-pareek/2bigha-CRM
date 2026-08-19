@@ -207,43 +207,72 @@ function applyHubSpotHints(
   return out;
 }
 
-/** CSV column headers + one example row, matching the leads Role/WhatsApp/Group/Lead Type flow. */
-const LEADS_TEMPLATE_HEADERS = [
-  'First Name',
-  'Last Name',
-  'Role',
-  'Email',
-  'Contact Number',
-  'WhatsApp Number',
-  'Group',
-  'Address',
-  'Website',
-  'Lead Type',
-  'Lead Source',
-];
-const LEADS_TEMPLATE_EXAMPLE = [
-  'Shagun',
-  'Mishra',
-  'OWNER/AGENT/USER',
-  'sapnashagun@example.com',
-  '+919876543210',
-  '+919876543210',
-  'Seller',
-  '123 Street Gurgaon Haryana India 122017',
-  'https://example.com',
-  'Lead',
-  'Email',
-];
+/** CSV column headers + one example row per entity type, shown to teams before they build their import file. */
+const IMPORT_TEMPLATE_FIELDS: Record<ImportModalProps['type'], { header: string; example: string }[]> = {
+  leads: [
+    { header: 'First Name', example: 'Shagun' },
+    { header: 'Last Name', example: 'Mishra' },
+    { header: 'Role', example: 'OWNER/AGENT/USER' },
+    { header: 'Email', example: 'sapnashagun@example.com' },
+    { header: 'Contact Number', example: '+919876543210' },
+    { header: 'WhatsApp Number', example: '+919876543210' },
+    { header: 'Group', example: 'Seller' },
+    { header: 'Address', example: '123 Street Gurgaon Haryana India 122017' },
+    { header: 'Website', example: 'https://example.com' },
+    { header: 'Lead Type', example: 'Lead' },
+    { header: 'Lead Source', example: 'Email' },
+  ],
+  contacts: [
+    { header: 'First Name', example: 'Riya' },
+    { header: 'Last Name', example: 'Kapoor' },
+    { header: 'Email', example: 'riya.kapoor@example.com' },
+    { header: 'Mobile No', example: '+919812345678' },
+    { header: 'Phone', example: '+911140001234' },
+    { header: 'Job Title', example: 'Marketing Manager' },
+    { header: 'Organization', example: 'Acme Realty Pvt Ltd' },
+    { header: 'Lead Source', example: 'Referral' },
+    { header: 'Industry', example: 'Real Estate' },
+    { header: 'Website', example: 'https://acme-realty.example.com' },
+    { header: 'Status', example: 'Active' },
+  ],
+  deals: [
+    { header: 'Deal Title', example: 'Acme HQ - 5000 sqft Lease' },
+    { header: 'Value', example: '2500000' },
+    { header: 'Stage', example: 'Negotiation' },
+    { header: 'Probability', example: '60' },
+    { header: 'Company / Organization', example: 'Acme Realty Pvt Ltd' },
+    { header: 'Contact Email', example: 'riya.kapoor@example.com' },
+  ],
+  clients: [
+    { header: 'Client Name', example: 'Rohit Sharma' },
+    { header: 'Email', example: 'rohit.sharma@example.com' },
+    { header: 'Phone', example: '+919900112233' },
+    { header: 'Status', example: 'Active' },
+  ],
+  organizations: [
+    { header: 'Company Name', example: 'Acme Realty Pvt Ltd' },
+    { header: 'Website', example: 'https://acme-realty.example.com' },
+    { header: 'Phone', example: '+911140001234' },
+    { header: 'Email', example: 'info@acme-realty.example.com' },
+    { header: 'Industry', example: 'Real Estate' },
+    { header: 'Territory', example: 'North India' },
+    { header: 'No. of Employees', example: '150' },
+    { header: 'Annual Revenue', example: '50000000' },
+    { header: 'Address', example: '456 MG Road Bangalore Karnataka India 560001' },
+  ],
+};
 
-function downloadLeadsCsvTemplate() {
-  const csv = [LEADS_TEMPLATE_HEADERS, LEADS_TEMPLATE_EXAMPLE]
-    .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
+function downloadCsvTemplate(type: ImportModalProps['type']) {
+  const fields = IMPORT_TEMPLATE_FIELDS[type] || [];
+  if (fields.length === 0) return;
+  const csv = [fields.map((f) => f.header), fields.map((f) => f.example)]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'leads-import-template.csv';
+  a.download = `${type}-import-template.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -493,20 +522,18 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
          <p className="text-sm font-medium text-text-muted mt-2">Support .xlsx, .csv (Max 10MB)</p>
         </div>
 
-        {type === 'leads' && (
-         <div className="flex items-center justify-center">
-          <button
-           type="button"
-           onClick={(e) => {
-            e.stopPropagation();
-            downloadLeadsCsvTemplate();
-           }}
-           className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
-          >
-           <FileText size={14} className="text-primary/70" /> Download CSV Template
-          </button>
-         </div>
-        )}
+        <div className="flex items-center justify-center">
+         <button
+          type="button"
+          onClick={(e) => {
+           e.stopPropagation();
+           downloadCsvTemplate(type);
+          }}
+          className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
+         >
+          <FileText size={14} className="text-primary/70" /> Download CSV Template
+         </button>
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
          <div className="p-5 bg-surface-dim rounded-[var(--radius-md)] border border-[var(--border-color)]">

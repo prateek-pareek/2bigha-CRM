@@ -71,6 +71,8 @@ export const BUILTIN_FILTER_OPTIONS: Record<string, string[]> = {
   pricingType: ['fixed', 'retainer', 'hourly', 'subscription'],
   platformEngagementStatus: ['New', 'Engaged', 'Won', 'Lost', 'Archived'],
   callStatus: ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'],
+  caseType: ['contract_review', 'dispute', 'compliance', 'nda', 'other'],
+  priority: ['low', 'medium', 'high', 'urgent'],
 };
 
 /**
@@ -85,6 +87,8 @@ const DATE_KEYS = new Set([
   'createdAt',
   'expectedClosureDate',
   'closedDate',
+  'startDate',
+  'expiryDate',
 ]);
 
 const NUMBER_KEYS = new Set([
@@ -95,6 +99,7 @@ const NUMBER_KEYS = new Set([
   'expectedDealValue',
   'exchangeRate',
   'contractMonths',
+  'contractValue',
 ]);
 
 const CHECKBOX_KEYS = new Set(['converted']);
@@ -113,6 +118,8 @@ const SELECT_KEYS = new Set([
   'callStatus',
   'leadCategory',
   'group',
+  'caseType',
+  'priority',
 ]);
 
 /** ObjectId / array / non-filterable layout keys */
@@ -191,6 +198,7 @@ export function getStaticProperties(
     case 'organizations':
     case 'deals':
     case 'clients':
+    case 'legal':
       props = fieldDefsToFilterProperties(module);
       break;
     case 'activities':

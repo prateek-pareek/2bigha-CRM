@@ -53,12 +53,60 @@ export class Integration {
 
   /**
    * Meta App Secret (App Dashboard → Settings → Basic) — used to verify the
-   * `X-Hub-Signature-256` header on inbound `webhooks/whatsapp` POSTs so
-   * only genuine Meta traffic is trusted. Meta-provider only; optional but
-   * strongly recommended (see WhatsAppWebhookController).
+   * `X-Hub-Signature-256` header on inbound webhook POSTs so only genuine
+   * Meta traffic is trusted. Shared shape across every Meta-backed
+   * integration doc (`type: 'whatsapp'` and `type: 'meta-leadgen'` each keep
+   * their own copy since they can be different Meta Apps); optional but
+   * strongly recommended (see WhatsAppWebhookController / MetaLeadAdsWebhookController).
    */
   @Prop()
   appSecret?: string;
+
+  /**
+   * Facebook Page ID whose Lead Ads forms are synced into CRM Leads
+   * (`type: 'meta-leadgen'` only). A Page Access Token is scoped to exactly
+   * one page, so this doc only ever represents one.
+   */
+  @Prop()
+  pageId?: string;
+
+  /**
+   * Long-lived Page Access Token (Graph API Explorer → select the Page →
+   * generate + exchange for a long-lived token) used both to fetch full
+   * lead details after a `leadgen` webhook fires and to list the page's Lead
+   * Ads forms. `type: 'meta-leadgen'` only — distinct from WhatsApp's `apiKey`.
+   */
+  @Prop()
+  pageAccessToken?: string;
+
+  /**
+   * Optional allow-list of Lead Ads Form IDs to sync (`type: 'meta-leadgen'`
+   * only). Empty/unset means every lead form on `pageId` is synced. See
+   * MetaLeadAdsService.processLeadgenEvent.
+   */
+  @Prop({ type: [String], default: [] })
+  formIds?: string[];
+
+  /**
+   * Cached `{ id, name, status }` rows for the page's Lead Ads forms,
+   * refreshed by MetaLeadAdsService.listForms() — lets the settings UI show
+   * form names instead of raw IDs, and lets processed leads attribute a
+   * human-readable form name to `Lead.source`.
+   */
+  @Prop({ type: [Object], default: [] })
+  forms?: Array<{ id: string; name: string; status?: string }>;
+
+  @Prop()
+  formsSyncedAt?: Date;
+
+  /**
+   * Last time MetaLeadAdsPollingCronService successfully finished a polling
+   * pass — drives the `since` window for the next pass (with a small
+   * overlap; see MetaLeadAdsService.pollForNewLeads). `type: 'meta-leadgen'`
+   * only.
+   */
+  @Prop()
+  lastPolledAt?: Date;
 
   /**
    * AiSensy "Project API" credentials — a separate surface from the

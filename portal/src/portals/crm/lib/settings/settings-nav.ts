@@ -3,7 +3,6 @@ import {
   BookOpen,
   Braces,
   Building2,
-  ClipboardCheck,
   Columns,
   Database,
   DollarSign,
@@ -14,7 +13,6 @@ import {
   LayoutDashboard,
   ListChecks,
   Mail,
-  MailX,
   MessageCircle,
   ScrollText,
   Share2,
@@ -47,6 +45,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
     description: "Deliverability, templates, and AI drafting.",
     icon: Mail,
     items: [
+      /* Hidden for now, not needed yet. Re-enable by uncommenting.
       {
         name: "Email Deliverability",
         description: "Per-inbox hourly and daily sending caps to protect domain reputation.",
@@ -71,6 +70,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         href: "/crm/settings/email-deliverability/undeliverable",
         icon: MailX,
       },
+      */
       {
         name: "Email Templates",
         description: "Create reusable email templates for outreach and follow-ups.",
