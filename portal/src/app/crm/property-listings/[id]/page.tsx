@@ -6,12 +6,14 @@ import {
   ArrowUpRight,
   Bath,
   Bed,
+  Check,
   Home,
   Mail,
   Phone,
   Ruler,
   Trash2,
   User,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
@@ -23,7 +25,9 @@ import {
   formatAddress,
   formatPrice,
   statusBadgeTone,
+  approvalStatusBadgeTone,
   type PropertyListingRecord,
+  type PropertyListingApprovalStatus,
 } from "@/lib/crm/property-listings/types";
 
 function authHeaders(): HeadersInit {
@@ -49,6 +53,7 @@ export default function PropertyListingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [listing, setListing] = useState<PropertyListingRecord | null>(null);
   const [activeImage, setActiveImage] = useState(0);
+  const [savingApproval, setSavingApproval] = useState(false);
   const [linkedLead, setLinkedLead] = useState<{ _id: string; firstName?: string; lastName?: string } | null>(
     null,
   );
@@ -105,6 +110,32 @@ export default function PropertyListingDetailPage() {
     }
   };
 
+  const setApprovalStatus = async (approvalStatus: PropertyListingApprovalStatus) => {
+    setSavingApproval(true);
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/property-listings/${id}`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalStatus }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message || "Failed to update approval status");
+        return;
+      }
+      toast.success(
+        approvalStatus === "Approved"
+          ? "Listing approved — now visible in the main Listing view."
+          : "Listing rejected.",
+      );
+      setListing(data);
+    } catch {
+      toast.error("Failed to update approval status");
+    } finally {
+      setSavingApproval(false);
+    }
+  };
+
   if (loading || !listing) {
     return <CrmRecordDetailSkeleton />;
   }
@@ -121,6 +152,9 @@ export default function PropertyListingDetailPage() {
         badge={
           <div className="flex items-center gap-1.5">
             <CrmStatusBadge tone={statusBadgeTone(listing.status)}>{listing.status}</CrmStatusBadge>
+            <CrmStatusBadge tone={approvalStatusBadgeTone(listing.approvalStatus)}>
+              {listing.approvalStatus}
+            </CrmStatusBadge>
             <CrmSoftBadge label={`For ${listing.listedFor}`} tone="secondary" />
           </div>
         }
@@ -131,13 +165,35 @@ export default function PropertyListingDetailPage() {
           { label: listing.title },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => void remove()}
-            className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-xs font-semibold text-[var(--text-muted)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--error-light)] hover:text-[var(--error)]"
-          >
-            <Trash2 size={14} /> Delete
-          </button>
+          <div className="flex items-center gap-2">
+            {listing.approvalStatus !== "Approved" ? (
+              <button
+                type="button"
+                disabled={savingApproval}
+                onClick={() => void setApprovalStatus("Approved")}
+                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 shadow-[var(--crm-shadow-input)] transition-colors hover:bg-emerald-100 disabled:opacity-50"
+              >
+                <Check size={14} /> Approve
+              </button>
+            ) : null}
+            {listing.approvalStatus !== "Rejected" ? (
+              <button
+                type="button"
+                disabled={savingApproval}
+                onClick={() => void setApprovalStatus("Rejected")}
+                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-xs font-semibold text-[var(--text-muted)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--error-light)] hover:text-[var(--error)] disabled:opacity-50"
+              >
+                <X size={14} /> Reject
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void remove()}
+              className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-xs font-semibold text-[var(--text-muted)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--error-light)] hover:text-[var(--error)]"
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+          </div>
         }
         className="mb-4"
       />

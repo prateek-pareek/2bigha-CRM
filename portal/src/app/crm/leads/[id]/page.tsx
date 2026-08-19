@@ -916,7 +916,12 @@ export default function LeadDetailPage() {
             }}
           />
           <EmailEngagementPanel rows={emailTracking} />
-          <CrmRecordOwnerCard ownerLabel={lead.leadOwner} />
+          <CrmRecordOwnerCard
+            ownerLabel={lead.leadOwner}
+            leadId={entityId}
+            canReassign={hasAccess('leads:write')}
+            onReassigned={() => void fetchLead()}
+          />
           {entityId ? (
             <LeadAssociationsPanel
               leadId={entityId}

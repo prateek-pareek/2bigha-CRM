@@ -396,6 +396,21 @@ const crmGroups = [
         ],
     },
     {
+        name: 'IVR Service',
+        items: [
+            {
+                name: 'IVR Service',
+                href: '/crm/ivr/call-logs',
+                icon: CrmNavIcon.Phone,
+                permission: 'leads:read',
+                children: [
+                    { name: 'Call Logs', href: '/crm/ivr/call-logs', icon: CrmNavIcon.Phone, permission: 'leads:read' },
+                    { name: 'My Call Logs', href: '/crm/ivr/my-call-logs', icon: CrmNavIcon.Phone, permission: 'leads:read' },
+                ],
+            },
+        ],
+    },
+    {
         name: 'Commercials',
         items: [
             { name: 'Deals', href: '/crm/deals', icon: CrmNavIcon.Deals, permission: 'deals:read' },

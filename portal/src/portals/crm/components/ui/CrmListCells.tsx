@@ -1,11 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { crmStageAccent } from "@/lib/crm/stage-accent";
 import { CrmIcon, CrmNavIcon } from "@/lib/crm/shared/icons";
 import { CrmKanbanAvatar, crmKanbanAvatarTone } from "./CrmKanban";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 /** CRMS list status pill — solid colored badge (`.badge-status` 12/500) */
 export function CrmListStatusBadge({
@@ -224,7 +225,11 @@ type CrmTableActionMenuProps = {
   onEmail?: () => void;
   onCall?: () => void;
   onWhatsApp?: () => void;
+  onReassign?: () => void;
+  onNotes?: () => void;
   className?: string;
+  /** Which edge the dropdown panel hangs from. Use "left" when this menu sits near the left edge of the table (e.g. a leading Action column) so the panel doesn't overflow off-screen. Defaults to "right" (panel's right edge pinned to the trigger). */
+  menuAlign?: "left" | "right";
 };
 
 /** Always-visible CRMS `action-icon btn-xs outline` ⋮ menu */
@@ -235,7 +240,10 @@ export function CrmTableActionMenu({
   onEmail,
   onCall,
   onWhatsApp,
+  onReassign,
+  onNotes,
   className,
+  menuAlign = "right",
 }: CrmTableActionMenuProps) {
   return (
     <div className={cn("crm-table-action-menu relative inline-flex", className)}>
@@ -248,7 +256,10 @@ export function CrmTableActionMenu({
           <CrmIcon.DotsVertical size={12} />
         </summary>
         <div
-          className="absolute right-0 top-full z-40 mt-1 min-w-[140px] rounded-[5px] border border-[#e2e8f0] bg-white py-1 shadow-[var(--crm-shadow-raised)]"
+          className={cn(
+            "absolute top-full z-40 mt-1 min-w-[140px] rounded-[5px] border border-[#e2e8f0] bg-white py-1 shadow-[var(--crm-shadow-raised)]",
+            menuAlign === "left" ? "left-0" : "right-0",
+          )}
           onClick={(e) => e.stopPropagation()}
         >
           {onEdit ? (
@@ -291,6 +302,26 @@ export function CrmTableActionMenu({
               WhatsApp
             </button>
           ) : null}
+          {onNotes ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+              onClick={onNotes}
+            >
+              <CrmIcon.Activity size={13} className="text-[#2f80ed]" />
+              Notes &amp; follow-up
+            </button>
+          ) : null}
+          {onReassign ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+              onClick={onReassign}
+            >
+              <CrmIcon.Users size={13} className="text-[#2f80ed]" />
+              Reassign
+            </button>
+          ) : null}
           {onClone ? (
             <button
               type="button"
@@ -314,5 +345,61 @@ export function CrmTableActionMenu({
         </div>
       </details>
     </div>
+  );
+}
+
+type CrmHoverActionIconProps = {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  onClick?: () => void;
+  tone?: "primary" | "whatsapp";
+  className?: string;
+};
+
+/** Always-visible row-action icon that shows the underlying number in a hover card, matching the reference CRM's Call/WhatsApp icons. */
+export function CrmHoverActionIcon({
+  icon,
+  label,
+  value,
+  onClick,
+  tone = "primary",
+  className,
+}: CrmHoverActionIconProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick?.();
+          }}
+          aria-label={`${label}: ${value}`}
+          className={cn(
+            "crm-table-action-btn inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white shadow-[0_4px_4px_0_rgba(219,219,219,0.25)]",
+            tone === "whatsapp" ? "text-[#25d366]" : "text-[#2f80ed]",
+            className,
+          )}
+        >
+          {icon}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        sideOffset={6}
+        className="w-auto px-3 py-2"
+      >
+        <div className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+          <span className="font-medium text-[#707070]">{label}:</span>
+          <span className="font-semibold text-[#1f2020]">{value}</span>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

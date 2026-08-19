@@ -37,6 +37,7 @@ export {
   CrmListOwnerCell,
   CrmTableCheck,
   CrmTableActionMenu,
+  CrmHoverActionIcon,
 } from "./CrmListCells";
 export { CrmListToolbar } from "./CrmListToolbar";
 export { CrmHeaderTools } from "./CrmHeaderTools";
