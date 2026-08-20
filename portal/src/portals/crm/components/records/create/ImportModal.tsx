@@ -99,7 +99,11 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
  clients: [
   { label: 'Client Name', key: 'name' },
   { label: 'Email', key: 'email' },
+  { label: 'Additional Emails (comma or semicolon-separated)', key: 'additionalEmails' },
   { label: 'Phone', key: 'phone' },
+  { label: 'WhatsApp Number', key: 'whatsappNumber' },
+  { label: 'Address', key: 'address' },
+  { label: 'Role (OWNER/AGENT/USER)', key: 'role' },
   { label: 'Status', key: 'status' },
  ],
  organizations: [
@@ -336,6 +340,26 @@ const DEALS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.deals.map(
   (f) => DEALS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
 );
 
+/**
+ * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.clients,
+ * with header text matching each field's `label` exactly so re-uploading this template
+ * auto-maps every column.
+ */
+const CLIENTS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.clients.map((f) => f.label);
+const CLIENTS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  name: 'Amit Kumar',
+  email: 'amit.kumar@example.com',
+  additionalEmails: 'amit.personal@example.com; amit.work@example.com',
+  phone: '+919876543210',
+  whatsappNumber: '+919876543210',
+  address: '123 Street, Gurgaon, Haryana, India 122017',
+  role: 'USER',
+  status: 'active',
+};
+const CLIENTS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.clients.map(
+  (f) => CLIENTS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
+);
+
 function downloadCsvTemplate(headers: string[], example: string[], filename: string) {
   const csv = [headers, example]
     .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
@@ -361,6 +385,10 @@ function downloadContactsCsvTemplate() {
 
 function downloadDealsCsvTemplate() {
   downloadCsvTemplate(DEALS_TEMPLATE_HEADERS, DEALS_TEMPLATE_EXAMPLE, 'deals-import-template.csv');
+}
+
+function downloadClientsCsvTemplate() {
+  downloadCsvTemplate(CLIENTS_TEMPLATE_HEADERS, CLIENTS_TEMPLATE_EXAMPLE, 'clients-import-template.csv');
 }
 
 export default function ImportModal({ isOpen, onClose, onSuccess, type }: ImportModalProps) {
@@ -617,7 +645,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
          <p className="text-sm font-medium text-text-muted mt-2">Support .xlsx, .csv (Max 10MB)</p>
         </div>
 
-        {(type === 'leads' || type === 'contacts' || type === 'deals') && (
+        {(type === 'leads' || type === 'contacts' || type === 'deals' || type === 'clients') && (
          <div className="flex items-center justify-center">
           <button
            type="button"
@@ -625,6 +653,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
             e.stopPropagation();
             if (type === 'leads') downloadLeadsCsvTemplate();
             else if (type === 'deals') downloadDealsCsvTemplate();
+            else if (type === 'clients') downloadClientsCsvTemplate();
             else downloadContactsCsvTemplate();
            }}
            className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"

@@ -8647,6 +8647,82 @@ export class CRMService {
             });
             rowOutcome = 'created';
           }
+        } else if (type === 'clients') {
+          if (!mapping) {
+            mappedData.name = row.Name || row.name || row['Client Name'] || 'Unknown';
+            mappedData.email = row.Email || row.email;
+            mappedData.phone = row.Phone || row.phone;
+          }
+          this.stripImportRoutingFields(mappedData);
+          const clientName = String(mappedData.name || 'Unknown').trim() || 'Unknown';
+          const clientEmail = String(mappedData.email ?? '').trim();
+          const clientPhone = this.sanitizePhone(mappedData.mobileNo ?? mappedData.phone);
+          const rawRole = String(mappedData.role ?? '').trim().toUpperCase();
+          const clientRole = this.CLIENT_ROLE_OPTIONS.includes(rawRole)
+            ? rawRole
+            : undefined;
+
+          const clientPayload: Record<string, unknown> = {
+            name: clientName,
+            email: clientEmail || undefined,
+            additionalEmails: Array.isArray(mappedData.additionalEmails)
+              ? mappedData.additionalEmails
+              : undefined,
+            phone: clientPhone || undefined,
+            whatsappNumber: mappedData.whatsappNumber || undefined,
+            address: mappedData.address || undefined,
+            role: clientRole,
+            status: mappedData.status || undefined,
+            customFields,
+          };
+
+          let existingClient: ClientDocument | null = null;
+          if (duplicateStrategy !== 'create') {
+            const matchOr: Record<string, unknown>[] = [];
+            if (clientEmail && clientEmail.includes('@')) {
+              matchOr.push({ email: this.emailRegexForMatch(clientEmail) });
+            }
+            if (clientPhone) matchOr.push({ phone: clientPhone });
+            if (matchOr.length) {
+              existingClient = await this.clientModel
+                .findOne({ $or: matchOr })
+                .exec();
+            }
+          }
+
+          if (existingClient && duplicateStrategy === 'skip') {
+            rowOutcome = 'skipped';
+          } else if (existingClient && duplicateStrategy === 'replace') {
+            const mergedCf = this.mergeCustomFieldsMaps(undefined, customFields);
+            await this.clientModel
+              .findByIdAndUpdate(existingClient._id, {
+                $set: { ...clientPayload, customFields: mergedCf },
+              })
+              .exec();
+            rowOutcome = 'replaced';
+          } else if (existingClient && duplicateStrategy === 'merge') {
+            const mergedCf = this.mergeCustomFieldsMaps(
+              existingClient.customFields,
+              customFields,
+            );
+            const existingLean = existingClient.toObject
+              ? existingClient.toObject()
+              : (existingClient as unknown as Record<string, unknown>);
+            const mergePatch = this.buildImportPersonMergePatch(
+              existingLean,
+              clientPayload,
+              ['name', 'email', 'phone', 'whatsappNumber', 'address', 'role', 'status'],
+            );
+            await this.clientModel
+              .findByIdAndUpdate(existingClient._id, {
+                $set: { ...mergePatch, customFields: mergedCf },
+              })
+              .exec();
+            rowOutcome = 'merged';
+          } else {
+            await this.clientModel.create(clientPayload);
+            rowOutcome = 'created';
+          }
         }
 
         if (rowOutcome !== 'failed') {
