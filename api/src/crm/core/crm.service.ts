@@ -3758,6 +3758,7 @@ export class CRMService {
     dto.pipeline = this.toObjectIdSafe(dto.pipeline);
     dto.lead = this.toObjectIdSafe(dto.lead);
     dto.contactPerson = this.toObjectIdSafe(dto.contactPerson);
+    dto.propertyListingId = this.toObjectIdSafe(dto.propertyListingId);
     if (dto.sharedWith !== undefined) {
       dto.sharedWith = this.normalizeObjectIdArray(dto.sharedWith);
     }
@@ -4922,6 +4923,8 @@ export class CRMService {
     if (dto.lead !== undefined) dto.lead = this.toObjectIdSafe(dto.lead);
     if (dto.contactPerson !== undefined)
       dto.contactPerson = this.toObjectIdSafe(dto.contactPerson);
+    if (dto.propertyListingId !== undefined)
+      dto.propertyListingId = this.toObjectIdSafe(dto.propertyListingId);
 
     if (dto.portalPmProjectId !== undefined) {
       const v = dto.portalPmProjectId;

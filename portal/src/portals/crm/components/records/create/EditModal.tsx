@@ -304,6 +304,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
 
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [dealContactsList, setDealContactsList] = useState<any[]>([]);
+  const [dealProperties, setDealProperties] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isOpen || (type !== 'Deal' && type !== 'Contact')) return;
@@ -320,6 +321,14 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
             headers: { Authorization: `Bearer ${token}` },
           });
           if (cRes.ok) setDealContactsList(await cRes.json());
+          const pRes = await fetch(
+            `${CRM_API_URL}/crm/property-listings?approvalStatus=Approved&pageSize=200`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            setDealProperties(Array.isArray(pData?.data) ? pData.data : []);
+          }
         }
       } catch {
         /* ignore */
@@ -818,6 +827,25 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                 <CrmFormSection title="Deal Details" defaultOpen>
                   <CrmFormGrid>
                 {sd('title') && <FormItem label="Deal Title" name="title" required defaultValue={initialData.title} />}
+                {sd('propertyListingId') && (
+                  <FormItem
+                    label="Property Listing"
+                    name="propertyListingId"
+                    type="select"
+                    options={[
+                      { label: 'Select property...', value: '' },
+                      ...dealProperties.map((p: any) => ({ label: p.title, value: String(p._id) })),
+                    ]}
+                    defaultValue={
+                      initialData.propertyListingId != null
+                        ? String(
+                            (initialData.propertyListingId as any)?._id ??
+                              initialData.propertyListingId,
+                          )
+                        : ''
+                    }
+                  />
+                )}
                 {sd('pricingType') && (
                   <FormItem
                     label="Pricing type"

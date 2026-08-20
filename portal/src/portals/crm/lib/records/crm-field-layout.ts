@@ -54,6 +54,7 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
 /** Core deal fields aligned with deal.schema + EditModal */
 export const DEAL_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'title', label: 'Deal Title', pinned: true },
+  { key: 'propertyListingId', label: 'Property Listing', pinned: true },
   { key: 'pricingType', label: 'Pricing type', pinned: true },
   { key: 'dealValue', label: 'Amount', pinned: true },
   { key: 'contractMonths', label: 'Contract months' },

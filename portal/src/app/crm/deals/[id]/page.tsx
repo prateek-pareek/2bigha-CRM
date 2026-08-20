@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DollarSign, Calendar, Building2, ChevronLeft, Edit2, Trash2, Mail, Clock, Plus, CreditCard, Share2, ExternalLink, Settings2, MessageSquare, Info, ListTodo, Loader2 } from 'lucide-react';
+import { DollarSign, Calendar, Building2, ChevronLeft, Edit2, Trash2, Mail, Clock, Plus, CreditCard, Share2, ExternalLink, Settings2, MessageSquare, Info, ListTodo, Loader2, Home } from 'lucide-react';
 import Timeline from '@/components/crm/inbox/Timeline';
 import EditModal from '@/components/crm/records/create/EditModal';
 import ConvertDealModal from '@/components/crm/records/create/ConvertDealModal';
@@ -24,6 +24,7 @@ import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookP
 import SalesAgentRecordPanel from '@/components/crm/sales/SalesAgentRecordPanel';
 import CrmPlaybookRecommendedBanner from '@/components/crm/automation/playbooks/CrmPlaybookRecommendedBanner';
 import DealAssociationsPanel from '@/components/crm/records/associations/DealAssociationsPanel';
+import { formatAddress, formatPrice } from '@/lib/crm/property-listings/types';
 import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
@@ -79,6 +80,33 @@ export default function DealDetailPage() {
   const [newChatMessage, setNewChatMessage] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [sendingChat, setSendingChat] = useState(false);
+  const [linkedProperty, setLinkedProperty] = useState<any>(null);
+
+  useEffect(() => {
+    const propertyId =
+      typeof deal?.propertyListingId === 'object'
+        ? deal?.propertyListingId?._id
+        : deal?.propertyListingId;
+    if (!propertyId) {
+      setLinkedProperty(null);
+      return;
+    }
+    const token = localStorage.getItem('token');
+    let cancelled = false;
+    fetch(`${CRM_API_URL}/crm/property-listings/${propertyId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setLinkedProperty(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkedProperty(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deal?.propertyListingId]);
 
   const socket = useRealtime(recordId ? `deal-chat:${recordId}` : undefined);
 
@@ -943,6 +971,34 @@ export default function DealDetailPage() {
               void fetchEmailTracking();
             }}
           />
+          <div className={crmRecordChrome.sidebarPanel}>
+            <h3 className={crmRecordChrome.sectionTitle}>Property Listing</h3>
+            {linkedProperty ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/crm/property-listings/${linkedProperty._id}`)}
+                className="flex w-full items-start gap-3 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--surface-dim)] px-3 py-2.5 text-left transition-colors hover:border-primary/40"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-primary/15 bg-primary/10 text-primary">
+                  <Home size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-[var(--text-main)]">{linkedProperty.title}</p>
+                  <p className="truncate text-xs text-[var(--text-muted)]">{formatAddress(linkedProperty)}</p>
+                  <p className="mt-0.5 text-xs font-medium text-primary">{formatPrice(linkedProperty.price, linkedProperty.currency)}</p>
+                </div>
+                <ExternalLink size={13} className="mt-1 shrink-0 text-[var(--text-muted)]" />
+              </button>
+            ) : (
+              <p className="text-xs text-[var(--text-muted)]">
+                No property linked to this deal yet.{' '}
+                <button type="button" onClick={() => setIsEditModalOpen(true)} className="font-semibold text-primary hover:underline">
+                  Link one
+                </button>
+              </p>
+            )}
+          </div>
+
           <DealAssociationsPanel
             dealId={recordId}
             deal={deal as Record<string, unknown>}
