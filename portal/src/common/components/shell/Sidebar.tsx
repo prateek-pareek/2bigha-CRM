@@ -414,6 +414,7 @@ const crmGroups = [
         name: 'Commercials',
         items: [
             { name: 'Deals', href: '/crm/deals', icon: CrmNavIcon.Deals, permission: 'deals:read' },
+            { name: 'Legal', href: '/crm/legal', icon: CrmNavIcon.Legal, permission: 'legal:read' },
             {
                 name: 'Proposals',
                 href: '/crm/proposals',

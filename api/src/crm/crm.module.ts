@@ -121,6 +121,9 @@ import { KommunoWebhookController } from './ivr/kommuno-webhook.controller';
 import { WhatsAppController } from './integrations/whatsapp.controller';
 import { WhatsAppWebhookController } from './integrations/whatsapp-webhook.controller';
 import { AiSensyWebhookController } from './integrations/aisensy-webhook.controller';
+import { MetaLeadAdsService } from './integrations/meta-lead-ads.service';
+import { MetaLeadAdsWebhookController } from './integrations/meta-lead-ads-webhook.controller';
+import { MetaLeadAdsPollingCronService } from './integrations/meta-lead-ads-polling-cron.service';
 import { Workflow, WorkflowSchema } from './schemas/workflow.schema';
 import {
   WorkflowExecution,
@@ -437,6 +440,7 @@ import {
     WhatsAppController,
     WhatsAppWebhookController,
     AiSensyWebhookController,
+    MetaLeadAdsWebhookController,
     WorkflowsController,
     LeadEngagementAutomationController,
     DealEngagementAutomationController,
@@ -522,6 +526,8 @@ import {
     WebsitePublicApiKeyGuard,
     EmailTrackingService,
     WhatsAppService,
+    MetaLeadAdsService,
+    MetaLeadAdsPollingCronService,
     VoiceCallingService,
     IvrService,
     EmailIntelligenceService,

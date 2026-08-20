@@ -2,8 +2,15 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Building2, Briefcase, User, Users, Plus, X, Loader2, Search } from "lucide-react";
+import { Building2, Briefcase, User, Users, Plus, X, Loader2, Search, Scale } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
+import {
+  fetchLegalCase,
+  fetchLegalCases,
+  linkLegalCaseLead,
+  unlinkLegalCaseLead,
+  type LegalCase,
+} from '@/lib/crm/legal-cases-api';
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +64,87 @@ export default function LeadAssociationsPanel({
   const deals = (lead?.associatedDeals as AnyRec[]) || [];
   const orgs = (lead?.associatedOrganizations as AnyRec[]) || [];
   const people = (lead?.associatedContacts as AnyRec[]) || [];
+
+  // `associatedLegalCases` comes back as raw ids (the Lead read path doesn't populate
+  // this cross-module link), so fetch each case's summary for display.
+  const legalCaseIds = ((lead?.associatedLegalCases as (string | { _id: string })[]) || []).map((x) =>
+    String((x as { _id?: string })?._id || x),
+  );
+  const [legalCases, setLegalCases] = useState<LegalCase[]>([]);
+  const [legalCasesLoading, setLegalCasesLoading] = useState(false);
+  const [legalBusyId, setLegalBusyId] = useState<string | null>(null);
+  const [legalAddOpen, setLegalAddOpen] = useState(false);
+  const [legalQ, setLegalQ] = useState("");
+  const [legalResults, setLegalResults] = useState<LegalCase[] | null>(null);
+  const [legalSearching, setLegalSearching] = useState(false);
+
+  useEffect(() => {
+    if (legalCaseIds.length === 0) {
+      setLegalCases([]);
+      return;
+    }
+    let cancelled = false;
+    setLegalCasesLoading(true);
+    Promise.all(legalCaseIds.map((id) => fetchLegalCase(id)))
+      .then((rows) => {
+        if (!cancelled) setLegalCases(rows.filter((r): r is LegalCase => Boolean(r)));
+      })
+      .finally(() => {
+        if (!cancelled) setLegalCasesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when the id list changes
+  }, [legalCaseIds.join(",")]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (legalQ.trim().length < 2) {
+        setLegalResults(null);
+        return;
+      }
+      setLegalSearching(true);
+      fetchLegalCases({ search: legalQ.trim(), limit: 8 })
+        .then((res) => setLegalResults(res.data))
+        .catch(() => setLegalResults(null))
+        .finally(() => setLegalSearching(false));
+    }, 320);
+    return () => clearTimeout(t);
+  }, [legalQ]);
+
+  const linkLegalCase = async (caseId: string) => {
+    if (legalCaseIds.includes(caseId)) {
+      toast.message("Already linked");
+      return;
+    }
+    setLegalBusyId(caseId);
+    try {
+      await linkLegalCaseLead(caseId, leadId);
+      toast.success("Legal case linked");
+      onUpdated();
+      setLegalAddOpen(false);
+      setLegalQ("");
+      setLegalResults(null);
+    } catch (err: any) {
+      toast.error(err?.message || "Could not link legal case");
+    } finally {
+      setLegalBusyId(null);
+    }
+  };
+
+  const unlinkLegalCase = async (caseId: string) => {
+    setLegalBusyId(caseId);
+    try {
+      await unlinkLegalCaseLead(caseId, leadId);
+      toast.success("Legal case unlinked");
+      onUpdated();
+    } catch (err: any) {
+      toast.error(err?.message || "Could not unlink legal case");
+    } finally {
+      setLegalBusyId(null);
+    }
+  };
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -368,6 +456,77 @@ export default function LeadAssociationsPanel({
                   title={contactLabel(c)}
                   subtitle={c.email}
                   onRemove={() => remove("associatedContacts", c._id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-text-muted">
+              <Scale size={12} />
+              Legal cases
+            </div>
+            <button
+              type="button"
+              onClick={() => setLegalAddOpen((o) => !o)}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              {legalAddOpen ? "Close" : "Link case"}
+            </button>
+          </div>
+
+          {legalAddOpen && (
+            <div className="mb-3 p-3 rounded-[var(--radius-md)] border border-border bg-surface-dim/30 space-y-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
+                <input
+                  className="w-full pl-9 pr-3 py-2 rounded-[var(--radius-md)] border border-border bg-card text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
+                  placeholder="Search legal cases…"
+                  value={legalQ}
+                  onChange={(e) => setLegalQ(e.target.value)}
+                />
+                {legalSearching && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-text-muted" size={14} />
+                )}
+              </div>
+              {legalResults && legalQ.trim().length >= 2 && (
+                <ul className="max-h-40 overflow-y-auto space-y-1 text-sm">
+                  {legalResults.length === 0 ? (
+                    <p className="text-xs text-text-muted py-1">No matches — try another title.</p>
+                  ) : (
+                    legalResults.map((lc) => (
+                      <li key={lc._id}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-card border border-transparent hover:border-border disabled:opacity-50"
+                          disabled={legalBusyId === lc._id}
+                          onClick={() => linkLegalCase(lc._id)}
+                        >
+                          {lc.title}
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {legalCasesLoading ? (
+            <p className="text-xs text-text-muted italic">Loading…</p>
+          ) : legalCases.length === 0 ? (
+            <p className="text-xs text-text-muted italic">No legal cases linked</p>
+          ) : (
+            <div className="space-y-2">
+              {legalCases.map((lc) => (
+                <Row
+                  key={lc._id}
+                  href={`/crm/legal/${lc._id}`}
+                  title={lc.title}
+                  subtitle={lc.stage}
+                  onRemove={() => unlinkLegalCase(lc._id)}
                 />
               ))}
             </div>

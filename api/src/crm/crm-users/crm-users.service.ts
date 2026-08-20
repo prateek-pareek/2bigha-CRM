@@ -77,6 +77,18 @@ const CANONICAL_CRM_PERMISSIONS: {
     module: 'crm',
     description: 'Move deals between pipelines and update stage/probability',
   },
+  { name: 'legal:read', module: 'crm', description: 'View legal cases' },
+  {
+    name: 'legal:write',
+    module: 'crm',
+    description: 'Create and edit legal cases',
+  },
+  { name: 'legal:delete', module: 'crm', description: 'Remove legal cases' },
+  {
+    name: 'legal:move_pipeline',
+    module: 'crm',
+    description: 'Move legal cases between pipelines and update stage',
+  },
 ];
 
 @Injectable()

@@ -10,8 +10,8 @@ import { UPLOADS_DIR } from './storage/storage.service';
 async function bootstrap() {
   // rawBody: true keeps the original request bytes on req.rawBody alongside
   // the parsed body — needed to verify Meta's X-Hub-Signature-256 header on
-  // inbound WhatsApp webhooks (HMAC must be computed over the exact raw
-  // bytes, not a re-serialized JSON.stringify of the parsed object).
+  // inbound WhatsApp and Meta Lead Ads webhooks (HMAC must be computed over
+  // the exact raw bytes, not a re-serialized JSON.stringify of the parsed object).
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
