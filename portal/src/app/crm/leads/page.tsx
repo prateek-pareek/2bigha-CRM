@@ -118,6 +118,7 @@ import {
   CrmListOrgCell,
   CrmListOwnerCell,
   CrmListStatusBadge,
+  CrmSoftBadge,
   CrmTableCheck,
   CrmTableActionMenu,
   CrmHoverActionIcon,
@@ -194,6 +195,13 @@ const STORAGE_KEY = 'leads_columns_v2';
 /** Matches Mongo ObjectId hex strings; avoids sending bad `pipeline` query params. */
 function isMongoObjectIdString(value: string | null | undefined): boolean {
   return typeof value === 'string' && /^[a-fA-F0-9]{24}$/.test(value.trim());
+}
+
+function groupBadgeTone(group?: string): 'success' | 'info' | 'secondary' {
+  const g = (group || '').trim().toLowerCase();
+  if (g === 'seller') return 'success';
+  if (g === 'buyer') return 'info';
+  return 'secondary';
 }
 
 function leadScoreBadgeClass(score: number) {
@@ -1503,7 +1511,7 @@ export default function LeadsPage() {
       case 'stage': return <CrmListStatusBadge label={lead.stage || lead.status || '—'} />;
       case 'callStatus': return <CrmListStatusBadge label={lead.callStatus || 'Not Called'} />;
       case 'leadCategory': return <span className="text-sm text-[#707070]">{lead.leadCategory || '—'}</span>;
-      case 'group': return <span className="text-sm text-[#707070]">{lead.group || '—'}</span>;
+      case 'group': return <CrmSoftBadge label={lead.group || ''} tone={groupBadgeTone(lead.group)} />;
       case 'createdByName': return <span className="text-sm text-[#707070]">{lead.createdByName || lead.leadOwner || '—'}</span>;
       case 'createdAt': return <span className="text-sm text-[#707070]">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>;
       case 'lastEmailActivityAt': {
@@ -2041,6 +2049,11 @@ export default function LeadsPage() {
                               tone={crmKanbanAvatarTone(`${lead.firstName}${lead.lastName}${lead._id}`)}
                               initials={`${(lead.firstName?.[0] || '?').toUpperCase()}${(lead.lastName?.[0] || '').toUpperCase()}`}
                               title={leadName}
+                              subtitle={
+                                lead.group ? (
+                                  <CrmSoftBadge label={lead.group} tone={groupBadgeTone(lead.group)} />
+                                ) : undefined
+                              }
                               trailing={
                                 <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                                   <button
