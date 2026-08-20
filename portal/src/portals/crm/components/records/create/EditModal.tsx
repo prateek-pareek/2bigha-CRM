@@ -5,7 +5,6 @@ import { X, Save, Trash2, Settings2, ChevronDown } from 'lucide-react';
 import { CRM_API_URL } from '@/lib/crm/config';
 import { getCrmAuthToken } from '@/lib/crm/api';
 import { hasPersonContactMethod, hasPersonContactMethodOrPortalListing } from '@/lib/crm/crm-contact-method';
-import { useOpportunitySourcePlatforms } from '@/lib/crm/hooks/useOpportunitySourcePlatforms';
 import { toast } from 'sonner';
 import { invalidateCrmForEntityType } from '@/lib/crm/shared/invalidate-on-mutation';
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -74,19 +73,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   const [showCustomizeLead, setShowCustomizeLead] = useState(false);
   const [crmPortalUsers, setCrmPortalUsers] = useState<Array<{ _id: string; firstName: string; lastName: string }>>([]);
   const [leadServiceOfferings, setLeadServiceOfferings] = useState<Array<{ _id: string; name: string }>>([]);
-
-  const legacyPlatform = String(initialData?.opportunitySourcePlatform ?? '').trim();
-  const { options: platformOptionsList } = useOpportunitySourcePlatforms(
-    legacyPlatform ? [legacyPlatform] : [],
-  );
-  const leadPlatformSelectOptions = useMemo(
-    () =>
-      crmSelectOptionsWithLegacyValue(
-        ['', ...platformOptionsList].map((value) => ({ value, label: value || '—' })),
-        legacyPlatform,
-      ),
-    [legacyPlatform, platformOptionsList],
-  );
 
   useEffect(() => {
     if (isOpen && type) {
@@ -822,32 +808,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           {sourceMetadata && <SocialPostPreview metadata={sourceMetadata} />}
                         </div>
                       )}
-                    </CrmFormGrid>
-                  </CrmFormSection>
-                )}
-                {type === 'Lead' && (
-                  <CrmFormSection
-                    title="Portal listing (optional)"
-                    description="Use when outreach started on a marketplace or job board and you only have the public listing link so far."
-                    defaultOpen={false}
-                  >
-                    <CrmFormGrid>
-                      <FormItem
-                        label="Platform"
-                        name="opportunitySourcePlatform"
-                        type="select"
-                        options={leadPlatformSelectOptions.map((o) => o.value)}
-                        defaultValue={initialData.opportunitySourcePlatform || ''}
-                      />
-                      <div className="sm:col-span-2">
-                        <FormItem
-                          label="Listing or project URL"
-                          name="opportunityListingUrl"
-                          type="url"
-                          placeholder="https://…"
-                          defaultValue={initialData.opportunityListingUrl || ''}
-                        />
-                      </div>
                     </CrmFormGrid>
                   </CrmFormSection>
                 )}

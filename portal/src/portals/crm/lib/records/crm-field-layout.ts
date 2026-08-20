@@ -26,16 +26,16 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'gender', label: 'Gender' },
   { key: 'mobileNo', label: 'Mobile' },
   { key: 'phone', label: 'Phone (alternate)' },
-  { key: 'organization', label: 'Company' },
-  { key: 'jobTitle', label: 'Job Title' },
-  { key: 'website', label: 'Website' },
+  { key: 'organization', label: 'Company', recordOnly: true },
+  { key: 'jobTitle', label: 'Job Title', recordOnly: true },
+  { key: 'website', label: 'Website', recordOnly: true },
   { key: 'linkedinUrl', label: 'LinkedIn URL' },
   { key: 'source', label: 'Lead Source' },
-  { key: 'industry', label: 'Industry' },
-  { key: 'annualRevenue', label: 'Annual Revenue' },
-  { key: 'noOfEmployees', label: 'No. of Employees' },
-  { key: 'territory', label: 'Territory' },
-  { key: 'relatedService', label: 'Related service' },
+  { key: 'industry', label: 'Industry', recordOnly: true },
+  { key: 'annualRevenue', label: 'Annual Revenue', recordOnly: true },
+  { key: 'noOfEmployees', label: 'No. of Employees', recordOnly: true },
+  { key: 'territory', label: 'Territory', recordOnly: true },
+  { key: 'relatedService', label: 'Related service', recordOnly: true },
   /** Shown when editing a lead (create panel omits this field; API sets owner on create). */
   { key: 'leadOwner', label: 'Lead Owner' },
   { key: 'pipeline', label: 'Pipeline', pinned: true },
@@ -268,8 +268,10 @@ export function getVisibleFieldKeysOrdered(
   const layout = mergeOrderWithCustomFields(module, context, customFieldKeys);
   const defs = defaultDefs(module);
   const pinned = new Set(defs.filter((d) => d.pinned).map((d) => d.key));
+  const recordOnly = new Set(defs.filter((d) => d.recordOnly).map((d) => d.key));
 
   return layout.order.filter((key) => {
+    if (context === 'form' && recordOnly.has(key)) return false;
     if (
       module === 'leads' &&
       context === 'form' &&

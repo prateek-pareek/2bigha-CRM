@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { CrmJiraPortal } from "@/components/crm/shell/CrmJiraPortal";
-import { Loader2, Save, Settings2, Plus, Check, Search, UserPlus, ArrowLeft, X } from "lucide-react";
+import { Loader2, Save, Settings2, Plus, Check, Search, X } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
@@ -29,12 +29,9 @@ export interface LeadCreatePanelProps {
   entity?: CrmPersonEntity;
 }
 
-/** Style tokens for the client-selection wizard steps — matches CRMLeadFormFields' own LBL/INP/SEL. */
-const LBL_STACK = "mb-1.5 block text-[13px] font-medium text-[var(--text-main)]";
+/** Style token for the inline "existing contact" search box — matches CRMLeadFormFields' own INP. */
 const INP_STACK =
   "w-full h-[38px] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)] shadow-[var(--crm-shadow-input)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/25 transition-all";
-const SEL_STACK =
-  "w-full h-[38px] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-main)] outline-none cursor-pointer shadow-[var(--crm-shadow-input)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/25 transition-all appearance-none";
 const INP_SEARCH = `${INP_STACK} pl-9`;
 
 function stripEmpty(obj: Record<string, unknown>) {
@@ -75,25 +72,13 @@ export default function LeadCreatePanel({
   const [leadCategories, setLeadCategories] = useState<Array<{ _id: string; label: string }>>([]);
   const [leadGroups, setLeadGroups] = useState<Array<{ _id: string; label: string }>>([]);
 
-  // --- Add Lead client-selection step (search existing client / create new) ---
+  // --- Add Lead: optional inline "existing contact" search that auto-fills the form below ---
   type ClientLite = { _id: string; name: string; phone?: string; email?: string; role?: string };
-  const [step, setStep] = useState<"search" | "create-client" | "details">(
-    entity === "lead" ? "search" : "details",
-  );
   const [selectedClient, setSelectedClient] = useState<ClientLite | null>(null);
   const [clientQuery, setClientQuery] = useState("");
   const [clientResults, setClientResults] = useState<ClientLite[]>([]);
   const [clientSearchLoading, setClientSearchLoading] = useState(false);
-  const [newClient, setNewClient] = useState({
-    role: "USER",
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    whatsappNumber: "",
-    address: "",
-  });
-  const [creatingClient, setCreatingClient] = useState(false);
+  const [showClientSearch, setShowClientSearch] = useState(false);
 
   const fetchOrganizations = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -169,12 +154,11 @@ export default function LeadCreatePanel({
       void fetchServiceOfferings();
       void fetchLeadPicklists();
       setLayoutTick((t) => t + 1);
-      // Reset the client-selection wizard each time the panel (re)opens.
-      setStep(entity === "lead" ? "search" : "details");
+      // Reset the optional "existing contact" search each time the panel (re)opens.
       setSelectedClient(null);
       setClientQuery("");
       setClientResults([]);
-      setNewClient({ role: "USER", firstName: "", lastName: "", email: "", phone: "", whatsappNumber: "", address: "" });
+      setShowClientSearch(false);
     }
   }, [isOpen, entity, fetchCustomFields, fetchOrganizations, fetchServiceOfferings, fetchLeadPicklists]);
 
@@ -207,7 +191,7 @@ export default function LeadCreatePanel({
 
   // Debounced client search (name or phone) against the existing global search endpoint.
   useEffect(() => {
-    if (step !== "search") return;
+    if (!showClientSearch || selectedClient) return;
     const q = clientQuery.trim();
     if (q.length < 2) {
       setClientResults([]);
@@ -235,55 +219,19 @@ export default function LeadCreatePanel({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [clientQuery, step]);
+  }, [clientQuery, showClientSearch, selectedClient]);
 
-  const handleCreateClient = async () => {
-    const name = `${newClient.firstName} ${newClient.lastName}`.trim();
-    if (!name) {
-      toast.error("Enter a first name");
-      return;
-    }
-    if (!newClient.phone.trim() && !newClient.email.trim()) {
-      toast.error("Enter a phone number or email");
-      return;
-    }
-    setCreatingClient(true);
-    try {
-      const res = await fetch(`${CRM_API_URL}/crm/clients`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          name,
-          email: newClient.email.trim() || undefined,
-          phone: newClient.phone.trim() || undefined,
-          whatsappNumber: newClient.whatsappNumber.trim() || undefined,
-          address: newClient.address.trim() || undefined,
-          role: newClient.role || undefined,
-        }),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        setSelectedClient({
-          _id: created._id,
-          name: created.name,
-          phone: created.phone,
-          email: created.email,
-          role: created.role,
-        });
-        toast.success("Client created");
-        setStep("details");
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.message || "Failed to create client");
-      }
-    } catch {
-      toast.error("Network error");
-    } finally {
-      setCreatingClient(false);
-    }
+  /** Auto-populate the (uncontrolled) form inputs from a selected existing contact. */
+  const applyClientToForm = (c: ClientLite) => {
+    const setVal = (name: string, value: string) => {
+      const el = formRef.current?.querySelector<HTMLInputElement>(`[name="${name}"]`);
+      if (el && value) el.value = value;
+    };
+    const [firstName, ...rest] = c.name.trim().split(/\s+/);
+    setVal("firstName", firstName || "");
+    setVal("lastName", rest.join(" "));
+    setVal("email", c.email || "");
+    setVal("mobileNo", c.phone || "");
   };
 
   const currentPipeline = pipelines.find((p) => p._id === selectedPipeline);
@@ -473,7 +421,7 @@ export default function LeadCreatePanel({
             setSelectedClient(null);
             setClientQuery("");
             setClientResults([]);
-            setStep("search");
+            setShowClientSearch(false);
           }
         } else {
           onClose();
@@ -505,8 +453,6 @@ export default function LeadCreatePanel({
 
   const cancelBtnClass =
     "inline-flex h-[38px] items-center justify-center rounded-[var(--radius-md)] border-0 bg-[var(--surface-dim)] px-3.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--background)] transition-colors";
-  const backLinkClass =
-    "mr-auto inline-flex h-[38px] items-center gap-1.5 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors";
 
   const detailsFooter = (
     <div className="flex w-full flex-wrap items-center justify-end gap-2">
@@ -536,243 +482,109 @@ export default function LeadCreatePanel({
     </div>
   );
 
-  const searchFooter = (
-    <div className="flex w-full flex-wrap items-center justify-between gap-2">
-      <button
-        type="button"
-        onClick={() => setStep("details")}
-        className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors underline-offset-2 hover:underline"
-      >
-        Skip — enter lead details manually
-      </button>
-      <button type="button" onClick={onClose} className={cancelBtnClass}>
-        Cancel
-      </button>
-    </div>
-  );
-
-  const createClientFooter = (
-    <div className="flex w-full flex-wrap items-center justify-end gap-2">
-      <button type="button" onClick={() => setStep("search")} className={backLinkClass}>
-        <ArrowLeft size={14} /> Back
-      </button>
-      <button type="button" onClick={onClose} className={cancelBtnClass}>
-        Cancel
-      </button>
-      <button
-        type="button"
-        disabled={creatingClient}
-        onClick={handleCreateClient}
-        className="inline-flex h-[38px] items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--primary)] px-3.5 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--primary-dark)] transition-colors shadow-sm disabled:opacity-50"
-      >
-        {creatingClient ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
-        {creatingClient ? "Creating…" : "Create User"}
-      </button>
-    </div>
-  );
-
-  const isWizardStep = entity === "lead" && step !== "details";
-
   const panelInner = (
     <>
       <CrmSlidePanelShell
         isOpen={isOpen}
         onClose={onClose}
         title={title}
-        subtitle={
-          step === "search"
-            ? "Step 1 of 2 — find the client, or create a new one"
-            : step === "create-client"
-              ? "Step 1 of 2 — create a new client record"
-              : undefined
-        }
         headerTone="hubspot"
         maxWidthClass="max-w-2xl"
         headerActions={
-          isWizardStep ? undefined : (
-            <button
-              type="button"
-              onClick={() => setShowCustomize(true)}
-              className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
-            >
-              <Settings2 size={13} className="text-[var(--text-muted)]" /> Fields
-            </button>
-          )
+          <button
+            type="button"
+            onClick={() => setShowCustomize(true)}
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
+          >
+            <Settings2 size={13} className="text-[var(--text-muted)]" /> Fields
+          </button>
         }
-        footer={step === "search" ? searchFooter : step === "create-client" ? createClientFooter : detailsFooter}
+        footer={detailsFooter}
       >
-        {step === "search" && entity === "lead" ? (
-          <div className="space-y-4">
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
-                autoFocus
-                value={clientQuery}
-                onChange={(e) => setClientQuery(e.target.value)}
-                placeholder="Search by client name or phone number…"
-                className={`${INP_SEARCH}`}
-              />
-            </div>
-
-            {clientSearchLoading ? (
-              <div className="flex justify-center py-8 text-[var(--text-muted)]">
-                <Loader2 size={20} className="animate-spin" />
-              </div>
-            ) : clientQuery.trim().length >= 2 && clientResults.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">
-                No clients found for &ldquo;{clientQuery.trim()}&rdquo;.{" "}
-                <button
-                  type="button"
-                  onClick={() => setStep("create-client")}
-                  className="font-semibold text-[var(--hs-link)] hover:underline"
-                >
-                  Create a new user
-                </button>
-                .
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {clientResults.map((c) => (
-                  <div
-                    key={c._id}
-                    className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3.5 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--text-main)] truncate">{c.name}</p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">
-                        {c.phone || c.email || "—"}
-                        {c.role ? ` · ${c.role}` : ""}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedClient(c);
-                        setStep("details");
-                      }}
-                      className="shrink-0 inline-flex h-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--primary)] px-3 text-xs font-semibold text-[var(--primary-foreground)] hover:bg-[var(--primary-dark)] transition-colors"
-                    >
-                      Select
-                    </button>
-                  </div>
-                ))}
-                {clientResults.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setStep("create-client")}
-                    className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--hs-link)] transition-colors"
-                  >
-                    Can&apos;t find them? Create a new user instead.
-                  </button>
-                )}
-              </div>
-            )}
-
-            {clientQuery.trim().length < 2 && (
-              <button
-                type="button"
-                onClick={() => setStep("create-client")}
-                className="w-full border border-dashed border-[var(--border-color)] hover:border-[var(--hs-link)] hover:bg-[var(--background)] py-3 rounded-md flex items-center justify-center gap-2 text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--hs-link)] transition-all"
-              >
-                <UserPlus size={14} /> Create a new user
-              </button>
-            )}
-          </div>
-        ) : step === "create-client" && entity === "lead" ? (
-          <div className="space-y-4">
-            <div>
-              <label className={LBL_STACK}>User Type</label>
-              <select
-                value={newClient.role}
-                onChange={(e) => setNewClient((f) => ({ ...f, role: e.target.value }))}
-                className={SEL_STACK}
-              >
-                <option value="OWNER">OWNER</option>
-                <option value="AGENT">AGENT</option>
-                <option value="USER">USER</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={LBL_STACK}>First name<span className="text-[var(--primary)]">*</span></label>
-                <input
-                  value={newClient.firstName}
-                  onChange={(e) => setNewClient((f) => ({ ...f, firstName: e.target.value }))}
-                  placeholder="Jane"
-                  className={INP_STACK}
-                />
-              </div>
-              <div>
-                <label className={LBL_STACK}>Last name</label>
-                <input
-                  value={newClient.lastName}
-                  onChange={(e) => setNewClient((f) => ({ ...f, lastName: e.target.value }))}
-                  placeholder="Doe"
-                  className={INP_STACK}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={LBL_STACK}>Email</label>
-                <input
-                  type="email"
-                  value={newClient.email}
-                  onChange={(e) => setNewClient((f) => ({ ...f, email: e.target.value }))}
-                  placeholder="email@example.com"
-                  className={INP_STACK}
-                />
-              </div>
-              <div>
-                <label className={LBL_STACK}>Phone number</label>
-                <input
-                  value={newClient.phone}
-                  onChange={(e) => setNewClient((f) => ({ ...f, phone: e.target.value }))}
-                  placeholder="+91 XXXXX XXXXX"
-                  className={INP_STACK}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={LBL_STACK}>WhatsApp number</label>
-                <input
-                  value={newClient.whatsappNumber}
-                  onChange={(e) => setNewClient((f) => ({ ...f, whatsappNumber: e.target.value }))}
-                  placeholder="+91 XXXXX XXXXX"
-                  className={INP_STACK}
-                />
-              </div>
-              <div>
-                <label className={LBL_STACK}>Address</label>
-                <input
-                  value={newClient.address}
-                  onChange={(e) => setNewClient((f) => ({ ...f, address: e.target.value }))}
-                  placeholder="City, State"
-                  className={INP_STACK}
-                />
-              </div>
-            </div>
-          </div>
-        ) : (
         <form id={formId} ref={formRef} onSubmit={handleSubmit} className="space-y-3">
           {entity === "lead" && selectedClient && (
             <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--background)] px-3.5 py-2.5">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Selected Contact</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Linked Contact</p>
                 <p className="text-sm font-semibold text-[var(--text-main)] truncate">{selectedClient.name}</p>
                 <p className="text-xs text-[var(--text-muted)] truncate">{selectedClient.phone || selectedClient.email || "—"}</p>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedClient(null);
-                  setStep("search");
-                }}
+                onClick={() => setSelectedClient(null)}
                 className="shrink-0 inline-flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--surface-dim)] transition-colors"
               >
                 <X size={12} /> Clear
               </button>
+            </div>
+          )}
+          {entity === "lead" && !selectedClient && (
+            <div className="space-y-2">
+              {!showClientSearch ? (
+                <button
+                  type="button"
+                  onClick={() => setShowClientSearch(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--hs-link)] transition-colors"
+                >
+                  <Search size={12} /> Link an existing contact (optional)
+                </button>
+              ) : (
+                <div className="rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--background)] p-3 space-y-2">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                      autoFocus
+                      value={clientQuery}
+                      onChange={(e) => setClientQuery(e.target.value)}
+                      placeholder="Search by name or phone number…"
+                      className={`${INP_SEARCH} bg-[var(--card-bg)]`}
+                    />
+                  </div>
+                  {clientSearchLoading ? (
+                    <div className="flex justify-center py-3 text-[var(--text-muted)]">
+                      <Loader2 size={16} className="animate-spin" />
+                    </div>
+                  ) : clientQuery.trim().length >= 2 && clientResults.length === 0 ? (
+                    <p className="text-xs text-[var(--text-muted)]">
+                      No contacts found for &ldquo;{clientQuery.trim()}&rdquo; — just fill in the fields below.
+                    </p>
+                  ) : (
+                    clientResults.map((c) => (
+                      <div
+                        key={c._id}
+                        className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[var(--text-main)] truncate">{c.name}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate">{c.phone || c.email || "—"}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedClient(c);
+                            setShowClientSearch(false);
+                            applyClientToForm(c);
+                          }}
+                          className="shrink-0 inline-flex h-7 items-center justify-center rounded-[var(--radius-md)] bg-[var(--primary)] px-2.5 text-xs font-semibold text-[var(--primary-foreground)] hover:bg-[var(--primary-dark)] transition-colors"
+                        >
+                          Use
+                        </button>
+                      </div>
+                    ))
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowClientSearch(false);
+                      setClientQuery("");
+                      setClientResults([]);
+                    }}
+                    className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
             </div>
           )}
           {entity === "contact" ? (
@@ -873,7 +685,6 @@ export default function LeadCreatePanel({
             </div>
           )}
         </form>
-        )}
       </CrmSlidePanelShell>
 
       <CRMFieldLayoutCustomizer

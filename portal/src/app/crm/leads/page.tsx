@@ -2266,7 +2266,7 @@ export default function LeadsPage() {
                                 ) : null}
                                 <CrmTableActionMenu
                                   menuAlign="left"
-                                  onEdit={() => router.push(`/crm/leads/${lead._id}`)}
+                                  onEdit={() => router.push(`/crm/leads/${lead._id}?edit=1`)}
                                   onNotes={() => setActivityLead(lead)}
                                   onReassign={
                                     hasAccess('leads:write')
