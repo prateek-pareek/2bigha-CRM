@@ -341,13 +341,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
     return c != null && c !== '' ? String(c) : '';
   }, [type, initialData]);
 
-  const contactOrgIdDefault = useMemo(() => {
-    if (type !== 'Contact') return '';
-    const o = initialData?.organization;
-    if (o && typeof o === 'object' && o !== null && '_id' in o) return String((o as { _id: string })._id);
-    return o != null && o !== '' ? String(o) : '';
-  }, [type, initialData]);
-
   const dealOrgSelectOptions = useMemo(
     () =>
       crmSelectOptionsWithLegacyValue(
@@ -375,17 +368,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
     [dealContactsList, dealContactIdDefault],
   );
 
-  const contactOrgSelectOptions = useMemo(
-    () =>
-      crmSelectOptionsWithLegacyValue(
-        [
-          { label: 'Select organization...', value: '' },
-          ...organizations.map((o: any) => ({ label: o.name, value: String(o._id) })),
-        ],
-        contactOrgIdDefault,
-      ),
-    [organizations, contactOrgIdDefault],
-  );
 
   const fetchSourceMetadata = async (url: string) => {
     if (!url || !url.startsWith('http')) return;
@@ -997,7 +979,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                     <Settings2 size={13} className="text-[var(--text-muted)]" /> Fields
                   </button>
                 </div>
-                {(sc('salutation') || sc('firstName') || sc('lastName') || sc('email') || sc('additionalEmails') || sc('mobileNo') || sc('phone') || sc('gender')) && (
+                {(sc('salutation') || sc('firstName') || sc('lastName') || sc('email') || sc('additionalEmails') || sc('mobileNo') || sc('phone') || sc('gender') || sc('linkedinUrl')) && (
                   <CrmFormSection title="Contact Information" defaultOpen={true}>
                     <CrmFormGrid>
                       {sc('salutation') && <FormItem label="Salutation" name="salutation" type="select" options={['Mr', 'Ms', 'Mrs', 'Dr']} defaultValue={initialData.salutation} />}
@@ -1015,53 +997,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                       {sc('mobileNo') && <FormItem label="Mobile No" name="mobileNo" type="phone" defaultValue={initialData.mobileNo} />}
                       {sc('phone') && <FormItem label="Phone (alternate)" name="phone" type="phone" defaultValue={initialData.phone} />}
                       {sc('gender') && <FormItem label="Gender" name="gender" type="select" options={['Male', 'Female', 'Other']} defaultValue={initialData.gender} />}
-                    </CrmFormGrid>
-                  </CrmFormSection>
-                )}
-                {(sc('organization') || sc('jobTitle') || sc('industry') || sc('website') || sc('noOfEmployees') || sc('annualRevenue') || sc('territory') || sc('linkedinUrl') || sc('twitterHandle') || sc('source')) && (
-                  <CrmFormSection title="Company Information" defaultOpen={false}>
-                    <CrmFormGrid>
-                      {sc('organization') && (
-                        <FormItem
-                          label="Company"
-                          name="organization"
-                          type="select"
-                          options={contactOrgSelectOptions}
-                          defaultValue={contactOrgIdDefault}
-                        />
-                      )}
-                      {sc('jobTitle') && <FormItem label="Job Title" name="jobTitle" defaultValue={initialData.jobTitle} />}
-                      {sc('industry') && <FormItem label="Industry" name="industry" defaultValue={initialData.industry} />}
-                      {sc('website') && <FormItem label="Website" name="website" defaultValue={initialData.website} />}
-                      {sc('noOfEmployees') && <FormItem label="No. of Employees" name="noOfEmployees" type="select" options={['1-10', '11-50', '51-200', '201-500', '500+']} defaultValue={initialData.noOfEmployees} />}
-                      {sc('annualRevenue') && <FormItem label="Annual Revenue" name="annualRevenue" type="number" defaultValue={initialData.annualRevenue} />}
-                      {sc('territory') && <FormItem label="Territory" name="territory" defaultValue={initialData.territory} />}
                       {sc('linkedinUrl') && <FormItem label="LinkedIn URL" name="linkedinUrl" defaultValue={initialData.linkedinUrl} placeholder="https://linkedin.com/in/username" />}
-                      {sc('twitterHandle') && <FormItem label="X (Twitter) handle" name="twitterHandle" defaultValue={initialData.twitterHandle} placeholder="@username" />}
-                      {sc('source') && (
-                        <div className="col-span-2 space-y-1">
-                          <FormItem
-                            label="Lead Source"
-                            name="source"
-                            defaultValue={initialData.source}
-                            onBlurField={(e: any) => {
-                              let val = (e.target.value || '').trim();
-                              const iframeSrc = val.match(/src=["']([^"']+)["']/);
-                              if (iframeSrc) { val = iframeSrc[1]; e.target.value = val; }
-                              if (val && (val.includes('linkedin.com') || val.includes('threads.com') || val.includes('threads.net') || val.includes('facebook.com') || val.includes('fb.watch'))) {
-                                void fetchSourceMetadata(val);
-                              }
-                            }}
-                          />
-                          {isFetchingMetadata && (
-                            <div className="mt-2 text-xs font-bold text-primary animate-pulse flex items-center gap-2 px-1">
-                              <Loader2 size={12} className="animate-spin" />
-                              Fetching post content...
-                            </div>
-                          )}
-                          {sourceMetadata && <SocialPostPreview metadata={sourceMetadata} />}
-                        </div>
-                      )}
                     </CrmFormGrid>
                   </CrmFormSection>
                 )}

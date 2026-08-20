@@ -73,7 +73,14 @@ export default function LeadCreatePanel({
   const [leadGroups, setLeadGroups] = useState<Array<{ _id: string; label: string }>>([]);
 
   // --- Add Lead: optional inline "existing contact" search that auto-fills the form below ---
-  type ClientLite = { _id: string; name: string; phone?: string; email?: string; role?: string };
+  type ClientLite = {
+    _id: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    role?: string;
+    kind: "client" | "lead" | "contact";
+  };
   const [selectedClient, setSelectedClient] = useState<ClientLite | null>(null);
   const [clientQuery, setClientQuery] = useState("");
   const [clientResults, setClientResults] = useState<ClientLite[]>([]);
@@ -206,8 +213,36 @@ export default function LeadCreatePanel({
         const res = await fetch(`${CRM_API_URL}/crm/search?q=${encodeURIComponent(q)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const data = res.ok ? await res.json() : { clients: [] };
-        if (!cancelled) setClientResults(Array.isArray(data.clients) ? data.clients : []);
+        const data = res.ok ? await res.json() : {};
+        const clients: ClientLite[] = Array.isArray(data.clients)
+          ? data.clients.map((c: any) => ({
+              _id: c._id,
+              name: c.name,
+              phone: c.phone,
+              email: c.email,
+              role: c.role,
+              kind: "client" as const,
+            }))
+          : [];
+        const leads: ClientLite[] = Array.isArray(data.leads)
+          ? data.leads.map((l: any) => ({
+              _id: l._id,
+              name: [l.firstName, l.lastName].filter(Boolean).join(" "),
+              phone: l.mobileNo || l.phone,
+              email: l.email,
+              kind: "lead" as const,
+            }))
+          : [];
+        const contacts: ClientLite[] = Array.isArray(data.contacts)
+          ? data.contacts.map((c: any) => ({
+              _id: c._id,
+              name: [c.firstName, c.lastName].filter(Boolean).join(" "),
+              phone: c.mobileNo || c.phone,
+              email: c.email,
+              kind: "contact" as const,
+            }))
+          : [];
+        if (!cancelled) setClientResults([...clients, ...leads, ...contacts]);
       } catch (err) {
         console.error(err);
         if (!cancelled) setClientResults([]);
@@ -391,7 +426,8 @@ export default function LeadCreatePanel({
       stage,
       status: data.status || stage,
       callStatus: entity === "lead" ? data.callStatus || "Not Called" : undefined,
-      clientId: entity === "lead" ? selectedClient?._id : undefined,
+      clientId:
+        entity === "lead" && selectedClient?.kind === "client" ? selectedClient._id : undefined,
       leadCategory: entity === "lead" ? data.leadCategory : undefined,
       group: entity === "lead" ? data.group : undefined,
       notes: entity === "lead" ? data.notes : undefined,
@@ -502,10 +538,10 @@ export default function LeadCreatePanel({
         footer={detailsFooter}
       >
         <form id={formId} ref={formRef} onSubmit={handleSubmit} className="space-y-3">
-          {entity === "lead" && selectedClient && (
+          {selectedClient && (
             <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--background)] px-3.5 py-2.5">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Linked Contact</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Prefilled from</p>
                 <p className="text-sm font-semibold text-[var(--text-main)] truncate">{selectedClient.name}</p>
                 <p className="text-xs text-[var(--text-muted)] truncate">{selectedClient.phone || selectedClient.email || "—"}</p>
               </div>
@@ -518,7 +554,7 @@ export default function LeadCreatePanel({
               </button>
             </div>
           )}
-          {entity === "lead" && !selectedClient && (
+          {!selectedClient && (
             <div className="space-y-2">
               {!showClientSearch ? (
                 <button
@@ -526,7 +562,7 @@ export default function LeadCreatePanel({
                   onClick={() => setShowClientSearch(true)}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--hs-link)] transition-colors"
                 >
-                  <Search size={12} /> Link an existing contact (optional)
+                  <Search size={12} /> Search existing people (optional)
                 </button>
               ) : (
                 <div className="rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--background)] p-3 space-y-2">
@@ -546,17 +582,19 @@ export default function LeadCreatePanel({
                     </div>
                   ) : clientQuery.trim().length >= 2 && clientResults.length === 0 ? (
                     <p className="text-xs text-[var(--text-muted)]">
-                      No contacts found for &ldquo;{clientQuery.trim()}&rdquo; — just fill in the fields below.
+                      No matches found for &ldquo;{clientQuery.trim()}&rdquo; — just fill in the fields below.
                     </p>
                   ) : (
                     clientResults.map((c) => (
                       <div
-                        key={c._id}
+                        key={`${c.kind}-${c._id}`}
                         className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2"
                       >
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[var(--text-main)] truncate">{c.name}</p>
-                          <p className="text-xs text-[var(--text-muted)] truncate">{c.phone || c.email || "—"}</p>
+                          <p className="text-sm font-semibold text-[var(--text-main)] truncate">{c.name || "—"}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate">
+                            {c.phone || c.email || "—"} · {c.kind}
+                          </p>
                         </div>
                         <button
                           type="button"

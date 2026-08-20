@@ -235,29 +235,37 @@ const LEADS_TEMPLATE_EXAMPLE = [
   'Email',
 ];
 
-/** CSV column headers + one example row, matching the contacts Job Title/Organization/Source flow. */
-const CONTACTS_TEMPLATE_HEADERS = [
-  'First Name',
-  'Last Name',
-  'Email',
-  'Contact Number',
-  'Job Title',
-  'Organization / Company Name',
-  'Website',
-  'LinkedIn URL',
-  'Lead Source',
-];
-const CONTACTS_TEMPLATE_EXAMPLE = [
-  'Riya',
-  'Kapoor',
-  'riya.kapoor@example.com',
-  '+919876543210',
-  'Marketing Manager',
-  'Example Realty Pvt Ltd',
-  'https://example.com',
-  'https://linkedin.com/in/riyakapoor',
-  'Referral',
-];
+/**
+ * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.contacts,
+ * with header text matching each field's `label` exactly so re-uploading this template
+ * auto-maps every column (see the `data.headers.find(...)` heuristic in handleFileChange).
+ */
+const CONTACTS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.contacts.map((f) => f.label);
+const CONTACTS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  firstName: 'Riya',
+  lastName: 'Kapoor',
+  email: 'riya.kapoor@example.com',
+  mobileNo: '+919876543210',
+  phone: '+911123456789',
+  jobTitle: 'Marketing Manager',
+  organization: 'Example Realty Pvt Ltd',
+  hubspotCompanyId: '',
+  hubspotContactId: '',
+  organizationId: '',
+  source: 'Referral',
+  industry: 'Real Estate',
+  annualRevenue: '500000',
+  noOfEmployees: '11-50',
+  website: 'https://example.com',
+  linkedinUrl: 'https://linkedin.com/in/riyakapoor',
+  territory: 'North Zone',
+  leadOwner: '',
+  status: 'New',
+  stage: 'New',
+};
+const CONTACTS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.contacts.map(
+  (f) => CONTACTS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
+);
 
 function downloadCsvTemplate(headers: string[], example: string[], filename: string) {
   const csv = [headers, example]
