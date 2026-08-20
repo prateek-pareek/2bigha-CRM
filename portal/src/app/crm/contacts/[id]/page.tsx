@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { User, Mail, CalendarClock, ChevronLeft, Edit2, Trash2, Calendar, Share2, Settings2, MessageSquare, Info, Building2, Phone, EyeOff } from 'lucide-react';
 import FollowUpSequenceModal from '@/components/crm/automation/playbooks/FollowUpSequenceModal';
@@ -55,6 +55,7 @@ export default function ContactDetailPage() {
   const { id } = useParams();
   const recordId = useMemo(() => crmRecordIdFromParams(id as string | string[]), [id]);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasAccess } = usePermissions();
   const [contact, setContact] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
@@ -207,6 +208,17 @@ export default function ContactDetailPage() {
       isCancelled = true;
     };
   }, [recordId]);
+
+  // Deep-link support: /crm/contacts/:id?edit=1 opens straight into the prefilled Edit form
+  // (used by the Contacts list "Edit" action instead of landing on the read-only view first).
+  useEffect(() => {
+    if (!contact || searchParams.get('edit') !== '1') return;
+    setIsEditModalOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('edit');
+    const query = params.toString();
+    router.replace(`/crm/contacts/${recordId}${query ? `?${query}` : ''}`, { scroll: false });
+  }, [contact, searchParams, recordId, router]);
 
   useEffect(() => {
     if (activeTab !== 'Details') return;
