@@ -80,12 +80,21 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
  deals: [
   { label: 'Deal Title', key: 'title' },
   { label: 'Value', key: 'dealValue' },
+  { label: 'Pricing Type (fixed/monthly)', key: 'pricingType' },
+  { label: 'Contract Months', key: 'contractMonths' },
+  { label: 'Expected Deal Value', key: 'expectedDealValue' },
+  { label: 'Currency', key: 'currency' },
+  { label: 'Exchange Rate', key: 'exchangeRate' },
   { label: 'Stage', key: 'stage' },
   { label: 'Probability', key: 'probability' },
   { label: 'Company / Organization name', key: 'organization' },
   { label: 'Contact email (link to contact)', key: 'contactEmail' },
   { label: 'HubSpot contact ID (link to contact)', key: 'hubspotContactId' },
   { label: 'MongoDB contact ID (advanced)', key: 'contactPerson' },
+  { label: 'Deal Owner', key: 'dealOwner' },
+  { label: 'Expected Closure Date', key: 'expectedClosureDate' },
+  { label: 'Closed Date', key: 'closedDate' },
+  { label: 'Next Step', key: 'nextStep' },
  ],
  clients: [
   { label: 'Client Name', key: 'name' },
@@ -298,6 +307,35 @@ const CONTACTS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.contacts.map(
   (f) => CONTACTS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
 );
 
+/**
+ * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.deals,
+ * with header text matching each field's `label` exactly so re-uploading this template
+ * auto-maps every column.
+ */
+const DEALS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.deals.map((f) => f.label);
+const DEALS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  title: 'Example Realty — 3BHK Sale',
+  dealValue: '2500000',
+  pricingType: 'fixed',
+  contractMonths: '',
+  expectedDealValue: '2500000',
+  currency: 'INR',
+  exchangeRate: '1',
+  stage: 'Qualification',
+  probability: '20',
+  organization: 'Example Realty Pvt Ltd',
+  contactEmail: 'riya.kapoor@example.com',
+  hubspotContactId: '',
+  contactPerson: '',
+  dealOwner: '',
+  expectedClosureDate: '2026-09-30',
+  closedDate: '',
+  nextStep: 'Schedule site visit',
+};
+const DEALS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.deals.map(
+  (f) => DEALS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
+);
+
 function downloadCsvTemplate(headers: string[], example: string[], filename: string) {
   const csv = [headers, example]
     .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
@@ -319,6 +357,10 @@ function downloadLeadsCsvTemplate() {
 
 function downloadContactsCsvTemplate() {
   downloadCsvTemplate(CONTACTS_TEMPLATE_HEADERS, CONTACTS_TEMPLATE_EXAMPLE, 'contacts-import-template.csv');
+}
+
+function downloadDealsCsvTemplate() {
+  downloadCsvTemplate(DEALS_TEMPLATE_HEADERS, DEALS_TEMPLATE_EXAMPLE, 'deals-import-template.csv');
 }
 
 export default function ImportModal({ isOpen, onClose, onSuccess, type }: ImportModalProps) {
@@ -575,13 +617,14 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
          <p className="text-sm font-medium text-text-muted mt-2">Support .xlsx, .csv (Max 10MB)</p>
         </div>
 
-        {(type === 'leads' || type === 'contacts') && (
+        {(type === 'leads' || type === 'contacts' || type === 'deals') && (
          <div className="flex items-center justify-center">
           <button
            type="button"
            onClick={(e) => {
             e.stopPropagation();
             if (type === 'leads') downloadLeadsCsvTemplate();
+            else if (type === 'deals') downloadDealsCsvTemplate();
             else downloadContactsCsvTemplate();
            }}
            className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"

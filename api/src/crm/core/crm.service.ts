@@ -8325,6 +8325,15 @@ export class CRMService {
                       'probability',
                       'organization',
                       'contactPerson',
+                      'pricingType',
+                      'contractMonths',
+                      'expectedDealValue',
+                      'dealOwner',
+                      'expectedClosureDate',
+                      'closedDate',
+                      'nextStep',
+                      'currency',
+                      'exchangeRate',
                     ],
                   )
                 : this.buildImportPersonReplacePatch(mappedData);
