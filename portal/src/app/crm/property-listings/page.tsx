@@ -91,10 +91,12 @@ function PropertyCardSkeleton() {
 function PropertyCard({
   listing,
   onClick,
+  onEdit,
   onDelete,
 }: {
   listing: PropertyListingRecord;
   onClick: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -145,7 +147,7 @@ function PropertyCard({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onClick} className="gap-2">
+              <DropdownMenuItem onClick={onEdit} className="gap-2">
                 <Pencil size={13} className="text-[#2f80ed]" /> Edit
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onDelete} className="gap-2 text-[#ef1e1e]">
@@ -439,6 +441,7 @@ export default function PropertyListingsPage() {
               key={p._id}
               listing={p}
               onClick={() => router.push(`/crm/property-listings/${p._id}`)}
+              onEdit={() => router.push(`/crm/property-listings/${p._id}/edit`)}
               onDelete={() => void remove(p._id)}
             />
           ))}
@@ -512,7 +515,7 @@ export default function PropertyListingsPage() {
                   </td>
                   <td className="crm-table-actions" onClick={(e) => e.stopPropagation()}>
                     <CrmTableActionMenu
-                      onEdit={() => router.push(`/crm/property-listings/${p._id}`)}
+                      onEdit={() => router.push(`/crm/property-listings/${p._id}/edit`)}
                       onDelete={() => void remove(p._id)}
                     />
                   </td>
