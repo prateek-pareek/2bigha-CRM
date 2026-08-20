@@ -21,10 +21,13 @@ interface ImportModalProps {
 /** Extra mapping rows for HubSpot-style exports (companies ↔ contacts ↔ deals). */
 const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
  leads: [
+  { label: 'Salutation', key: 'salutation' },
   { label: 'First Name', key: 'firstName' },
   { label: 'Last Name', key: 'lastName' },
   { label: 'Role (OWNER/AGENT/USER — creates/links a Client)', key: 'role' },
   { label: 'Email', key: 'email' },
+  { label: 'Additional Emails (comma or semicolon-separated)', key: 'additionalEmails' },
+  { label: 'Gender', key: 'gender' },
   { label: 'Mobile No', key: 'mobileNo' },
   { label: 'Phone', key: 'phone' },
   { label: 'WhatsApp Number (on the linked Client)', key: 'whatsappNumber' },
@@ -34,12 +37,18 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'HubSpot contact ID (optional, for linking)', key: 'hubspotContactId' },
   { label: 'MongoDB organization ID (advanced)', key: 'organizationId' },
   { label: 'Job Title', key: 'jobTitle' },
+  { label: 'Website', key: 'website' },
+  { label: 'LinkedIn URL', key: 'linkedinUrl' },
   { label: 'Annual Revenue', key: 'annualRevenue' },
   { label: 'Industry', key: 'industry' },
+  { label: 'No. of Employees', key: 'noOfEmployees' },
+  { label: 'Territory', key: 'territory' },
   { label: 'Status', key: 'status' },
+  { label: 'Call Status', key: 'callStatus' },
   { label: 'Group (Seller/Buyer — see Settings)', key: 'group' },
   { label: 'Lead Type (Reference/Investor/Lead/Buyer lead — see Settings)', key: 'leadCategory' },
   { label: 'Lead Source', key: 'source' },
+  { label: 'Notes', key: 'notes' },
  ],
  contacts: [
   { label: 'Salutation', key: 'salutation' },
@@ -212,33 +221,45 @@ function applyHubSpotHints(
   return out;
 }
 
-/** CSV column headers + one example row, matching the leads Role/WhatsApp/Group/Lead Type flow. */
-const LEADS_TEMPLATE_HEADERS = [
-  'First Name',
-  'Last Name',
-  'Role',
-  'Email',
-  'Contact Number',
-  'WhatsApp Number',
-  'Group',
-  'Address',
-  'Website',
-  'Lead Type',
-  'Lead Source',
-];
-const LEADS_TEMPLATE_EXAMPLE = [
-  'Shagun',
-  'Mishra',
-  'OWNER/AGENT/USER',
-  'sapnashagun@example.com',
-  '+919876543210',
-  '+919876543210',
-  'Seller',
-  '123 Street Gurgaon Haryana India 122017',
-  'https://example.com',
-  'Lead',
-  'Email',
-];
+/**
+ * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.leads,
+ * with header text matching each field's `label` exactly so re-uploading this template
+ * auto-maps every column (see the `data.headers.find(...)` heuristic in handleFileChange).
+ */
+const LEADS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.leads.map((f) => f.label);
+const LEADS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  salutation: 'Ms',
+  firstName: 'Shagun',
+  lastName: 'Mishra',
+  role: 'OWNER/AGENT/USER',
+  email: 'sapnashagun@example.com',
+  additionalEmails: 'shagun.personal@example.com; shagun.work@example.com',
+  gender: 'Female',
+  mobileNo: '+919876543210',
+  phone: '+911123456789',
+  whatsappNumber: '+919876543210',
+  address: '123 Street, Gurgaon, Haryana, India 122017',
+  organization: 'Example Realty Pvt Ltd',
+  hubspotCompanyId: '',
+  hubspotContactId: '',
+  organizationId: '',
+  jobTitle: 'Marketing Manager',
+  website: 'https://example.com',
+  linkedinUrl: 'https://linkedin.com/in/shagunmishra',
+  annualRevenue: '500000',
+  industry: 'Real Estate',
+  noOfEmployees: '11-50',
+  territory: 'North Zone',
+  status: 'New',
+  callStatus: 'Not Called',
+  group: 'Seller',
+  leadCategory: 'Lead',
+  source: 'Email',
+  notes: 'Interested in 3BHK, follow up next week',
+};
+const LEADS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.leads.map(
+  (f) => LEADS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
+);
 
 /**
  * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.contacts,
