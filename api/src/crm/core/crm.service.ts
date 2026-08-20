@@ -8367,6 +8367,28 @@ export class CRMService {
           ) {
             mappedData.annualRevenue = Number(mappedData.annualRevenue);
           }
+          if (
+            mappedData.additionalEmails !== undefined &&
+            mappedData.additionalEmails !== null &&
+            mappedData.additionalEmails !== ''
+          ) {
+            // Imported as one CSV cell (comma/semicolon-separated) — split into the string[] the schema expects.
+            const primary = String(mappedData.email ?? '')
+              .trim()
+              .toLowerCase();
+            const seen = new Set<string>();
+            const parsed: string[] = [];
+            for (const raw of String(mappedData.additionalEmails).split(/[,;]/)) {
+              const trimmed = raw.trim();
+              if (!trimmed || !trimmed.includes('@')) continue;
+              const lower = trimmed.toLowerCase();
+              if (primary && lower === primary) continue;
+              if (seen.has(lower)) continue;
+              seen.add(lower);
+              parsed.push(trimmed);
+            }
+            mappedData.additionalEmails = parsed;
+          }
           const hsCont =
             mappedData.hubspotContactId ?? mappedData.hsContactId;
           if (hsCont != null && String(hsCont).trim() !== '') {

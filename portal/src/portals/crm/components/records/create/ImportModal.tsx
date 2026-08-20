@@ -42,9 +42,12 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'Lead Source', key: 'source' },
  ],
  contacts: [
+  { label: 'Salutation', key: 'salutation' },
   { label: 'First Name', key: 'firstName' },
   { label: 'Last Name', key: 'lastName' },
   { label: 'Email', key: 'email' },
+  { label: 'Additional Emails (comma or semicolon-separated)', key: 'additionalEmails' },
+  { label: 'Gender', key: 'gender' },
   { label: 'Mobile No', key: 'mobileNo' },
   { label: 'Phone', key: 'phone' },
   { label: 'Job Title', key: 'jobTitle' },
@@ -59,6 +62,8 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'Website', key: 'website' },
   { label: 'LinkedIn URL', key: 'linkedinUrl' },
   { label: 'Territory', key: 'territory' },
+  { label: 'Telegram', key: 'telegram' },
+  { label: 'Address', key: 'address' },
   { label: 'Owner', key: 'leadOwner' },
   { label: 'Status', key: 'status' },
   { label: 'Stage', key: 'stage' },
@@ -242,9 +247,12 @@ const LEADS_TEMPLATE_EXAMPLE = [
  */
 const CONTACTS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.contacts.map((f) => f.label);
 const CONTACTS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  salutation: 'Ms',
   firstName: 'Riya',
   lastName: 'Kapoor',
   email: 'riya.kapoor@example.com',
+  additionalEmails: 'riya.k.personal@example.com; riya.work@example.com',
+  gender: 'Female',
   mobileNo: '+919876543210',
   phone: '+911123456789',
   jobTitle: 'Marketing Manager',
@@ -259,6 +267,8 @@ const CONTACTS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
   website: 'https://example.com',
   linkedinUrl: 'https://linkedin.com/in/riyakapoor',
   territory: 'North Zone',
+  telegram: '@riyakapoor',
+  address: '123 MG Road, Bengaluru, Karnataka',
   leadOwner: '',
   status: 'New',
   stage: 'New',
@@ -496,6 +506,17 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
   const typeLabel = IMPORT_TYPE_LABEL[type] || type;
   const crmFields = CRM_FIELDS_MAP[type] || [];
 
+  // Flag when the same source column has been mapped to more than one CRM property
+  // (e.g. Last Name accidentally pointed at the same column as First Name).
+  const columnUsage = new Map<string, number>();
+  Object.values(mapping).forEach((col) => {
+    if (col) columnUsage.set(col, (columnUsage.get(col) || 0) + 1);
+  });
+  const duplicateMappedColumns = new Set(
+    [...columnUsage.entries()].filter(([, n]) => n > 1).map(([col]) => col),
+  );
+  const hasDuplicateMapping = duplicateMappedColumns.size > 0;
+
   return (
    <CrmJiraPortal>
    <div className={`${crmModalChrome.overlay} flex items-center justify-center p-4`}>
@@ -662,7 +683,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
           </tr>
          </thead>
          <tbody className="divide-y divide-slate-50">
-           {crmFields.map(field => (
+           {crmFields.map(field => {
+            const isDuplicate = !!mapping[field.key] && duplicateMappedColumns.has(mapping[field.key]);
+            return (
             <tr key={field.key} className="group hover:bg-white transition-all">
              <td className="px-6 py-4">
               <div className="flex items-center gap-3">
@@ -679,16 +702,26 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
               <select
                value={mapping[field.key] || ''}
                onChange={(e) => setMapping(prev => ({ ...prev, [field.key]: e.target.value }))}
-               className="w-full bg-white border border-[var(--border-color)] rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-bold text-text-main outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
+               className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 transition-all appearance-none cursor-pointer ${
+                isDuplicate
+                 ? 'bg-red-50 border-red-300 text-red-700 focus:ring-red-200'
+                 : 'bg-white border-[var(--border-color)] text-text-main focus:ring-primary/20'
+               }`}
               >
                <option value="">— Skip Field —</option>
                {headers.map(h => (
                 <option key={h} value={h}>{h}</option>
                ))}
               </select>
+              {isDuplicate && (
+               <p className="mt-1 text-xs font-semibold text-red-600">
+                Also mapped to another property — pick a different column.
+               </p>
+              )}
              </td>
             </tr>
-           ))}
+            );
+           })}
            {/* Custom Fields section */}
            <tr className="bg-primary/[0.02]">
             <td colSpan={3} className="px-6 py-4">
@@ -757,11 +790,11 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
         <CrmButton
          className="flex-[2]"
          onClick={handleImport}
-         disabled={uploading}
+         disabled={uploading || hasDuplicateMapping}
          loading={uploading}
          rightIcon={!uploading ? <ChevronRight size={16} strokeWidth={1.75} /> : undefined}
         >
-         {uploading ? 'Importing…' : 'Start import'}
+         {uploading ? 'Importing…' : hasDuplicateMapping ? 'Fix duplicate mappings to continue' : 'Start import'}
         </CrmButton>
        </div>
       </div>
