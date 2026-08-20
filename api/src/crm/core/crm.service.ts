@@ -1765,14 +1765,23 @@ export class CRMService {
         }
       }
     }
-    if (opts.entity === 'contact' && opts.existingContact && mergedEmail) {
-      const l = await this.leadModel
-        .findOne({ email: this.emailRegexForMatch(opts.merged.email) })
-        .select('_id email')
-        .lean()
-        .exec();
-      if (l && normalizeEmail(l.email) === mergedEmail) {
-        opts.excludeLeadIds.add(String(l._id));
+    if (opts.entity === 'contact' && opts.existingContact) {
+      // Always exclude the lead this contact was synced from (by sourceLead link) —
+      // mirrors the lead-side exclusion above, so editing a synced contact's own
+      // phone/mobile doesn't get flagged as a conflict against its own source lead.
+      if (opts.existingContact.sourceLead) {
+        opts.excludeLeadIds.add(String(opts.existingContact.sourceLead));
+      }
+      // Also exclude by email match (handles edge cases where sourceLead isn't set)
+      if (mergedEmail) {
+        const l = await this.leadModel
+          .findOne({ email: this.emailRegexForMatch(opts.merged.email) })
+          .select('_id email')
+          .lean()
+          .exec();
+        if (l && normalizeEmail(l.email) === mergedEmail) {
+          opts.excludeLeadIds.add(String(l._id));
+        }
       }
     }
   }
@@ -2119,6 +2128,8 @@ export class CRMService {
       firstName: lead.firstName || 'Unknown',
       lastName: lead.lastName || '',
       ...(email ? { email } : {}),
+      salutation: lead.salutation || undefined,
+      gender: lead.gender || undefined,
       phone: lead.phone || undefined,
       mobileNo: lead.mobileNo || undefined,
       organization: lead.organization || undefined,
@@ -2319,6 +2330,8 @@ export class CRMService {
       firstName: contact.firstName || undefined,
       lastName: contact.lastName || undefined,
       ...(email ? { email } : {}),
+      salutation: contact.salutation || undefined,
+      gender: contact.gender || undefined,
       phone: contact.phone || undefined,
       mobileNo: contact.mobileNo || undefined,
       organization: orgName,
