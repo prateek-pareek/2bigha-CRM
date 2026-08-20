@@ -8,6 +8,7 @@ import {
 import { Integration } from '../schemas/integration.schema';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { AiSensyClient } from './aisensy-client.util';
+import { StorageService } from '../../storage/storage.service';
 
 const META_API = 'https://graph.facebook.com/v18.0';
 
@@ -49,6 +50,7 @@ export class WhatsAppService {
     @InjectModel(Integration.name, 'crmConnection')
     private integrationModel: Model<any>,
     private readonly realtimeGateway: RealtimeGateway,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -73,6 +75,8 @@ export class WhatsAppService {
     businessAccountId?: string;
     provider: 'meta' | 'aisensy';
     sourceLabel?: string;
+    aisensyProjectId?: string;
+    aisensyProjectApiPassword?: string;
   } | null> {
     const config = await this.integrationModel
       .findOne({ type: 'whatsapp' })
@@ -91,6 +95,12 @@ export class WhatsAppService {
         : undefined,
       provider,
       sourceLabel: config.sourceLabel ? String(config.sourceLabel) : undefined,
+      aisensyProjectId: config.aisensyProjectId
+        ? String(config.aisensyProjectId)
+        : undefined,
+      aisensyProjectApiPassword: config.aisensyProjectApiPassword
+        ? String(config.aisensyProjectApiPassword)
+        : undefined,
     };
   }
 
@@ -129,15 +139,44 @@ export class WhatsAppService {
       return { success: false, error: 'Invalid phone number' };
 
     if (config.provider === 'aisensy') {
-      // AiSensy's public API is campaign/template-scoped only (see
-      // AiSensyClient's doc comment) — there's no confirmed endpoint for a
-      // free-text session reply, so we can't honor an arbitrary `body`
-      // here yet. Send a template instead via sendTemplateMessage().
-      return {
-        success: false,
-        error:
-          "Free-text replies aren't supported via AiSensy yet — send a template message instead (AiSensy's API is template/campaign-only).",
-      };
+      // Free-text sends go through AiSensy's separate Project API, which
+      // needs its own projectId/projectApiPassword credential pair (see
+      // AiSensyClient.sendSessionMessage's doc comment). Without those
+      // configured, fall back to the old template-only guidance.
+      if (!config.aisensyProjectId || !config.aisensyProjectApiPassword) {
+        return {
+          success: false,
+          error:
+            "Free-text replies need AiSensy's Project API credentials — add a Project ID and Project API Password under Settings → Integrations → WhatsApp, or send a template message instead.",
+        };
+      }
+
+      const client = new AiSensyClient(config.apiKey, {
+        projectId: config.aisensyProjectId,
+        projectApiPassword: config.aisensyProjectApiPassword,
+      });
+      const result = await client.sendSessionMessage({ destination: phone, body });
+      if (!result.success) {
+        this.logger.error(`AiSensy session send failed: ${result.error}`);
+        return { success: false, error: result.error || 'Send failed' };
+      }
+
+      const msgId = result.raw?.messages?.[0]?.id
+        ? String(result.raw.messages[0].id)
+        : undefined;
+      const saved = await this.messageModel.create({
+        waId: phone,
+        direction: 'outbound',
+        body,
+        messageId: msgId,
+        sentBy: userId ? new Types.ObjectId(userId) : undefined,
+        module,
+        entityId: entityId ? new Types.ObjectId(entityId) : undefined,
+        status: 'sent',
+        meta: { ...result.raw, provider: 'aisensy' },
+      });
+      this.emitWhatsAppEvent(phone, saved);
+      return { success: true, messageId: msgId };
     }
 
     try {
@@ -198,6 +237,8 @@ export class WhatsAppService {
     userId?: string;
     module?: string;
     entityId?: string;
+    mediaUrl?: string;
+    mediaFilename?: string;
   }): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const config = await this.getConfig();
     if (!config)
@@ -224,6 +265,10 @@ export class WhatsAppService {
         campaignName: templateName,
         source: config.sourceLabel,
         templateParams: this.flattenParamsForAiSensy(params.components),
+        media: params.mediaUrl ? {
+          url: params.mediaUrl,
+          filename: params.mediaFilename || 'file'
+        } : undefined,
       });
 
       const body =
@@ -247,6 +292,11 @@ export class WhatsAppService {
           ? new Types.ObjectId(params.entityId)
           : undefined,
         status: 'sent',
+        attachment: params.mediaUrl ? {
+          type: 'image',
+          url: params.mediaUrl,
+          filename: params.mediaFilename
+        } : undefined,
         meta: {
           ...result.raw,
           provider: 'aisensy',
@@ -373,11 +423,119 @@ export class WhatsAppService {
       return { success: false, error: 'WhatsApp not configured or inactive' };
     }
     if (config.provider === 'aisensy') {
-      return {
-        success: false,
-        error:
-          "AiSensy doesn't expose a public template-list API — manage & approve templates in the AiSensy dashboard, then map each one to a Campaign name under Settings → WhatsApp templates.",
-      };
+      if (!config.aisensyProjectId || !config.aisensyProjectApiPassword) {
+        return {
+          success: false,
+          error: 'AiSensy Project ID and Project API Password are required to sync templates.',
+        };
+      }
+      try {
+        const templates: WhatsAppCachedTemplate[] = [];
+        let hasMore = true;
+        let after: string | undefined = undefined;
+
+        const reverseLanguageMap: Record<string, string> = {
+          'english': 'en',
+          'english (us)': 'en_US',
+          'english (uk)': 'en_GB',
+          'hindi': 'hi',
+          'spanish': 'es',
+          'portuguese': 'pt',
+        };
+
+        while (hasMore) {
+          let url = `https://apis.aisensy.com/project-apis/v1/project/${config.aisensyProjectId}/wa_template?limit=100`;
+          if (after) url += `&after=${after}`;
+          
+          const res = await fetch(url, {
+            headers: {
+              'Accept': 'application/json',
+              'X-AiSensy-Project-API-Pwd': config.aisensyProjectApiPassword || '',
+            }
+          });
+          const data: any = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const errorMessage = data?.message || data?.error || 'Failed to sync templates from AiSensy';
+            this.logger.error(`AiSensy template sync failed: ${JSON.stringify(data)}`);
+            return { success: false, error: errorMessage };
+          }
+
+          const page = Array.isArray(data?.template) ? data.template : [];
+          for (const row of page) {
+            const langLower = String(row.language || '').toLowerCase();
+            const language = reverseLanguageMap[langLower] || langLower.substring(0, 2);
+
+            const components: any[] = [];
+            components.push({
+              type: 'BODY',
+              text: row.text || '',
+              example: row.sample_text && row.sample_text !== row.text ? {
+                body_text: [
+                  (row.sample_text.match(/\[(.*?)\]/g) || []).map((v: string) => v.slice(1, -1))
+                ]
+              } : undefined
+            });
+
+            if (row.footer_text) {
+              components.push({ type: 'FOOTER', text: row.footer_text });
+            }
+
+            if (row.header_text) {
+              components.push({ type: 'HEADER', format: 'TEXT', text: row.header_text });
+            } else if (['IMAGE', 'VIDEO', 'FILE', 'LOCATION'].includes(row.type)) {
+              components.push({ type: 'HEADER', format: row.type === 'FILE' ? 'DOCUMENT' : row.type });
+            }
+
+            if (Array.isArray(row.buttons) && row.buttons.length > 0) {
+              components.push({
+                type: 'BUTTONS',
+                buttons: row.buttons.map((b: any) => ({
+                  type: b.type === 'Phone Number' ? 'PHONE_NUMBER' : (b.type === 'URL' ? 'URL' : 'QUICK_REPLY'),
+                  text: b.button_title || b.text || '',
+                  url: b.type === 'URL' ? b.button_value : undefined,
+                  phone_number: b.type === 'Phone Number' ? b.button_value : undefined,
+                }))
+              });
+            }
+
+            templates.push({
+              id: row.template_id || row.id || undefined,
+              name: String(row.name || ''),
+              status: String(row.status || ''),
+              language,
+              category: row.category ? String(row.category) : undefined,
+              components,
+            });
+          }
+
+          if (page.length < 100) {
+            hasMore = false;
+          } else {
+            after = page[page.length - 1].id;
+          }
+        }
+
+        const syncedAt = new Date();
+        await this.integrationModel.updateOne(
+          { type: 'whatsapp' },
+          {
+            $set: {
+              templates,
+              templatesSyncedAt: syncedAt,
+            },
+          },
+        );
+
+        return {
+          success: true,
+          templates,
+          syncedAt: syncedAt.toISOString(),
+        };
+
+      } catch (e: any) {
+        this.logger.error(`AiSensy template sync error: ${e?.message}`);
+        return { success: false, error: e?.message || 'Failed to sync templates' };
+      }
     }
     if (!config.businessAccountId) {
       return {
@@ -451,10 +609,50 @@ export class WhatsAppService {
     }
   }
 
+  /**
+   * Applies a delivery/read/failed receipt from the provider's webhook to
+   * the previously-saved outbound message (matched by `messageId`) and
+   * pushes a realtime update so the inbox's tick marks refresh live.
+   * `status` is normalized to the schema's enum — an unrecognized value is
+   * logged and dropped rather than persisted, so a provider quirk can't
+   * silently poison the field with junk.
+   */
+  async updateMessageStatus(
+    messageId: string,
+    status: string,
+    meta?: Record<string, any>,
+  ): Promise<void> {
+    const normalized = String(status || '').toLowerCase();
+    if (!['sent', 'delivered', 'read', 'failed'].includes(normalized)) {
+      this.logger.warn(`Ignoring unrecognized WhatsApp status "${status}" for ${messageId}`);
+      return;
+    }
+
+    const message = await this.messageModel.findOne({ messageId }).exec();
+    if (!message) return; // status update for a message we don't have (or an inbound echo)
+
+    // Never downgrade — a late/out-of-order 'sent' receipt shouldn't
+    // overwrite an already-recorded 'delivered'/'read'.
+    const rank = { sent: 0, delivered: 1, read: 2, failed: 3 } as const;
+    if ((rank[message.status as keyof typeof rank] ?? 0) > rank[normalized as keyof typeof rank]) {
+      return;
+    }
+
+    message.status = normalized;
+    if (meta) message.meta = { ...(message.meta || {}), lastStatusEvent: meta };
+    await message.save();
+    this.emitWhatsAppEvent(message.waId, message);
+  }
+
   async saveIncoming(
     waId: string,
     body: string,
     messageId: string,
+    attachment?: {
+      type: 'image' | 'document' | 'video' | 'audio';
+      url: string;
+      filename?: string;
+    },
   ): Promise<void> {
     const saved = await this.messageModel.create({
       waId,
@@ -462,6 +660,30 @@ export class WhatsAppService {
       body,
       messageId,
       status: 'delivered',
+      attachment,
+    });
+    this.emitWhatsAppEvent(waId, saved);
+  }
+
+  async saveOutgoingWebhook(
+    waId: string,
+    body: string,
+    messageId: string,
+    attachment?: {
+      type: 'image' | 'document' | 'video' | 'audio';
+      url: string;
+      filename?: string;
+    },
+  ): Promise<void> {
+    const existing = await this.messageModel.findOne({ messageId }).exec();
+    if (existing) return;
+    const saved = await this.messageModel.create({
+      waId,
+      direction: 'outbound',
+      body,
+      messageId,
+      status: 'sent',
+      attachment,
     });
     this.emitWhatsAppEvent(waId, saved);
   }
@@ -500,5 +722,127 @@ export class WhatsAppService {
       ])
       .exec();
     return agg;
+  }
+
+  async handleMediaMessage(
+    waId: string,
+    mediaId: string,
+    type: 'image' | 'document' | 'video' | 'audio',
+    caption?: string,
+    messageId?: string,
+  ): Promise<void> {
+    const config = await this.getConfig();
+    if (!config) {
+      this.logger.error('WhatsApp not configured or inactive; skipping media download');
+      return;
+    }
+
+    try {
+      // 1. Get temporary media URL from Meta Graph API
+      const mediaRes = await fetch(`${META_API}/${mediaId}`, {
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+      });
+      const mediaData = await mediaRes.json().catch(() => ({}));
+      if (!mediaRes.ok || !mediaData.url) {
+        this.logger.error(`Failed to fetch Meta media url for id ${mediaId}: ${JSON.stringify(mediaData)}`);
+        return;
+      }
+
+      // 2. Download the binary stream/buffer
+      const fileRes = await fetch(mediaData.url, {
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+      });
+      if (!fileRes.ok) {
+        this.logger.error(`Failed to download Meta media file from url`);
+        return;
+      }
+      const buffer = Buffer.from(await fileRes.arrayBuffer());
+
+      // 3. Save it to local storage
+      const mime = mediaData.mime_type || this.mimeFromType(type);
+      const ext = mime.split('/')[1]?.split(';')[0] || this.extFromType(type);
+      const filename = `wa_${mediaId}_${Date.now()}.${ext}`;
+      
+      let uploadResult: any;
+      if (type === 'image') {
+        uploadResult = await this.storageService.uploadBuffer(buffer, {
+          originalName: filename,
+          mime,
+          ext,
+          subfolder: 'uploads',
+          skipOptimize: true,
+        });
+      } else {
+        const mockFile: any = {
+          buffer,
+          originalname: filename,
+          mimetype: mime,
+        };
+        uploadResult = await this.storageService.uploadDocument(mockFile);
+      }
+
+      const attachment = {
+        type,
+        url: uploadResult.url,
+        filename: uploadResult.originalName || filename,
+      };
+
+      const body = caption || `[${type.toUpperCase()}]`;
+
+      await this.saveIncoming(waId, body, messageId || `meta_${mediaId}`, attachment);
+    } catch (e: any) {
+      this.logger.error(`Error handling media message ${mediaId}: ${e?.message}`);
+    }
+  }
+
+  private mimeFromType(type: string): string {
+    if (type === 'image') return 'image/jpeg';
+    if (type === 'video') return 'video/mp4';
+    if (type === 'audio') return 'audio/aac';
+    return 'application/octet-stream';
+  }
+
+  private extFromType(type: string): string {
+    if (type === 'image') return 'jpg';
+    if (type === 'video') return 'mp4';
+    if (type === 'audio') return 'aac';
+    return 'bin';
+  }
+
+  async logOutboundMessage(params: {
+    phone: string;
+    body: string;
+    messageId?: string;
+    sentBy?: Types.ObjectId;
+    module?: string;
+    entityId?: Types.ObjectId;
+    mediaUrl?: string;
+    mediaFilename?: string;
+    rawPayload?: any;
+    templateName?: string;
+  }): Promise<WhatsAppMessageDocument> {
+    const phone = params.phone.replace(/\D/g, '');
+    const saved = await this.messageModel.create({
+      waId: phone,
+      direction: 'outbound',
+      body: params.body,
+      messageId: params.messageId,
+      sentBy: params.sentBy,
+      module: params.module,
+      entityId: params.entityId,
+      status: 'sent',
+      attachment: params.mediaUrl ? {
+        type: 'image',
+        url: params.mediaUrl,
+        filename: params.mediaFilename
+      } : undefined,
+      meta: {
+        ...params.rawPayload,
+        provider: 'aisensy',
+        template: params.templateName ? { name: params.templateName } : undefined
+      },
+    });
+    this.emitWhatsAppEvent(phone, saved);
+    return saved;
   }
 }

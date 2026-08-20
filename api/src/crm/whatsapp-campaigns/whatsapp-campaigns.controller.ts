@@ -30,6 +30,30 @@ export class WhatsAppCampaignsController {
     return this.campaignsService.findAll(req.user.userId, { status, search });
   }
 
+  @Get('live')
+  @Permissions('outreach:read', 'inbox:read')
+  getLiveCampaigns() {
+    return this.campaignsService.getLiveCampaigns();
+  }
+
+  @Post('live')
+  @Permissions('outreach:write', 'inbox:write')
+  createLiveCampaign(@Body() body: Record<string, unknown>) {
+    return this.campaignsService.createLiveCampaign(body);
+  }
+
+  @Get('live/:id/details')
+  @Permissions('outreach:read', 'inbox:read')
+  getLiveCampaignDetails(@Param('id') id: string) {
+    return this.campaignsService.getLiveCampaignDetails(id);
+  }
+
+  @Get('live/:id/analytics')
+  @Permissions('outreach:read', 'inbox:read')
+  getLiveCampaignAnalytics(@Param('id') id: string) {
+    return this.campaignsService.getLiveCampaignAnalytics(id);
+  }
+
   @Get(':id')
   @Permissions('outreach:read', 'inbox:read')
   findOne(@Request() req: { user: { userId: string } }, @Param('id') id: string) {

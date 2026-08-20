@@ -3,6 +3,20 @@ import { Document, Types } from 'mongoose';
 
 export type WhatsAppMessageDocument = WhatsAppMessage & Document;
 
+@Schema({ _id: false })
+class WhatsAppAttachment {
+  @Prop({ type: String, enum: ['image', 'document', 'video', 'audio'], required: true })
+  type: 'image' | 'document' | 'video' | 'audio';
+
+  @Prop({ type: String, required: true })
+  url: string;
+
+  @Prop({ type: String })
+  filename?: string;
+}
+
+const WhatsAppAttachmentSchema = SchemaFactory.createForClass(WhatsAppAttachment);
+
 @Schema({ timestamps: true })
 export class WhatsAppMessage {
   @Prop({ required: true })
@@ -17,7 +31,7 @@ export class WhatsAppMessage {
   @Prop()
   messageId?: string; // Meta message ID
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   sentBy?: Types.ObjectId;
 
   @Prop({ type: String })
@@ -31,6 +45,9 @@ export class WhatsAppMessage {
 
   @Prop({ type: Object })
   meta?: Record<string, any>;
+
+  @Prop({ type: WhatsAppAttachmentSchema })
+  attachment?: WhatsAppAttachment;
 }
 
 export const WhatsAppMessageSchema =

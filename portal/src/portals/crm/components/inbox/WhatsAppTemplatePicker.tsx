@@ -37,11 +37,45 @@ export default function WhatsAppTemplatePicker({
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [selected, setSelected] = useState<WhatsAppCachedTemplate | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [liveCampaigns, setLiveCampaigns] = useState<any[]>([]);
+  const [selectedCampaignName, setSelectedCampaignName] = useState<string>("");
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaFilename, setMediaFilename] = useState("");
+  const [linking, setLinking] = useState(false);
 
   const slots = useMemo(
     () => (selected ? extractSlots(selected) : []),
     [selected],
   );
+
+  const matchingCampaigns = useMemo(() => {
+    if (!selected) return [];
+    return liveCampaigns.filter(
+      (c) =>
+        c.status === "LIVE" &&
+        c.message_payload?.template?.name === selected.name
+    );
+  }, [selected, liveCampaigns]);
+
+  const hasMediaHeader = useMemo(() => {
+    if (!selected) return false;
+    const header = selected.components?.find(
+      (c: any) => String(c.type).toUpperCase() === "HEADER"
+    );
+    return header ? ["IMAGE", "VIDEO", "DOCUMENT"].includes(String(header.format).toUpperCase()) : false;
+  }, [selected]);
+
+  useEffect(() => {
+    if (!selected) {
+      setSelectedCampaignName("");
+      return;
+    }
+    if (matchingCampaigns.length > 0) {
+      setSelectedCampaignName(matchingCampaigns[0].name);
+    } else {
+      setSelectedCampaignName(selected.name);
+    }
+  }, [selected, matchingCampaigns]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -63,18 +97,45 @@ export default function WhatsAppTemplatePicker({
     setLoading(true);
     const token = localStorage.getItem("token");
     try {
+      if (refresh) {
+        await fetch(`${CRM_API_URL}/crm/whatsapp-templates/sync`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+
       const res = await fetch(
-        `${CRM_API_URL}/crm/whatsapp/templates${refresh ? "?refresh=1" : ""}`,
+        `${CRM_API_URL}/crm/whatsapp-templates`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => []);
       if (!res.ok) {
-        toast.error(data?.error || data?.message || "Failed to load templates");
+        toast.error("Failed to load templates");
         return;
       }
-      if (data.error) toast.error(data.error);
-      setTemplates(Array.isArray(data.templates) ? data.templates : []);
-      setSyncedAt(data.syncedAt || null);
+      const mapped = (Array.isArray(data) ? data : []).map((t: any) => ({
+        ...t,
+        id: t.id || t._id,
+      }));
+      setTemplates(mapped);
+
+      try {
+        const liveRes = await fetch(`${CRM_API_URL}/crm/whatsapp-campaigns/live`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const liveData = await liveRes.json().catch(() => ({}));
+        if (liveRes.ok && Array.isArray(liveData?.campaign)) {
+          setLiveCampaigns(liveData.campaign);
+        }
+      } catch (err) {
+        console.error("Failed to load live campaigns", err);
+      }
+
+      const maxSync = mapped.reduce((max: number, t: any) => {
+        const time = t.lastSyncedAt ? new Date(t.lastSyncedAt).getTime() : 0;
+        return time > max ? time : max;
+      }, 0);
+      setSyncedAt(maxSync ? new Date(maxSync).toISOString() : null);
     } catch {
       toast.error("Failed to load templates");
     } finally {
@@ -86,7 +147,7 @@ export default function WhatsAppTemplatePicker({
     setSyncing(true);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/whatsapp/templates/sync`, {
+      const res = await fetch(`${CRM_API_URL}/crm/whatsapp-templates/sync`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -95,9 +156,8 @@ export default function WhatsAppTemplatePicker({
         toast.error(data?.error || "Sync failed");
         return;
       }
-      setTemplates(Array.isArray(data.templates) ? data.templates : []);
-      setSyncedAt(data.syncedAt || null);
-      toast.success(`Synced ${data.templates?.length ?? 0} templates`);
+      toast.success(`Synced ${data.synced ?? 0} templates`);
+      await loadTemplates(false);
     } catch {
       toast.error("Sync failed");
     } finally {
@@ -110,12 +170,16 @@ export default function WhatsAppTemplatePicker({
     setSelected(null);
     setValues({});
     setSearch("");
+    setMediaUrl("");
+    setMediaFilename("");
     void loadTemplates(false);
   }, [open]);
 
   useEffect(() => {
     if (!selected) {
       setValues({});
+      setMediaUrl("");
+      setMediaFilename("");
       return;
     }
     const next: Record<string, string> = {};
@@ -123,10 +187,49 @@ export default function WhatsAppTemplatePicker({
       next[slot.key] = slot.example || "";
     }
     setValues(next);
+    setMediaUrl("");
+    setMediaFilename("");
   }, [selected]);
+
+  const registerCampaign = async () => {
+    if (!selected || !selectedCampaignName.trim()) {
+      toast.error("Please enter a campaign name to register");
+      return;
+    }
+    setLinking(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(
+        `${CRM_API_URL}/crm/whatsapp-templates/${selected.id}/aisensy-link`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ aisensyCampaignName: selectedCampaignName.trim() }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(`Activated campaign "${selectedCampaignName.trim()}" on AiSensy!`);
+        await loadTemplates(false);
+      } else {
+        toast.error(data.message || "Failed to register campaign");
+      }
+    } catch {
+      toast.error("Failed to register campaign");
+    } finally {
+      setLinking(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!selected || !to) return;
+    if (hasMediaHeader && !mediaUrl.trim()) {
+      toast.error("Header Media URL is required for this template type");
+      return;
+    }
     for (const slot of slots) {
       if (!values[slot.key]?.trim()) {
         toast.error(`Fill ${slot.label}`);
@@ -145,10 +248,12 @@ export default function WhatsAppTemplatePicker({
         },
         body: JSON.stringify({
           to,
-          name: selected.name,
+          name: selectedCampaignName || selected.name,
           language: selected.language,
           components,
           bodyPreview: bodyPreview(selected, values),
+          mediaUrl: hasMediaHeader ? mediaUrl.trim() : undefined,
+          mediaFilename: hasMediaHeader ? mediaFilename.trim() : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -265,6 +370,80 @@ export default function WhatsAppTemplatePicker({
                 <div className="rounded-[var(--radius-md)] border border-border bg-slate-50 p-3 text-xs leading-relaxed text-text-main whitespace-pre-wrap">
                   {bodyPreview(selected, values)}
                 </div>
+
+                {/* Live Campaign selector */}
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                    AiSensy API Campaign
+                  </span>
+                  {matchingCampaigns.length > 0 ? (
+                    <select
+                      value={selectedCampaignName}
+                      onChange={(e) => setSelectedCampaignName(e.target.value)}
+                      className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    >
+                      {matchingCampaigns.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name} (Live)
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div>
+                      <div className="flex gap-2">
+                        <input
+                          value={selectedCampaignName}
+                          onChange={(e) => setSelectedCampaignName(e.target.value)}
+                          placeholder="Type Campaign Name manually..."
+                          className="h-10 flex-1 rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        />
+                        <CrmButton
+                          variant="primary"
+                          disabled={linking || !selectedCampaignName.trim()}
+                          onClick={() => void registerCampaign()}
+                          className="h-10 px-3 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold shrink-0"
+                        >
+                          {linking ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            "Register"
+                          )}
+                        </CrmButton>
+                      </div>
+                      <p className="mt-1.5 text-[10px] text-amber-600 font-semibold leading-relaxed">
+                        ⚠️ No live API campaigns found for this template on AiSensy. Click "Register" to create & activate this campaign instantly!
+                      </p>
+                    </div>
+                  )}
+                </div>
+ 
+                {hasMediaHeader && (
+                  <div className="space-y-3 pt-1.5 border-t border-border/40">
+                    <label className="block space-y-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                        Header Media URL (Required)
+                      </span>
+                      <input
+                        value={mediaUrl}
+                        onChange={(e) => setMediaUrl(e.target.value)}
+                        placeholder="e.g. https://example.com/image.jpg"
+                        className="h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                        Header File Name (Optional)
+                      </span>
+                      <input
+                        value={mediaFilename}
+                        onChange={(e) => setMediaFilename(e.target.value)}
+                        placeholder="e.g. banner.jpg"
+                        className="h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </label>
+                  </div>
+                )}
+
                 {slots.length > 0 && (
                   <div className="space-y-3">
                     {slots.map((slot) => (

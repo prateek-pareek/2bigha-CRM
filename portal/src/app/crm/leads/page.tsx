@@ -57,7 +57,7 @@ import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
 import LeadActivityPopup from '@/components/crm/records/detail/LeadActivityPopup';
 import WebsiteLeadsPanel from '@/components/crm/records/list/WebsiteLeadsPanel';
-import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
+import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import LeadCreatePanel from '@/components/crm/records/create/LeadCreatePanel';
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
@@ -1173,6 +1173,14 @@ export default function LeadsPage() {
     }
   };
 
+  /** Opens the lead's WhatsApp thread inside the CRM inbox (not an external
+   *  wa.me deep link) so the message actually gets logged against the lead
+   *  instead of happening entirely outside the CRM. */
+  const openLeadWhatsApp = (lead: Lead) => {
+    const waId = contactWhatsappWaId(lead);
+    if (waId) router.push(`/crm/whatsapp?wa=${encodeURIComponent(waId)}`);
+  };
+
   const handleDelete = async (id: string) => {
     if (!window.confirm('Move this lead to Trash? Only an admin can restore it.')) return;
     try {
@@ -2253,9 +2261,7 @@ export default function LeadsPage() {
                                     label="WhatsApp"
                                     value={(lead.mobileNo || lead.phone)!}
                                     tone="whatsapp"
-                                    onClick={() =>
-                                      window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')
-                                    }
+                                    onClick={() => openLeadWhatsApp(lead)}
                                   />
                                 ) : null}
                                 <CrmTableActionMenu

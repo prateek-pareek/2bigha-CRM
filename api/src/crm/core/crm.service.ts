@@ -2273,6 +2273,151 @@ export class CRMService {
   }
 
   /**
+   * Reverse of syncContactFromLead: keeps the originating Lead's duplicated
+   * fields aligned when a Contact is edited directly (Contact was previously
+   * a write-only mirror target — edits never flowed back). Only pushes to the
+   * contact's `sourceLead` (or a lead matched by email if sourceLead is
+   * unset) — does not fan out across every entry in `associatedLeads`.
+   *
+   * Deliberately excludes leadScore* (lead-computed, one-way onto Contact)
+   * and `converted`/`status`/`stage` (pipeline progression is lead-owned
+   * state; a contact-side edit shouldn't silently move the lead's stage).
+   */
+  private async syncLeadFromContact(contact: any): Promise<any> {
+    const email = (contact?.email || '').trim();
+    if (!email && !contact?.firstName?.trim() && !contact?.lastName?.trim())
+      return null;
+
+    let existing: any = null;
+    if (contact?.sourceLead) {
+      existing = await this.leadModel.findById(contact.sourceLead).exec();
+    }
+    if (!existing && email) {
+      existing = await this.leadModel
+        .findOne({ email: this.emailRegexForMatch(email) })
+        .exec();
+    }
+    if (!existing) return null;
+
+    // Contact.organization stores an Organization ObjectId (see updateContact/
+    // ensureOrganization); Lead.organization stores the plain company name.
+    let orgName: string | undefined;
+    if (contact.organization) {
+      if (Types.ObjectId.isValid(String(contact.organization))) {
+        const org = await this.organizationModel
+          .findById(contact.organization)
+          .select('name')
+          .lean()
+          .exec();
+        orgName = org?.name;
+      } else {
+        orgName = String(contact.organization);
+      }
+    }
+
+    const patch: Record<string, unknown> = {
+      firstName: contact.firstName || undefined,
+      lastName: contact.lastName || undefined,
+      ...(email ? { email } : {}),
+      phone: contact.phone || undefined,
+      mobileNo: contact.mobileNo || undefined,
+      organization: orgName,
+      jobTitle: contact.jobTitle || undefined,
+      linkedinUrl: contact.linkedinUrl || undefined,
+      source: contact.source || undefined,
+      industry: contact.industry || undefined,
+      annualRevenue: contact.annualRevenue ?? undefined,
+      noOfEmployees: contact.noOfEmployees || undefined,
+      leadOwner: contact.leadOwner || undefined,
+      website: contact.website || undefined,
+      territory: contact.territory || undefined,
+      image: contact.image || undefined,
+      sourceMetadata: contact.sourceMetadata || undefined,
+    };
+    if (Array.isArray(contact.additionalEmails) && contact.additionalEmails.length) {
+      patch.additionalEmails = contact.additionalEmails;
+    }
+
+    Object.keys(patch).forEach(
+      (k) => patch[k] === undefined && delete patch[k],
+    );
+
+    const cf = this.mergeCustomFieldsMaps(
+      existing?.customFields,
+      contact?.customFields,
+    );
+    if (Object.keys(cf).length) patch.customFields = cf;
+
+    if (!Object.keys(patch).length) return null;
+
+    await this.leadModel.findByIdAndUpdate(existing._id, patch).exec();
+    return this.leadModel.findById(existing._id).exec();
+  }
+
+  private async syncLeadFromContactSafe(contact: any): Promise<any> {
+    try {
+      return await this.syncLeadFromContact(contact);
+    } catch (err: any) {
+      console.error(
+        '[CRMService] syncLeadFromContact failed:',
+        err?.message || err,
+      );
+      return null;
+    }
+  }
+
+  /** 'won' | 'lost' for a terminal deal stage name, else null for an in-progress stage. */
+  private dealStageOutcome(stage?: string): 'won' | 'lost' | null {
+    const s = String(stage || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[_-]+/g, ' ');
+    if (!s) return null;
+    if (s === 'won' || s === 'closed won' || s.includes('closed won')) return 'won';
+    if (s === 'lost' || s === 'closed lost' || s.includes('closed lost')) return 'lost';
+    return null;
+  }
+
+  /**
+   * Pushes a Deal's closed-won/closed-lost outcome onto its linked Lead (and,
+   * transitively, the Lead's synced Contact via syncContactFromLead). Deal.stage
+   * and Lead.stage track different pipelines and are NOT synced field-for-field —
+   * only the terminal won/lost outcome, which Lead.status/converted already
+   * model, is meaningful to mirror across. A deal still moving through
+   * mid-pipeline stages (Qualification, Proposal, ...) leaves the Lead untouched.
+   */
+  private async syncLeadFromDeal(deal: any): Promise<any> {
+    const leadId = deal?.lead;
+    if (!leadId) return null;
+
+    const outcome = this.dealStageOutcome(deal.stage);
+    if (!outcome) return null;
+
+    const patch: Record<string, unknown> =
+      outcome === 'won' ? { status: 'Won', converted: true } : { status: 'Lost' };
+
+    const updatedLead = await this.leadModel
+      .findByIdAndUpdate(leadId, patch, { returnDocument: 'after' })
+      .exec();
+    if (updatedLead) {
+      await this.syncContactFromLeadSafe(updatedLead);
+    }
+    return updatedLead;
+  }
+
+  private async syncLeadFromDealSafe(deal: any): Promise<any> {
+    try {
+      return await this.syncLeadFromDeal(deal);
+    } catch (err: any) {
+      console.error(
+        '[CRMService] syncLeadFromDeal failed:',
+        err?.message || err,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Keeps Contacts in sync with Clients by email. Called after client create/update.
    * Deleting a client does not delete the contact.
    */
@@ -5009,6 +5154,7 @@ export class CRMService {
           recordId: String(updated._id),
           user,
         });
+        await this.syncLeadFromDealSafe(updated);
       }
       if (oldDeal) {
         if (
@@ -6037,6 +6183,7 @@ export class CRMService {
           err?.message || err,
         );
       }
+      await this.syncLeadFromContactSafe(updated);
       await this.bustCrmCache('contacts', String(updated._id));
       return this.contactModel.findById(updated._id).exec();
     }
@@ -7076,6 +7223,7 @@ export class CRMService {
         probability: 100,
       })
       .exec();
+    await this.syncLeadFromDealSafe({ ...deal, stage: targetStage });
 
     if (user) {
       const userName = `${user.firstName} ${user.lastName}`;

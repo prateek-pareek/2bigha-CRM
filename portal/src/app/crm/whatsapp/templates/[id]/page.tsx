@@ -38,6 +38,8 @@ export default function WhatsAppTemplateDetailPage() {
   const [syncing, setSyncing] = useState(false);
   const [aisensyCampaignName, setAisensyCampaignName] = useState("");
   const [linkingAiSensy, setLinkingAiSensy] = useState(false);
+  const [liveCampaigns, setLiveCampaigns] = useState<any[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,6 +61,22 @@ export default function WhatsAppTemplateDetailPage() {
           data.components || [],
         ),
       );
+
+      // Fetch live campaigns
+      setLoadingCampaigns(true);
+      try {
+        const liveRes = await fetch(`${CRM_API_URL}/crm/whatsapp-campaigns/live`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const liveData = await liveRes.json().catch(() => ({}));
+        if (liveRes.ok && Array.isArray(liveData?.campaign)) {
+          setLiveCampaigns(liveData.campaign);
+        }
+      } catch (err) {
+        console.error("Failed to load live campaigns", err);
+      } finally {
+        setLoadingCampaigns(false);
+      }
     } catch {
       toast.error("Failed to load template");
     } finally {
@@ -304,12 +322,27 @@ export default function WhatsAppTemplateDetailPage() {
           here. WhatsApp campaigns and inbox sends via AiSensy use this mapping.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            value={aisensyCampaignName}
-            onChange={(e) => setAisensyCampaignName(e.target.value)}
-            placeholder="AiSensy campaign name"
-            className="h-9 min-w-[220px] flex-1 rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-          />
+          {liveCampaigns.length > 0 ? (
+            <select
+              value={aisensyCampaignName}
+              onChange={(e) => setAisensyCampaignName(e.target.value)}
+              className="h-9 min-w-[220px] flex-1 rounded-[var(--radius-md)] border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+            >
+              <option value="">-- Select live campaign --</option>
+              {liveCampaigns.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name} ({c.status})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={aisensyCampaignName}
+              onChange={(e) => setAisensyCampaignName(e.target.value)}
+              placeholder="AiSensy campaign name"
+              className="h-9 min-w-[220px] flex-1 rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+          )}
           <CrmButton
             variant="secondary"
             disabled={linkingAiSensy}

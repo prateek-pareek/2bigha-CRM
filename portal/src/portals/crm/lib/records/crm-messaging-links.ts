@@ -20,6 +20,12 @@ export function contactWhatsappUrl(contact: { mobileNo?: string; phone?: string 
   return whatsappUrlFromPhone(contact.mobileNo) || whatsappUrlFromPhone(contact.phone);
 }
 
+/** Digits-only WhatsApp id for a contact, for routing within the CRM (e.g. `/crm/whatsapp?wa=...`)
+ *  rather than opening an external wa.me link. */
+export function contactWhatsappWaId(contact: { mobileNo?: string; phone?: string }): string | null {
+  return digitsForMessaging(contact.mobileNo) || digitsForMessaging(contact.phone);
+}
+
 /** Ensure a CRM-stored URL opens in the browser. */
 export function normalizeExternalHttpUrl(raw: string | undefined | null): string | null {
   const t = String(raw || '').trim();

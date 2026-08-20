@@ -129,6 +129,12 @@ export class WhatsAppCampaign {
 
   @Prop({ type: Types.ObjectId })
   deletedBy?: Types.ObjectId;
+
+  @Prop()
+  mediaUrl?: string;
+
+  @Prop()
+  mediaFilename?: string;
 }
 
 export const WhatsAppCampaignSchema = SchemaFactory.createForClass(WhatsAppCampaign);
