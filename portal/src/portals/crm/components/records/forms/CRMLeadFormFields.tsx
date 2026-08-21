@@ -530,29 +530,6 @@ export default function CRMLeadFormFields({
           </CrmFormGrid>
         </CrmFormSection>
       ))}
-      <CrmFormSection
-        title="Portal listing (optional)"
-        description="For outreach via Upwork, Naukri, Indeed, etc. when you do not have an email or phone yet."
-        defaultOpen={false}
-      >
-        <CrmFormGrid>
-          <OpportunitySourcePlatformField
-            label="Platform"
-            labelClassName={LBL}
-            inputClassName={SEL}
-          />
-          <div className="sm:col-span-2">
-            <label className={LBL}>Listing or project URL</label>
-            <input
-              name="opportunityListingUrl"
-              type="url"
-              inputMode="url"
-              placeholder="https://www.upwork.com/jobs/…"
-              className={INP}
-            />
-          </div>
-        </CrmFormGrid>
-      </CrmFormSection>
     </div>
   );
 }

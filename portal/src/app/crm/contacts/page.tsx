@@ -769,7 +769,7 @@ export default function ContactsPage() {
                     onClick={() => router.push(`/crm/contacts/${contact._id}`)}
                     actions={
                       <CrmTableActionMenu
-                        onEdit={() => router.push(`/crm/contacts/${contact._id}`)}
+                        onEdit={() => router.push(`/crm/contacts/${contact._id}?edit=1`)}
                         onEmail={contact.email ? () => setEmailContact(contact) : undefined}
                         onCall={
                           (contact.mobileNo || contact.phone)
@@ -907,7 +907,7 @@ export default function ContactsPage() {
                     ))}
                     <td className="crm-table-actions">
                       <CrmTableActionMenu
-                        onEdit={() => router.push(`/crm/contacts/${contact._id}`)}
+                        onEdit={() => router.push(`/crm/contacts/${contact._id}?edit=1`)}
                         onEmail={contact.email ? () => setEmailContact(contact) : undefined}
                         onCall={
                           (contact.mobileNo || contact.phone)

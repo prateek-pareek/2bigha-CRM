@@ -1765,14 +1765,23 @@ export class CRMService {
         }
       }
     }
-    if (opts.entity === 'contact' && opts.existingContact && mergedEmail) {
-      const l = await this.leadModel
-        .findOne({ email: this.emailRegexForMatch(opts.merged.email) })
-        .select('_id email')
-        .lean()
-        .exec();
-      if (l && normalizeEmail(l.email) === mergedEmail) {
-        opts.excludeLeadIds.add(String(l._id));
+    if (opts.entity === 'contact' && opts.existingContact) {
+      // Always exclude the lead this contact was synced from (by sourceLead link) —
+      // mirrors the lead-side exclusion above, so editing a synced contact's own
+      // phone/mobile doesn't get flagged as a conflict against its own source lead.
+      if (opts.existingContact.sourceLead) {
+        opts.excludeLeadIds.add(String(opts.existingContact.sourceLead));
+      }
+      // Also exclude by email match (handles edge cases where sourceLead isn't set)
+      if (mergedEmail) {
+        const l = await this.leadModel
+          .findOne({ email: this.emailRegexForMatch(opts.merged.email) })
+          .select('_id email')
+          .lean()
+          .exec();
+        if (l && normalizeEmail(l.email) === mergedEmail) {
+          opts.excludeLeadIds.add(String(l._id));
+        }
       }
     }
   }
@@ -2119,6 +2128,8 @@ export class CRMService {
       firstName: lead.firstName || 'Unknown',
       lastName: lead.lastName || '',
       ...(email ? { email } : {}),
+      salutation: lead.salutation || undefined,
+      gender: lead.gender || undefined,
       phone: lead.phone || undefined,
       mobileNo: lead.mobileNo || undefined,
       organization: lead.organization || undefined,
@@ -2319,6 +2330,8 @@ export class CRMService {
       firstName: contact.firstName || undefined,
       lastName: contact.lastName || undefined,
       ...(email ? { email } : {}),
+      salutation: contact.salutation || undefined,
+      gender: contact.gender || undefined,
       phone: contact.phone || undefined,
       mobileNo: contact.mobileNo || undefined,
       organization: orgName,
@@ -3758,6 +3771,7 @@ export class CRMService {
     dto.pipeline = this.toObjectIdSafe(dto.pipeline);
     dto.lead = this.toObjectIdSafe(dto.lead);
     dto.contactPerson = this.toObjectIdSafe(dto.contactPerson);
+    dto.propertyListingId = this.toObjectIdSafe(dto.propertyListingId);
     if (dto.sharedWith !== undefined) {
       dto.sharedWith = this.normalizeObjectIdArray(dto.sharedWith);
     }
@@ -4922,6 +4936,8 @@ export class CRMService {
     if (dto.lead !== undefined) dto.lead = this.toObjectIdSafe(dto.lead);
     if (dto.contactPerson !== undefined)
       dto.contactPerson = this.toObjectIdSafe(dto.contactPerson);
+    if (dto.propertyListingId !== undefined)
+      dto.propertyListingId = this.toObjectIdSafe(dto.propertyListingId);
 
     if (dto.portalPmProjectId !== undefined) {
       const v = dto.portalPmProjectId;
@@ -8081,6 +8097,29 @@ export class CRMService {
           });
         }
 
+        if (
+          mappedData.additionalEmails !== undefined &&
+          mappedData.additionalEmails !== null &&
+          mappedData.additionalEmails !== ''
+        ) {
+          // Imported as one CSV cell (comma/semicolon-separated) — split into the string[] the schema expects.
+          const primary = String(mappedData.email ?? '')
+            .trim()
+            .toLowerCase();
+          const seen = new Set<string>();
+          const parsed: string[] = [];
+          for (const raw of String(mappedData.additionalEmails).split(/[,;]/)) {
+            const trimmed = raw.trim();
+            if (!trimmed || !trimmed.includes('@')) continue;
+            const lower = trimmed.toLowerCase();
+            if (primary && lower === primary) continue;
+            if (seen.has(lower)) continue;
+            seen.add(lower);
+            parsed.push(trimmed);
+          }
+          mappedData.additionalEmails = parsed;
+        }
+
         if (type === 'leads') {
           if (!mapping) {
             const fullName = String(
@@ -8302,6 +8341,15 @@ export class CRMService {
                       'probability',
                       'organization',
                       'contactPerson',
+                      'pricingType',
+                      'contractMonths',
+                      'expectedDealValue',
+                      'dealOwner',
+                      'expectedClosureDate',
+                      'closedDate',
+                      'nextStep',
+                      'currency',
+                      'exchangeRate',
                     ],
                   )
                 : this.buildImportPersonReplacePatch(mappedData);
@@ -8610,6 +8658,82 @@ export class CRMService {
                 requestedOrgRid,
               ),
             });
+            rowOutcome = 'created';
+          }
+        } else if (type === 'clients') {
+          if (!mapping) {
+            mappedData.name = row.Name || row.name || row['Client Name'] || 'Unknown';
+            mappedData.email = row.Email || row.email;
+            mappedData.phone = row.Phone || row.phone;
+          }
+          this.stripImportRoutingFields(mappedData);
+          const clientName = String(mappedData.name || 'Unknown').trim() || 'Unknown';
+          const clientEmail = String(mappedData.email ?? '').trim();
+          const clientPhone = this.sanitizePhone(mappedData.mobileNo ?? mappedData.phone);
+          const rawRole = String(mappedData.role ?? '').trim().toUpperCase();
+          const clientRole = this.CLIENT_ROLE_OPTIONS.includes(rawRole)
+            ? rawRole
+            : undefined;
+
+          const clientPayload: Record<string, unknown> = {
+            name: clientName,
+            email: clientEmail || undefined,
+            additionalEmails: Array.isArray(mappedData.additionalEmails)
+              ? mappedData.additionalEmails
+              : undefined,
+            phone: clientPhone || undefined,
+            whatsappNumber: mappedData.whatsappNumber || undefined,
+            address: mappedData.address || undefined,
+            role: clientRole,
+            status: mappedData.status || undefined,
+            customFields,
+          };
+
+          let existingClient: ClientDocument | null = null;
+          if (duplicateStrategy !== 'create') {
+            const matchOr: Record<string, unknown>[] = [];
+            if (clientEmail && clientEmail.includes('@')) {
+              matchOr.push({ email: this.emailRegexForMatch(clientEmail) });
+            }
+            if (clientPhone) matchOr.push({ phone: clientPhone });
+            if (matchOr.length) {
+              existingClient = await this.clientModel
+                .findOne({ $or: matchOr })
+                .exec();
+            }
+          }
+
+          if (existingClient && duplicateStrategy === 'skip') {
+            rowOutcome = 'skipped';
+          } else if (existingClient && duplicateStrategy === 'replace') {
+            const mergedCf = this.mergeCustomFieldsMaps(undefined, customFields);
+            await this.clientModel
+              .findByIdAndUpdate(existingClient._id, {
+                $set: { ...clientPayload, customFields: mergedCf },
+              })
+              .exec();
+            rowOutcome = 'replaced';
+          } else if (existingClient && duplicateStrategy === 'merge') {
+            const mergedCf = this.mergeCustomFieldsMaps(
+              existingClient.customFields,
+              customFields,
+            );
+            const existingLean = existingClient.toObject
+              ? existingClient.toObject()
+              : (existingClient as unknown as Record<string, unknown>);
+            const mergePatch = this.buildImportPersonMergePatch(
+              existingLean,
+              clientPayload,
+              ['name', 'email', 'phone', 'whatsappNumber', 'address', 'role', 'status'],
+            );
+            await this.clientModel
+              .findByIdAndUpdate(existingClient._id, {
+                $set: { ...mergePatch, customFields: mergedCf },
+              })
+              .exec();
+            rowOutcome = 'merged';
+          } else {
+            await this.clientModel.create(clientPayload);
             rowOutcome = 'created';
           }
         }

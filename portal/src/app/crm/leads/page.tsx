@@ -117,6 +117,7 @@ import {
   CrmListPersonCell,
   CrmListOwnerCell,
   CrmListStatusBadge,
+  CrmSoftBadge,
   CrmTableCheck,
   CrmTableActionMenu,
   CrmHoverActionIcon,
@@ -192,6 +193,13 @@ const STORAGE_KEY = 'leads_columns_v2';
 /** Matches Mongo ObjectId hex strings; avoids sending bad `pipeline` query params. */
 function isMongoObjectIdString(value: string | null | undefined): boolean {
   return typeof value === 'string' && /^[a-fA-F0-9]{24}$/.test(value.trim());
+}
+
+function groupBadgeTone(group?: string): 'success' | 'info' | 'secondary' {
+  const g = (group || '').trim().toLowerCase();
+  if (g === 'seller') return 'success';
+  if (g === 'buyer') return 'info';
+  return 'secondary';
 }
 
 function leadScoreBadgeClass(score: number) {
@@ -1500,7 +1508,7 @@ export default function LeadsPage() {
       case 'stage': return <CrmListStatusBadge label={lead.stage || lead.status || '—'} />;
       case 'callStatus': return <CrmListStatusBadge label={lead.callStatus || 'Not Called'} />;
       case 'leadCategory': return <span className="text-sm text-[#707070]">{lead.leadCategory || '—'}</span>;
-      case 'group': return <span className="text-sm text-[#707070]">{lead.group || '—'}</span>;
+      case 'group': return <CrmSoftBadge label={lead.group || ''} tone={groupBadgeTone(lead.group)} />;
       case 'createdByName': return <span className="text-sm text-[#707070]">{lead.createdByName || lead.leadOwner || '—'}</span>;
       case 'createdAt': return <span className="text-sm text-[#707070]">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>;
       case 'lastEmailActivityAt': {
@@ -2038,6 +2046,11 @@ export default function LeadsPage() {
                               tone={crmKanbanAvatarTone(`${lead.firstName}${lead.lastName}${lead._id}`)}
                               initials={`${(lead.firstName?.[0] || '?').toUpperCase()}${(lead.lastName?.[0] || '').toUpperCase()}`}
                               title={leadName}
+                              subtitle={
+                                lead.group ? (
+                                  <CrmSoftBadge label={lead.group} tone={groupBadgeTone(lead.group)} />
+                                ) : undefined
+                              }
                               trailing={
                                 <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                                   <button
@@ -2049,35 +2062,45 @@ export default function LeadsPage() {
                                     <Check size={10} strokeWidth={4} className={selectedIds.has(lead._id) ? 'opacity-100' : 'opacity-40 text-[var(--text-muted)]'} />
                                   </button>
                                   {(lead.mobileNo || lead.phone) ? (
-                                    <button
-                                      type="button"
+                                    <CrmHoverActionIcon
+                                      icon={<CrmIcon.PhoneCall size={12} />}
+                                      label="Call"
+                                      value={(lead.mobileNo || lead.phone)!}
+                                      tone="primary"
                                       onClick={() => setCallLead(lead)}
-                                      className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-emerald-50 hover:text-emerald-600"
-                                      aria-label="Call lead"
-                                    >
-                                      <Phone size={13} />
-                                    </button>
+                                      className="h-6 w-6 border-transparent shadow-none hover:bg-emerald-50 hover:text-emerald-600"
+                                    />
                                   ) : null}
                                   {contactWhatsappUrl(lead) ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => openLeadWhatsApp(lead)}
-                                      className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-emerald-50 hover:text-emerald-600"
-                                      aria-label="Message on WhatsApp"
-                                    >
-                                      <CrmNavIcon.WhatsApp size={13} />
-                                    </button>
+                                    <CrmHoverActionIcon
+                                      icon={<CrmNavIcon.WhatsApp size={12} />}
+                                      label="WhatsApp"
+                                      value={(lead.mobileNo || lead.phone)!}
+                                      tone="whatsapp"
+                                      onClick={() =>
+                                        window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')
+                                      }
+                                      className="h-6 w-6 border-transparent shadow-none hover:bg-emerald-50"
+                                    />
                                   ) : null}
-                                  {hasAccess('leads:delete') ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDelete(lead._id)}
-                                      className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-rose-50 hover:text-rose-500"
-                                      aria-label="Delete lead"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  ) : null}
+                                  <CrmTableActionMenu
+                                    menuAlign="right"
+                                    onNotes={() => setActivityLead(lead)}
+                                    onReassign={
+                                      hasAccess('leads:write')
+                                        ? () => {
+                                            setSelectedIds(new Set([lead._id]));
+                                            setAssignOwner('');
+                                            setAssignOpen(true);
+                                          }
+                                        : undefined
+                                    }
+                                    onDelete={
+                                      hasAccess('leads:delete')
+                                        ? () => handleDelete(lead._id)
+                                        : undefined
+                                    }
+                                  />
                                 </div>
                               }
                             />
@@ -2253,7 +2276,7 @@ export default function LeadsPage() {
                                 ) : null}
                                 <CrmTableActionMenu
                                   menuAlign="left"
-                                  onEdit={() => router.push(`/crm/leads/${lead._id}`)}
+                                  onEdit={() => router.push(`/crm/leads/${lead._id}?edit=1`)}
                                   onNotes={() => setActivityLead(lead)}
                                   onReassign={
                                     hasAccess('leads:write')

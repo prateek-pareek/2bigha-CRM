@@ -27,6 +27,7 @@ interface CRMDealFormFieldsProps {
   setSelectedPipeline: (id: string) => void;
   organizations: any[];
   contacts: any[];
+  properties?: any[];
   userAssignedPipeline?: string | null;
   defaultDealOwner?: string;
   variant: "stack" | "grid";
@@ -41,6 +42,7 @@ export default function CRMDealFormFields({
   setSelectedPipeline,
   organizations,
   contacts,
+  properties = [],
   userAssignedPipeline,
   defaultDealOwner = "",
   variant,
@@ -85,6 +87,23 @@ export default function CRMDealFormFields({
           <div key={key}>
             <label className={LABEL}>Deal name <span className="text-[#f2545b]">*</span></label>
             <input name="title" type="text" required placeholder="Enterprise deal" className={INPUT} />
+          </div>
+        );
+      case "propertyListingId":
+        return (
+          <div key={key}>
+            <label className={LABEL}>Property Listing</label>
+            <select name="propertyListingId" className={SELECT} defaultValue="">
+              <option value="">Select property...</option>
+              {properties.map((p) => (
+                <option key={p._id} value={p._id}>{p.title}</option>
+              ))}
+            </select>
+            {properties.length === 0 && (
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                No approved property listings yet — create one under Property Listings first.
+              </p>
+            )}
           </div>
         );
       case "pricingType":

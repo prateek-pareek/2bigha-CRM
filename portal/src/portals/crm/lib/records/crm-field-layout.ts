@@ -26,16 +26,16 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'gender', label: 'Gender' },
   { key: 'mobileNo', label: 'Mobile' },
   { key: 'phone', label: 'Phone (alternate)' },
-  { key: 'organization', label: 'Company' },
-  { key: 'jobTitle', label: 'Job Title' },
-  { key: 'website', label: 'Website' },
+  { key: 'organization', label: 'Company', recordOnly: true },
+  { key: 'jobTitle', label: 'Job Title', recordOnly: true },
+  { key: 'website', label: 'Website', recordOnly: true },
   { key: 'linkedinUrl', label: 'LinkedIn URL' },
   { key: 'source', label: 'Lead Source' },
-  { key: 'industry', label: 'Industry' },
-  { key: 'annualRevenue', label: 'Annual Revenue' },
-  { key: 'noOfEmployees', label: 'No. of Employees' },
-  { key: 'territory', label: 'Territory' },
-  { key: 'relatedService', label: 'Related service' },
+  { key: 'industry', label: 'Industry', recordOnly: true },
+  { key: 'annualRevenue', label: 'Annual Revenue', recordOnly: true },
+  { key: 'noOfEmployees', label: 'No. of Employees', recordOnly: true },
+  { key: 'territory', label: 'Territory', recordOnly: true },
+  { key: 'relatedService', label: 'Related service', recordOnly: true },
   /** Shown when editing a lead (create panel omits this field; API sets owner on create). */
   { key: 'leadOwner', label: 'Lead Owner' },
   { key: 'pipeline', label: 'Pipeline', pinned: true },
@@ -54,15 +54,16 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
 /** Core deal fields aligned with deal.schema + EditModal */
 export const DEAL_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'title', label: 'Deal Title', pinned: true },
+  { key: 'propertyListingId', label: 'Property Listing', pinned: true },
   { key: 'pricingType', label: 'Pricing type', pinned: true },
   { key: 'dealValue', label: 'Amount', pinned: true },
   { key: 'contractMonths', label: 'Contract months' },
   { key: 'pipeline', label: 'Pipeline', pinned: true },
-  { key: 'stage', label: 'Stage', pinned: true },
+  { key: 'stage', label: 'Stage', pinned: true, recordOnly: true },
   /** Derived from pipeline stage — not collected on create/edit forms. */
   { key: 'probability', label: 'Probability (%)', recordOnly: true },
-  { key: 'organization', label: 'Organization' },
-  { key: 'contactPerson', label: 'Contact Person' },
+  { key: 'organization', label: 'Organization', recordOnly: true },
+  { key: 'contactPerson', label: 'Contact Person', recordOnly: true },
   { key: 'expectedClosureDate', label: 'Expected Close Date' },
   { key: 'closedDate', label: 'Closed Date' },
   { key: 'nextStep', label: 'Next Step' },
@@ -83,15 +84,15 @@ export const CONTACT_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'gender', label: 'Gender' },
   { key: 'mobileNo', label: 'Mobile' },
   { key: 'phone', label: 'Phone (alternate)' },
-  { key: 'organization', label: 'Company' },
-  { key: 'jobTitle', label: 'Job Title' },
-  { key: 'website', label: 'Website' },
+  { key: 'organization', label: 'Company', recordOnly: true },
+  { key: 'jobTitle', label: 'Job Title', recordOnly: true },
+  { key: 'website', label: 'Website', recordOnly: true },
   { key: 'linkedinUrl', label: 'LinkedIn URL' },
-  { key: 'source', label: 'Lead Source' },
-  { key: 'industry', label: 'Industry' },
-  { key: 'annualRevenue', label: 'Annual Revenue' },
-  { key: 'noOfEmployees', label: 'No. of Employees' },
-  { key: 'territory', label: 'Territory' },
+  { key: 'source', label: 'Lead Source', recordOnly: true },
+  { key: 'industry', label: 'Industry', recordOnly: true },
+  { key: 'annualRevenue', label: 'Annual Revenue', recordOnly: true },
+  { key: 'noOfEmployees', label: 'No. of Employees', recordOnly: true },
+  { key: 'territory', label: 'Territory', recordOnly: true },
   { key: 'leadOwner', label: 'Owner', recordOnly: true },
   { key: 'pipeline', label: 'Pipeline', pinned: true },
   { key: 'stage', label: 'Stage' },
@@ -99,8 +100,8 @@ export const CONTACT_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'converted', label: 'Converted', recordOnly: true },
   { key: 'leadScore', label: 'Lead score', recordOnly: true },
   { key: 'image', label: 'Image URL', recordOnly: true },
-  { key: 'telegram', label: 'Telegram' },
-  { key: 'address', label: 'Address' },
+  { key: 'telegram', label: 'Telegram', recordOnly: true },
+  { key: 'address', label: 'Address', recordOnly: true },
   { key: 'createdAt', label: 'Created', recordOnly: true },
 ];
 
@@ -289,8 +290,10 @@ export function getVisibleFieldKeysOrdered(
   const layout = mergeOrderWithCustomFields(module, context, customFieldKeys);
   const defs = defaultDefs(module);
   const pinned = new Set(defs.filter((d) => d.pinned).map((d) => d.key));
+  const recordOnly = new Set(defs.filter((d) => d.recordOnly).map((d) => d.key));
 
   return layout.order.filter((key) => {
+    if (context === 'form' && recordOnly.has(key)) return false;
     if (
       module === 'leads' &&
       context === 'form' &&

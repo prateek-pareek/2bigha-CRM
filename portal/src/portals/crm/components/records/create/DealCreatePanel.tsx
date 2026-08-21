@@ -45,6 +45,7 @@ export default function DealCreatePanel({
   const [selectedPipeline, setSelectedPipeline] = useState<string>(initialPipelineId);
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [layoutTick, setLayoutTick] = useState(0);
   const [showCustomize, setShowCustomize] = useState(false);
@@ -92,6 +93,21 @@ export default function DealCreatePanel({
     }
   };
 
+  const fetchProperties = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/property-listings?approvalStatus=Approved&pageSize=200`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProperties(Array.isArray(data?.data) ? data.data : []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchPipelines = async () => {
     const token = localStorage.getItem("token");
     try {
@@ -122,6 +138,7 @@ export default function DealCreatePanel({
       fetchPipelines();
       fetchOrganizations();
       fetchContacts();
+      fetchProperties();
       fetchCustomFields();
       setLayoutTick((t) => t + 1);
     }
@@ -237,6 +254,7 @@ export default function DealCreatePanel({
 
     const payload = stripEmpty({
       title: data.title,
+      propertyListingId: data.propertyListingId || undefined,
       dealValue: num(data.dealValue),
       pricingType: data.pricingType === "monthly" ? "monthly" : "fixed",
       contractMonths:
@@ -358,6 +376,7 @@ export default function DealCreatePanel({
             setSelectedPipeline={setSelectedPipeline}
             organizations={organizations}
             contacts={contacts}
+            properties={properties}
             userAssignedPipeline={(user as any)?.assignedDealsPipeline}
             defaultDealOwner={defaultDealOwner}
             variant="stack"

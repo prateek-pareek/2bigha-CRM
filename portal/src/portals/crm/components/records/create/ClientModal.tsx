@@ -38,7 +38,6 @@ interface ClientModalProps {
 export default function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalProps) {
   const { user, hasAccess } = usePermissions();
   const isAdmin = hasAccess("admin") || user?.role === "ADMIN";
-  const [organizations, setOrganizations] = useState<any[]>([]);
   const [crmUsers, setCrmUsers] = useState<any[]>([]);
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,7 +59,6 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
 
   useEffect(() => {
     if (isOpen) {
-      fetchOrganizations();
       fetchCrmUsers();
       fetchCustomFields();
       if (client) {
@@ -92,21 +90,6 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       }
     }
   }, [isOpen, client]);
-
-  const fetchOrganizations = async () => {
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(`${CRM_API_URL}/crm/organizations/list`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setOrganizations(data);
-      }
-    } catch (error) {
-      console.error("Fetch organizations error:", error);
-    }
-  };
 
   const fetchCrmUsers = async () => {
     const token = localStorage.getItem("token");
@@ -372,25 +355,8 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
           </CrmFormGrid>
         </CrmFormSection>
 
-        <CrmFormSection title="Company & Status" defaultOpen={false}>
+        <CrmFormSection title="Team Assignment" defaultOpen={false}>
           <CrmFormGrid>
-            <div>
-              <label className={LBL}>Organization</label>
-              <select className={SEL} value={formData.organization} onChange={(e) => setFormData({ ...formData, organization: e.target.value })}>
-                <option value="">Select organization…</option>
-                {organizations.map((org) => (
-                  <option key={org._id} value={org._id}>{org.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={LBL}>Status</label>
-              <select className={`${SEL} capitalize`} value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
-                <option value="active">Active</option>
-                <option value="prospective">Prospective</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
             <div className="sm:col-span-2">
               <label className={LBL}>Assigned CRM users</label>
               <div className="rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] p-3 max-h-40 overflow-y-auto space-y-1.5 shadow-[var(--crm-shadow-input)]">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Target, Building2, Phone, EyeOff, ChevronDown, MapPin, Star, Lock, ThumbsUp, CheckCircle2 } from 'lucide-react';
 import FollowUpSequenceModal from '@/components/crm/automation/playbooks/FollowUpSequenceModal';
 import FollowUpSequenceCard from '@/components/crm/automation/playbooks/FollowUpSequenceCard';
@@ -64,6 +64,7 @@ export default function LeadDetailPage() {
   const { id } = useParams();
   const recordId = useMemo(() => crmRecordIdFromParams(id as string | string[]), [id]);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasAccess } = usePermissions();
   const [lead, setLead] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
@@ -307,6 +308,17 @@ export default function LeadDetailPage() {
       isCancelled = true;
     };
   }, [recordId]);
+
+  // Deep-link support: /crm/leads/:id?edit=1 opens straight into the prefilled Edit form
+  // (used by the Leads list "Edit" action instead of landing on the read-only view first).
+  useEffect(() => {
+    if (!lead || searchParams.get('edit') !== '1') return;
+    setIsEditModalOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('edit');
+    const query = params.toString();
+    router.replace(`/crm/leads/${recordId}${query ? `?${query}` : ''}`, { scroll: false });
+  }, [lead, searchParams, recordId, router]);
 
   useEffect(() => {
     if (activeTab !== 'Details') return;

@@ -56,6 +56,10 @@ export class Deal {
   @Prop({ type: Types.ObjectId, ref: 'Lead' })
   lead: Types.ObjectId;
 
+  /** The property listing this deal is for — picked when the deal is created. */
+  @Prop({ type: Types.ObjectId, ref: 'PropertyListing' })
+  propertyListingId?: Types.ObjectId;
+
   @Prop()
   expectedClosureDate: Date;
 

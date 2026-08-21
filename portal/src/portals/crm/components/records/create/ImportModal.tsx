@@ -21,10 +21,13 @@ interface ImportModalProps {
 /** Extra mapping rows for HubSpot-style exports (companies ↔ contacts ↔ deals). */
 const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
  leads: [
+  { label: 'Salutation', key: 'salutation' },
   { label: 'First Name', key: 'firstName' },
   { label: 'Last Name', key: 'lastName' },
   { label: 'Role (OWNER/AGENT/USER — creates/links a Client)', key: 'role' },
   { label: 'Email', key: 'email' },
+  { label: 'Additional Emails (comma or semicolon-separated)', key: 'additionalEmails' },
+  { label: 'Gender', key: 'gender' },
   { label: 'Mobile No', key: 'mobileNo' },
   { label: 'Phone', key: 'phone' },
   { label: 'WhatsApp Number (on the linked Client)', key: 'whatsappNumber' },
@@ -34,17 +37,26 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'HubSpot contact ID (optional, for linking)', key: 'hubspotContactId' },
   { label: 'MongoDB organization ID (advanced)', key: 'organizationId' },
   { label: 'Job Title', key: 'jobTitle' },
+  { label: 'Website', key: 'website' },
+  { label: 'LinkedIn URL', key: 'linkedinUrl' },
   { label: 'Annual Revenue', key: 'annualRevenue' },
   { label: 'Industry', key: 'industry' },
+  { label: 'No. of Employees', key: 'noOfEmployees' },
+  { label: 'Territory', key: 'territory' },
   { label: 'Status', key: 'status' },
+  { label: 'Call Status', key: 'callStatus' },
   { label: 'Group (Seller/Buyer — see Settings)', key: 'group' },
   { label: 'Lead Type (Reference/Investor/Lead/Buyer lead — see Settings)', key: 'leadCategory' },
   { label: 'Lead Source', key: 'source' },
+  { label: 'Notes', key: 'notes' },
  ],
  contacts: [
+  { label: 'Salutation', key: 'salutation' },
   { label: 'First Name', key: 'firstName' },
   { label: 'Last Name', key: 'lastName' },
   { label: 'Email', key: 'email' },
+  { label: 'Additional Emails (comma or semicolon-separated)', key: 'additionalEmails' },
+  { label: 'Gender', key: 'gender' },
   { label: 'Mobile No', key: 'mobileNo' },
   { label: 'Phone', key: 'phone' },
   { label: 'Job Title', key: 'jobTitle' },
@@ -59,6 +71,8 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'Website', key: 'website' },
   { label: 'LinkedIn URL', key: 'linkedinUrl' },
   { label: 'Territory', key: 'territory' },
+  { label: 'Telegram', key: 'telegram' },
+  { label: 'Address', key: 'address' },
   { label: 'Owner', key: 'leadOwner' },
   { label: 'Status', key: 'status' },
   { label: 'Stage', key: 'stage' },
@@ -66,17 +80,30 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
  deals: [
   { label: 'Deal Title', key: 'title' },
   { label: 'Value', key: 'dealValue' },
+  { label: 'Pricing Type (fixed/monthly)', key: 'pricingType' },
+  { label: 'Contract Months', key: 'contractMonths' },
+  { label: 'Expected Deal Value', key: 'expectedDealValue' },
+  { label: 'Currency', key: 'currency' },
+  { label: 'Exchange Rate', key: 'exchangeRate' },
   { label: 'Stage', key: 'stage' },
   { label: 'Probability', key: 'probability' },
   { label: 'Company / Organization name', key: 'organization' },
   { label: 'Contact email (link to contact)', key: 'contactEmail' },
   { label: 'HubSpot contact ID (link to contact)', key: 'hubspotContactId' },
   { label: 'MongoDB contact ID (advanced)', key: 'contactPerson' },
+  { label: 'Deal Owner', key: 'dealOwner' },
+  { label: 'Expected Closure Date', key: 'expectedClosureDate' },
+  { label: 'Closed Date', key: 'closedDate' },
+  { label: 'Next Step', key: 'nextStep' },
  ],
  clients: [
   { label: 'Client Name', key: 'name' },
   { label: 'Email', key: 'email' },
+  { label: 'Additional Emails (comma or semicolon-separated)', key: 'additionalEmails' },
   { label: 'Phone', key: 'phone' },
+  { label: 'WhatsApp Number', key: 'whatsappNumber' },
+  { label: 'Address', key: 'address' },
+  { label: 'Role (OWNER/AGENT/USER)', key: 'role' },
   { label: 'Status', key: 'status' },
  ],
  organizations: [
@@ -207,76 +234,161 @@ function applyHubSpotHints(
   return out;
 }
 
-/** CSV column headers + one example row per entity type, shown to teams before they build their import file. */
-const IMPORT_TEMPLATE_FIELDS: Record<ImportModalProps['type'], { header: string; example: string }[]> = {
-  leads: [
-    { header: 'First Name', example: 'Shagun' },
-    { header: 'Last Name', example: 'Mishra' },
-    { header: 'Role', example: 'OWNER/AGENT/USER' },
-    { header: 'Email', example: 'sapnashagun@example.com' },
-    { header: 'Contact Number', example: '+919876543210' },
-    { header: 'WhatsApp Number', example: '+919876543210' },
-    { header: 'Group', example: 'Seller' },
-    { header: 'Address', example: '123 Street Gurgaon Haryana India 122017' },
-    { header: 'Website', example: 'https://example.com' },
-    { header: 'Lead Type', example: 'Lead' },
-    { header: 'Lead Source', example: 'Email' },
-  ],
-  contacts: [
-    { header: 'First Name', example: 'Riya' },
-    { header: 'Last Name', example: 'Kapoor' },
-    { header: 'Email', example: 'riya.kapoor@example.com' },
-    { header: 'Mobile No', example: '+919812345678' },
-    { header: 'Phone', example: '+911140001234' },
-    { header: 'Job Title', example: 'Marketing Manager' },
-    { header: 'Organization', example: 'Acme Realty Pvt Ltd' },
-    { header: 'Lead Source', example: 'Referral' },
-    { header: 'Industry', example: 'Real Estate' },
-    { header: 'Website', example: 'https://acme-realty.example.com' },
-    { header: 'Status', example: 'Active' },
-  ],
-  deals: [
-    { header: 'Deal Title', example: 'Acme HQ - 5000 sqft Lease' },
-    { header: 'Value', example: '2500000' },
-    { header: 'Stage', example: 'Negotiation' },
-    { header: 'Probability', example: '60' },
-    { header: 'Company / Organization', example: 'Acme Realty Pvt Ltd' },
-    { header: 'Contact Email', example: 'riya.kapoor@example.com' },
-  ],
-  clients: [
-    { header: 'Client Name', example: 'Rohit Sharma' },
-    { header: 'Email', example: 'rohit.sharma@example.com' },
-    { header: 'Phone', example: '+919900112233' },
-    { header: 'Status', example: 'Active' },
-  ],
-  organizations: [
-    { header: 'Company Name', example: 'Acme Realty Pvt Ltd' },
-    { header: 'Website', example: 'https://acme-realty.example.com' },
-    { header: 'Phone', example: '+911140001234' },
-    { header: 'Email', example: 'info@acme-realty.example.com' },
-    { header: 'Industry', example: 'Real Estate' },
-    { header: 'Territory', example: 'North India' },
-    { header: 'No. of Employees', example: '150' },
-    { header: 'Annual Revenue', example: '50000000' },
-    { header: 'Address', example: '456 MG Road Bangalore Karnataka India 560001' },
-  ],
+/**
+ * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.leads,
+ * with header text matching each field's `label` exactly so re-uploading this template
+ * auto-maps every column (see the `data.headers.find(...)` heuristic in handleFileChange).
+ */
+const LEADS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.leads.map((f) => f.label);
+const LEADS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  salutation: 'Ms',
+  firstName: 'Shagun',
+  lastName: 'Mishra',
+  role: 'OWNER/AGENT/USER',
+  email: 'sapnashagun@example.com',
+  additionalEmails: 'shagun.personal@example.com; shagun.work@example.com',
+  gender: 'Female',
+  mobileNo: '+919876543210',
+  phone: '+911123456789',
+  whatsappNumber: '+919876543210',
+  address: '123 Street, Gurgaon, Haryana, India 122017',
+  organization: 'Example Realty Pvt Ltd',
+  hubspotCompanyId: '',
+  hubspotContactId: '',
+  organizationId: '',
+  jobTitle: 'Marketing Manager',
+  website: 'https://example.com',
+  linkedinUrl: 'https://linkedin.com/in/shagunmishra',
+  annualRevenue: '500000',
+  industry: 'Real Estate',
+  noOfEmployees: '11-50',
+  territory: 'North Zone',
+  status: 'New',
+  callStatus: 'Not Called',
+  group: 'Seller',
+  leadCategory: 'Lead',
+  source: 'Email',
+  notes: 'Interested in 3BHK, follow up next week',
 };
+const LEADS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.leads.map(
+  (f) => LEADS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
+);
 
-function downloadCsvTemplate(type: ImportModalProps['type']) {
-  const fields = IMPORT_TEMPLATE_FIELDS[type] || [];
-  if (fields.length === 0) return;
-  const csv = [fields.map((f) => f.header), fields.map((f) => f.example)]
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+/**
+ * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.contacts,
+ * with header text matching each field's `label` exactly so re-uploading this template
+ * auto-maps every column (see the `data.headers.find(...)` heuristic in handleFileChange).
+ */
+const CONTACTS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.contacts.map((f) => f.label);
+const CONTACTS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  salutation: 'Ms',
+  firstName: 'Riya',
+  lastName: 'Kapoor',
+  email: 'riya.kapoor@example.com',
+  additionalEmails: 'riya.k.personal@example.com; riya.work@example.com',
+  gender: 'Female',
+  mobileNo: '+919876543210',
+  phone: '+911123456789',
+  jobTitle: 'Marketing Manager',
+  organization: 'Example Realty Pvt Ltd',
+  hubspotCompanyId: '',
+  hubspotContactId: '',
+  organizationId: '',
+  source: 'Referral',
+  industry: 'Real Estate',
+  annualRevenue: '500000',
+  noOfEmployees: '11-50',
+  website: 'https://example.com',
+  linkedinUrl: 'https://linkedin.com/in/riyakapoor',
+  territory: 'North Zone',
+  telegram: '@riyakapoor',
+  address: '123 MG Road, Bengaluru, Karnataka',
+  leadOwner: '',
+  status: 'New',
+  stage: 'New',
+};
+const CONTACTS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.contacts.map(
+  (f) => CONTACTS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
+);
+
+/**
+ * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.deals,
+ * with header text matching each field's `label` exactly so re-uploading this template
+ * auto-maps every column.
+ */
+const DEALS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.deals.map((f) => f.label);
+const DEALS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  title: 'Example Realty — 3BHK Sale',
+  dealValue: '2500000',
+  pricingType: 'fixed',
+  contractMonths: '',
+  expectedDealValue: '2500000',
+  currency: 'INR',
+  exchangeRate: '1',
+  stage: 'Qualification',
+  probability: '20',
+  organization: 'Example Realty Pvt Ltd',
+  contactEmail: 'riya.kapoor@example.com',
+  hubspotContactId: '',
+  contactPerson: '',
+  dealOwner: '',
+  expectedClosureDate: '2026-09-30',
+  closedDate: '',
+  nextStep: 'Schedule site visit',
+};
+const DEALS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.deals.map(
+  (f) => DEALS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
+);
+
+/**
+ * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.clients,
+ * with header text matching each field's `label` exactly so re-uploading this template
+ * auto-maps every column.
+ */
+const CLIENTS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.clients.map((f) => f.label);
+const CLIENTS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  name: 'Amit Kumar',
+  email: 'amit.kumar@example.com',
+  additionalEmails: 'amit.personal@example.com; amit.work@example.com',
+  phone: '+919876543210',
+  whatsappNumber: '+919876543210',
+  address: '123 Street, Gurgaon, Haryana, India 122017',
+  role: 'USER',
+  status: 'active',
+};
+const CLIENTS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.clients.map(
+  (f) => CLIENTS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
+);
+
+function downloadCsvTemplate(headers: string[], example: string[], filename: string) {
+  const csv = [headers, example]
+    .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
     .join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${type}-import-template.csv`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadLeadsCsvTemplate() {
+  downloadCsvTemplate(LEADS_TEMPLATE_HEADERS, LEADS_TEMPLATE_EXAMPLE, 'leads-import-template.csv');
+}
+
+function downloadContactsCsvTemplate() {
+  downloadCsvTemplate(CONTACTS_TEMPLATE_HEADERS, CONTACTS_TEMPLATE_EXAMPLE, 'contacts-import-template.csv');
+}
+
+function downloadDealsCsvTemplate() {
+  downloadCsvTemplate(DEALS_TEMPLATE_HEADERS, DEALS_TEMPLATE_EXAMPLE, 'deals-import-template.csv');
+}
+
+function downloadClientsCsvTemplate() {
+  downloadCsvTemplate(CLIENTS_TEMPLATE_HEADERS, CLIENTS_TEMPLATE_EXAMPLE, 'clients-import-template.csv');
 }
 
 export default function ImportModal({ isOpen, onClose, onSuccess, type }: ImportModalProps) {
@@ -485,6 +597,17 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
   const typeLabel = IMPORT_TYPE_LABEL[type] || type;
   const crmFields = CRM_FIELDS_MAP[type] || [];
 
+  // Flag when the same source column has been mapped to more than one CRM property
+  // (e.g. Last Name accidentally pointed at the same column as First Name).
+  const columnUsage = new Map<string, number>();
+  Object.values(mapping).forEach((col) => {
+    if (col) columnUsage.set(col, (columnUsage.get(col) || 0) + 1);
+  });
+  const duplicateMappedColumns = new Set(
+    [...columnUsage.entries()].filter(([, n]) => n > 1).map(([col]) => col),
+  );
+  const hasDuplicateMapping = duplicateMappedColumns.size > 0;
+
   return (
    <CrmJiraPortal>
    <div className={`${crmModalChrome.overlay} flex items-center justify-center p-4`}>
@@ -522,18 +645,23 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
          <p className="text-sm font-medium text-text-muted mt-2">Support .xlsx, .csv (Max 10MB)</p>
         </div>
 
-        <div className="flex items-center justify-center">
-         <button
-          type="button"
-          onClick={(e) => {
-           e.stopPropagation();
-           downloadCsvTemplate(type);
-          }}
-          className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
-         >
-          <FileText size={14} className="text-primary/70" /> Download CSV Template
-         </button>
-        </div>
+        {(type === 'leads' || type === 'contacts' || type === 'deals' || type === 'clients') && (
+         <div className="flex items-center justify-center">
+          <button
+           type="button"
+           onClick={(e) => {
+            e.stopPropagation();
+            if (type === 'leads') downloadLeadsCsvTemplate();
+            else if (type === 'deals') downloadDealsCsvTemplate();
+            else if (type === 'clients') downloadClientsCsvTemplate();
+            else downloadContactsCsvTemplate();
+           }}
+           className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
+          >
+           <FileText size={14} className="text-primary/70" /> Download CSV Template
+          </button>
+         </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
          <div className="p-5 bg-surface-dim rounded-[var(--radius-md)] border border-[var(--border-color)]">
@@ -648,7 +776,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
           </tr>
          </thead>
          <tbody className="divide-y divide-slate-50">
-           {crmFields.map(field => (
+           {crmFields.map(field => {
+            const isDuplicate = !!mapping[field.key] && duplicateMappedColumns.has(mapping[field.key]);
+            return (
             <tr key={field.key} className="group hover:bg-white transition-all">
              <td className="px-6 py-4">
               <div className="flex items-center gap-3">
@@ -665,16 +795,26 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
               <select
                value={mapping[field.key] || ''}
                onChange={(e) => setMapping(prev => ({ ...prev, [field.key]: e.target.value }))}
-               className="w-full bg-white border border-[var(--border-color)] rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-bold text-text-main outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
+               className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 transition-all appearance-none cursor-pointer ${
+                isDuplicate
+                 ? 'bg-red-50 border-red-300 text-red-700 focus:ring-red-200'
+                 : 'bg-white border-[var(--border-color)] text-text-main focus:ring-primary/20'
+               }`}
               >
                <option value="">— Skip Field —</option>
                {headers.map(h => (
                 <option key={h} value={h}>{h}</option>
                ))}
               </select>
+              {isDuplicate && (
+               <p className="mt-1 text-xs font-semibold text-red-600">
+                Also mapped to another property — pick a different column.
+               </p>
+              )}
              </td>
             </tr>
-           ))}
+            );
+           })}
            {/* Custom Fields section */}
            <tr className="bg-primary/[0.02]">
             <td colSpan={3} className="px-6 py-4">
@@ -743,11 +883,11 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
         <CrmButton
          className="flex-[2]"
          onClick={handleImport}
-         disabled={uploading}
+         disabled={uploading || hasDuplicateMapping}
          loading={uploading}
          rightIcon={!uploading ? <ChevronRight size={16} strokeWidth={1.75} /> : undefined}
         >
-         {uploading ? 'Importing…' : 'Start import'}
+         {uploading ? 'Importing…' : hasDuplicateMapping ? 'Fix duplicate mappings to continue' : 'Start import'}
         </CrmButton>
        </div>
       </div>
