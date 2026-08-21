@@ -28,7 +28,6 @@ import {
   CrmTableShell,
   CrmTable,
   CrmListPersonCell,
-  CrmListOrgCell,
   CrmListStatusBadge,
   CrmListMutedText,
   CrmTableActionMenu,
@@ -62,7 +61,6 @@ const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
   { key: 'status', label: 'Status' },
-  { key: 'organization', label: 'Organization' },
   { key: 'createdAt', label: 'Added Date' },
 ];
 
@@ -236,9 +234,6 @@ export default function ClientsPage() {
       case 'email': return <CrmListMutedText>{client.email || '—'}</CrmListMutedText>;
       case 'phone': return <CrmListMutedText>{client.phone || '—'}</CrmListMutedText>;
       case 'status': return <CrmListStatusBadge label={client.status || '—'} />;
-      case 'organization': return (
-        <CrmListOrgCell name={client.organization?.name || 'Private Client'} />
-      );
       case 'createdAt': return (
         <CrmListMutedText>
           {client.createdAt ? new Date(client.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}

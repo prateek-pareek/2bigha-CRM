@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { TeamsIntegrationService } from './teams-integration.service';
 import { WhatsAppService } from './whatsapp.service';
+import { MetaLeadAdsService } from './meta-lead-ads.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RbacGuard } from '../crm-users/rbac.guard';
 import { Permissions } from '../crm-users/permissions.decorator';
@@ -24,6 +25,7 @@ export class IntegrationsController {
   constructor(
     private readonly teamsService: TeamsIntegrationService,
     private readonly whatsappService: WhatsAppService,
+    private readonly metaLeadAdsService: MetaLeadAdsService,
     private readonly teamsBotService: TeamsBotService,
     private readonly catalogService: IntegrationCatalogService,
     private readonly slackService: SlackIntegrationService,
@@ -100,6 +102,47 @@ export class IntegrationsController {
     if (result.success)
       return { success: true, message: `Test message sent to ${phone}` };
     return { success: false, message: result.error || 'Send failed' };
+  }
+
+  @Get('meta-leadgen')
+  @Permissions('settings:write')
+  async getMetaLeadAdsConfig() {
+    return this.integrationModel.findOne({ type: 'meta-leadgen' }).exec();
+  }
+
+  /** Same explicit-allowlist rationale as WHATSAPP_CONFIG_FIELDS above — keeps
+   * a loose request body from clobbering the cached `forms`/`formsSyncedAt`. */
+  private static readonly META_LEADGEN_CONFIG_FIELDS = [
+    'pageId',
+    'pageAccessToken',
+    'formIds',
+    'appSecret',
+    'sourceLabel',
+    'isActive',
+  ] as const;
+
+  @Post('meta-leadgen')
+  @Permissions('settings:write')
+  async saveMetaLeadAdsConfig(@Body() data: any) {
+    const update: Record<string, any> = { type: 'meta-leadgen' };
+    for (const field of IntegrationsController.META_LEADGEN_CONFIG_FIELDS) {
+      if (data?.[field] !== undefined) update[field] = data[field];
+    }
+    return this.integrationModel
+      .findOneAndUpdate({ type: 'meta-leadgen' }, update, { upsert: true, new: true })
+      .exec();
+  }
+
+  @Post('meta-leadgen/test')
+  @Permissions('settings:write')
+  async testMetaLeadAds() {
+    return this.metaLeadAdsService.testConnection();
+  }
+
+  @Get('meta-leadgen/forms')
+  @Permissions('settings:write')
+  async listMetaLeadAdsForms() {
+    return this.metaLeadAdsService.listForms();
   }
 
   @Get('teams')

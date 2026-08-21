@@ -29,6 +29,7 @@ export class PipelineController {
     'deals:read',
     'platform-opportunities:read',
     'proposals:read',
+    'legal:read',
     'settings:read',
   )
   findAllPipelines(
@@ -39,7 +40,8 @@ export class PipelineController {
       | 'platform_opportunities'
       | 'proposals'
       | 'quotations'
-      | 'contracts',
+      | 'contracts'
+      | 'legal',
   ) {
     return this.pipelinesService.findAll(type);
   }

@@ -73,6 +73,15 @@ export class IntegrationCatalogService {
           .exec();
         return { success: true, message: 'WhatsApp disconnected' };
 
+      case 'meta-lead-ads':
+        await this.integrationModel
+          .findOneAndUpdate(
+            { type: 'meta-leadgen' },
+            { $set: { isActive: false, status: 'disconnected' } },
+          )
+          .exec();
+        return { success: true, message: 'Meta Lead Ads disconnected' };
+
       case 'google-postmaster':
         await this.integrationModel
           .deleteOne({ type: 'google_postmaster' })
@@ -201,6 +210,22 @@ export class IntegrationCatalogService {
           connectionStatus: active ? 'connected' : 'disconnected',
           connectedAt: (doc as any)?.updatedAt ?? (doc as any)?.createdAt ?? null,
           detail: active ? 'API key configured' : 'Not configured',
+        };
+      }
+
+      case 'meta-lead-ads': {
+        const doc = await this.integrationModel
+          .findOne({ type: 'meta-leadgen' })
+          .lean()
+          .exec();
+        const active =
+          !!(doc as any)?.isActive &&
+          !!(doc as any)?.pageAccessToken &&
+          !!(doc as any)?.pageId;
+        return {
+          connectionStatus: active ? 'connected' : 'disconnected',
+          connectedAt: (doc as any)?.updatedAt ?? (doc as any)?.createdAt ?? null,
+          detail: active ? `Page ${(doc as any)?.pageId} configured` : 'Not configured',
         };
       }
 

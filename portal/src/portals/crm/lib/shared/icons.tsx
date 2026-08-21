@@ -84,6 +84,7 @@ export const CrmNavIcon = {
   Contacts: createCrmTiIcon("user-up"),
   Companies: createCrmTiIcon("building-community"),
   Deals: createCrmTiIcon("medal"),
+  Legal: createCrmTiIcon("gavel"),
   Leads: createCrmTiIcon("chart-arcs"),
   Pipeline: createCrmTiIcon("timeline-event-exclamation"),
   Proposals: createCrmTiIcon("file-star"),

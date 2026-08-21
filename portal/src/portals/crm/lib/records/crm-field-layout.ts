@@ -5,7 +5,7 @@
 
 export type CrmFieldContext = 'form' | 'record';
 
-export type CrmModuleKey = 'leads' | 'deals' | 'contacts' | 'organizations' | 'clients';
+export type CrmModuleKey = 'leads' | 'deals' | 'contacts' | 'organizations' | 'clients' | 'legal';
 
 export interface CrmFieldDef {
   key: string;
@@ -130,6 +130,24 @@ export const CLIENT_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'createdAt', label: 'Created', recordOnly: true },
 ];
 
+/** legal-case.schema — Legal module (contracts, disputes, compliance, NDAs). */
+export const LEGAL_CASE_FIELD_DEFS: CrmFieldDef[] = [
+  { key: 'title', label: 'Case Title', pinned: true },
+  { key: 'caseType', label: 'Case Type', pinned: true },
+  { key: 'description', label: 'Description' },
+  { key: 'counterpartyName', label: 'Counterparty' },
+  { key: 'contractValue', label: 'Contract Value' },
+  { key: 'currency', label: 'Currency' },
+  { key: 'priority', label: 'Priority', pinned: true },
+  { key: 'startDate', label: 'Start Date' },
+  { key: 'expiryDate', label: 'Expiry Date' },
+  { key: 'jurisdiction', label: 'Jurisdiction' },
+  { key: 'caseOwner', label: 'Case Owner' },
+  { key: 'pipeline', label: 'Pipeline', pinned: true },
+  { key: 'stage', label: 'Stage', pinned: true },
+  { key: 'createdAt', label: 'Created', recordOnly: true },
+];
+
 export function getFieldDefsForModule(module: CrmModuleKey): CrmFieldDef[] {
   let defs: CrmFieldDef[];
   switch (module) {
@@ -147,6 +165,9 @@ export function getFieldDefsForModule(module: CrmModuleKey): CrmFieldDef[] {
       break;
     case 'clients':
       defs = CLIENT_FIELD_DEFS;
+      break;
+    case 'legal':
+      defs = LEGAL_CASE_FIELD_DEFS;
       break;
     default:
       return [];

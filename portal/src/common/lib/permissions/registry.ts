@@ -75,6 +75,12 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     { perm: 'clients:export', label: 'Export / download clients CSV' },
   ],
   inbox: [{ perm: 'inbox:connect', label: 'Connect email accounts' }],
+  legal: [
+    {
+      perm: 'legal:move_pipeline',
+      label: 'Move between pipelines / board stage',
+    },
+  ],
 };
 
 export const GLOBAL_PERMISSION_KEYS = new Set([
@@ -94,6 +100,7 @@ export const GLOBAL_PERMISSION_KEYS = new Set([
   'clients:import',
   'clients:export',
   'inbox:connect',
+  'legal:move_pipeline',
   ...SOCIAL_PERMISSION_KEYS,
 ]);
 
@@ -194,6 +201,7 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
   { id: 'leads', label: 'Leads', routes: ['/crm/leads', '/crm/website-leads', '/crm/website-chats', '/crm/segments'] },
   { id: 'platform-opportunities', label: 'Platform opportunities', routes: ['/crm/platform-opportunities'] },
   { id: 'deals', label: 'Deals', routes: ['/crm/deals'] },
+  { id: 'legal', label: 'Legal', routes: ['/crm/legal'] },
   { id: 'clients', label: 'Clients', routes: ['/crm/clients', '/client-portals'] },
   { id: 'contacts', label: 'Contacts', routes: ['/crm/contacts'] },
   { id: 'organizations', label: 'Organizations', routes: ['/crm/organizations'] },

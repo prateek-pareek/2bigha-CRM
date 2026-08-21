@@ -23,7 +23,6 @@ import {
   CrmTableShell,
   CrmTable,
   CrmListPersonCell,
-  CrmListOrgCell,
   CrmListOwnerCell,
   CrmListStatusBadge,
   CrmSoftBadge,
@@ -112,7 +111,6 @@ interface Column {
 
 const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'title', label: 'Deal Name' },
-  { key: 'organization', label: 'Organization' },
   { key: 'dealValue', label: 'Amount' },
   { key: 'status', label: 'Stage' },
   { key: 'probability', label: 'Probability' },
@@ -800,10 +798,6 @@ export default function DealsPage() {
             initials={title.slice(0, 2)}
           />
         );
-      }
-      case 'organization': {
-        const orgName = typeof deal.organization === 'string' ? deal.organization : deal.organization?.name;
-        return <CrmListOrgCell name={orgName || '—'} />;
       }
       case 'dealValue': {
         if (!canViewCrmRevenue) return <span className="text-sm text-[#707070]">—</span>;

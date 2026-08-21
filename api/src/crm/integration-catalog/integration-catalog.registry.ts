@@ -63,6 +63,19 @@ export const INTEGRATION_CATALOG: IntegrationCatalogDefinition[] = [
     capabilities: ['outbound_messages', 'webhooks'],
   },
   {
+    id: 'meta-lead-ads',
+    name: 'Meta Lead Ads',
+    description:
+      'Automatically create CRM leads the moment someone submits a Facebook or Instagram Lead Ads form, via Meta webhooks.',
+    category: 'automation',
+    authType: 'api_key',
+    configurePath: '/crm/settings/integrations/meta-leads',
+    accentColor: '#0866FF',
+    availability: 'live',
+    statusQuery: { type: 'meta-leadgen' },
+    capabilities: ['lead_capture', 'webhooks'],
+  },
+  {
     id: 'google-postmaster',
     name: 'Google Postmaster Tools',
     description:

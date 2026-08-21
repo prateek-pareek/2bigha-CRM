@@ -200,7 +200,7 @@ export class Lead {
     image?: string;
     authorName?: string;
     authorPhoto?: string;
-    type?: 'linkedin' | 'threads' | 'facebook' | 'generic';
+    type?: 'linkedin' | 'threads' | 'facebook' | 'instagram' | 'generic';
     url: string;
   };
 
@@ -224,6 +224,10 @@ export class Lead {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Deal' }], default: [] })
   associatedDeals: Types.ObjectId[];
+
+  /** Legal cases referencing this lead (bidirectional; see LegalCase.associatedLeads). */
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'LegalCase' }], default: [] })
+  associatedLegalCases: Types.ObjectId[];
 
   /** Heuristic 0–100 conversion likelihood; recomputed on lead changes, activities, and email engagement. */
   @Prop({ min: 0, max: 100, index: true })

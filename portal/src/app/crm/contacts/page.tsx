@@ -46,7 +46,6 @@ import {
   CrmTableShell,
   CrmTable,
   CrmListPersonCell,
-  CrmListOrgCell,
   CrmListMutedText,
   CrmTableCheck,
   CrmTableActionMenu,
@@ -102,8 +101,6 @@ const DEFAULT_COLUMNS: Column[] = [
   { key: 'name', label: 'Name', visible: true },
   { key: 'email', label: 'Email', visible: true },
   { key: 'phone', label: 'Phone', visible: true },
-  { key: 'jobTitle', label: 'Job Title', visible: true },
-  { key: 'organization', label: 'Organization', visible: true },
   { key: 'createdAt', label: 'Created', visible: true },
   { key: 'lastEmailActivityAt', label: 'Last Email Activity', visible: true },
 ];
@@ -569,11 +566,6 @@ export default function ContactsPage() {
     }
     if (colKey === 'email') return <CrmListMutedText>{contact.email || '—'}</CrmListMutedText>;
     if (colKey === 'phone') return <CrmListMutedText>{contact.phone || '—'}</CrmListMutedText>;
-    if (colKey === 'jobTitle') return <CrmListMutedText>{contact.jobTitle || '—'}</CrmListMutedText>;
-    if (colKey === 'organization') {
-      const orgName = contact.organization?.name || contact.organization || '—';
-      return <CrmListOrgCell name={typeof orgName === 'string' ? orgName : '—'} />;
-    }
     if (colKey === 'createdAt') return (
       <CrmListMutedText>
         {new Date(contact.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
