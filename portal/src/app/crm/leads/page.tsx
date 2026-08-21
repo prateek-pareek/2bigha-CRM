@@ -2545,7 +2545,6 @@ export default function LeadsPage() {
         leadName={`${callLead?.firstName || ''} ${callLead?.lastName || ''}`.trim()}
         relatedType="Lead"
       />
-<<<<<<< HEAD
       <AddPropertyModal
         open={!!propertyLead}
         onClose={() => setPropertyLead(null)}
