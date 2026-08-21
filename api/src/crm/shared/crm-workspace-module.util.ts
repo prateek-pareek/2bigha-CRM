@@ -16,11 +16,15 @@ export const CRM_ROLE_MODULES = [...CRM_WORKSPACE_MODULES, CRM_ROLE_MODULE_ALL] 
 
 export const DEFAULT_LEAD_WORKSPACE_MODULE: CrmWorkspaceModule = '2Bigha';
 
-/** Reads the caller's workspace scope off the populated `dbUser.roleId`. Defaults to 'ALL' (unrestricted). */
+/**
+ * Reads the caller's workspace scope off the populated `dbUser.roleId.workspaceModule`.
+ * `dbUser` is the live `CRMUser` doc (`request.crmDbUser`, set by `RbacGuard` — the
+ * actual account a login resolves to). Defaults to 'ALL' (unrestricted).
+ */
 export function resolveRoleModule(dbUser?: any): CrmRoleModule {
   const role = dbUser?.roleId;
-  const module = typeof role === 'object' ? role?.module : undefined;
-  return CRM_ROLE_MODULES.includes(module) ? module : CRM_ROLE_MODULE_ALL;
+  const workspaceModule = typeof role === 'object' ? role?.workspaceModule : undefined;
+  return CRM_ROLE_MODULES.includes(workspaceModule) ? workspaceModule : CRM_ROLE_MODULE_ALL;
 }
 
 /**

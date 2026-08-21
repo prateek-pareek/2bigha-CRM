@@ -1,6 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { CRM_ROLE_MODULES, CrmRoleModule } from '../../crm/shared/crm-workspace-module.util';
 
 export type UserRoleDocument = UserRole & Document;
 
@@ -8,14 +7,6 @@ export type UserRoleDocument = UserRole & Document;
 export class UserRole {
   @Prop({ required: true, trim: true, unique: true })
   name: string;
-
-  /**
-   * Workspace this role belongs to (RBAC/workspace-isolation layer). 'ALL' (Super Admin
-   * style roles) bypasses the module-boundary check. Defaults to 'ALL' so roles created
-   * before this field existed keep their current (unrestricted) behavior.
-   */
-  @Prop({ enum: CRM_ROLE_MODULES, default: 'ALL', index: true })
-  module: CrmRoleModule;
 
   @Prop({ trim: true, default: '' })
   description?: string;

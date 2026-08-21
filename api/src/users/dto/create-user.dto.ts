@@ -73,4 +73,9 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   useRoleOverrides?: boolean;
+
+  /** Manager/Team Lead this user reports to — RBAC/workspace-isolation "my team" scope. */
+  @IsOptional()
+  @IsString()
+  reportsTo?: string | null;
 }

@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UserRole, UserRoleDocument } from './schemas/user-role.schema';
-import { CRM_ROLE_MODULES } from '../crm/shared/crm-workspace-module.util';
 import { RoleAuditLogService } from './role-audit-log.service';
 
 @Injectable()
@@ -18,7 +17,6 @@ export class RolesService {
       name: String(dto?.name || '').trim(),
       description: String(dto?.description || '').trim(),
       isActive: dto?.isActive !== false,
-      module: CRM_ROLE_MODULES.includes(dto?.module) ? dto.module : 'ALL',
       permissions: Array.isArray(dto?.permissions) ? dto.permissions : [],
       crmPermissions: Array.isArray(dto?.crmPermissions) ? dto.crmPermissions : [],
       pmPermissions: Array.isArray(dto?.pmPermissions) ? dto.pmPermissions : [],
@@ -60,7 +58,6 @@ export class RolesService {
       'name',
       'description',
       'isActive',
-      'module',
       'permissions',
       'crmPermissions',
       'pmPermissions',
@@ -70,7 +67,6 @@ export class RolesService {
     ] as const;
     for (const k of keys) {
       if (dto?.[k] === undefined) continue;
-      if (k === 'module' && !CRM_ROLE_MODULES.includes(dto.module)) continue;
       payload[k] = dto[k];
     }
     const updated = await this.roleModel.findByIdAndUpdate(id, payload, { new: true }).lean().exec();
