@@ -30,17 +30,17 @@ export class RolesController {
 
   @Post()
   create(@Body() dto: any, @Request() req: any) {
-    return this.rolesService.createRole(dto, req?.user?.userId || req?.user?._id);
+    return this.rolesService.createRole(dto, req?.user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: any) {
-    return this.rolesService.updateRole(id, dto);
+  update(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    return this.rolesService.updateRole(id, dto, req?.user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.rolesService.deleteRole(id);
+  remove(@Param('id') id: string, @Request() req: any) {
+    return this.rolesService.deleteRole(id, req?.user);
   }
 }
 
