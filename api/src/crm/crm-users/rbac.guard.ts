@@ -11,6 +11,12 @@ import {
   hasCrmAdminFromDbUser,
   hasCrmAdminJwtBypass,
 } from '../shared/crm-admin-access.util';
+import { roleBelongsToWorkspace } from '../shared/crm-workspace-module.util';
+
+/** Permission prefixes that belong to a single fixed workspace (see requirement doc's RBAC section). */
+const PERMISSION_PREFIX_WORKSPACE: Record<string, 'LEGAL'> = {
+  legal: 'LEGAL',
+};
 
 @Injectable()
 export class RbacGuard implements CanActivate {
@@ -116,6 +122,18 @@ export class RbacGuard implements CanActivate {
     if (!hasPermission) {
       console.log('RbacGuard: Insufficient permissions');
       throw new ForbiddenException('Insufficient permissions');
+    }
+
+    // Workspace boundary: a permission fixed to one workspace (e.g. legal:*) requires
+    // the caller's role to actually belong to that workspace (or 'ALL' / Super Admin).
+    const fixedWorkspacePermission = requiredPermissions.find(
+      (p) => PERMISSION_PREFIX_WORKSPACE[p.split(':')[0]],
+    );
+    if (fixedWorkspacePermission) {
+      const workspace = PERMISSION_PREFIX_WORKSPACE[fixedWorkspacePermission.split(':')[0]];
+      if (!roleBelongsToWorkspace(dbUser, workspace)) {
+        throw new ForbiddenException(`This action is restricted to the ${workspace} workspace.`);
+      }
     }
 
     return true;

@@ -1,6 +1,33 @@
-version: '3.8'
-
 services:
+  # Reverse proxy + automatic Let's Encrypt TLS. The backend/frontend services
+  # below carry traefik.* labels but nothing was serving them — this is that
+  # missing piece. Ports 80/443 must be free on the VPS (stop any host nginx).
+  traefik:
+    image: traefik:v3.3
+    container_name: mathionix-traefik
+    restart: always
+    command:
+      - --providers.docker=true
+      # Don't expose a container publicly unless it opts in with traefik.enable=true.
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Force every plaintext request to HTTPS.
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set in .env}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      # Read-only socket: Traefik only needs to watch container labels.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Issued certificates — persist these or you WILL hit Let's Encrypt rate limits.
+      - letsencrypt_data:/letsencrypt
+
   redis:
     image: redis:7-alpine
     container_name: mathionix-redis
@@ -44,7 +71,11 @@ services:
       start_period: 40s
 
   backend:
-    image: myapp_backend:latest
+    # CI/CD (see .github/workflows/deploy.yml) sets BACKEND_IMAGE to a GHCR tag
+    # and runs `docker compose pull && up -d --no-build`, skipping the build:
+    # block below entirely. Local/manual deploys fall back to the bundled tag
+    # and build from source.
+    image: ${BACKEND_IMAGE:-myapp_backend:latest}
     build:
       context: ./api
       dockerfile: Dockerfile
@@ -54,7 +85,7 @@ services:
       - "4000"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mathionix-backend.rule=Host(`apps.mathionix.tech`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))"
+      - "traefik.http.routers.mathionix-backend.rule=Host(`${APP_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))"
       - "traefik.http.routers.mathionix-backend.priority=2"
       - "traefik.http.routers.mathionix-backend.entrypoints=websecure"
       - "traefik.http.routers.mathionix-backend.tls.certresolver=letsencrypt"
@@ -66,9 +97,11 @@ services:
     volumes:
       - uploads_data:/app/uploads
     environment:
-      - MONGO_URI=mongodb://mongodb:27017/mathionix-crm
-      - MONGO_URI_CRM=mongodb://mongodb:27017/mathionix-crm
-      - MONGO_URI_PM=mongodb://mongodb:27017/mathionix-crm
+      # Defaults target the bundled `mongodb` service. Point these at an
+      # external/managed MongoDB by setting MONGO_URI in .env (see DEPLOY.md).
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/mathionix-crm}
+      - MONGO_URI_CRM=${MONGO_URI_CRM:-${MONGO_URI:-mongodb://mongodb:27017/mathionix-crm}}
+      - MONGO_URI_PM=${MONGO_URI_PM:-${MONGO_URI:-mongodb://mongodb:27017/mathionix-crm}}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - REDIS_ENABLED=${REDIS_ENABLED:-true}
       - REDIS_CACHE_TTL_SECONDS=${REDIS_CACHE_TTL_SECONDS:-180}
@@ -82,7 +115,7 @@ services:
       - REDIS_CACHE_TTL_SEARCH_SECONDS=${REDIS_CACHE_TTL_SEARCH_SECONDS:-45}
       - REDIS_CACHE_TTL_SOCIAL_PUBLIC_SECONDS=${REDIS_CACHE_TTL_SOCIAL_PUBLIC_SECONDS:-300}
       - PORT=4000
-      - JWT_SECRET=supersecret
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
       - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
       - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
       - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}
@@ -132,13 +165,15 @@ services:
       - INTERNAL_CLIENT_PORTAL_KEY=${INTERNAL_CLIENT_PORTAL_KEY}
 
   frontend:
-    image: myapp_frontend:latest
+    image: ${FRONTEND_IMAGE:-myapp_frontend:latest}
     build:
-      context: ./portal
-      dockerfile: Dockerfile
+      # Root context (not ./portal): portal/package.json links the shared UI kit
+      # as "file:../packages/ui", which must be inside the build context.
+      context: .
+      dockerfile: portal/Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-        - NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL:-http://localhost:4000}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set in .env}
+        - NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL:-}
         - NEXT_PUBLIC_CRM_STANDALONE=true
     container_name: mathionix-frontend
     restart: always
@@ -146,7 +181,7 @@ services:
       - "3000"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mathionix-frontend.rule=Host(`apps.mathionix.tech`)"
+      - "traefik.http.routers.mathionix-frontend.rule=Host(`${APP_DOMAIN}`)"
       - "traefik.http.routers.mathionix-frontend.priority=1"
       - "traefik.http.routers.mathionix-frontend.entrypoints=websecure"
       - "traefik.http.routers.mathionix-frontend.tls.certresolver=letsencrypt"
@@ -155,6 +190,10 @@ services:
       - backend
 
 volumes:
+  letsencrypt_data:
+    name: myapp_letsencrypt_data
+    # PRODUCTION: Let's Encrypt certs + account key. Losing this re-issues certs
+    # and can trip the 5-per-week duplicate-certificate rate limit.
   mongodb_data:
     name: myapp_mongodb_data
     # PRODUCTION: survives container recreate. Never rename this volume name.

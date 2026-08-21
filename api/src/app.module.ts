@@ -23,6 +23,7 @@ import { WhatsAppLinksModule } from './crm/whatsapp-links/whatsapp-links.module'
 import { WhatsAppCampaignsModule } from './crm/whatsapp-campaigns/whatsapp-campaigns.module';
 import { PropertyListingsModule } from './crm/property-listings/property-listings.module';
 import { LegalModule } from './crm/legal/legal.module';
+import { OwnershipTransferModule } from './crm/ownership-transfer/ownership-transfer.module';
 import { mongoConnectionLabel } from './common/mongo-connection-label.util';
 import {
   LOCAL_MONGO_URI,
@@ -72,6 +73,7 @@ import {
     WhatsAppCampaignsModule,
     PropertyListingsModule,
     LegalModule,
+    OwnershipTransferModule,
     RealtimeModule,
     MailModule,
     CRMUsersModule,

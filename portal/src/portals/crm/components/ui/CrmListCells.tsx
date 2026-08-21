@@ -226,6 +226,7 @@ type CrmTableActionMenuProps = {
   onCall?: () => void;
   onWhatsApp?: () => void;
   onReassign?: () => void;
+  onTransfer?: () => void;
   onNotes?: () => void;
   /** Read-only detail view — distinct from Edit (Lead Action Menu). */
   onView?: () => void;
@@ -255,6 +256,7 @@ export function CrmTableActionMenu({
   onCall,
   onWhatsApp,
   onReassign,
+  onTransfer,
   onNotes,
   onView,
   onSetActivity,

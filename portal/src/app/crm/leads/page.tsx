@@ -312,6 +312,7 @@ export default function LeadsPage() {
   const [transferOwnerName, setTransferOwnerName] = useState('');
   const [transferring, setTransferring] = useState(false);
   const [leadListingCounts, setLeadListingCounts] = useState<Record<string, { propertyCount: number; farmCount: number }>>({});
+  const [showWebsiteLeads, setShowWebsiteLeads] = useState(false);
   const [isBulkEmailOpen, setIsBulkEmailOpen] = useState(false);
   const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
@@ -2544,6 +2545,7 @@ export default function LeadsPage() {
         leadName={`${callLead?.firstName || ''} ${callLead?.lastName || ''}`.trim()}
         relatedType="Lead"
       />
+<<<<<<< HEAD
       <AddPropertyModal
         open={!!propertyLead}
         onClose={() => setPropertyLead(null)}

@@ -13,6 +13,7 @@ import {
   isPlatformSuperAdminEmail,
   PLATFORM_SUPER_ADMIN_DEFAULTS,
 } from '../auth/platform-super-admin.util';
+import { RoleAuditLogService } from './role-audit-log.service';
 
 const ADMIN_ROLES = ['ADMIN', 'CEO', 'CTO', 'MANAGER', 'EXECUTIVE', 'SENIOR MEMBER', 'ADMINISTRATOR', 'SUPERADMIN', 'SUPER_ADMIN', 'OWNER'];
 
@@ -39,6 +40,7 @@ export class UsersService {
     private crmUserModel: Model<CRMUserDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly trashService: TrashService,
+    private readonly auditLog: RoleAuditLogService,
   ) {}
 
   private async applyRoleTemplateToUserData(updateData: any): Promise<void> {
@@ -183,9 +185,14 @@ export class UsersService {
     return updated || user;
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<User | null> {
+  async update(id: string, updateUserDto: UpdateUserDto, actor?: any): Promise<User | null> {
     const currentUser = await this.userModel.findById(id).exec();
     if (!currentUser) return null;
+
+    const roleChanged =
+      (updateUserDto as any)?.roleId !== undefined &&
+      String((updateUserDto as any).roleId || '') !== String(currentUser.roleId || '');
+    const previousRoleId = currentUser.roleId;
 
     const updateData: any = { ...updateUserDto };
     if (isPlatformSuperAdminEmail(currentUser.email)) {
@@ -245,6 +252,18 @@ export class UsersService {
         { new: true },
       )
       .exec();
+
+    if (roleChanged && updatedUser) {
+      await this.auditLog.log({
+        actor,
+        action: 'user_role_assigned',
+        targetType: 'User',
+        targetId: id,
+        targetLabel: [updatedUser.firstName, updatedUser.lastName].filter(Boolean).join(' ') || updatedUser.email,
+        before: { roleId: previousRoleId },
+        after: { roleId: updatedUser.roleId },
+      });
+    }
 
     // Notify about access changes
     if (requiresSoftRefresh && updatedUser) {

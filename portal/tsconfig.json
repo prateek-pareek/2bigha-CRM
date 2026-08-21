@@ -17,6 +17,14 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    // @mathionix/ui is linked from ../packages/ui via a file: dependency, so
+    // node_modules/@mathionix/ui is a symlink. Without preserveSymlinks, tsc
+    // resolves it to its real path and then looks for ITS deps (@radix-ui/*,
+    // react) under packages/ui - where nothing is installed, by design.
+    // Keeping the symlink path makes those resolve from portal/node_modules,
+    // mirroring the resolve.modules hack next.config.ts already applies to
+    // webpack, and guaranteeing a single copy of @types/react in the program.
+    "preserveSymlinks": true,
     "plugins": [
       {
         "name": "next"

@@ -72,21 +72,20 @@ type LoginBrandHeroProps = {
   className?: string;
 };
 
-/** Centered brand for auth: mark + 2Bigha name. */
+/** Centered brand for auth: 2Bigha logo. */
 export function MathionixLoginBrandHero({ className }: LoginBrandHeroProps) {
   return (
     <div className={cn("mx-auto mb-6 flex flex-col items-center hover:scale-105 transition-transform duration-500", className)}>
-      <Image
-        src={MATHIONIX_MARK_PNG}
-        alt="2Bigha"
-        width={110}
-        height={110}
-        priority
-        className="rounded-[28px] object-contain shadow-sm border border-[#f1f3f5]"
-      />
-      <span className="mt-3 text-xl font-semibold tracking-tight text-[var(--text-main)]">
-        2Bigha
-      </span>
+      <div className="flex items-center justify-center px-4 py-2.5">
+        <Image
+          src={MATHIONIX_MARK_PNG}
+          alt="2Bigha"
+          width={120}
+          height={42}
+          priority
+          className="object-contain"
+        />
+      </div>
     </div>
   );
 }

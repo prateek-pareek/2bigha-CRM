@@ -64,6 +64,15 @@ import {
   isMongoObjectIdString,
 } from '../shared/crm-record-id.util';
 import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
+import {
+  leadModuleFilter,
+  roleAllowsModule,
+  resolveRoleModule,
+  DEFAULT_LEAD_WORKSPACE_MODULE,
+  CRM_WORKSPACE_MODULES,
+  CRM_ROLE_MODULE_ALL,
+} from '../shared/crm-workspace-module.util';
+import { RoleAuditLogService } from '../../users/role-audit-log.service';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import {
@@ -194,6 +203,7 @@ export class CRMService {
     private readonly associationsService: AssociationsService,
     private readonly leadIntentService: LeadIntentService,
     private readonly exportQuotaService: ExportQuotaService,
+    private readonly roleAuditLog: RoleAuditLogService,
   ) { }
 
   private notifySalesAgent(event: {
@@ -2420,6 +2430,49 @@ export class CRMService {
     return perms.has(`${moduleKey}:read:all`);
   }
 
+  /** Middle tier between "own" and "all" — Team Lead/Manager scoped to their own team only. */
+  private canReadTeamModuleData(moduleKey: 'leads' | 'deals' | 'contacts', user?: any): boolean {
+    if (hasCrmFullDataAccess(user)) return true;
+    const perms = this.crmPermissionSet(user);
+    return perms.has(`${moduleKey}:read:team`);
+  }
+
+  /** Direct reports (reportsTo === me) — the "team" a Team Lead/Manager is scoped to. */
+  private async teamMemberIdsAndNames(
+    user?: any,
+  ): Promise<{ ids: Types.ObjectId[]; names: string[] }> {
+    const selfId = this.userObjectId(user);
+    if (!selfId) return { ids: [], names: [] };
+    const reports = await this.hrmsUserModel
+      .find({ reportsTo: selfId })
+      .select('_id firstName lastName email')
+      .lean();
+    const ids = reports.map((r: any) => r._id as Types.ObjectId);
+    const names = reports
+      .map((r: any) => [r.firstName, r.lastName].filter(Boolean).join(' ').trim() || r.email)
+      .filter(Boolean);
+    return { ids, names };
+  }
+
+  /** Self + direct reports, matched the same way as *OwnershipFilter (owner label, createdBy, sharedWith). */
+  private async teamOwnershipFilter(
+    ownerField: 'leadOwner' | 'dealOwner',
+    user?: any,
+  ): Promise<Record<string, unknown>> {
+    const selfId = this.userObjectId(user);
+    const { ids: teamIds, names: teamNames } = await this.teamMemberIdsAndNames(user);
+    const allIds = selfId ? [selfId, ...teamIds] : teamIds;
+    const allNames = [this.ownerLabel(user), ...teamNames].filter(Boolean);
+    const or: Record<string, unknown>[] = [];
+    if (allNames.length) or.push({ [ownerField]: { $in: allNames } });
+    if (allIds.length) {
+      or.push({ createdBy: { $in: allIds } });
+      or.push({ sharedWith: { $in: allIds } });
+      or.push({ [ownerField]: { $in: allIds.map((id) => String(id)) } });
+    }
+    return or.length ? { $or: or } : { _id: null };
+  }
+
   private canReadModule(
     moduleKey: 'leads' | 'deals' | 'contacts' | 'clients' | 'organizations',
     user?: any,
@@ -2483,6 +2536,14 @@ export class CRMService {
   async createLead(dto: any, user?: any): Promise<Lead> {
     if (!canViewCrmRevenue(user)) {
       delete dto.annualRevenue;
+    }
+
+    // Workspace boundary: keep an explicit valid module, else inherit the creator's
+    // own workspace-scoped role, else fall back to the 2Bigha default.
+    if (!CRM_WORKSPACE_MODULES.includes(dto.module)) {
+      const roleModule = resolveRoleModule(user?.crmDbUser);
+      dto.module =
+        roleModule === CRM_ROLE_MODULE_ALL ? DEFAULT_LEAD_WORKSPACE_MODULE : roleModule;
     }
 
     if (dto.organization) await this.ensureOrganization(dto.organization, dto);
@@ -2773,11 +2834,20 @@ export class CRMService {
       filter = listOpts?.includeConverted ? {} : { ...nonConverted };
     }
 
-    const restrictedByDataScope = !!user && !this.canReadAllModuleData('leads', user);
-    if (restrictedByDataScope) {
-      filter = { $and: [filter, this.leadOwnershipFilter(user)] };
+    const canReadAll = this.canReadAllModuleData('leads', user);
+    if (!canReadAll) {
+      if (this.canReadTeamModuleData('leads', user)) {
+        filter = { $and: [filter, await this.teamOwnershipFilter('leadOwner', user)] };
+      } else {
+        filter = { $and: [filter, this.leadOwnershipFilter(user)] };
+      }
     } else if (listOpts?.mine && user) {
       filter = { $and: [filter, this.leadOwnershipFilter(user)] };
+    }
+
+    const moduleFilter = leadModuleFilter(user?.crmDbUser);
+    if (Object.keys(moduleFilter).length) {
+      filter = { $and: [filter, moduleFilter] };
     }
 
     if (listOpts?.leadType === 'platform') {
@@ -2894,6 +2964,9 @@ export class CRMService {
         return null;
       }
     }
+    if (lead && user && !roleAllowsModule(user.crmDbUser, (lead as any).module)) {
+      return null;
+    }
     if (lead && user && !this.canReadAllModuleData('leads', user)) {
       const ownerName = this.ownerLabel(user);
       const userId = this.userObjectId(user);
@@ -2904,7 +2977,14 @@ export class CRMService {
         !!userId &&
         Array.isArray((lead as any).sharedWith) &&
         (lead as any).sharedWith.some((u: any) => String(u) === String(userId));
-      if (!byOwner && !byCreator && !byShared) return null;
+      let byTeam = false;
+      if (!byOwner && !byCreator && !byShared && this.canReadTeamModuleData('leads', user)) {
+        const { ids: teamIds, names: teamNames } = await this.teamMemberIdsAndNames(user);
+        byTeam =
+          teamNames.includes(String((lead as any).leadOwner || '').trim()) ||
+          teamIds.some((id) => String(id) === String((lead as any).createdBy || ''));
+      }
+      if (!byOwner && !byCreator && !byShared && !byTeam) return null;
     }
     if (!lead) return null;
     const plain =
@@ -3008,6 +3088,9 @@ export class CRMService {
           return true;
         });
     }
+    if (oldLead && user && !roleAllowsModule(user.crmDbUser, (oldLead as any).module)) {
+      throw new ForbiddenException('This lead belongs to a different workspace.');
+    }
     if (oldLead && user && !this.canReadAllModuleData('leads', user)) {
       const ownerName = this.ownerLabel(user);
       const userId = this.userObjectId(user);
@@ -3018,7 +3101,19 @@ export class CRMService {
         !!userId &&
         Array.isArray((oldLead as any).sharedWith) &&
         (oldLead as any).sharedWith.some((u: any) => String(u) === String(userId));
-      if (!isMineByOwner && !isMineByCreator && !isSharedWithMe) {
+      let isMineByTeam = false;
+      if (
+        !isMineByOwner &&
+        !isMineByCreator &&
+        !isSharedWithMe &&
+        this.canReadTeamModuleData('leads', user)
+      ) {
+        const { ids: teamIds, names: teamNames } = await this.teamMemberIdsAndNames(user);
+        isMineByTeam =
+          teamNames.includes(String((oldLead as any).leadOwner || '').trim()) ||
+          teamIds.some((id) => String(id) === String((oldLead as any).createdBy || ''));
+      }
+      if (!isMineByOwner && !isMineByCreator && !isSharedWithMe && !isMineByTeam) {
         throw new ForbiddenException('You can only edit your assigned leads.');
       }
     }
@@ -3188,6 +3283,22 @@ export class CRMService {
           author: user.userId || user._id,
         });
       }
+    }
+    if (
+      updated &&
+      oldLead &&
+      dto.leadOwner !== undefined &&
+      String((oldLead as any).leadOwner || '') !== String(dto.leadOwner || '')
+    ) {
+      await this.roleAuditLog.log({
+        actor: user,
+        action: 'ownership_changed',
+        targetType: 'Lead',
+        targetId: updated._id,
+        targetLabel: `${updated.firstName || ''} ${updated.lastName || ''}`.trim(),
+        before: { leadOwner: (oldLead as any).leadOwner },
+        after: { leadOwner: dto.leadOwner },
+      });
     }
     if (updated)
       await this.syncContactFromLeadSafe(
@@ -7102,6 +7213,12 @@ export class CRMService {
     const filter: Record<string, unknown> =
       clauses.length === 1 ? clauses[0] : { $and: clauses };
 
+    const previousOwners = await this.leadModel
+      .find(filter as Record<string, any>)
+      .select('_id leadOwner')
+      .lean()
+      .exec();
+
     const result = await this.leadModel
       .updateMany(filter as Record<string, any>, {
         $set: { leadOwner: ownerName },
@@ -7109,6 +7226,15 @@ export class CRMService {
       .exec();
 
     await this.bustCrmCache('leads');
+
+    await this.roleAuditLog.log({
+      actor: user,
+      action: 'ownership_changed',
+      targetType: 'Lead',
+      targetLabel: `Bulk reassign ${previousOwners.length} lead(s) to ${ownerName}`,
+      before: { owners: previousOwners.map((l: any) => ({ id: l._id, leadOwner: l.leadOwner })) },
+      after: { leadOwner: ownerName, ids: oids },
+    });
 
     return {
       ownerName,

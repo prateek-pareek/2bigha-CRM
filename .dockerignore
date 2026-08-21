@@ -1,0 +1,15 @@
+# Keep node_modules out of the build context: portal/node_modules contains a
+# host-absolute symlink for @mathionix/ui and Linux-incompatible native addons.
+**/node_modules
+**/.next
+**/dist
+.git
+**/*.log
+# Never ship secrets into an image layer.
+.env
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.local.example
+api/uploads
+_from-internal
