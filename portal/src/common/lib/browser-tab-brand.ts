@@ -8,7 +8,7 @@ export type BrowserTabBrand =
   | "portal";
 
 const ICON_PATH: Record<BrowserTabBrand, string> = {
-  default: "/brand/mathionix-favicon.png",
+  default: "/brand/2bigha-logo.png",
   crm: "/favicons/crm.svg",
   hrms: "/favicons/hrms.svg",
   pm: "/favicons/pm.svg",
