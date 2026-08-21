@@ -110,7 +110,14 @@ jobs:
           script: |
             set -e
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
-            cd "${{ vars.VPS_DEPLOY_PATH }}"
+            DEPLOY_PATH="${{ vars.VPS_DEPLOY_PATH }}"
+            DEPLOY_PATH="${DEPLOY_PATH:-/opt/2bigha-CRM}"
+            if [ ! -d "$DEPLOY_PATH" ]; then
+              echo "Error: Directory $DEPLOY_PATH does not exist on VPS!"
+              exit 1
+            fi
+            cd "$DEPLOY_PATH"
+            echo "Deploying in directory: $(pwd)"
             # Shell-exported vars win over .env during compose interpolation, so
             # this pins the just-built tags without touching the checked-in .env
             # (which still holds JWT_SECRET, MONGO_URI, APP_DOMAIN, etc).
