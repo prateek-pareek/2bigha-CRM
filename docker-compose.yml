@@ -1,3 +1,5 @@
+name: myapp
+
 services:
   # Reverse proxy + automatic Let's Encrypt TLS. The backend/frontend services
   # below carry traefik.* labels but nothing was serving them — this is that
