@@ -10,6 +10,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { LocalStrategy } from './local.strategy';
 import { MicrosoftStrategy } from './microsoft.strategy';
 import { GoogleStrategy } from './google.strategy';
+import { RegisterGuard } from './register.guard';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { GoogleStrategy } from './google.strategy';
     LocalStrategy,
     MicrosoftStrategy,
     GoogleStrategy,
+    RegisterGuard,
   ],
 })
 export class AuthModule {}

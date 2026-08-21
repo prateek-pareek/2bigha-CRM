@@ -1,0 +1,23 @@
+# Use an EXTERNAL MongoDB (Hostinger managed database, Atlas, or a mongod
+# installed on the VPS host) instead of the bundled `mongodb` container.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.external-db.yml up -d
+#
+# Set MONGO_URI in .env first. If mongod runs on the VPS *host* rather than a
+# remote provider, use host.docker.internal, which extra_hosts maps below:
+#   MONGO_URI=mongodb://user:pass@host.docker.internal:27017/mathionix-crm?authSource=admin
+#
+# For a remote managed database, use the provider's connection string as-is.
+services:
+  backend:
+    # Drop the dependency so compose does not start the bundled mongodb service.
+    # `!reset` is required: an empty list alone is treated as "no override".
+    depends_on: !reset null
+    extra_hosts:
+      # Lets the container reach a mongod bound on the VPS host itself.
+      - 'host.docker.internal:host-gateway'
+
+  # Never start the bundled database in this mode.
+  mongodb:
+    profiles: ['bundled-db-disabled']

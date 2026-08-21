@@ -1,21 +1,26 @@
-# 2Bigha CRM Infrastructure Initialization for Windows
+# 2Bigha CRM - local dev bootstrap (Windows / PowerShell)
+# Mirrors init.sh. Safe to re-run: it never touches Docker volumes.
 
-Write-Host "Initializing CRM Development Environment..." -ForegroundColor Blue
+$ErrorActionPreference = 'Stop'
 
-# Clean up any existing instances
-docker-compose down -v
+Write-Host "Setting up 2Bigha CRM..." -ForegroundColor Blue
 
-# Start MongoDB first
-docker-compose up -d mongodb
+npm run setup
 
-# Wait for MongoDB to be ready
-Write-Host "Waiting for MongoDB to start..." -ForegroundColor Yellow
-Start-Sleep -Seconds 10
+if (-not (Test-Path api/.env)) {
+    Copy-Item api/.env.example api/.env
+    Write-Host "Created api/.env from example" -ForegroundColor Green
+}
 
-# Build and start services
-docker-compose up --build -d api web
+if (-not (Test-Path portal/.env.local)) {
+    Copy-Item portal/.env.local.example portal/.env.local
+    Write-Host "Created portal/.env.local from example" -ForegroundColor Green
+}
 
-Write-Host "CRM Services started successfully!" -ForegroundColor Green
-Write-Host "Web: http://localhost:3000"
-Write-Host "API: http://localhost:3001"
-Write-Host "MongoDB: localhost:27017"
+Write-Host ""
+Write-Host "Done. Next steps:" -ForegroundColor Green
+Write-Host "  npm run db:up    # start MongoDB + Redis (published on 127.0.0.1)"
+Write-Host "  npm run dev      # start API + portal"
+Write-Host ""
+Write-Host "  Portal: http://localhost:3000  ->  /crm"
+Write-Host "  API:    http://localhost:4000/api"

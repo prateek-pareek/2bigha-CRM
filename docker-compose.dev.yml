@@ -1,0 +1,15 @@
+# Local development only — publishes the datastores to the host loopback so the
+# API/portal can run natively (npm run dev) against them.
+#
+# Usage:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mongodb redis
+#
+# NOT named docker-compose.override.yml on purpose: an override file is loaded
+# automatically, which on the Hostinger VPS would publish Mongo/Redis to the
+# public internet. This file only applies when passed with -f explicitly.
+services:
+  mongodb:
+    ports:
+      - '127.0.0.1:27017:27017'
+  redis:
+    ports:
+      - '127.0.0.1:6380:6379'

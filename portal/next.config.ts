@@ -4,6 +4,9 @@ import path from "path";
 const nextConfig: NextConfig = {
   // Compile the shared UI package from TypeScript source.
   transpilePackages: ["@mathionix/ui"],
+  // Pin the file-tracing root to the repo. Next otherwise walks up looking for a
+  // lockfile and can latch onto an unrelated one outside the project.
+  outputFileTracingRoot: path.resolve(__dirname, ".."),
   // Tree-shake barrel imports from large UI libs (no extra npm packages).
   // lucide-react, date-fns, and recharts are optimized by Next.js by default.
   experimental: {

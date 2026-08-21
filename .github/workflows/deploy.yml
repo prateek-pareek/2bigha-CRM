@@ -1,0 +1,119 @@
+name: Build and deploy
+
+# Builds the backend + frontend images on GitHub's runners (not the VPS - the
+# frontend build alone needs ~4GB RAM and took 13 minutes even on a decent
+# laptop), pushes them to GHCR, then SSHes into the VPS to pull and restart.
+#
+# One-time setup before this will run, all under
+# Settings -> Secrets and variables -> Actions on the GitHub repo:
+#
+# Secrets:
+#   VPS_HOST        VPS IPv4 or hostname
+#   VPS_USER        SSH user (root, or a sudo user with docker group access)
+#   VPS_SSH_KEY      private key matching a public key already in the VPS's
+#                    ~/.ssh/authorized_keys (ssh-keygen -t ed25519, no passphrase)
+#   NEXT_PUBLIC_API_URL   e.g. https://crm.yourdomain.com (baked into the
+#                    frontend bundle at build time - must match .env on the VPS)
+#
+# Variables (Settings -> Variables, not secret - just not encrypted):
+#   VPS_DEPLOY_PATH  e.g. /opt/2bigha-CRM (where DEPLOY.md has you git clone)
+#
+# The VPS itself keeps `.env` with the runtime secrets (JWT_SECRET, MONGO_URI,
+# APP_DOMAIN, ...) - those never pass through GitHub. This workflow only ever
+# pushes images and tells the VPS to pull + restart.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository }}-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository }}-frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      backend_image: ${{ steps.tags.outputs.backend }}
+      frontend_image: ${{ steps.tags.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          echo "backend=${BACKEND_IMAGE}:${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "frontend=${FRONTEND_IMAGE}:${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.tags.outputs.backend }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          # Root context: portal/package.json links the shared UI kit as
+          # "file:../packages/ui", which must be inside the build context.
+          context: .
+          file: ./portal/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_CRM_STANDALONE=true
+          tags: |
+            ${{ steps.tags.outputs.frontend }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          # GITHUB_TOKEN is only valid for this run - fine here since the pull
+          # happens synchronously, right after the push, in the same run.
+          envs: GHCR_TOKEN,GHCR_ACTOR
+          script: |
+            set -e
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+            cd "${{ vars.VPS_DEPLOY_PATH }}"
+            # Shell-exported vars win over .env during compose interpolation, so
+            # this pins the just-built tags without touching the checked-in .env
+            # (which still holds JWT_SECRET, MONGO_URI, APP_DOMAIN, etc).
+            export BACKEND_IMAGE="${{ needs.build-and-push.outputs.backend_image }}"
+            export FRONTEND_IMAGE="${{ needs.build-and-push.outputs.frontend_image }}"
+            docker compose pull backend frontend
+            docker compose up -d --no-build
+            docker image prune -f
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}

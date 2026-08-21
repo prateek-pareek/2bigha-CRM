@@ -9,8 +9,9 @@
     "dev:all": "concurrently \"npm run dev:portal\" \"npm run dev:api\"",
     "dev": "npm run dev:all",
     "build:all": "concurrently \"cd portal && npm run build\" \"cd api && npm run build\"",
-    "db:up": "docker compose up -d mongodb redis",
-    "setup": "npm install && cd portal && npm install --legacy-peer-deps && cd ../api && npm install"
+    "db:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mongodb redis",
+    "setup": "npm install && cd portal && npm install --legacy-peer-deps && cd ../api && npm install",
+    "db:down": "docker compose stop mongodb redis"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

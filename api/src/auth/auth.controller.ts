@@ -12,6 +12,7 @@ import {
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './local-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RegisterGuard } from './register.guard';
 import { LoginDto } from './dto/login.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -36,9 +37,20 @@ export class AuthController {
     return this.authService.login(req.user);
   }
 
+  // Open only for the very first account (bootstrap); every registration
+  // after that requires an authenticated admin. See register.guard.ts.
+  @UseGuards(RegisterGuard)
   @Post('register')
   async register(@Body() createUserDto: CreateUserDto) {
-    return this.authService.register(createUserDto);
+    const user = await this.authService.register(createUserDto);
+    // .toObject() first: spreading a Mongoose document directly copies its
+    // internal state ($__, _doc, ...) rather than the document's own fields,
+    // which still contains the password hash under _doc.
+    const plain = typeof (user as any)?.toObject === 'function'
+      ? (user as any).toObject()
+      : user;
+    const { password, ...safeUser } = plain as any;
+    return safeUser;
   }
 
   @UseGuards(JwtAuthGuard)

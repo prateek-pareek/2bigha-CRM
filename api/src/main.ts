@@ -42,7 +42,12 @@ async function bootstrap() {
     next();
   });
 
-  app.enableCors();
+  // Restrict to the deployed portal's origin. Falls back to reflecting the
+  // request origin only when FRONTEND_URL isn't set (local dev convenience) -
+  // on a real deploy this env var is required by docker-compose.yml.
+  app.enableCors({
+    origin: process.env.FRONTEND_URL || true,
+  });
   app.setGlobalPrefix('api');
 
   app.useGlobalPipes(
