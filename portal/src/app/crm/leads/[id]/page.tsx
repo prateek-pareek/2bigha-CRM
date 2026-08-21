@@ -25,9 +25,7 @@ import { CRMLeadCompanySidebarCard } from '@/components/crm/records/associations
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
-import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookPanel';
 import SalesAgentRecordPanel from '@/components/crm/sales/SalesAgentRecordPanel';
-import CrmPlaybookRecommendedBanner from '@/components/crm/automation/playbooks/CrmPlaybookRecommendedBanner';
 import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
@@ -969,15 +967,6 @@ export default function LeadDetailPage() {
           {entityId ? (
             <SalesAgentRecordPanel recordType="Lead" recordId={entityId} />
           ) : null}
-          <CrmPlaybookRecommendedBanner relatedTo={entityId} relatedType="Lead" />
-          <CrmPlaybookPanel
-            relatedTo={entityId}
-            relatedType="Lead"
-            onApplied={() => {
-              void fetchActivities();
-              void fetchEmailTracking();
-            }}
-          />
         </aside>
       </div>
 

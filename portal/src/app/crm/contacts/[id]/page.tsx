@@ -23,8 +23,6 @@ import ContactAssociationsPanel from '@/components/crm/records/associations/Cont
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForContact, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
-import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookPanel';
-import CrmPlaybookRecommendedBanner from '@/components/crm/automation/playbooks/CrmPlaybookRecommendedBanner';
 import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
@@ -578,15 +576,6 @@ export default function ContactDetailPage() {
               recordLabel={displayName}
             />
           ) : null}
-          <CrmPlaybookRecommendedBanner relatedTo={entityId} relatedType="Contact" />
-          <CrmPlaybookPanel
-            relatedTo={entityId}
-            relatedType="Contact"
-            onApplied={() => {
-              void fetchActivities();
-              void fetchEmailTracking();
-            }}
-          />
         </aside>
       </div>
 

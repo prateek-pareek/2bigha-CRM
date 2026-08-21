@@ -41,6 +41,8 @@ interface StaffUser {
     roleId?: string | { _id: string; name: string };
     useRoleOverrides?: boolean;
     password?: string;
+    /** Manager/Team Lead this user reports to — "my team" = self + everyone reporting to me. */
+    reportsTo?: string | { _id: string; firstName?: string; lastName?: string; email?: string } | null;
 }
 
 export type CrmTeamManagementVariant = "employees" | "settings";
@@ -127,12 +129,21 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
         setEditingUser({ ...editingUser, salesWorkspaceAccessibleEmployees: next });
     };
 
-    const openAccessEditor = (u: StaffUser) => {
+    const openAccessEditor = async (u: StaffUser) => {
         setActivePermissionTab("role");
         setEditingUser({
             ...u,
             crmPermissions: migrateLegacyCrmPermissionKeys(u.crmPermissions || []),
         });
+        // `reportsTo` lives on the HRMS User record, not the CRMUser record this page
+        // otherwise edits — CRMUser and User share the same _id, so this is a safe lookup.
+        try {
+            const res = await api.get(`/users/${u._id}`);
+            const reportsTo = res.data?.reportsTo;
+            setEditingUser((prev) => (prev && prev._id === u._id ? { ...prev, reportsTo } : prev));
+        } catch (err) {
+            console.error("Failed to fetch reportsTo:", err);
+        }
     };
 
     const fetchUsers = async () => {
@@ -221,6 +232,14 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                 salesWorkspaceAccessibleEmployees: user.salesWorkspaceAccessibleEmployees || [],
             };
             await api.put(`/crm-users/${user._id}`, updatePayload);
+            // `reportsTo` lives on the HRMS User record (CRMUser and User share the same
+            // _id), so it's a separate call rather than part of the /crm-users payload.
+            await api.patch(`/users/${user._id}`, {
+                reportsTo:
+                    typeof user.reportsTo === "object" && user.reportsTo
+                        ? user.reportsTo._id
+                        : user.reportsTo || null,
+            });
             setEditingUser(null);
             fetchUsers();
         } catch (err) {
@@ -656,6 +675,37 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                                         </option>
                                                     ))}
                                                 </select>
+                                            </div>
+                                            <div className="rounded-md border border-[var(--surface-dim)] bg-white p-3 space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-[0.15em] text-[var(--text-muted)]">
+                                                    Reports To
+                                                </label>
+                                                <select
+                                                    className="h-9 w-full rounded-md border border-[var(--border-color)] bg-white px-2 text-xs text-[var(--text-main)]"
+                                                    value={
+                                                        typeof editingUser.reportsTo === "object" && editingUser.reportsTo
+                                                            ? editingUser.reportsTo._id
+                                                            : editingUser.reportsTo || ""
+                                                    }
+                                                    onChange={(e) =>
+                                                        setEditingUser({
+                                                            ...editingUser,
+                                                            reportsTo: e.target.value || null,
+                                                        })
+                                                    }
+                                                >
+                                                    <option value="">No manager (top of hierarchy)</option>
+                                                    {users
+                                                        .filter((u) => u._id !== editingUser._id)
+                                                        .map((u) => (
+                                                            <option key={u._id} value={u._id}>
+                                                                {`${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                                <p className="text-[11px] text-[var(--primary-muted)]">
+                                                    "My team" for Team Lead/Manager roles = this user + everyone reporting to them.
+                                                </p>
                                             </div>
                                             <div className="rounded-md border border-[var(--surface-dim)] bg-white p-3 space-y-2">
                                                 <label className="text-xs font-bold uppercase tracking-[0.15em] text-[var(--text-muted)]">

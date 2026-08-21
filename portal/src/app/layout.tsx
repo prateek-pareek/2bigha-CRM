@@ -9,9 +9,9 @@ export const metadata: Metadata = {
   title: "2Bigha CRM",
   description: "2Bigha CRM — sales pipeline, outreach, and client management",
   icons: {
-    icon: [{ url: "/brand/mathionix-favicon.png", type: "image/png" }],
-    shortcut: "/brand/mathionix-favicon.png",
-    apple: "/brand/mathionix-favicon.png",
+    icon: [{ url: "/brand/2bigha-logo.png", type: "image/png" }],
+    shortcut: "/brand/2bigha-logo.png",
+    apple: "/brand/2bigha-logo.png",
   },
 };
 

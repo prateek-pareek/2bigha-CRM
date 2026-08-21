@@ -1,11 +1,23 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { applyCrmSoftDeletePlugin } from '../../shared/crm-soft-delete.util';
+import {
+  CRM_WORKSPACE_MODULES,
+  CrmWorkspaceModule,
+  DEFAULT_LEAD_WORKSPACE_MODULE,
+} from '../../shared/crm-workspace-module.util';
 
 export type LeadDocument = Lead & Document;
 
 @Schema({ timestamps: true })
 export class Lead {
+  /**
+   * Workspace boundary (RBAC/workspace-isolation layer). Defaults to '2Bigha' so
+   * every lead created before this field existed is treated as a 2Bigha-workspace lead.
+   */
+  @Prop({ enum: CRM_WORKSPACE_MODULES, default: DEFAULT_LEAD_WORKSPACE_MODULE, index: true })
+  module: CrmWorkspaceModule;
+
   @Prop({ required: true })
   firstName: string;
 
@@ -268,6 +280,8 @@ export const LeadSchema = SchemaFactory.createForClass(Lead);
 applyCrmSoftDeletePlugin(LeadSchema);
 LeadSchema.index({ isDeleted: 1, deletedAt: -1 });
 
+/** Default workspace-boundary filter applied to every leads list query. */
+LeadSchema.index({ module: 1, createdAt: -1 });
 /** Speeds up CRM leads list / board when filtering by pipeline. */
 LeadSchema.index({ pipeline: 1, createdAt: -1 });
 /** Speeds up large-scale lead pagination for default/non-converted board list. */

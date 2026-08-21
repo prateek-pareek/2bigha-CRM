@@ -66,6 +66,13 @@ export class User {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Deal' }], default: [] })
   accessibleClientPortals: Types.ObjectId[];
+
+  /**
+   * Manager/Team Lead this user reports to (RBAC/workspace-isolation layer).
+   * "My team" = this user + everyone whose reportsTo === this user's id.
+   */
+  @Prop({ type: Types.ObjectId, ref: 'User', index: true })
+  reportsTo?: Types.ObjectId;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
