@@ -27,7 +27,6 @@ function isPureNumericString(value: string): boolean {
 /** Built-in CRM fields that are stored/compared as numbers. */
 const NUMERIC_FIELDS = new Set([
   'annualRevenue',
-  'leadScore',
   'dealValue',
   'probability',
 ]);

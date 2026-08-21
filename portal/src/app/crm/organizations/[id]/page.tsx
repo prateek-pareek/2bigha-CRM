@@ -6,7 +6,6 @@ import { CRM_API_URL } from '@/lib/crm/config';
 import { Building2, Globe, Mail, Phone, ChevronLeft, Trash2, Edit2, Settings2, MessageSquare, Info } from 'lucide-react';
 import Timeline from '@/components/crm/inbox/Timeline';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
-import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookPanel';
 import OrganizationAssociationsPanel from '@/components/crm/records/associations/OrganizationAssociationsPanel';
 import EditModal from '@/components/crm/records/create/EditModal';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
@@ -327,11 +326,6 @@ export default function OrganizationDetailPage() {
  </div>
 
  <div className="space-y-4">
- <CrmPlaybookPanel
- relatedTo={recordId}
- relatedType="Organization"
- onApplied={() => { void refreshActivities(); }}
- />
  <OrganizationAssociationsPanel
  organizationId={recordId}
  org={org as Record<string, unknown>}

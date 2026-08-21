@@ -526,7 +526,6 @@ export class LeadEngagementAutomationService implements OnModuleInit {
     const referenced = await this.pipelineModel
       .find({
         _id: { $in: objectIds },
-        type: { $ne: 'platform_opportunities' },
       })
       .sort({ createdAt: 1 })
       .exec();

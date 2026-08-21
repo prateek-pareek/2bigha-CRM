@@ -93,7 +93,6 @@ const DATE_KEYS = new Set([
 
 const NUMBER_KEYS = new Set([
   'annualRevenue',
-  'leadScore',
   'dealValue',
   'probability',
   'expectedDealValue',

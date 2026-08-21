@@ -20,9 +20,7 @@ import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagem
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
-import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookPanel';
 import SalesAgentRecordPanel from '@/components/crm/sales/SalesAgentRecordPanel';
-import CrmPlaybookRecommendedBanner from '@/components/crm/automation/playbooks/CrmPlaybookRecommendedBanner';
 import DealAssociationsPanel from '@/components/crm/records/associations/DealAssociationsPanel';
 import { formatAddress, formatPrice } from '@/lib/crm/property-listings/types';
 import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
@@ -962,15 +960,6 @@ export default function DealDetailPage() {
           {recordId ? (
             <SalesAgentRecordPanel recordType="Deal" recordId={String(recordId)} />
           ) : null}
-          <CrmPlaybookRecommendedBanner relatedTo={recordId} relatedType="Deal" />
-          <CrmPlaybookPanel
-            relatedTo={recordId}
-            relatedType="Deal"
-            onApplied={() => {
-              void fetchActivities();
-              void fetchEmailTracking();
-            }}
-          />
           <div className={crmRecordChrome.sidebarPanel}>
             <h3 className={crmRecordChrome.sectionTitle}>Property Listing</h3>
             {linkedProperty ? (

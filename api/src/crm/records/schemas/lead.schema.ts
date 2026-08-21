@@ -26,7 +26,7 @@ export class Lead {
 
   /** Latest outbound call outcome for this lead (synced with call activity UI). */
   @Prop({
-    enum: ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'],
+    enum: ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed', 'Not Answered'],
     default: 'Not Called',
     index: true,
   })
@@ -56,9 +56,6 @@ export class Lead {
   jobTitle: string;
 
   @Prop()
-  source: string; // Ref to CRM Lead Source
-
-  @Prop()
   industry: string; // Ref to CRM Industry
 
   @Prop()
@@ -75,9 +72,6 @@ export class Lead {
 
   @Prop()
   website: string;
-
-  @Prop()
-  linkedinUrl: string;
 
   /** X/Twitter @handle (stored without @) for cold-DM outreach. */
   @Prop({ trim: true, index: true })
@@ -179,6 +173,21 @@ export class Lead {
   checklistProgress?: Record<string, boolean>;
 
   /**
+   * Current Lead Intent selection(s) — potential future opportunities (client may
+   * become a Buyer/Seller/Investor, buy a Subscription, or list a Property/Farm
+   * later). Values are labels of active `LeadPicklistOption` rows with
+   * listKey 'leadIntent'. Every set/change is additionally recorded as a
+   * LeadIntentEvent (see records/schemas/lead-intent-event.schema.ts) for the
+   * Lead Intent Analytics dashboard.
+   */
+  @Prop({ type: [String], default: [], index: true })
+  leadIntents?: string[];
+
+  /** When to reconnect about the current lead intent(s). */
+  @Prop()
+  leadIntentFollowUpAt?: Date;
+
+  /**
    * Denormalized creator display name, set alongside `createdBy` at creation time so
    * "search by Created By / agent name" doesn't require a $lookup on every query.
    * Leads created before this field existed simply won't match a Created-By search.
@@ -192,17 +201,6 @@ export class Lead {
   /** Values are strings, string[] (multi-select), or other JSON-serializable primitives. */
   @Prop({ type: Object, default: {} })
   customFields: Record<string, unknown>;
-
-  @Prop({ type: Object })
-  sourceMetadata?: {
-    title?: string;
-    description?: string;
-    image?: string;
-    authorName?: string;
-    authorPhoto?: string;
-    type?: 'linkedin' | 'threads' | 'facebook' | 'instagram' | 'generic';
-    url: string;
-  };
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy: Types.ObjectId;
@@ -228,17 +226,6 @@ export class Lead {
   /** Legal cases referencing this lead (bidirectional; see LegalCase.associatedLeads). */
   @Prop({ type: [{ type: Types.ObjectId, ref: 'LegalCase' }], default: [] })
   associatedLegalCases: Types.ObjectId[];
-
-  /** Heuristic 0–100 conversion likelihood; recomputed on lead changes, activities, and email engagement. */
-  @Prop({ min: 0, max: 100, index: true })
-  leadScore?: number;
-
-  @Prop()
-  leadScoreUpdatedAt?: Date;
-
-  /** Sub-scores: completeness, firmographic, stageFit, engagement */
-  @Prop({ type: Object })
-  leadScoreBreakdown?: Record<string, number>;
 
   /** HubSpot-style stable public id (optional on legacy rows; unique when set). */
   @Prop({ trim: true, sparse: true, unique: true })
@@ -288,6 +275,8 @@ LeadSchema.index({ leadType: 1, createdAt: -1 });
 LeadSchema.index({ leadCategory: 1, createdAt: -1 });
 /** "Group" filter. */
 LeadSchema.index({ group: 1, createdAt: -1 });
+/** Lead Intent List / filter. */
+LeadSchema.index({ leadIntents: 1, createdAt: -1 });
 /** Add Lead client-selection step: list leads already linked to a given client. */
 LeadSchema.index({ clientId: 1, createdAt: -1 });
 /** Header global search (`$text` with regex fallback). */

@@ -12,6 +12,7 @@ export type PropertyListingType =
   | 'Commercial'
   | 'Office'
   | 'Warehouse'
+  | 'Farm'
   | 'Other';
 
 export type PropertyListingStatus =
@@ -67,6 +68,7 @@ export class PropertyListing {
       'Commercial',
       'Office',
       'Warehouse',
+      'Farm',
       'Other',
     ],
     default: 'Apartment',

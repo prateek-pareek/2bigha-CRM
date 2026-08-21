@@ -6,6 +6,7 @@ export type PropertyListingType =
   | "Commercial"
   | "Office"
   | "Warehouse"
+  | "Farm"
   | "Other";
 
 export type PropertyListingStatus =
@@ -56,6 +57,7 @@ export const PROPERTY_TYPES: PropertyListingType[] = [
   "Commercial",
   "Office",
   "Warehouse",
+  "Farm",
   "Other",
 ];
 

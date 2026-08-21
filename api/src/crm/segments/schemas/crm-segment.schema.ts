@@ -8,20 +8,18 @@ export type CrmSegmentListType = 'dynamic' | 'static';
 
 export type CrmSegmentMemberModule =
   | 'leads'
-  | 'contacts'
-  | 'platform-opportunities';
+  | 'contacts';
 
 export const CRM_SEGMENT_MEMBER_MODULES: CrmSegmentMemberModule[] = [
   'leads',
   'contacts',
-  'platform-opportunities',
 ];
 
 @Schema({ _id: false })
 export class CrmSegmentMember {
   @Prop({
     required: true,
-    enum: ['leads', 'contacts', 'platform-opportunities'],
+    enum: ['leads', 'contacts'],
   })
   module: CrmSegmentMemberModule;
 
@@ -49,7 +47,7 @@ export const CrmSegmentFilterCriterionSchema = SchemaFactory.createForClass(
 );
 
 /**
- * Marketing / outreach list: leads, contacts, and platform opportunities
+ * Marketing / outreach list: leads and contacts
  * grouped by filter rules or manual membership.
  */
 @Schema({ timestamps: true })
@@ -69,9 +67,6 @@ export class CrmSegment {
 
   @Prop({ type: [CrmSegmentFilterCriterionSchema], default: [] })
   contactFilters: CrmSegmentFilterCriterion[];
-
-  @Prop({ type: [CrmSegmentFilterCriterionSchema], default: [] })
-  platformOpportunityFilters: CrmSegmentFilterCriterion[];
 
   /** Static lists: explicit membership. */
   @Prop({ type: [CrmSegmentMemberSchema], default: [] })

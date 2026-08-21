@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import Timeline from '@/components/crm/inbox/Timeline';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
-import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookPanel';
 import ClientModal from '@/components/crm/records/create/ClientModal';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import ScheduleMeetingModal from '@/components/crm/inbox/ScheduleMeetingModal';
@@ -577,14 +576,6 @@ export default function ClientDetailPage() {
               </ul>
             )}
           </div>
-
-          <CrmPlaybookPanel
-            relatedTo={recordId}
-            relatedType="Client"
-            onApplied={() => {
-              void fetchData();
-            }}
-          />
         </div>
       </div>
 

@@ -17,6 +17,7 @@ import { parseAdditionalEmailsFromForm } from "@/lib/crm/crm-additional-emails";
 import DeleteCustomFieldMergeDialog, {
   type CustomFieldMergeRow,
 } from "@/components/crm/records/detail/DeleteCustomFieldMergeDialog";
+import LeadIntentChips from "@/components/crm/records/forms/LeadIntentChips";
 
 export type CrmPersonEntity = "lead" | "contact";
 
@@ -71,6 +72,8 @@ export default function LeadCreatePanel({
   const [serviceOfferings, setServiceOfferings] = useState<Array<{ _id: string; name: string }>>([]);
   const [leadCategories, setLeadCategories] = useState<Array<{ _id: string; label: string }>>([]);
   const [leadGroups, setLeadGroups] = useState<Array<{ _id: string; label: string }>>([]);
+  const [selectedIntents, setSelectedIntents] = useState<string[]>([]);
+  const [intentFollowUpAt, setIntentFollowUpAt] = useState("");
 
   // --- Add Lead: optional inline "existing contact" search that auto-fills the form below ---
   type ClientLite = {
@@ -357,7 +360,7 @@ export default function LeadCreatePanel({
       toast.error(
         entity === "contact"
           ? "Add at least one of email, phone (mobile or alternate), or LinkedIn URL so we can reach this contact."
-          : "Add at least one of email, phone, LinkedIn, or a job/freelance listing URL (https) when you do not have direct contact details yet.",
+          : "Add at least one of email, phone, or a job/freelance listing URL (https) when you do not have direct contact details yet.",
       );
       return;
     }
@@ -431,6 +434,8 @@ export default function LeadCreatePanel({
       leadCategory: entity === "lead" ? data.leadCategory : undefined,
       group: entity === "lead" ? data.group : undefined,
       notes: entity === "lead" ? data.notes : undefined,
+      leadIntents: entity === "lead" && selectedIntents.length ? selectedIntents : undefined,
+      leadIntentFollowUpAt: entity === "lead" && selectedIntents.length ? intentFollowUpAt || undefined : undefined,
       sourceMetadata,
       customFields: Object.keys(cfData).length > 0 ? cfData : undefined,
     });
@@ -458,6 +463,8 @@ export default function LeadCreatePanel({
             setClientQuery("");
             setClientResults([]);
             setShowClientSearch(false);
+            setSelectedIntents([]);
+            setIntentFollowUpAt("");
           }
         } else {
           onClose();
@@ -658,6 +665,21 @@ export default function LeadCreatePanel({
               leadGroups={leadGroups}
               visualVariant="hubspot"
             />
+          )}
+
+          {entity === "lead" && (
+            <div className="pt-4 border-t border-[var(--surface-dim)]">
+              <h4 className="mb-1 text-sm font-semibold text-[var(--text-main)]">Lead Intent</h4>
+              <p className="mb-2 text-xs text-[var(--text-muted)]">
+                Select intent types for this lead
+              </p>
+              <LeadIntentChips
+                selected={selectedIntents}
+                onChange={setSelectedIntents}
+                followUpAt={intentFollowUpAt}
+                onFollowUpAtChange={setIntentFollowUpAt}
+              />
+            </div>
           )}
 
           {isAdmin && (

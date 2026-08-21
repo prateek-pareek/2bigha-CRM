@@ -4,28 +4,29 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { crmRecordChrome } from "@/lib/crm/chrome";
 
+/** Default tab set most record detail pages use; pass a wider literal union (e.g. add "History") via the generic when a page needs more tabs. */
 export type CrmRecordDetailTabId = "Activity" | "Details";
 
-type TabDef = {
-  id: CrmRecordDetailTabId;
+type TabDef<TTabId extends string> = {
+  id: TTabId;
   label: string;
   icon: LucideIcon;
 };
 
-type Props = {
-  tabs: TabDef[];
-  activeTab: CrmRecordDetailTabId;
-  onTabChange: (tab: CrmRecordDetailTabId) => void;
+type Props<TTabId extends string> = {
+  tabs: TabDef<TTabId>[];
+  activeTab: TTabId;
+  onTabChange: (tab: TTabId) => void;
   detailsToolbar?: React.ReactNode;
 };
 
 /** CRMS-style underline tabs on record detail (matches deals record chrome). */
-export default function CrmRecordDetailTabs({
+export default function CrmRecordDetailTabs<TTabId extends string = CrmRecordDetailTabId>({
   tabs,
   activeTab,
   onTabChange,
   detailsToolbar,
-}: Props) {
+}: Props<TTabId>) {
   return (
     <div className={crmRecordChrome.tabBar}>
       <div className={crmRecordChrome.tabs} role="tablist" aria-label="Record sections">

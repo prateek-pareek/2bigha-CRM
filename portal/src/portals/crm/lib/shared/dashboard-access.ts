@@ -98,12 +98,6 @@ export const CRM_REPORT_ACCESS_ITEMS: CrmDashboardAccessItem[] = [
     requiredPermission: "reports-leads-conversion:read",
   },
   {
-    slug: "email",
-    label: "Email Reports",
-    href: "/crm/reports/email",
-    requiredPermission: "reports-email:read",
-  },
-  {
     slug: "forecast",
     label: "Deal Reports",
     href: "/crm/reports/forecast",

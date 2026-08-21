@@ -32,22 +32,11 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'Phone', key: 'phone' },
   { label: 'WhatsApp Number (on the linked Client)', key: 'whatsappNumber' },
   { label: 'Address (on the linked Client)', key: 'address' },
-  { label: 'Organization / Company name', key: 'organization' },
-  { label: 'HubSpot company ID (match imported company)', key: 'hubspotCompanyId' },
   { label: 'HubSpot contact ID (optional, for linking)', key: 'hubspotContactId' },
-  { label: 'MongoDB organization ID (advanced)', key: 'organizationId' },
-  { label: 'Job Title', key: 'jobTitle' },
-  { label: 'Website', key: 'website' },
-  { label: 'LinkedIn URL', key: 'linkedinUrl' },
-  { label: 'Annual Revenue', key: 'annualRevenue' },
-  { label: 'Industry', key: 'industry' },
-  { label: 'No. of Employees', key: 'noOfEmployees' },
-  { label: 'Territory', key: 'territory' },
   { label: 'Status', key: 'status' },
   { label: 'Call Status', key: 'callStatus' },
   { label: 'Group (Seller/Buyer — see Settings)', key: 'group' },
   { label: 'Lead Type (Reference/Investor/Lead/Buyer lead — see Settings)', key: 'leadCategory' },
-  { label: 'Lead Source', key: 'source' },
   { label: 'Notes', key: 'notes' },
  ],
  contacts: [
@@ -188,14 +177,14 @@ function applyHubSpotHints(
   if (!out.phone && (type === 'contacts' || type === 'leads'))
     out.phone = pick('Phone Number', 'Phone', 'Work phone');
   if (!out.mobileNo) out.mobileNo = pick('Mobile Phone', 'Mobile phone', 'Contact Number', 'Phone');
-  if (!out.organization && (type === 'contacts' || type === 'leads'))
+  if (!out.organization && type === 'contacts')
     out.organization = pick(
       'Company Name',
       'Associated Company',
       'Primary Associated Company ID',
       'Company name',
     );
-  if (!out.jobTitle && type !== 'organizations')
+  if (!out.jobTitle && type !== 'organizations' && type !== 'leads')
     out.jobTitle = pick('Job Title', 'Job title');
   if (!out.name && type === 'organizations')
     out.name = pick('Name', 'Company name', 'Company Name', 'Company');
@@ -206,7 +195,7 @@ function applyHubSpotHints(
       'Company record ID',
       'HubSpot Company ID',
     );
-  if (!out.hubspotCompanyId && (type === 'contacts' || type === 'leads'))
+  if (!out.hubspotCompanyId && type === 'contacts')
     out.hubspotCompanyId = pick(
       'Associated Company IDs',
       'Primary Associated Company ID',
@@ -229,7 +218,6 @@ function applyHubSpotHints(
     if (!out.address) out.address = pick('Address', 'City, State');
     if (!out.group) out.group = pick('Group', 'Group Name');
     if (!out.leadCategory) out.leadCategory = pick('Lead Type', 'Lead Category');
-    if (!out.source) out.source = pick('Lead Source', 'Source');
   }
   return out;
 }
@@ -252,22 +240,11 @@ const LEADS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
   phone: '+911123456789',
   whatsappNumber: '+919876543210',
   address: '123 Street, Gurgaon, Haryana, India 122017',
-  organization: 'Example Realty Pvt Ltd',
-  hubspotCompanyId: '',
   hubspotContactId: '',
-  organizationId: '',
-  jobTitle: 'Marketing Manager',
-  website: 'https://example.com',
-  linkedinUrl: 'https://linkedin.com/in/shagunmishra',
-  annualRevenue: '500000',
-  industry: 'Real Estate',
-  noOfEmployees: '11-50',
-  territory: 'North Zone',
   status: 'New',
   callStatus: 'Not Called',
   group: 'Seller',
   leadCategory: 'Lead',
-  source: 'Email',
   notes: 'Interested in 3BHK, follow up next week',
 };
 const LEADS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.leads.map(

@@ -27,7 +27,6 @@ import { InboxRule, InboxRuleDocument } from '../schemas/inbox-rules.schema';
 import { Email, EmailDocument } from '../schemas/email.schema';
 import { CRMUser, CRMUserDocument } from '../crm-users/schemas/user.schema';
 import { Upload, UploadDocument } from '../../storage/schemas/upload.schema';
-import { WebsiteLead, WebsiteLeadDocument } from '../schemas/website-lead.schema';
 
 import { EmailTrackingService } from '../email/email-tracking.service';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
@@ -209,8 +208,6 @@ export class InboxAccountsService {
     private userModel: Model<CRMUserDocument>,
     @InjectModel(InboxRule.name, 'crmConnection')
     private inboxRuleModel: Model<InboxRuleDocument>,
-    @InjectModel(WebsiteLead.name, 'crmConnection')
-    private websiteLeadModel: Model<WebsiteLeadDocument>,
     private notificationsService: NotificationsService,
     private emailService: EmailService,
     private teamsIntegrationService: TeamsIntegrationService,
@@ -4835,7 +4832,7 @@ export class InboxAccountsService {
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(escaped, 'i');
 
-    const [leads, contacts, clients, websiteLeads] = await Promise.all([
+    const [leads, contacts, clients] = await Promise.all([
       this.leadModel
         .find({
           $or: [
@@ -4870,18 +4867,6 @@ export class InboxAccountsService {
         .select('name email additionalEmails invalidEmails')
         .lean()
         .exec(),
-      this.websiteLeadModel
-        .find({
-          $or: [
-            { firstName: re },
-            { lastName: re },
-            { email: re },
-          ],
-        })
-        .limit(15)
-        .select('firstName lastName email')
-        .lean()
-        .exec(),
     ]);
 
     const results: Array<{
@@ -4900,18 +4885,6 @@ export class InboxAccountsService {
           l.email,
           l.additionalEmails,
           (l as { invalidEmails?: string[] }).invalidEmails,
-        ),
-      });
-    }
-    for (const wl of websiteLeads) {
-      results.push({
-        module: 'leads',
-        entityId: wl._id.toString(),
-        label: `${wl.firstName || ''} ${wl.lastName || ''}`.trim() || 'Website Lead',
-        emails: this.collectEntityEmails(
-          wl.email,
-          [],
-          [],
         ),
       });
     }

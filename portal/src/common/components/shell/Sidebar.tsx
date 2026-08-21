@@ -365,6 +365,8 @@ const crmGroups = [
         name: 'Prospecting',
         items: [
             { name: 'Leads', href: '/crm/leads', icon: CrmNavIcon.Leads, permission: 'leads:read' },
+            { name: 'Lead Intent', href: '/crm/leads/intent', icon: CrmNavIcon.Target, permission: 'leads:read' },
+            { name: 'Groups', href: '/crm/groups', icon: CrmNavIcon.UsersGroup, permission: 'leads:read' },
             { name: 'Task board', href: '/crm/tasks', icon: CrmNavIcon.CheckCircle, permission: 'activities:read' },
         ],
     },
@@ -374,7 +376,6 @@ const crmGroups = [
             { name: 'Contacts', href: '/crm/contacts', icon: CrmNavIcon.Contacts, permission: 'contacts:read' },
             // Hidden for now — do not remove. Re-enable by uncommenting.
             // { name: 'Companies', href: '/crm/organizations', icon: CrmNavIcon.Companies, permission: 'organizations:read' },
-            // { name: 'Website leads', href: '/crm/website-leads', icon: CrmNavIcon.World, permission: 'leads:read' },
             { name: 'Clients', href: '/crm/clients', icon: CrmNavIcon.UserCheck, permission: 'clients:read', adminOnly: true },
             { name: 'Segments', href: '/crm/segments', icon: CrmNavIcon.Layers, permission: 'leads:read' },
         ],

@@ -8,7 +8,6 @@ import {
   Mail,
   Phone,
   Tag,
-  Target,
   User,
   type LucideIcon,
 } from 'lucide-react';
@@ -79,7 +78,6 @@ const FIELD_ICONS: Record<string, LucideIcon> = {
   source: Globe,
   probability: Info,
   noOfEmployees: User,
-  leadScore: Target,
   priority: Tag,
   leadOwner: User,
   contactOwner: User,
@@ -105,7 +103,6 @@ export const CRM_CARD_BUILTIN_FIELDS: Record<CrmCardEntityId, CrmCardFieldDef[]>
     { key: 'callStatus', label: 'Call Status', icon: Phone },
     { key: 'priority', label: 'Priority', icon: Tag },
     { key: 'leadOwner', label: 'Lead Owner', icon: User },
-    { key: 'leadScore', label: 'Score', icon: Target },
     { key: 'pipeline', label: 'Pipeline', icon: Tag },
     { key: 'createdAt', label: 'Created Date', icon: Calendar },
     { key: 'lastEmailActivityAt', label: 'Last Email Activity', icon: Calendar },
@@ -255,11 +252,6 @@ export function resolveCrmCardFieldValue(
       const p = record.pipeline;
       if (p && typeof p === 'object' && 'name' in p) return String((p as { name?: string }).name || '');
       return String(p || '');
-    }
-    if (fieldKey === 'leadScore') {
-      const score = record.leadScore;
-      if (score != null && !Number.isNaN(Number(score))) return `Score ${score}`;
-      return '';
     }
     if (fieldKey === 'createdAt') return formatDate(record.createdAt as string);
     if (fieldKey === 'lastEmailActivityAt') return formatDate(record.lastEmailActivityAt as string);

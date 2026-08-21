@@ -298,7 +298,7 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
       ) {
         toast.error(
           activeTab === 'Lead'
-            ? 'Add at least one of email, phone (mobile or alternate), or LinkedIn URL so we can reach this lead.'
+            ? 'Add at least one of email or phone (mobile or alternate) so we can reach this lead.'
             : 'Add at least one of email, phone (mobile or alternate), or LinkedIn URL so we can reach this contact.'
         );
         return;
@@ -403,7 +403,6 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
       const stage = leadSelectedStage || (payload.stage as string) || firstStage;
       payload.stage = stage;
       payload.status = (payload.status as string) || stage;
-      if (initialSource && !payload.source) payload.source = initialSource;
       if (payload.annualRevenue !== undefined && payload.annualRevenue !== '')
         payload.annualRevenue = Number(payload.annualRevenue);
       Object.keys(payload).forEach((k) => {
@@ -548,7 +547,7 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-                      Add at least one of email, phone, or LinkedIn.
+                      Add at least one of email or phone.
                     </p>
                     <button
                       type="button"

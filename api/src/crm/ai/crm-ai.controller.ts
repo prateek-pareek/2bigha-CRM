@@ -102,7 +102,6 @@ export class CrmAiController {
     'leads:write',
     'contacts:write',
     'deals:write',
-    'platform-opportunities:write',
     'proposals:write',
   )
   draftContract(
@@ -124,11 +123,10 @@ export class CrmAiController {
       'leads',
       'contacts',
       'deals',
-      'platform-opportunities',
     ] as const;
     if (!allowed.includes(mod as (typeof allowed)[number])) {
       throw new BadRequestException(
-        'module must be "leads", "contacts", "deals", or "platform-opportunities"',
+        'module must be "leads", "contacts", or "deals"',
       );
     }
     const entityId = String(body.entityId || '').trim();
@@ -281,7 +279,6 @@ export class CrmAiController {
     'leads:write',
     'contacts:write',
     'deals:write',
-    'platform-opportunities:write',
     'proposals:write',
   )
   draftProposal(
@@ -303,11 +300,10 @@ export class CrmAiController {
       'leads',
       'contacts',
       'deals',
-      'platform-opportunities',
     ] as const;
     if (!allowed.includes(mod as (typeof allowed)[number])) {
       throw new BadRequestException(
-        'module must be "leads", "contacts", "deals", or "platform-opportunities"',
+        'module must be "leads", "contacts", or "deals"',
       );
     }
     const entityId = String(body.entityId || '').trim();

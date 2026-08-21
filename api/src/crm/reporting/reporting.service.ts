@@ -25,10 +25,6 @@ import {
   CrmGlobalSettingsDocument,
 } from '../schemas/crm-global-settings.schema';
 import {
-  PlatformOpportunity,
-  PlatformOpportunityDocument,
-} from '../schemas/platform-opportunity.schema';
-import {
   WorkflowDelayedJob,
   WorkflowDelayedJobDocument,
 } from '../schemas/workflow-delayed-job.schema';
@@ -37,6 +33,8 @@ import {
   InboxEmailDocument,
 } from '../schemas/inbox-email.schema';
 import { Pipeline, PipelineDocument } from '../schemas/pipeline.schema';
+import { CallLog, CallLogDocument } from '../ivr/schemas/call-log.schema';
+import { AgentTarget, AgentTargetDocument } from './schemas/agent-target.schema';
 import { AppCacheService } from '../../redis/app-cache.service';
 import {
   actionVerb,
@@ -552,14 +550,16 @@ export class ReportingService {
     private auditLogModel: Model<AuditLogDocument>,
     @InjectModel(CrmGlobalSettings.name, 'crmConnection')
     private globalSettingsModel: Model<CrmGlobalSettingsDocument>,
-    @InjectModel(PlatformOpportunity.name, 'crmConnection')
-    private platformOpportunityModel: Model<PlatformOpportunityDocument>,
     @InjectModel(WorkflowDelayedJob.name, 'crmConnection')
     private delayedJobModel: Model<WorkflowDelayedJobDocument>,
     @InjectModel(InboxEmail.name, 'crmConnection')
     private inboxEmailModel: Model<InboxEmailDocument>,
     @InjectModel(Pipeline.name, 'crmConnection')
     private pipelineModel: Model<PipelineDocument>,
+    @InjectModel(CallLog.name, 'crmConnection')
+    private callLogModel: Model<CallLogDocument>,
+    @InjectModel(AgentTarget.name, 'crmConnection')
+    private agentTargetModel: Model<AgentTargetDocument>,
     private readonly appCache: AppCacheService,
   ) {}
 
@@ -4700,6 +4700,113 @@ export class ReportingService {
     };
   }
 
+  /**
+   * Team Members → Performance tab + Agent Performance baseline report:
+   * today/this-week/this-month work snapshot for one agent, reusing the same
+   * computeWindowWorkSnapshot the Sales Health dashboard is built on.
+   */
+  /**
+   * Agent Performance baseline (human agents) — replaces the dead
+   * `reports/agents` redirect. Calls made, activities, leads created/converted,
+   * and target-vs-actual per agent for the given window. Properties/farms
+   * listed are fetched separately (PropertyListingsService lives outside this
+   * module) and merged client-side.
+   */
+  async getAgentPerformanceLeaderboard(window: string) {
+    const range = this.resolveWorkspaceWindow(window);
+    const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+
+    const [callRows, leadRows, convertedRows, activityRows, targets, users] = await Promise.all([
+      this.callLogModel.aggregate([
+        { $match: { ...dateMatch, initiatedByUserId: { $exists: true, $ne: null } } },
+        { $group: { _id: '$initiatedByUserId', count: { $sum: 1 } } },
+      ]),
+      this.leadModel.aggregate([
+        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null } } },
+        { $group: { _id: '$createdBy', count: { $sum: 1 } } },
+      ]),
+      this.leadModel.aggregate([
+        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null }, converted: true } },
+        { $group: { _id: '$createdBy', count: { $sum: 1 } } },
+      ]),
+      this.activityModel.aggregate([
+        { $match: { ...dateMatch, type: { $nin: ['System'] }, author: { $exists: true, $ne: null } } },
+        { $group: { _id: '$author', count: { $sum: 1 } } },
+      ]),
+      this.agentTargetModel.find().lean(),
+      this.hrmsUserModel.find().select('_id firstName lastName email').limit(2000).lean(),
+    ]);
+
+    const userById = new Map(users.map((u: any) => [String(u._id), u]));
+    const targetById = new Map(targets.map((t: any) => [String(t.agentId), t]));
+    const agentIds = new Set<string>([
+      ...callRows.map((r) => String(r._id)),
+      ...leadRows.map((r) => String(r._id)),
+      ...activityRows.map((r) => String(r._id)),
+    ]);
+
+    const countMap = (rows: Array<{ _id: unknown; count: number }>) =>
+      new Map(rows.map((r) => [String(r._id), r.count]));
+    const calls = countMap(callRows);
+    const leadsCreated = countMap(leadRows);
+    const leadsConverted = countMap(convertedRows);
+    const activities = countMap(activityRows);
+
+    const leaderboard = [...agentIds].map((id) => {
+      const user = userById.get(id);
+      const target = targetById.get(id);
+      const name = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown agent';
+      return {
+        agentId: id,
+        name,
+        calls: calls.get(id) || 0,
+        activities: activities.get(id) || 0,
+        leadsCreated: leadsCreated.get(id) || 0,
+        leadsConverted: leadsConverted.get(id) || 0,
+        target: target
+          ? {
+              leadsTarget: target.leadsTarget || 0,
+              callsTarget: target.callsTarget || 0,
+              dealsTarget: target.dealsTarget || 0,
+              propertiesTarget: target.propertiesTarget || 0,
+            }
+          : null,
+      };
+    });
+
+    leaderboard.sort((a, b) => b.calls + b.leadsCreated - (a.calls + a.leadsCreated));
+
+    return { window: range.key, windowLabel: this.windowLabel(range.key), agents: leaderboard };
+  }
+
+  async getAgentTargets() {
+    return this.agentTargetModel.find().lean();
+  }
+
+  async upsertAgentTarget(
+    agentId: string,
+    patch: { leadsTarget?: number; callsTarget?: number; dealsTarget?: number; propertiesTarget?: number },
+  ) {
+    return this.agentTargetModel
+      .findOneAndUpdate(
+        { agentId: new Types.ObjectId(agentId) },
+        { $set: patch },
+        { upsert: true, new: true },
+      )
+      .lean();
+  }
+
+  async getAgentPerformanceSummary(agentId: string) {
+    const authorIds = await this.resolveHrmsAuthorIds(agentId);
+    const authorId = authorIds.length ? authorIds : null;
+    const [today, thisWeek, thisMonth] = await Promise.all([
+      this.computeWindowWorkSnapshot(this.resolveWorkspaceWindow('today'), agentId, authorId),
+      this.computeWindowWorkSnapshot(this.resolveWorkspaceWindow('this_week'), agentId, authorId),
+      this.computeWindowWorkSnapshot(this.resolveWorkspaceWindow('this_month'), agentId, authorId),
+    ]);
+    return { today, thisWeek, thisMonth };
+  }
+
   private async computeSalesDepartmentHealth(
     window: string,
     owner?: string,
@@ -6997,15 +7104,6 @@ export class ReportingService {
       byStage: Array<{ stage: string; count: number }>;
       stageEntered: Array<{ stage: string; count: number }>;
     }>;
-    platformOpportunitiesAddedByDay: Array<{
-      date: string;
-      total: number;
-      byPipeline: Array<{
-        pipelineId: string | null;
-        pipelineName: string;
-        count: number;
-      }>;
-    }>;
     dealsAddedByDay: Array<{
       date: string;
       total: number;
@@ -7084,7 +7182,6 @@ export class ReportingService {
         atRiskDeals: [],
         nextStepRequired: [],
         leadsAddedByDay: [],
-        platformOpportunitiesAddedByDay: [],
         dealsAddedByDay: [],
         window: this.resolveWorkspaceWindow(window).key,
       };
@@ -7163,15 +7260,6 @@ export class ReportingService {
       }>;
       byStage: Array<{ stage: string; count: number }>;
       stageEntered: Array<{ stage: string; count: number }>;
-    }>;
-    platformOpportunitiesAddedByDay: Array<{
-      date: string;
-      total: number;
-      byPipeline: Array<{
-        pipelineId: string | null;
-        pipelineName: string;
-        count: number;
-      }>;
     }>;
     dealsAddedByDay: Array<{
       date: string;
@@ -7275,7 +7363,6 @@ export class ReportingService {
       recentRaw,
       auditRaw,
       leadsAddedByDay,
-      platformOpportunitiesAddedByDay,
       dealsAddedByDay,
       leadFollowUpAndIntake,
       upcomingFollowUps,
@@ -7364,7 +7451,6 @@ export class ReportingService {
                   'contacts',
                   'organizations',
                   'clients',
-                  'platform-opportunities',
                 ],
               },
             })
@@ -7378,15 +7464,6 @@ export class ReportingService {
         : Promise.resolve([]),
       wantLeads
         ? this.getLeadsAddedByDayForSalesWorkspace(
-            owner,
-            ownerMatchExtras,
-            scopedAuthorId,
-            leadIntakeWindow.start,
-            leadIntakeWindow.end,
-          )
-        : Promise.resolve([]),
-      wantLeads
-        ? this.getPlatformOpportunitiesAddedByDayForSalesWorkspace(
             owner,
             ownerMatchExtras,
             scopedAuthorId,
@@ -7709,7 +7786,6 @@ export class ReportingService {
     }
     if (wantLeads) {
       payload.leadsAddedByDay = leadsAddedByDay;
-      payload.platformOpportunitiesAddedByDay = platformOpportunitiesAddedByDay;
     }
     if (wantLeads || wantDeals) {
       payload.dealsAddedByDay = dealsAddedByDay;
@@ -8543,10 +8619,10 @@ export class ReportingService {
             ],
           },
         },
-        // Never count lead / platform boards as deals.
+        // Never count lead boards as deals.
         {
           $match: {
-            pipelineType: { $nin: ['leads', 'platform_opportunities'] },
+            pipelineType: { $ne: 'leads' },
           },
         },
         {
@@ -8669,216 +8745,6 @@ export class ReportingService {
     return out;
   }
 
-  private async buildPlatformCreatedVisibilityForWorkspace(
-    owner: string,
-    ownerMatchExtras: string[] | undefined,
-    scopedAuthorId: Types.ObjectId | Types.ObjectId[] | null,
-  ): Promise<Record<string, unknown>> {
-    let ownerKey = owner?.trim();
-    if (
-      ownerKey &&
-      ownerKey !== 'All' &&
-      ownerKey !== 'All authorized' &&
-      Types.ObjectId.isValid(ownerKey) &&
-      ownerKey.length === 24
-    ) {
-      const label = await this.getHrmsDisplayOwnerLabel(
-        new Types.ObjectId(ownerKey),
-      );
-      if (label) ownerKey = label;
-    }
-
-    if (
-      !scopedAuthorId &&
-      (!ownerKey || ownerKey === 'All' || ownerKey === 'All authorized')
-    ) {
-      return {};
-    }
-
-    const primaryForMerge =
-      ownerKey && ownerKey !== 'All' && ownerKey !== 'All authorized'
-        ? ownerKey
-        : undefined;
-    const owners = this.mergeOwnerMatchStrings(
-      primaryForMerge,
-      ownerMatchExtras,
-    ).filter((o) => o !== 'All authorized');
-    const authorId =
-      scopedAuthorId || (await this.resolveHrmsAuthorId(owner?.trim()));
-
-    const orClauses: Record<string, unknown>[] = [];
-    const nameClause = this.ownerFieldNameMatch('ownerLabel', owners);
-    if (nameClause) {
-      if (Array.isArray((nameClause as { $or?: unknown }).$or)) {
-        orClauses.push(
-          ...((nameClause as { $or: Record<string, unknown>[] }).$or),
-        );
-      } else {
-        orClauses.push(nameClause);
-      }
-    }
-    if (authorId) {
-      const ids = Array.isArray(authorId) ? authorId : [authorId];
-      const authIn = ids.length === 1 ? ids[0] : { $in: ids };
-      orClauses.push({ createdBy: authIn });
-      orClauses.push({ sharedWith: authIn });
-      for (const id of ids) {
-        orClauses.push({ ownerLabel: String(id) });
-      }
-    }
-
-    if (orClauses.length === 0) return {};
-    if (orClauses.length === 1) return orClauses[0];
-    return { $or: orClauses };
-  }
-
-  private async getPlatformOpportunitiesAddedByDayForSalesWorkspace(
-    owner: string,
-    ownerMatchExtras: string[] | undefined,
-    scopedAuthorId: Types.ObjectId | Types.ObjectId[] | null,
-    start: Date,
-    end: Date,
-  ): Promise<
-    Array<{
-      date: string;
-      total: number;
-      byPipeline: Array<{
-        pipelineId: string | null;
-        pipelineName: string;
-        count: number;
-      }>;
-    }>
-  > {
-    const createdVisibility =
-      await this.buildPlatformCreatedVisibilityForWorkspace(
-        owner,
-        ownerMatchExtras,
-        scopedAuthorId,
-      );
-    const tz = this.reportingCalendarTz();
-
-    const match: Record<string, unknown> = {
-      createdAt: { $gte: start, $lte: end },
-      ...createdVisibility,
-    };
-
-    type AggRow = {
-      _id: { d: string; pid: string | null; pn: string };
-      count: number;
-    };
-
-    const raw = (await this.platformOpportunityModel
-      .aggregate([
-        { $match: match },
-        {
-          $lookup: {
-            from: 'pipelines',
-            let: { lp: '$pipeline' },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $eq: ['$_id', '$$lp'] },
-                  type: 'platform_opportunities',
-                },
-              },
-              { $project: { name: 1 } },
-              { $limit: 1 },
-            ],
-            as: 'pipeDoc',
-          },
-        },
-        {
-          $addFields: {
-            dayKey: {
-              $dateToString: {
-                format: '%Y-%m-%d',
-                date: '$createdAt',
-                timezone: tz,
-              },
-            },
-            pipelineIdStr: {
-              $cond: [
-                { $ifNull: ['$pipeline', false] },
-                { $toString: '$pipeline' },
-                null,
-              ],
-            },
-            pipelineName: {
-              $ifNull: [
-                { $arrayElemAt: ['$pipeDoc.name', 0] },
-                {
-                  $cond: [
-                    {
-                      $gt: [
-                        {
-                          $strLenCP: {
-                            $ifNull: ['$opportunitySourcePlatform', ''],
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                    '$opportunitySourcePlatform',
-                    'No pipeline',
-                  ],
-                },
-              ],
-            },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              d: '$dayKey',
-              pid: '$pipelineIdStr',
-              pn: '$pipelineName',
-            },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { '_id.d': 1, '_id.pn': 1 } },
-      ])
-      .exec()) as AggRow[];
-
-    const dayMap = new Map<
-      string,
-      Map<string, { pipelineId: string | null; pipelineName: string; count: number }>
-    >();
-
-    for (const row of raw) {
-      const day = row._id?.d;
-      if (!day) continue;
-      const pid = row._id.pid;
-      const pname = String(row._id.pn || 'No pipeline').trim() || 'No pipeline';
-      const c = Number(row.count) || 0;
-      if (!dayMap.has(day)) dayMap.set(day, new Map());
-      const pmap = dayMap.get(day)!;
-      const key = pid == null ? `__none__:${pname}` : String(pid);
-      const prev = pmap.get(key);
-      if (prev) prev.count += c;
-      else pmap.set(key, { pipelineId: pid, pipelineName: pname, count: c });
-    }
-
-    const out: Array<{
-      date: string;
-      total: number;
-      byPipeline: Array<{
-        pipelineId: string | null;
-        pipelineName: string;
-        count: number;
-      }>;
-    }> = [];
-
-    const sortedDays = [...dayMap.keys()].sort();
-    for (const d of sortedDays) {
-      const pmap = dayMap.get(d)!;
-      const byPipeline = [...pmap.values()].sort((a, b) => b.count - a.count);
-      const total = byPipeline.reduce((s, x) => s + x.count, 0);
-      out.push({ date: d, total, byPipeline });
-    }
-    return out;
-  }
-
   private async getLeadFollowUpAndIntakeForSalesWorkspace(
     owner: string,
     ownerMatchExtras: string[] | undefined,
@@ -8988,7 +8854,6 @@ export class ReportingService {
         organization?: string;
         leadOwner?: string;
         status: string;
-        entityType?: 'lead' | 'platformOpportunity';
         createdAt: string;
       }>;
       yesterday: Array<{
@@ -8998,7 +8863,6 @@ export class ReportingService {
         organization?: string;
         leadOwner?: string;
         status: string;
-        entityType?: 'lead' | 'platformOpportunity';
         createdAt: string;
       }>;
       thisWeek: Array<{
@@ -9008,7 +8872,6 @@ export class ReportingService {
         organization?: string;
         leadOwner?: string;
         status: string;
-        entityType?: 'lead' | 'platformOpportunity';
         createdAt: string;
       }>;
     };
@@ -9033,62 +8896,6 @@ export class ReportingService {
       .limit(900)
       .lean()
       .exec();
-    let leadOwnerKey = owner?.trim();
-    if (
-      leadOwnerKey &&
-      leadOwnerKey !== 'All' &&
-      leadOwnerKey !== 'All authorized' &&
-      Types.ObjectId.isValid(leadOwnerKey) &&
-      leadOwnerKey.length === 24
-    ) {
-      const label = await this.getHrmsDisplayOwnerLabel(
-        new Types.ObjectId(leadOwnerKey),
-      );
-      if (label) leadOwnerKey = label;
-    }
-    const primaryForMerge =
-      leadOwnerKey &&
-      leadOwnerKey !== 'All' &&
-      leadOwnerKey !== 'All authorized'
-        ? leadOwnerKey
-        : undefined;
-    const leadOwners = this.mergeOwnerMatchStrings(
-      primaryForMerge,
-      ownerMatchExtras,
-    ).filter((o) => o !== 'All authorized');
-    const authorId =
-      scopedAuthorId || (await this.resolveHrmsAuthorId(owner?.trim()));
-    const platformVisibility: Record<string, unknown> = {};
-    if (leadOwners.length > 0 || authorId) {
-      const ownerFilter =
-        leadOwners.length === 1 ? leadOwners[0] : { $in: leadOwners };
-      const authIn = Array.isArray(authorId) ? { $in: authorId } : authorId;
-      const orClauses: Record<string, unknown>[] = [];
-      if (leadOwners.length > 0) {
-        orClauses.push({ ownerLabel: ownerFilter });
-      }
-      if (authorId) {
-        orClauses.push({ createdBy: authIn });
-        orClauses.push({ sharedWith: authIn });
-      }
-      if (orClauses.length === 1) {
-        Object.assign(platformVisibility, orClauses[0]);
-      } else if (orClauses.length > 1) {
-        platformVisibility.$or = orClauses;
-      }
-    }
-    const weekPlatformRaw = await this.platformOpportunityModel
-      .find({
-        createdAt: { $gte: week.start, $lte: week.end },
-        ...platformVisibility,
-      })
-      .select(
-        '_id title platformClientLabel opportunitySourcePlatform ownerLabel stage platformEngagementStatus createdAt',
-      )
-      .sort({ createdAt: -1 })
-      .limit(900)
-      .lean()
-      .exec();
     const toLead = (l: Record<string, unknown>) => {
       const first = String(l.firstName || '').trim();
       const last = String(l.lastName || '').trim();
@@ -9107,29 +8914,7 @@ export class ReportingService {
     const weekRowsAll = (weekLeadRaw as unknown as Array<Record<string, unknown>>).map(
       toLead,
     );
-    const platformRowsAll = (
-      weekPlatformRaw as unknown as Array<Record<string, unknown>>
-    ).map((row) => {
-      const title = String(row.title || '').trim();
-      const client = String(row.platformClientLabel || '').trim();
-      const platform = String(row.opportunitySourcePlatform || '').trim();
-      return {
-        id: String(row._id),
-        name: title || client || 'Platform opportunity',
-        email: '',
-        organization: client || platform || undefined,
-        leadOwner: String(row.ownerLabel || '') || undefined,
-        status:
-          String(row.stage || row.platformEngagementStatus || 'New').trim() || 'New',
-        entityType: 'platformOpportunity' as const,
-        createdAt: row.createdAt
-          ? new Date(String(row.createdAt)).toISOString()
-          : new Date().toISOString(),
-      };
-    });
-    const intakeRowsAll = [...weekRowsAll, ...platformRowsAll]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 900);
+    const intakeRowsAll = weekRowsAll.slice(0, 900);
     const inRange = (isoTs: string, start: Date, end: Date) => {
       const t = new Date(isoTs).getTime();
       return t >= start.getTime() && t <= end.getTime();

@@ -17,10 +17,6 @@ import { CRMService } from '../core/crm.service';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import {
-  PlatformOpportunity,
-  PlatformOpportunityDocument,
-} from '../schemas/platform-opportunity.schema';
-import {
   appendCrmListFilters,
   CrmFilterCriterion,
 } from '../shared/crm-list-filters';
@@ -33,7 +29,6 @@ type SegmentDto = {
   listType?: 'dynamic' | 'static';
   leadFilters?: CrmFilterCriterion[];
   contactFilters?: CrmFilterCriterion[];
-  platformOpportunityFilters?: CrmFilterCriterion[];
 };
 
 @Injectable()
@@ -45,8 +40,6 @@ export class CrmSegmentsService {
     private leadModel: Model<LeadDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private contactModel: Model<ContactDocument>,
-    @InjectModel(PlatformOpportunity.name, 'crmConnection')
-    private platformOpportunityModel: Model<PlatformOpportunityDocument>,
     @Inject(forwardRef(() => CRMService))
     private readonly crmService: CRMService,
   ) {}
@@ -79,8 +72,7 @@ export class CrmSegmentsService {
     module: CrmSegmentMemberModule,
   ): CrmFilterCriterion[] {
     if (module === 'leads') return (segment.leadFilters ?? []) as CrmFilterCriterion[];
-    if (module === 'contacts') return (segment.contactFilters ?? []) as CrmFilterCriterion[];
-    return (segment.platformOpportunityFilters ?? []) as CrmFilterCriterion[];
+    return (segment.contactFilters ?? []) as CrmFilterCriterion[];
   }
 
   private toResponse(doc: CrmSegmentDocument | Record<string, unknown>) {
@@ -93,7 +85,6 @@ export class CrmSegmentsService {
       listType: row.listType,
       leadFilters: row.leadFilters ?? [],
       contactFilters: row.contactFilters ?? [],
-      platformOpportunityFilters: row.platformOpportunityFilters ?? [],
       members: (row.members ?? []).map((m) => ({
         module: m.module,
         entityId: String(m.entityId),
@@ -105,18 +96,16 @@ export class CrmSegmentsService {
   }
 
   private async enrichCounts(row: CrmSegment, user?: any) {
-    const [leadCount, contactCount, platformOpportunityCount] =
+    const [leadCount, contactCount] =
       await Promise.all([
         this.countForModule(row, user, 'leads'),
         this.countForModule(row, user, 'contacts'),
-        this.countForModule(row, user, 'platform-opportunities'),
       ]);
     return {
       ...this.toResponse(row as CrmSegmentDocument),
       leadCount,
       contactCount,
-      platformOpportunityCount,
-      memberCount: leadCount + contactCount + platformOpportunityCount,
+      memberCount: leadCount + contactCount,
     };
   }
 
@@ -196,9 +185,6 @@ export class CrmSegmentsService {
       listType,
       leadFilters: this.normalizeFilters(dto.leadFilters),
       contactFilters: this.normalizeFilters(dto.contactFilters),
-      platformOpportunityFilters: this.normalizeFilters(
-        dto.platformOpportunityFilters,
-      ),
       members: [],
       createdBy: user?.userId
         ? new Types.ObjectId(String(user.userId))
@@ -213,23 +199,20 @@ export class CrmSegmentsService {
       listType?: 'dynamic' | 'static';
       leadFilters?: CrmFilterCriterion[];
       contactFilters?: CrmFilterCriterion[];
-      platformOpportunityFilters?: CrmFilterCriterion[];
       members?: Array<{ module: CrmSegmentMemberModule; entityId: string }>;
     },
     user?: any,
   ) {
     const draft = this.draftSegmentFromDto(dto);
-    const [leadCount, contactCount, platformOpportunityCount] =
+    const [leadCount, contactCount] =
       await Promise.all([
         this.countForModule(draft, user, 'leads'),
         this.countForModule(draft, user, 'contacts'),
-        this.countForModule(draft, user, 'platform-opportunities'),
       ]);
     return {
       leadCount,
       contactCount,
-      platformOpportunityCount,
-      memberCount: leadCount + contactCount + platformOpportunityCount,
+      memberCount: leadCount + contactCount,
     };
   }
 
@@ -239,7 +222,6 @@ export class CrmSegmentsService {
       listType?: 'dynamic' | 'static';
       leadFilters?: CrmFilterCriterion[];
       contactFilters?: CrmFilterCriterion[];
-      platformOpportunityFilters?: CrmFilterCriterion[];
       members?: Array<{ module: CrmSegmentMemberModule; entityId: string }>;
       module: string;
       page?: number;
@@ -273,9 +255,6 @@ export class CrmSegmentsService {
       ),
       contactFilters: this.normalizeFilters(
         (source.contactFilters ?? []) as CrmFilterCriterion[],
-      ),
-      platformOpportunityFilters: this.normalizeFilters(
-        (source.platformOpportunityFilters ?? []) as CrmFilterCriterion[],
       ),
       members:
         source.listType === 'static'
@@ -409,7 +388,6 @@ export class CrmSegmentsService {
     listType?: 'dynamic' | 'static';
     leadFilters?: CrmFilterCriterion[];
     contactFilters?: CrmFilterCriterion[];
-    platformOpportunityFilters?: CrmFilterCriterion[];
     members?: Array<{ module: CrmSegmentMemberModule; entityId: string }>;
   }): CrmSegment {
     const listType = dto.listType === 'static' ? 'static' : 'dynamic';
@@ -430,9 +408,6 @@ export class CrmSegmentsService {
       listType,
       leadFilters: this.normalizeFilters(dto.leadFilters) as any,
       contactFilters: this.normalizeFilters(dto.contactFilters) as any,
-      platformOpportunityFilters: this.normalizeFilters(
-        dto.platformOpportunityFilters,
-      ) as any,
       members: listType === 'static' ? (members as any) : [],
     } as CrmSegment;
   }
@@ -458,11 +433,6 @@ export class CrmSegmentsService {
     }
     if (dto.contactFilters !== undefined) {
       doc.contactFilters = this.normalizeFilters(dto.contactFilters) as any;
-    }
-    if (dto.platformOpportunityFilters !== undefined) {
-      doc.platformOpportunityFilters = this.normalizeFilters(
-        dto.platformOpportunityFilters,
-      ) as any;
     }
     await doc.save();
     return this.findOne(id, user);
@@ -593,11 +563,8 @@ export class CrmSegmentsService {
         );
         return this.normalizePagedResult(module, result, page, pageSize);
       }
-      if (module === 'contacts') {
-        const result = await this.crmService.findAllContacts(user, listOpts);
-        return this.normalizePagedResult(module, result, page, pageSize);
-      }
-      return this.listPlatformOpportunitiesDynamic(user, filters, opts);
+      const result = await this.crmService.findAllContacts(user, listOpts);
+      return this.normalizePagedResult(module, result, page, pageSize);
     }
 
     const memberIds = (segment.members ?? [])
@@ -623,20 +590,12 @@ export class CrmSegmentsService {
         q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
         'i',
       );
-      const searchOr =
-        module === 'platform-opportunities'
-          ? [
-              { title: rx },
-              { opportunitySourcePlatform: rx },
-              { platformClientLabel: rx },
-              { notes: rx },
-            ]
-          : [
-              { firstName: rx },
-              { lastName: rx },
-              { email: rx },
-              { organization: rx },
-            ];
+      const searchOr = [
+        { firstName: rx },
+        { lastName: rx },
+        { email: rx },
+        { organization: rx },
+      ];
       filter = {
         $and: [filter, { $or: searchOr }],
       };
@@ -646,11 +605,9 @@ export class CrmSegmentsService {
     const mongoFilter = filter as Record<string, any>;
     const model = this.modelForModule(module);
     const select =
-      module === 'platform-opportunities'
-        ? '_id title opportunitySourcePlatform platformClientLabel platformEngagementStatus stage ownerLabel createdAt'
-        : module === 'leads'
-          ? '_id firstName lastName email organization status stage leadOwner createdAt'
-          : '_id firstName lastName email organization status stage leadOwner jobTitle createdAt';
+      module === 'leads'
+        ? '_id firstName lastName email organization status stage leadOwner createdAt'
+        : '_id firstName lastName email organization status stage leadOwner jobTitle createdAt';
     const [data, total] = await Promise.all([
       model
         .find(mongoFilter)
@@ -684,63 +641,9 @@ export class CrmSegmentsService {
     return { module, data: arr, total: arr.length, page: 1, pageSize: arr.length };
   }
 
-  private async listPlatformOpportunitiesDynamic(
-    user: any,
-    filters: CrmFilterCriterion[],
-    opts?: { page?: number; pageSize?: number; search?: string },
-  ) {
-    const page = Math.max(1, opts?.page ?? 1);
-    const pageSize = Math.min(Math.max(1, opts?.pageSize ?? 50), 200);
-    const accessFilter = this.buildAccessFilter('platform-opportunities', user);
-    let filter: Record<string, unknown> = { ...accessFilter };
-    filter = appendCrmListFilters(filter, filters, 'platform-opportunities');
-    if (opts?.search?.trim()) {
-      const rx = new RegExp(
-        opts.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-        'i',
-      );
-      filter = {
-        $and: [
-          filter,
-          {
-            $or: [
-              { title: rx },
-              { opportunitySourcePlatform: rx },
-              { platformClientLabel: rx },
-              { notes: rx },
-            ],
-          },
-        ],
-      };
-    }
-    const skip = (page - 1) * pageSize;
-    const mongoFilter = filter as Record<string, any>;
-    const [data, total] = await Promise.all([
-      this.platformOpportunityModel
-        .find(mongoFilter)
-        .select(
-          '_id title opportunitySourcePlatform platformClientLabel platformEngagementStatus stage ownerLabel createdAt',
-        )
-        .sort({ updatedAt: -1, createdAt: -1 })
-        .skip(skip)
-        .limit(pageSize)
-        .lean()
-        .exec(),
-      this.platformOpportunityModel.countDocuments(mongoFilter),
-    ]);
-    return {
-      module: 'platform-opportunities' as const,
-      data,
-      total,
-      page,
-      pageSize,
-    };
-  }
-
   private modelForModule(module: CrmSegmentMemberModule): Model<any> {
     if (module === 'leads') return this.leadModel;
-    if (module === 'contacts') return this.contactModel;
-    return this.platformOpportunityModel;
+    return this.contactModel;
   }
 
   private buildAccessFilter(
@@ -752,15 +655,6 @@ export class CrmSegmentsService {
     const userId = user.userId && Types.ObjectId.isValid(String(user.userId))
       ? new Types.ObjectId(String(user.userId))
       : null;
-
-    if (module === 'platform-opportunities') {
-      const mineOr: Record<string, unknown>[] = [{ ownerLabel: ownerName }];
-      if (userId) {
-        mineOr.push({ createdBy: userId });
-        mineOr.push({ sharedWith: userId });
-      }
-      return { $or: mineOr };
-    }
 
     const mineOr: Record<string, unknown>[] = [{ leadOwner: ownerName }];
     if (module === 'contacts') {
@@ -808,14 +702,6 @@ export class CrmSegmentsService {
     }
 
     const filters = this.filtersForModule(segment, module);
-    if (module === 'platform-opportunities') {
-      const accessFilter = this.buildAccessFilter(module, user);
-      let filter: Record<string, unknown> = { ...accessFilter };
-      filter = appendCrmListFilters(filter, filters, 'platform-opportunities');
-      return this.platformOpportunityModel.countDocuments(
-        filter as Record<string, any>,
-      );
-    }
     const result =
       module === 'leads'
         ? await this.crmService.findAllLeads(user, undefined, {

@@ -1,12 +1,9 @@
 "use client";
 
-import Link from 'next/link';
-import { Mail, Phone, Building2, ExternalLink, UserPlus } from 'lucide-react';
+import { Mail, Phone, ExternalLink } from 'lucide-react';
 import { fieldLabel } from '@/lib/crm/crm-field-layout';
 import { contactXProfileUrl } from '@/lib/crm/crm-x-messaging';
 import { CrmCustomFieldValue, type CrmCustomFieldDefLite } from '@/components/crm/records/forms/CrmCustomFieldValue';
-import EmailFinderFromLinkedIn from '@/components/crm/email/tools/EmailFinderFromLinkedIn';
-import EmailExtractorFromWebsite from '@/components/crm/email/tools/EmailExtractorFromWebsite';
 import EmailVerifierButton from '@/components/crm/email/tools/EmailVerifierButton';
 import { usePermissions } from '@/hooks/usePermissions';
 import { crmRecordChrome } from '@/lib/crm/chrome';
@@ -18,7 +15,6 @@ const SIDEBAR_SKIP = new Set([
   'firstName',
   'lastName',
   'gender',
-  'organization',
   'leadOwner', // shown in Owner block below
 ]);
 
@@ -29,21 +25,12 @@ const SIDEBAR_ORDER = [
   'additionalEmails',
   'mobileNo',
   'phone',
-  'jobTitle',
-  'source',
   'stage',
   'status',
   'callStatus',
   'pipeline',
-  'industry',
-  'website',
-  'linkedinUrl',
   'twitterHandle',
-  'annualRevenue',
-  'noOfEmployees',
-  'territory',
   'relatedService',
-  'leadScore',
 ];
 
 interface CRMLeadRecordFieldsProps {
@@ -105,18 +92,12 @@ export default function CRMLeadRecordFields({
         return Boolean(String(lead.mobileNo || '').trim());
       case 'phone':
         return Boolean(String(lead.phone || '').trim());
-      case 'website':
-        return Boolean(String(lead.website || '').trim());
-      case 'linkedinUrl':
-        return Boolean(String(lead.linkedinUrl || '').trim());
       case 'twitterHandle':
         return Boolean(String(lead.twitterHandle || '').trim());
       case 'pipeline':
         return Boolean(pipelineName || lead.pipeline);
       case 'createdAt':
         return Boolean(lead.createdAt);
-      case 'leadScore':
-        return lead.leadScore != null && !Number.isNaN(Number(lead.leadScore));
       case 'relatedService': {
         const rs = lead.relatedService;
         if (rs && typeof rs === 'object' && rs !== null && 'name' in rs) return Boolean((rs as { name: string }).name);
@@ -199,94 +180,6 @@ export default function CRMLeadRecordFields({
         ) : (
           '—'
         );
-      case 'organization':
-        return lead.organization ? (
-          <Link
-            href={`/crm/organizations?search=${encodeURIComponent(lead.organization)}`}
-            className="text-primary hover:underline font-medium break-words"
-          >
-            {!compact ? <Building2 size={16} className="text-text-muted shrink-0 inline mr-1.5 align-text-bottom" /> : null}
-            {lead.organization}
-          </Link>
-        ) : (
-          '—'
-        );
-      case 'jobTitle':
-        return lead.jobTitle || '—';
-      case 'website':
-        if (!lead.website) return '—';
-        if (compact) {
-          return (
-            <a
-              href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block truncate text-[var(--primary)] hover:underline"
-              title={lead.website}
-            >
-              {lead.website.replace(/^https?:\/\//, '')}
-            </a>
-          );
-        }
-        return (
-          <div className="flex flex-wrap gap-2 items-center">
-            <a
-              href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              {lead.website}
-            </a>
-            <EmailExtractorFromWebsite
-              websiteUrl={lead.website}
-              existingEmail={lead.email}
-              onEmailFound={onApplyEmailFromFinder}
-            />
-          </div>
-        );
-      case 'linkedinUrl':
-        if (!lead.linkedinUrl) return '—';
-        if (compact) {
-          return (
-            <a
-              href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[#0A66C2] hover:underline text-sm font-medium"
-            >
-              <ExternalLink size={13} />
-              LinkedIn profile
-            </a>
-          );
-        }
-        return (
-          <div className="flex flex-wrap gap-2 items-center">
-            <a
-              href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#0A66C2]/10 text-[#0A66C2] rounded-[var(--radius-md)] text-sm font-bold hover:bg-[#0A66C2]/20 transition-colors"
-            >
-              <ExternalLink size={16} />
-              Open Profile
-            </a>
-            <a
-              href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#0A66C2] text-white rounded-[var(--radius-md)] text-sm font-bold hover:bg-[#004182] transition-colors"
-            >
-              <UserPlus size={16} />
-              Connect
-            </a>
-            <EmailFinderFromLinkedIn
-              linkedinUrl={lead.linkedinUrl}
-              existingEmail={lead.email}
-              onEmailFound={onApplyEmailFromFinder}
-            />
-          </div>
-        );
       case 'twitterHandle': {
         const x = contactXProfileUrl(lead);
         return x ? (
@@ -296,18 +189,6 @@ export default function CRMLeadRecordFields({
           </a>
         ) : '—';
       }
-      case 'source':
-        return <div className="break-words">{lead.source || '—'}</div>;
-      case 'industry':
-        return lead.industry || '—';
-      case 'annualRevenue':
-        return lead.annualRevenue !== undefined && lead.annualRevenue !== null && lead.annualRevenue !== ''
-          ? String(lead.annualRevenue)
-          : '—';
-      case 'noOfEmployees':
-        return lead.noOfEmployees || '—';
-      case 'territory':
-        return lead.territory || '—';
       case 'relatedService': {
         const rs = lead.relatedService;
         if (rs && typeof rs === 'object' && rs !== null && 'name' in rs) return (rs as { name: string }).name;
@@ -335,33 +216,6 @@ export default function CRMLeadRecordFields({
               minute: '2-digit',
             })
           : '—';
-      case 'leadScore': {
-        const s = lead.leadScore;
-        if (s == null || Number.isNaN(Number(s))) return '—';
-        const n = Number(s);
-        if (compact) return <span className="tabular-nums font-semibold">{n}/100</span>;
-        const tier =
-          n >= 70 ? 'text-emerald-700' : n >= 40 ? 'text-amber-800' : 'text-slate-600';
-        const bd = lead.leadScoreBreakdown as Record<string, number> | undefined;
-        const parts =
-          bd && typeof bd === 'object'
-            ? ['completeness', 'firmographic', 'stageFit', 'engagement']
-                .filter((k) => typeof bd[k] === 'number')
-                .map((k) => `${k} ${bd[k]}`)
-                .join(' · ')
-            : '';
-        return (
-          <div className="space-y-1">
-            <span className={`text-lg font-bold tabular-nums ${tier}`}>{n}</span>
-            <span className="text-text-muted text-xs block">out of 100 (heuristic)</span>
-            {parts ? (
-              <p className="text-xs text-text-muted leading-snug" title={parts}>
-                {parts}
-              </p>
-            ) : null}
-          </div>
-        );
-      }
       default:
         return lead[key] != null && lead[key] !== '' ? String(lead[key]) : '—';
     }
@@ -381,22 +235,12 @@ export default function CRMLeadRecordFields({
       additionalEmails: 'Additional emails',
       mobileNo: 'Mobile',
       phone: 'Phone (alternate)',
-      organization: 'Company',
-      jobTitle: 'Job Title',
-      website: 'Website',
-      linkedinUrl: 'LinkedIn',
       twitterHandle: 'X (Twitter)',
-      source: 'Lead Source',
-      industry: 'Industry',
-      annualRevenue: 'Annual Revenue',
-      noOfEmployees: 'No. of Employees',
-      territory: 'Territory',
       relatedService: 'Related service',
       leadOwner: 'Lead Owner',
       pipeline: 'Pipeline',
       stage: 'Stage',
       status: 'Status',
-      leadScore: 'Lead score',
       createdAt: 'Created',
     };
     return map[key] || key;
@@ -426,7 +270,7 @@ export default function CRMLeadRecordFields({
         </div>
       );
     }
-    const span2 = (key === 'linkedinUrl' && lead.linkedinUrl) || (key === 'twitterHandle' && lead.twitterHandle);
+    const span2 = key === 'twitterHandle' && lead.twitterHandle;
     if (layout === 'sidebar') {
       return (
         <div key={key} className={crmRecordChrome.infoRow}>

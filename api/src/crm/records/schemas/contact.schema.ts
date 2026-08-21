@@ -132,16 +132,6 @@ export class Contact {
     url: string;
   };
 
-  /** Mirrored from linked lead when present (see LeadScoringService). */
-  @Prop({ min: 0, max: 100, index: true })
-  leadScore?: number;
-
-  @Prop()
-  leadScoreUpdatedAt?: Date;
-
-  @Prop({ type: Object })
-  leadScoreBreakdown?: Record<string, number>;
-
   @Prop({ trim: true, sparse: true, unique: true })
   recordId?: string;
 

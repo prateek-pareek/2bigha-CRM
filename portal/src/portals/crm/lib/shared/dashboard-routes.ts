@@ -139,10 +139,10 @@ export type DealReportSection = (typeof DEAL_REPORT_SECTIONS)[number]["slug"];
 export const REPORT_ROUTES = [
   { slug: "overview", label: "Overview", href: "/crm/reports/overview", permission: "reports-overview:read" },
   ...LEAD_REPORT_SECTIONS.map(({ slug, label, href, permission }) => ({ slug, label, href, permission })),
-  { slug: "email", label: "Email Reports", href: "/crm/reports/email", permission: "reports-email:read" },
   { slug: "forecast", label: "Deal Reports", href: "/crm/reports/forecast", permission: "reports-forecast:read" },
   { slug: "health", label: "Sales Health", href: "/crm/reports/forecast/health", permission: "reports-health:read" },
   { slug: "revenue", label: "Forecast", href: "/crm/reports/forecast/revenue", revenueOnly: true, permission: "reports-revenue:read" },
+  { slug: "agents", label: "Agent Performance", href: "/crm/reports/agents", permission: "dashboard:read" },
 ] as const;
 
 export type ReportRouteSlug = (typeof REPORT_ROUTES)[number]["slug"];
@@ -155,11 +155,11 @@ export const REPORT_SECTION_DESCRIPTIONS: Record<string, string> = {
   "leads-funnel": "Created → converted → deals funnel, open stages, and lost/converted stage detail.",
   "leads-aging": "Follow-up coverage and stale open leads needing attention.",
   "leads-conversion": "Time from lead created to first outreach and between follow-ups.",
-  email: "Template performance, mailbox engagement, and deliverability.",
   forecast:
     "Daily deal intake by platform and employee, pipeline outcomes, closers, and board outreach insights.",
   health: "Work done, activity mix, and pipeline risk signals.",
   revenue: "Generated revenue vs weighted open-pipeline forecast.",
+  agents: "Calls, activities, leads, and properties/farms listed per human agent, with target-vs-actual.",
 };
 
 export function reportSectionTitle(slug: string): string {

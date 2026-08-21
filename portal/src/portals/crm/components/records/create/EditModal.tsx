@@ -15,10 +15,8 @@ import {
   getDefaultCountryCodeFromPhone,
   getNationalDigitsFromPhone,
 } from '@/lib/crm/phone-country-codes';
-import SocialPostPreview from '@/components/crm/sales/SocialPostPreview';
 import CrmMultiEmailListField from '@/components/crm/email/engagement/CrmMultiEmailListField';
 import { parseAdditionalEmailsFromForm } from '@/lib/crm/crm-additional-emails';
-import { Loader2 } from 'lucide-react';
 import { FormDatePicker } from '@/components/ui/date-picker';
 import { crmModalChrome } from '@/lib/crm/chrome';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -56,8 +54,6 @@ interface EditModalProps {
 export default function EditModal({ isOpen, onClose, type, initialData, onSuccess }: EditModalProps) {
   const { canViewCrmRevenue } = usePermissions();
   const [loading, setLoading] = useState(false);
-  const [sourceMetadata, setSourceMetadata] = useState<any>(initialData?.sourceMetadata || null);
-  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState<string>('');
@@ -158,28 +154,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
     }
   }, [type, selectedPipeline, selectedStage, pipelines]);
 
-  // Auto-fetch social metadata if source is a social URL but metadata wasn't saved yet
-  useEffect(() => {
-    if (!isOpen || type !== 'Lead') return;
-    if (initialData?.sourceMetadata) {
-      setSourceMetadata(initialData.sourceMetadata);
-      return;
-    }
-    const rawSrc = initialData?.source || '';
-    // Extract iframe src if full embed code was stored
-    const iframeSrc = rawSrc.match(/src=["']([^"']+)["']/);
-    const src = iframeSrc ? iframeSrc[1] : rawSrc;
-    if (
-      src.includes('linkedin.com') ||
-      src.includes('threads.com') ||
-      src.includes('threads.net') ||
-      src.includes('facebook.com') ||
-      src.includes('fb.watch')
-    ) {
-      void fetchSourceMetadata(src);
-    }
-  }, [isOpen, type, initialData?.source, initialData?.sourceMetadata]);
-
   const fetchPipelines = async (pipelineType?: 'deals' | 'leads') => {
     const token = localStorage.getItem('token');
     const url = pipelineType ? `${CRM_API_URL}/crm/pipelines?type=${pipelineType}` : `${CRM_API_URL}/crm/pipelines`;
@@ -241,8 +215,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
 
   const sl = (k: string) => {
     if (type !== 'Lead') return false;
-    // Social outreach needs LinkedIn URL even if older layouts hid company fields.
-    if (k === 'linkedinUrl') return true;
     if (!leadFormKeys.has(k)) return false;
     if (!canViewCrmRevenue && k === 'annualRevenue') return false;
     return true;
@@ -378,27 +350,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   );
 
 
-  const fetchSourceMetadata = async (url: string) => {
-    if (!url || !url.startsWith('http')) return;
-    setIsFetchingMetadata(true);
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`${CRM_API_URL}/crm/fetch-link-metadata`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSourceMetadata(data);
-      }
-    } catch (err) {
-      console.error('[EditModal] Failed to fetch source metadata:', err);
-    } finally {
-      setIsFetchingMetadata(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -436,13 +387,12 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
               email: data.email,
               mobileNo: data.mobileNo,
               phone: data.phone,
-              linkedinUrl: data.linkedinUrl,
               opportunityListingUrl: data.opportunityListingUrl,
             });
       if (!idOk) {
         toast.error(
           type === 'Lead'
-            ? 'Add at least one of email, phone (mobile or alternate), LinkedIn URL, or a job/freelance listing URL (https).'
+            ? 'Add at least one of email, phone (mobile or alternate), or a job/freelance listing URL (https).'
             : 'Add at least one of email, phone (mobile or alternate), or LinkedIn URL so we can reach this contact.',
         );
         setLoading(false);
@@ -534,9 +484,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
         const p = initialData.pipeline;
         payload.pipeline = typeof p === 'object' && p && '_id' in p ? (p as any)._id : p;
       }
-      if (sourceMetadata) {
-        payload.sourceMetadata = sourceMetadata;
-      }
       if (payload.relatedService === '') payload.relatedService = null;
     }
 
@@ -553,9 +500,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       }
       if (payload.annualRevenue !== undefined && payload.annualRevenue !== '') {
         payload.annualRevenue = Number(payload.annualRevenue);
-      }
-      if (sourceMetadata) {
-        payload.sourceMetadata = sourceMetadata;
       }
       if (payload.organization === '' || payload.organization === 'Select organization...') {
         payload.organization = null;
@@ -654,7 +598,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                     <Settings2 size={13} className="text-[var(--text-muted)]" /> Fields
                   </button>
                 </div>
-                {(sl('salutation') || sl('firstName') || sl('lastName') || sl('email') || sl('additionalEmails') || sl('mobileNo') || sl('phone') || sl('gender') || sl('linkedinUrl') || sl('twitterHandle')) && (
+                {(sl('salutation') || sl('firstName') || sl('lastName') || sl('email') || sl('additionalEmails') || sl('mobileNo') || sl('phone') || sl('gender') || sl('twitterHandle')) && (
                   <CrmFormSection title="Contact Information" defaultOpen>
                     <CrmFormGrid>
                       {sl('salutation') && <FormItem label="Salutation" name="salutation" type="select" options={['Mr', 'Ms', 'Mrs', 'Dr']} defaultValue={initialData.salutation} />}
@@ -672,14 +616,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                       {sl('mobileNo') && <FormItem label="Mobile No" name="mobileNo" type="phone" defaultValue={initialData.mobileNo} />}
                       {sl('phone') && <FormItem label="Phone (alternate)" name="phone" defaultValue={initialData.phone} />}
                       {sl('gender') && <FormItem label="Gender" name="gender" type="select" options={['Male', 'Female', 'Other']} defaultValue={initialData.gender} />}
-                      {sl('linkedinUrl') && (
-                        <FormItem
-                          label="LinkedIn URL"
-                          name="linkedinUrl"
-                          defaultValue={initialData.linkedinUrl}
-                          placeholder="https://linkedin.com/in/username"
-                        />
-                      )}
                       {sl('twitterHandle') && (
                         <FormItem
                           label="X (Twitter) handle"
@@ -691,16 +627,9 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                     </CrmFormGrid>
                   </CrmFormSection>
                 )}
-                {(sl('organization') || sl('jobTitle') || sl('industry') || sl('website') || sl('noOfEmployees') || sl('annualRevenue') || sl('territory') || sl('relatedService')) && (
-                  <CrmFormSection title="Company Information" defaultOpen={false}>
+                {(sl('pipeline') || sl('stage') || sl('status') || sl('callStatus') || sl('leadOwner') || sl('relatedService')) && (
+                  <CrmFormSection title="Lead Information" defaultOpen={false}>
                     <CrmFormGrid>
-                      {sl('organization') && <FormItem label="Organization" name="organization" defaultValue={initialData.organization} />}
-                      {sl('jobTitle') && <FormItem label="Job Title" name="jobTitle" defaultValue={initialData.jobTitle} />}
-                      {sl('industry') && <FormItem label="Industry" name="industry" defaultValue={initialData.industry} />}
-                      {sl('website') && <FormItem label="Website" name="website" defaultValue={initialData.website} />}
-                      {sl('noOfEmployees') && <FormItem label="No. of Employees" name="noOfEmployees" type="select" options={['1-10', '11-50', '51-200', '201-500', '500+']} defaultValue={initialData.noOfEmployees} />}
-                      {sl('annualRevenue') && <FormItem label="Annual Revenue" name="annualRevenue" type="number" defaultValue={initialData.annualRevenue} />}
-                      {sl('territory') && <FormItem label="Territory" name="territory" defaultValue={initialData.territory} />}
                       {sl('relatedService') && (
                         <FormItem
                           label="Related service"
@@ -710,12 +639,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           defaultValue={leadRelatedSvcId}
                         />
                       )}
-                    </CrmFormGrid>
-                  </CrmFormSection>
-                )}
-                {(sl('pipeline') || sl('stage') || sl('status') || sl('callStatus') || sl('leadOwner') || sl('source')) && (
-                  <CrmFormSection title="Lead Information" defaultOpen={false}>
-                    <CrmFormGrid>
                       {sl('pipeline') && (
                         <div className="space-y-1.5">
                           <label className={CRM_HS_LABEL_CLASS}>Pipeline</label>
@@ -775,30 +698,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                         ) : (
                           <FormItem label="Lead Owner" name="leadOwner" defaultValue={initialData.leadOwner} placeholder="First Last" />
                         ))}
-                      {sl('source') && (
-                        <div className="sm:col-span-2 space-y-1">
-                          <FormItem
-                            label="Lead Source"
-                            name="source"
-                            defaultValue={initialData.source}
-                            onBlurField={(e: any) => {
-                              let val = (e.target.value || '').trim();
-                              const iframeSrc = val.match(/src=["']([^"']+)["']/);
-                              if (iframeSrc) { val = iframeSrc[1]; e.target.value = val; }
-                              if (val && (val.includes('linkedin.com') || val.includes('threads.com') || val.includes('threads.net') || val.includes('facebook.com') || val.includes('fb.watch'))) {
-                                void fetchSourceMetadata(val);
-                              }
-                            }}
-                          />
-                          {isFetchingMetadata && (
-                            <div className="mt-2 text-xs font-medium text-[var(--primary)] animate-pulse flex items-center gap-2 px-1">
-                              <Loader2 size={12} className="animate-spin" />
-                              Fetching post content...
-                            </div>
-                          )}
-                          {sourceMetadata && <SocialPostPreview metadata={sourceMetadata} />}
-                        </div>
-                      )}
                     </CrmFormGrid>
                   </CrmFormSection>
                 )}

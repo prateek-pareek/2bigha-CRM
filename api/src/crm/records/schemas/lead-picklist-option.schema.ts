@@ -34,6 +34,13 @@ export class LeadPicklistOption {
 
   @Prop({ type: Types.ObjectId })
   deletedBy?: Types.ObjectId;
+
+  /** Who created this option — surfaced on the Groups page ("created by"). */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  createdBy?: Types.ObjectId;
+
+  @Prop({ trim: true })
+  createdByName?: string;
 }
 
 export const LeadPicklistOptionSchema = SchemaFactory.createForClass(

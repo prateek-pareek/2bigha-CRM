@@ -34,6 +34,33 @@ export class PropertyListingsController {
     return this.listingsService.stats();
   }
 
+  /** Leads-table batch counts (property + farm) — avoids N+1 calls per row. */
+  @Post('counts-by-lead')
+  @Permissions('property_listings:read')
+  countsByLead(@Body() body: { ids?: string[] }) {
+    return this.listingsService.countsByLeadIds(body?.ids || []);
+  }
+
+  /** Agent Performance leaderboard — properties/farms listed per agent, merged client-side. */
+  @Get('counts-by-agent')
+  @Permissions('property_listings:read')
+  countsByAgent(@Query('dateFrom') dateFrom?: string, @Query('dateTo') dateTo?: string) {
+    return this.listingsService.countsByCreatedBy({ dateFrom, dateTo });
+  }
+
+  /**
+   * Transfer Lead — full ownership transfer to another agent, blocked once
+   * the lead already has ≥1 property/farm listed (per the FRD's restriction).
+   */
+  @Post('transfer-lead/:leadId')
+  @Permissions('leads:write')
+  transferLead(
+    @Param('leadId') leadId: string,
+    @Body() body: { ownerName?: string },
+  ) {
+    return this.listingsService.transferLead(leadId, body?.ownerName || '');
+  }
+
   @Get(':id')
   @Permissions('property_listings:read')
   findOne(@Param('id') id: string) {

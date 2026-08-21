@@ -21,7 +21,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
   },
   {
     name: 'get_lead',
-    description: 'Fetch a lead by MongoDB id with pipeline, stage, score, and custom fields.',
+    description: 'Fetch a lead by MongoDB id with pipeline, stage, and custom fields.',
     input_schema: {
       type: 'object',
       properties: { leadId: { type: 'string' } },
@@ -41,19 +41,6 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
     name: 'get_record_context',
     description:
       'Rich context for the current record: agent memory, email engagement summary, recent activities.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        recordType: { type: 'string', enum: ['Lead', 'Deal', 'Contact'] },
-        recordId: { type: 'string' },
-      },
-      required: ['recordType', 'recordId'],
-    },
-  },
-  {
-    name: 'get_playbook_guidance',
-    description:
-      'Get applicable sales playbook recommendations and step guidance for a record.',
     input_schema: {
       type: 'object',
       properties: {
@@ -96,7 +83,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
       properties: {
         module: {
           type: 'string',
-          enum: ['leads', 'contacts', 'deals', 'platform-opportunities'],
+          enum: ['leads', 'contacts', 'deals'],
         },
         entityId: { type: 'string' },
         kind: { type: 'string', enum: ['proposal', 'quotation'] },
@@ -113,7 +100,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
       properties: {
         module: {
           type: 'string',
-          enum: ['leads', 'contacts', 'deals', 'platform-opportunities'],
+          enum: ['leads', 'contacts', 'deals'],
         },
         entityId: { type: 'string' },
         instructions: { type: 'string' },
@@ -172,15 +159,6 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
         stageName: { type: 'string' },
       },
       required: ['dealId', 'stageName'],
-    },
-  },
-  {
-    name: 'recalculate_lead_score',
-    description: 'Refresh heuristic lead score for a lead.',
-    input_schema: {
-      type: 'object',
-      properties: { leadId: { type: 'string' } },
-      required: ['leadId'],
     },
   },
   {
@@ -258,7 +236,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
         accountId: { type: 'string' },
         module: {
           type: 'string',
-          enum: ['leads', 'contacts', 'deals', 'platform-opportunities'],
+          enum: ['leads', 'contacts', 'deals'],
         },
         entityId: { type: 'string' },
         to: { type: 'string' },
@@ -301,7 +279,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
     input_schema: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['leads', 'deals', 'platform_opportunities'] },
+        type: { type: 'string', enum: ['leads', 'deals'] },
       },
     },
   },
@@ -331,15 +309,6 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
         limit: { type: 'number' },
       },
       required: ['module', 'entityId'],
-    },
-  },
-  {
-    name: 'get_playbook_detail',
-    description: 'Full playbook content and checklist steps for a playbook id.',
-    input_schema: {
-      type: 'object',
-      properties: { playbookId: { type: 'string' } },
-      required: ['playbookId'],
     },
   },
   {

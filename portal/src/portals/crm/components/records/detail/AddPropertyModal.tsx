@@ -45,16 +45,26 @@ type Props = {
   leadId?: string;
   leadName?: string;
   onSuccess?: (property: any) => void;
+  /** 'Farm' opens this same form pre-set to the Farm property type ("Add Farm" quick action). */
+  defaultPropertyType?: string;
 };
 
-/** Create a property listing linked to a lead, opened from the lead detail page. */
-export default function AddPropertyModal({ open, onClose, leadId, leadName, onSuccess }: Props) {
+/** Create a property listing linked to a lead, opened from the lead detail page (or as "Add Farm" when defaultPropertyType is 'Farm'). */
+export default function AddPropertyModal({
+  open,
+  onClose,
+  leadId,
+  leadName,
+  onSuccess,
+  defaultPropertyType = "Apartment",
+}: Props) {
+  const isFarm = defaultPropertyType === "Farm";
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setDraft(EMPTY_DRAFT);
-  }, [open]);
+    if (open) setDraft({ ...EMPTY_DRAFT, propertyType: defaultPropertyType });
+  }, [open, defaultPropertyType]);
 
   if (!open) return null;
 
@@ -120,7 +130,7 @@ export default function AddPropertyModal({ open, onClose, leadId, leadName, onSu
               <Building2 size={16} />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-[var(--text-main)]">Add property</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-main)]">{isFarm ? "Add farm" : "Add property"}</h3>
               <p className="text-xs text-[var(--text-muted)]">
                 {leadName ? `Linked to ${leadName}` : leadId ? "Linked to this lead" : "Not linked to a lead"}
               </p>
@@ -261,7 +271,7 @@ export default function AddPropertyModal({ open, onClose, leadId, leadName, onSu
           </CrmButton>
           <CrmButton type="button" disabled={saving} onClick={() => void save()} className="gap-2">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Building2 size={14} />}
-            {saving ? "Saving…" : "Add property"}
+            {saving ? "Saving…" : isFarm ? "Add farm" : "Add property"}
           </CrmButton>
         </div>
       </div>

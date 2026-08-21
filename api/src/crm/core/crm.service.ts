@@ -19,10 +19,6 @@ import {
 } from '../schemas/organization.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import { Client, ClientDocument } from '../schemas/client.schema';
-import {
-  PlatformOpportunity,
-  PlatformOpportunityDocument,
-} from '../schemas/platform-opportunity.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
 import {
   CustomField,
@@ -34,7 +30,6 @@ import { PipelinesService } from './pipelines.service';
 import { WorkflowsService } from '../automation/workflows.service';
 import { LeadEngagementAutomationService } from '../automation/lead-engagement-automation.service';
 import { DealEngagementAutomationService } from '../automation/deal-engagement-automation.service';
-import { LeadScoringService } from './lead-scoring.service';
 import { appendCrmListFilters, CrmFilterCriterion } from '../shared/crm-list-filters';
 import {
   CRM_BUILTIN_OPPORTUNITY_SOURCE_PLATFORMS,
@@ -139,8 +134,9 @@ import {
   unionObjectIdStrings,
 } from '../shared/crm-duplicate.util';
 import { SalesAgentTriggerService } from '../sales-agent/sales-agent-cron.service';
-import { DomainCompanySyncService } from '../admin/domain-company-sync.service';
 import { AssociationsService } from '../associations/associations.service';
+import { LeadIntentService } from '../records/lead-intent.service';
+import { ExportQuotaService } from '../admin/export-quota.service';
 
 type ImportDuplicateStrategy = 'create' | 'skip' | 'merge' | 'replace';
 type ImportRowOutcome = 'created' | 'merged' | 'replaced' | 'skipped';
@@ -158,8 +154,6 @@ export class CRMService {
     private contactModel: Model<ContactDocument>,
     @InjectModel(Client.name, 'crmConnection')
     private clientModel: Model<ClientDocument>,
-    @InjectModel(PlatformOpportunity.name, 'crmConnection')
-    private platformOpportunityModel: Model<PlatformOpportunityDocument>,
     @InjectModel(Activity.name, 'crmConnection')
     private activityModel: Model<ActivityDocument>,
     @InjectModel(CustomField.name, 'crmConnection')
@@ -189,7 +183,6 @@ export class CRMService {
     private readonly workflowsService: WorkflowsService,
     private readonly leadEngagementAutomation: LeadEngagementAutomationService,
     private readonly dealEngagementAutomation: DealEngagementAutomationService,
-    private readonly leadScoringService: LeadScoringService,
     private readonly inboxIdleService: InboxIdleService,
     @Inject(PM_PROGRESS_READ_PORT)
     private readonly pmProgressReadService: PmProgressReadPort,
@@ -199,8 +192,9 @@ export class CRMService {
     private readonly salesAgentTrigger: SalesAgentTriggerService,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly mailService: MailService,
-    private readonly domainCompanySync: DomainCompanySyncService,
     private readonly associationsService: AssociationsService,
+    private readonly leadIntentService: LeadIntentService,
+    private readonly exportQuotaService: ExportQuotaService,
   ) { }
 
   private notifySalesAgent(event: {
@@ -320,14 +314,12 @@ export class CRMService {
 
     if (fieldKey === 'stage' || fieldKey === 'status') {
       // Contacts/leads both have stage; contacts share lead pipelines.
-      const types: Array<'leads' | 'deals' | 'platform_opportunities'> =
+      const types: Array<'leads' | 'deals'> =
         moduleName === 'leads' || moduleName === 'contacts'
           ? ['leads']
           : moduleName === 'deals'
             ? ['deals']
-            : moduleName === 'platform-opportunities'
-              ? ['platform_opportunities']
-              : [];
+            : [];
 
       const stages: string[] = [];
       for (const type of types) {
@@ -359,7 +351,6 @@ export class CRMService {
       case 'organizations': model = this.organizationModel; break;
       case 'contacts': model = this.contactModel; break;
       case 'clients': model = this.clientModel; break;
-      case 'platform-opportunities': model = this.platformOpportunityModel; break;
       default: return [];
     }
 
@@ -377,7 +368,7 @@ export class CRMService {
     const allowed = new Set([
       'firstName', 'lastName', 'email', 'organization', 'stage', 'status', 'phone',
       'mobileNo', 'jobTitle', 'source', 'industry', 'annualRevenue', 'noOfEmployees',
-      'territory', 'linkedinUrl', 'twitterHandle', 'relatedService', 'leadScore',
+      'territory', 'linkedinUrl', 'twitterHandle', 'relatedService',
       'leadOwner', 'telegram', 'gender', 'address', 'name', 'website', 'title',
       'dealValue', 'probability', 'dealOwner', 'contactPerson', 'expectedClosureDate',
       'closedDate', 'currency', 'content', 'type', 'createdAt', 'subject', 'from', 'to',
@@ -1821,16 +1812,6 @@ export class CRMService {
     const safe = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(`linkedin\\.com/in/${safe}(/|$|\\?)`, 'i');
 
-    const lead = await this.leadModel
-      .findOne({
-        _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
-        linkedinUrl: { $regex: re },
-      })
-      .lean()
-      .exec();
-    if (lead && linkedInProfileKey(lead.linkedinUrl) === key)
-      return { kind: 'Lead', doc: lead };
-
     const contact = await this.contactModel
       .findOne({
         _id: { $nin: this.toObjectIdSet(excludeContactIds) },
@@ -1931,7 +1912,9 @@ export class CRMService {
       }
     } else if (!hasAtLeastOneContactOrPortalListing(merged)) {
       throw new BadRequestException(
-        'Add at least one of email, phone (mobile or alternate), LinkedIn URL, or a valid https job/freelance listing URL so we can track this prospect.',
+        opts.entity === 'lead'
+          ? 'Add at least one of email, phone (mobile or alternate), or a valid https job/freelance listing URL so we can track this prospect.'
+          : 'Add at least one of email, phone (mobile or alternate), LinkedIn URL, or a valid https job/freelance listing URL so we can track this prospect.',
       );
     }
 
@@ -2134,8 +2117,6 @@ export class CRMService {
       mobileNo: lead.mobileNo || undefined,
       organization: lead.organization || undefined,
       jobTitle: lead.jobTitle || undefined,
-      linkedinUrl: lead.linkedinUrl || undefined,
-      source: lead.source || undefined,
       industry: lead.industry || undefined,
       annualRevenue: lead.annualRevenue ?? undefined,
       noOfEmployees: lead.noOfEmployees || undefined,
@@ -2146,13 +2127,7 @@ export class CRMService {
       status: lead.status || undefined,
       stage: lead.stage || undefined,
       pipeline: lead.pipeline || undefined,
-      sourceMetadata: lead.sourceMetadata || undefined,
     };
-    if (lead.leadScore != null && typeof lead.leadScore === 'number') {
-      (patch as any).leadScore = lead.leadScore;
-      (patch as any).leadScoreUpdatedAt = lead.leadScoreUpdatedAt;
-      (patch as any).leadScoreBreakdown = lead.leadScoreBreakdown;
-    }
     if (lead.converted !== undefined && lead.converted !== null) {
       patch.converted = !!lead.converted;
     }
@@ -2290,9 +2265,9 @@ export class CRMService {
    * contact's `sourceLead` (or a lead matched by email if sourceLead is
    * unset) — does not fan out across every entry in `associatedLeads`.
    *
-   * Deliberately excludes leadScore* (lead-computed, one-way onto Contact)
-   * and `converted`/`status`/`stage` (pipeline progression is lead-owned
-   * state; a contact-side edit shouldn't silently move the lead's stage).
+   * Deliberately excludes `converted`/`status`/`stage` (pipeline progression
+   * is lead-owned state; a contact-side edit shouldn't silently move the
+   * lead's stage).
    */
   private async syncLeadFromContact(contact: any): Promise<any> {
     const email = (contact?.email || '').trim();
@@ -2336,8 +2311,6 @@ export class CRMService {
       mobileNo: contact.mobileNo || undefined,
       organization: orgName,
       jobTitle: contact.jobTitle || undefined,
-      linkedinUrl: contact.linkedinUrl || undefined,
-      source: contact.source || undefined,
       industry: contact.industry || undefined,
       annualRevenue: contact.annualRevenue ?? undefined,
       noOfEmployees: contact.noOfEmployees || undefined,
@@ -2345,7 +2318,6 @@ export class CRMService {
       website: contact.website || undefined,
       territory: contact.territory || undefined,
       image: contact.image || undefined,
-      sourceMetadata: contact.sourceMetadata || undefined,
     };
     if (Array.isArray(contact.additionalEmails) && contact.additionalEmails.length) {
       patch.additionalEmails = contact.additionalEmails;
@@ -2581,6 +2553,22 @@ export class CRMService {
     compare?: string,
   ) {
     return this.reportingService.getLeadsDashboardAnalytics(days, owner, compare);
+  }
+
+  async getAgentPerformanceSummary(agentId: string) {
+    return this.reportingService.getAgentPerformanceSummary(agentId);
+  }
+
+  async getAgentPerformanceLeaderboard(window: string) {
+    return this.reportingService.getAgentPerformanceLeaderboard(window);
+  }
+
+  async getAgentTargets() {
+    return this.reportingService.getAgentTargets();
+  }
+
+  async upsertAgentTarget(agentId: string, patch: Record<string, number>) {
+    return this.reportingService.upsertAgentTarget(agentId, patch);
   }
 
   async getSalesDepartmentHealth(window: string = 'this_week', owner?: string) {
@@ -2907,9 +2895,6 @@ export class CRMService {
 
   // --- Leads ---
   async createLead(dto: any, user?: any): Promise<Lead> {
-    delete dto.leadScore;
-    delete dto.leadScoreUpdatedAt;
-    delete dto.leadScoreBreakdown;
     if (!canViewCrmRevenue(user)) {
       delete dto.annualRevenue;
     }
@@ -2969,6 +2954,15 @@ export class CRMService {
       const parsed = dto.nextFollowUpAt ? new Date(dto.nextFollowUpAt) : null;
       dto.nextFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
     }
+    if (dto.leadIntents !== undefined) {
+      dto.leadIntents = Array.isArray(dto.leadIntents)
+        ? Array.from(new Set(dto.leadIntents.map((v: unknown) => String(v || '').trim()).filter(Boolean)))
+        : [];
+    }
+    if (dto.leadIntentFollowUpAt !== undefined) {
+      const parsed = dto.leadIntentFollowUpAt ? new Date(dto.leadIntentFollowUpAt) : null;
+      dto.leadIntentFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
+    }
     if (dto.phone) dto.phone = this.sanitizePhone(dto.phone);
     if (dto.mobileNo) dto.mobileNo = this.sanitizePhone(dto.mobileNo);
     if (dto.twitterHandle !== undefined) {
@@ -2993,6 +2987,17 @@ export class CRMService {
     );
 
     const lead = await new this.leadModel(dto).save();
+
+    // Log the Lead Intent history event for analytics (Lead.leadIntents itself was already saved above).
+    if (dto.leadIntents?.length) {
+      await this.leadIntentService.recordIntent(
+        String(lead._id),
+        dto.leadIntents,
+        dto.leadIntentFollowUpAt,
+        'add_lead_form',
+        user,
+      );
+    }
 
     // 0. Link the Client picked/created in the Add Lead client-selection step (optional).
     if (dto.clientId) {
@@ -3067,14 +3072,6 @@ export class CRMService {
       recordId: String(lead._id),
       user,
     });
-    try {
-      await this.leadScoringService.refreshLeadScore(String(lead._id));
-    } catch (err: any) {
-      console.error(
-        '[CRMService] lead score refresh failed:',
-        err?.message || err,
-      );
-    }
     void this.leadEngagementAutomation.onLeadUpdated(String(lead._id));
     const fresh = await this.leadModel
       .findById(lead._id)
@@ -3249,7 +3246,7 @@ export class CRMService {
     );
     const skip = (page - 1) * pageSize;
     const outreachSelect =
-      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields leadScore mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source';
+      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt';
     const [data, count] = await Promise.all([
       this.leadModel
         .find(filter)
@@ -3335,9 +3332,6 @@ export class CRMService {
       Object.keys(dto || {}).filter((k) => (dto as any)[k] !== undefined),
     );
     delete dto.recordId;
-    delete dto.leadScore;
-    delete dto.leadScoreUpdatedAt;
-    delete dto.leadScoreBreakdown;
     if (!canViewCrmRevenue(user)) {
       delete dto.annualRevenue;
     }
@@ -3371,6 +3365,20 @@ export class CRMService {
       dto.nextFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
       // A changed/cleared follow-up date needs a fresh reminder cycle.
       dto.followUpReminderSentAt = null;
+    }
+    let pendingIntentUpdate: { intents: string[]; followUpAt?: Date } | null = null;
+    if (dto.leadIntents !== undefined) {
+      const rawIntents: unknown[] = Array.isArray(dto.leadIntents) ? dto.leadIntents : [];
+      const cleanIntents: string[] = Array.from(
+        new Set(rawIntents.map((v) => String(v || '').trim()).filter(Boolean)),
+      );
+      dto.leadIntents = cleanIntents;
+      if (dto.leadIntentFollowUpAt !== undefined) {
+        const parsed = dto.leadIntentFollowUpAt ? new Date(dto.leadIntentFollowUpAt) : null;
+        dto.leadIntentFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+      }
+      // Logged after the update succeeds so the analytics event only fires on a real change.
+      pendingIntentUpdate = { intents: cleanIntents, followUpAt: dto.leadIntentFollowUpAt || undefined };
     }
 
     const leadAssocKeys = [
@@ -3514,6 +3522,18 @@ export class CRMService {
       .findByIdAndUpdate(id, dto, { returnDocument: 'after' })
       .exec();
 
+    if (updated && pendingIntentUpdate && pendingIntentUpdate.intents.length) {
+      // Lead.leadIntents was already persisted above; this just appends the
+      // analytics history event(s) for the Lead Intent Analytics dashboard.
+      await this.leadIntentService.recordIntent(
+        id,
+        pendingIntentUpdate.intents,
+        pendingIntentUpdate.followUpAt,
+        'add_lead_form',
+        user,
+      );
+    }
+
     if (user && updated && oldLead) {
       const changes: string[] = [];
       const fieldLabels: Record<string, string> = {
@@ -3524,12 +3544,10 @@ export class CRMService {
         phone: 'Phone',
         organization: 'Company',
         jobTitle: 'Job Title',
-        source: 'Source',
         industry: 'Industry',
         annualRevenue: 'Annual Revenue',
         noOfEmployees: 'No. of Employees',
         website: 'Website',
-        linkedinUrl: 'LinkedIn URL',
         territory: 'Territory',
         status: 'Status',
         stage: 'Stage',
@@ -3642,16 +3660,6 @@ export class CRMService {
             user,
           });
         }
-        if ((oldLead as any).source !== (updated as any).source) {
-          this.workflowsService.dispatch({
-            trigger: 'lead_source_changed',
-            entityType: 'Lead',
-            entityId: updated._id,
-            record: rec,
-            previous: prev,
-            user,
-          });
-        }
         if ((oldLead as any).leadOwner !== (updated as any).leadOwner) {
           this.workflowsService.dispatch({
             trigger: 'lead_owner_changed',
@@ -3665,14 +3673,6 @@ export class CRMService {
       }
     }
     if (updated) {
-      try {
-        await this.leadScoringService.refreshLeadScore(String(updated._id));
-      } catch (err: any) {
-        console.error(
-          '[CRMService] lead score refresh failed:',
-          err?.message || err,
-        );
-      }
       void this.leadEngagementAutomation.onLeadUpdated(String(updated._id));
       await this.bustCrmCache('leads', String(updated._id));
       return this.leadModel
@@ -3681,22 +3681,6 @@ export class CRMService {
         .exec();
     }
     return updated;
-  }
-
-  async recalculateLeadScore(id: string, user?: any): Promise<Lead | null> {
-    const lead = await this.findOneLead(id, user);
-    if (!lead) return null;
-    const resolvedId = await this.resolveDocumentId(this.leadModel, id);
-    if (!resolvedId) return null;
-    try {
-      await this.leadScoringService.refreshLeadScore(resolvedId);
-    } catch (err: any) {
-      console.error(
-        '[CRMService] lead score refresh failed:',
-        err?.message || err,
-      );
-    }
-    return this.findOneLead(id, user);
   }
 
   // --- Deals ---
@@ -5678,18 +5662,6 @@ export class CRMService {
       record: this.entityPlain(contact),
       user,
     });
-    // Auto-create/link company from corporate email domain (skip gmail/outlook/etc.)
-    try {
-      await this.domainCompanySync.linkContactByEmail(
-        contact._id,
-        (contact as any).email,
-      );
-    } catch (err: any) {
-      console.error(
-        '[CRMService] domain company link on create failed:',
-        err?.message || err,
-      );
-    }
     await this.bustCrmCache('contacts', String(contact._id));
     return this.contactModel.findById(contact._id).exec() as Promise<Contact>;
   }
@@ -6188,17 +6160,6 @@ export class CRMService {
       }
     }
     if (updated) {
-      try {
-        await this.domainCompanySync.linkContactByEmail(
-          updated._id,
-          (updated as any).email,
-        );
-      } catch (err: any) {
-        console.error(
-          '[CRMService] domain company link on update failed:',
-          err?.message || err,
-        );
-      }
       await this.syncLeadFromContactSafe(updated);
       await this.bustCrmCache('contacts', String(updated._id));
       return this.contactModel.findById(updated._id).exec();
@@ -6247,8 +6208,6 @@ export class CRMService {
       mongoId = await this.resolveDocumentId(this.organizationModel, s);
     else if (t === 'Client')
       mongoId = await this.resolveDocumentId(this.clientModel, s);
-    else if (t === 'PlatformOpportunity')
-      mongoId = await this.resolveDocumentId(this.platformOpportunityModel, s);
 
     return mongoId ? new Types.ObjectId(mongoId) : undefined;
   }
@@ -6445,17 +6404,6 @@ export class CRMService {
       dto.assignee = new Types.ObjectId(dto.assignee);
     }
     const activity = await new this.activityModel(dto).save();
-
-    if (dto.relatedType === 'Lead' && dto.relatedTo) {
-      void this.leadScoringService
-        .refreshLeadScore(String(dto.relatedTo))
-        .catch((err: any) =>
-          console.error(
-            '[CRMService] lead score refresh failed:',
-            err?.message || err,
-          ),
-        );
-    }
 
     // Asynchronous notification (tasks: prefer assignee; else author)
     void (async () => {
@@ -6929,7 +6877,6 @@ export class CRMService {
             mobileNo: lead.mobileNo,
             jobTitle: lead.jobTitle,
             organization: lead.organization,
-            linkedinUrl: lead.linkedinUrl,
           };
           if (Object.keys(cf).length) patch.customFields = cf;
           contact = await this.contactModel
@@ -6947,7 +6894,6 @@ export class CRMService {
           mobileNo: lead.mobileNo,
           jobTitle: lead.jobTitle,
           organization: lead.organization,
-          linkedinUrl: lead.linkedinUrl,
           ...(Object.keys(cfNew).length ? { customFields: cfNew } : {}),
           recordId: await this.nextRecordId(this.contactModel),
         });
@@ -7033,7 +6979,6 @@ export class CRMService {
             mobileNo: lead.mobileNo,
             jobTitle: lead.jobTitle,
             organization: lead.organization,
-            linkedinUrl: lead.linkedinUrl,
           };
           if (Object.keys(cf).length) patch.customFields = cf;
           await this.contactModel
@@ -7052,7 +6997,6 @@ export class CRMService {
             mobileNo: lead.mobileNo,
             organization: lead.organization,
             jobTitle: lead.jobTitle,
-            linkedinUrl: lead.linkedinUrl,
             ...(Object.keys(cfNew).length ? { customFields: cfNew } : {}),
             recordId: await this.nextRecordId(this.contactModel),
           });
@@ -7420,7 +7364,6 @@ export class CRMService {
         phone: contact?.phone || undefined,
         mobileNo: contact?.mobileNo || undefined,
         jobTitle: contact?.jobTitle || undefined,
-        linkedinUrl: contact?.linkedinUrl || undefined,
         organization: orgName,
         annualRevenue: deal.dealValue || undefined,
         pipeline: resolvedPipelineId,
@@ -7428,7 +7371,6 @@ export class CRMService {
         status: stage,
         converted: false,
         leadOwner: deal.dealOwner,
-        source: 'Deal conversion',
         associatedDeals: [dealOid],
         ...(org?._id
           ? { associatedOrganizations: [org._id] }
@@ -7685,7 +7627,9 @@ export class CRMService {
       ids?: string[];
       pipelineId?: string;
     },
+    user?: any,
   ): Promise<string> {
+    await this.exportQuotaService.checkQuota(user?.userId);
     let data: any[] = [];
     let headers: string[] = [];
     const selectedObjectIds = Array.isArray(options?.ids)
@@ -7720,7 +7664,6 @@ export class CRMService {
           'status',
           'email',
           'mobileNo',
-          'leadScore',
           'createdAt',
         ];
         break;
@@ -7785,6 +7728,11 @@ export class CRMService {
           .join(','),
       ),
     ];
+
+    await this.exportQuotaService.logExport(user, type, data.length, {
+      ids: options?.ids,
+      pipelineId: options?.pipelineId,
+    });
 
     return csvRows.join('\r\n');
   }

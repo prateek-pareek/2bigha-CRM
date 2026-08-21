@@ -9,7 +9,6 @@ export const WORKFLOW_TRIGGERS = [
   'lead_stage_changed',
   'lead_pipeline_changed',
   'lead_status_changed',
-  'lead_source_changed',
   'lead_owner_changed',
   /** First open of a tracked CRM email (pixel) for this lead */
   'lead_tracked_email_opened',

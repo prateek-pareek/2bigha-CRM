@@ -20,7 +20,6 @@ import {
 } from './crm-contract-ai-format.util';
 import { PipelinesService } from '../core/pipelines.service';
 import { InboxAccountsService } from '../inbox/inbox-accounts.service';
-import { PlatformOpportunitiesService } from '../opportunities/platform-opportunities.service';
 import { analyzeEmailSpamContent } from '../email/spam-word-checker';
 import { buildSpamAvoidancePromptSection } from '../email/spam-word-ai-prompt';
 import { AnthropicClientService } from '../../integrations/anthropic/anthropic-client.service';
@@ -37,8 +36,7 @@ type PersonModule = 'leads' | 'contacts';
 export type ProposalSourceModule =
   | 'leads'
   | 'contacts'
-  | 'deals'
-  | 'platform-opportunities';
+  | 'deals';
 type ProposalKind = 'proposal' | 'quotation';
 
 const TONE_HINTS: Record<string, string> = {
@@ -68,8 +66,6 @@ export class CrmAiService {
     private readonly pipelinesService: PipelinesService,
     @Inject(forwardRef(() => InboxAccountsService))
     private readonly inboxAccountsService: InboxAccountsService,
-    @Inject(forwardRef(() => PlatformOpportunitiesService))
-    private readonly platformOpportunitiesService: PlatformOpportunitiesService,
     private readonly anthropic: AnthropicClientService,
   ) {}
 
@@ -509,12 +505,6 @@ export class CrmAiService {
       if (!draft.clientName && org) draft.clientName = org;
       if (!draft.clientEmail && email) draft.clientEmail = email;
     }
-    if (module === 'platform-opportunities') {
-      const client = String(context.platformClientLabel || '').trim();
-      const title = String(context.title || '').trim();
-      if (!draft.clientName && client) draft.clientName = client;
-      if (!draft.title && title) draft.title = `Proposal: ${title}`;
-    }
     return draft;
   }
 
@@ -934,7 +924,6 @@ export class CrmAiService {
       leads: 'Lead',
       contacts: 'Contact',
       deals: 'Deal',
-      'platform-opportunities': 'Platform opportunity',
     };
     return `${labels[module] || 'Record'} not found`;
   }
@@ -961,17 +950,10 @@ export class CrmAiService {
       const context = await this.buildPersonContext('contacts', record);
       return { record, context };
     }
-    if (module === 'deals') {
-      const deal = await this.crmService.findOneDeal(entityId, user);
-      if (!deal) return { record: null, context: {} };
-      const record = JSON.parse(JSON.stringify(deal)) as Record<string, unknown>;
-      const context = await this.buildDealContext(record);
-      return { record, context };
-    }
-    const opp = await this.platformOpportunitiesService.findOne(entityId, user);
-    if (!opp) return { record: null, context: {} };
-    const record = JSON.parse(JSON.stringify(opp)) as Record<string, unknown>;
-    const context = this.buildPlatformOpportunityContext(record);
+    const deal = await this.crmService.findOneDeal(entityId, user);
+    if (!deal) return { record: null, context: {} };
+    const record = JSON.parse(JSON.stringify(deal)) as Record<string, unknown>;
+    const context = await this.buildDealContext(record);
     return { record, context };
   }
 
@@ -1042,32 +1024,6 @@ export class CrmAiService {
       contactJobTitle: contact?.jobTitle,
       associatedContacts: o.associatedContacts,
       customFields,
-    };
-  }
-
-  private buildPlatformOpportunityContext(o: Record<string, unknown>) {
-    const sm = o.sourceMetadata as Record<string, unknown> | undefined;
-    return {
-      recordType: 'platform_opportunity',
-      title: o.title,
-      opportunitySourcePlatform: o.opportunitySourcePlatform,
-      platformClientLabel: o.platformClientLabel,
-      opportunityListingUrl: o.opportunityListingUrl,
-      platformEngagementStatus: o.platformEngagementStatus,
-      notes: o.notes,
-      source: o.source,
-      ownerLabel: o.ownerLabel,
-      linkedInPost:
-        sm && typeof sm === 'object'
-          ? {
-              url: sm.url,
-              title: sm.title,
-              description: sm.description,
-              authorName: sm.authorName,
-              type: sm.type,
-            }
-          : null,
-      senderBusinessContext: PIPELINE_CATEGORY_CONTEXT.freelancer,
     };
   }
 

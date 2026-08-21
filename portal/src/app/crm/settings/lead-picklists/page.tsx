@@ -25,7 +25,7 @@ import { CRM_HS_CONTROL_CLASS, CRM_HS_LABEL_CLASS } from "@/components/crm/recor
 const LBL = CRM_HS_LABEL_CLASS;
 const INP = CRM_HS_CONTROL_CLASS;
 
-type ListKey = "leadCategory" | "group" | "checklistItem";
+type ListKey = "leadCategory" | "group" | "checklistItem" | "leadIntent";
 
 const TABS: { key: ListKey; label: string; blurb: string }[] = [
   {
@@ -36,12 +36,17 @@ const TABS: { key: ListKey; label: string; blurb: string }[] = [
   {
     key: "group",
     label: "Group",
-    blurb: "Powers the \"Group\" filter and the Add Lead \"Group\" dropdown (e.g. Seller, Buyer).",
+    blurb: "Powers the \"Group\" filter and the Add Lead \"Group\" dropdown (e.g. Seller, Buyer). Manage groups with lead counts on the Groups page.",
   },
   {
     key: "checklistItem",
     label: "Onboarding Checklist",
     blurb: "Powers the onboarding checklist shown on each lead's detail page — mark items done as you work the lead.",
+  },
+  {
+    key: "leadIntent",
+    label: "Lead Intent",
+    blurb: "Powers the Add Lead \"Lead Intent\" chips and the Call Activity Form's intent selection.",
   },
 ];
 

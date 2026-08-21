@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Target, Building2, Phone, EyeOff, ChevronDown, MapPin, Star, Lock, ThumbsUp, CheckCircle2 } from 'lucide-react';
+import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Building2, Phone, EyeOff, ChevronDown, MapPin, Lock, ThumbsUp, CheckCircle2, History } from 'lucide-react';
 import FollowUpSequenceModal from '@/components/crm/automation/playbooks/FollowUpSequenceModal';
 import FollowUpSequenceCard from '@/components/crm/automation/playbooks/FollowUpSequenceCard';
 import Timeline from '@/components/crm/inbox/Timeline';
@@ -14,26 +14,24 @@ import ScheduleMeetingModal from '@/components/crm/inbox/ScheduleMeetingModal';
 import CRMLeadRecordFields from '@/components/crm/records/forms/CRMLeadRecordFields';
 import CRMFieldLayoutCustomizer from '@/components/crm/records/forms/CRMFieldLayoutCustomizer';
 import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
-import { contactWhatsappUrl, contactLinkedInProfileUrl, contactLinkedInSourceUrl } from '@/lib/crm/crm-messaging-links';
+import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import LeadAssociationsPanel from '@/components/crm/records/associations/LeadAssociationsPanel';
 import LeadPropertiesPanel from '@/components/crm/records/associations/LeadPropertiesPanel';
 import AddPropertyModal from '@/components/crm/records/detail/AddPropertyModal';
 import LeadWhatsAppPanel from '@/components/crm/records/associations/LeadWhatsAppPanel';
 import LinkWhatsAppModal from '@/components/crm/records/detail/LinkWhatsAppModal';
-import { CRMLeadCompanySidebarCard } from '@/components/crm/records/associations/CRMCompanySidebarCard';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
-import CrmPlaybookPanel from '@/components/crm/automation/playbooks/CrmPlaybookPanel';
 import SalesAgentRecordPanel from '@/components/crm/sales/SalesAgentRecordPanel';
-import CrmPlaybookRecommendedBanner from '@/components/crm/automation/playbooks/CrmPlaybookRecommendedBanner';
 import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
 import CrmRecordOwnerCard from '@/components/crm/records/detail/CrmRecordOwnerCard';
 import LeadOnboardingChecklistCard from '@/components/crm/records/detail/LeadOnboardingChecklistCard';
+import LeadUpdateHistoryPanel from '@/components/crm/records/detail/LeadUpdateHistoryPanel';
 import CrmRecordPipelineStatus from '@/components/crm/records/detail/CrmRecordPipelineStatus';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
 import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
@@ -52,19 +50,13 @@ function WhatsAppGlyph({ className }: { className?: string }) {
   );
 }
 
-function LinkedInGlyph({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-    </svg>
-  );
-}
-
 export default function LeadDetailPage() {
   const { id } = useParams();
   const recordId = useMemo(() => crmRecordIdFromParams(id as string | string[]), [id]);
   const router = useRouter();
   const searchParams = useSearchParams();
+  /** "View" quick action (Lead Action Menu) — same detail page, edit entry points hidden. */
+  const isReadOnlyView = searchParams.get('readonly') === '1';
   const { hasAccess } = usePermissions();
   const [lead, setLead] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
@@ -82,6 +74,7 @@ export default function LeadDetailPage() {
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [isAddPropertyModalOpen, setIsAddPropertyModalOpen] = useState(false);
+  const [isAddFarmModalOpen, setIsAddFarmModalOpen] = useState(false);
   const [propertiesRefreshKey, setPropertiesRefreshKey] = useState(0);
   const [isLinkWhatsAppModalOpen, setIsLinkWhatsAppModalOpen] = useState(false);
   const [whatsappLinksRefreshKey, setWhatsappLinksRefreshKey] = useState(0);
@@ -94,8 +87,7 @@ export default function LeadDetailPage() {
   const [layoutTickRecord, setLayoutTickRecord] = useState(0);
   const [isSharing, setIsSharing] = useState(false);
   const [emailTracking, setEmailTracking] = useState<CrmEmailTrackingRow[]>([]);
-  const [activeTab, setActiveTab] = useState<'Activity' | 'Details'>('Activity');
-  const [scoreRefreshing, setScoreRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'Activity' | 'Details' | 'History'>('Activity');
   const [recordMetaLoaded, setRecordMetaLoaded] = useState(false);
   const entityId = useMemo(
     () => String((lead?._id ?? recordId) || ''),
@@ -109,11 +101,6 @@ export default function LeadDetailPage() {
     [customFieldDefs, layoutTickRecord]
   );
 
-  const recordFieldKeysForGrid = useMemo(
-    () => visibleRecordKeys.filter((k) => k !== 'organization'),
-    [visibleRecordKeys]
-  );
-
   const pipelineName = useMemo(() => {
     if (!lead?.pipeline) return undefined;
     const pid = typeof lead.pipeline === 'string' ? lead.pipeline : (lead.pipeline as any)?._id;
@@ -122,14 +109,6 @@ export default function LeadDetailPage() {
   }, [lead, pipelines]);
 
   const whatsappUrl = useMemo(() => (lead ? contactWhatsappUrl(lead) : null), [lead]);
-  const linkedInProfileUrl = useMemo(
-    () => (lead ? contactLinkedInProfileUrl(lead) : null),
-    [lead],
-  );
-  const linkedInSourceUrl = useMemo(
-    () => (lead ? contactLinkedInSourceUrl(lead) : null),
-    [lead],
-  );
 
   const fetchLead = async () => {
     const token = localStorage.getItem('token');
@@ -148,26 +127,6 @@ export default function LeadDetailPage() {
       const data = await res.json();
       setActivities(data || []);
     } catch (err) { console.error(err); }
-  };
-
-  const refreshLeadScore = async () => {
-    const token = localStorage.getItem('token');
-    if (!recordId || !token) return;
-    setScoreRefreshing(true);
-    try {
-      const res = await fetch(
-        `${CRM_API_URL}/crm/leads/${encodeURIComponent(recordId)}/recalculate-score`,
-        { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setLead(data);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setScoreRefreshing(false);
-    }
   };
 
   const fetchEmailTracking = useCallback(async (targetEntityId?: string) => {
@@ -392,7 +351,6 @@ export default function LeadDetailPage() {
     .sort((a: { order?: number }, b: { order?: number }) => (a.order ?? 0) - (b.order ?? 0))
     .map((s: { name: string }) => s.name)
     .filter(Boolean);
-  const highScore = lead.leadScore != null && Number(lead.leadScore) >= 70;
 
   const updateLeadStage = async (newStage: string) => {
     if (!newStage || newStage === stage || !hasAccess('leads:write')) return;
@@ -436,17 +394,6 @@ export default function LeadDetailPage() {
     },
   ];
 
-  if (linkedInSourceUrl && linkedInSourceUrl !== linkedInProfileUrl) {
-    quickActions.push({
-      id: 'linkedin-source',
-      label: 'LI source',
-      icon: <LinkedInGlyph className="h-3.5 w-3.5 text-[#0a66c2]" />,
-      href: linkedInSourceUrl,
-      external: true,
-      title: 'Open LinkedIn source post / capture URL',
-    });
-  }
-
   if (whatsappUrl) {
     quickActions.push({
       id: 'whatsapp',
@@ -489,6 +436,13 @@ export default function LeadDetailPage() {
       onClick: () => setIsMeetingModalOpen(true),
     },
     {
+      id: 'add-farm',
+      label: 'Farm',
+      icon: <MapPin size={14} />,
+      title: 'Add a farm linked to this lead',
+      onClick: () => setIsAddFarmModalOpen(true),
+    },
+    {
       id: 'add-property',
       label: 'Property',
       icon: <Building2 size={14} />,
@@ -498,13 +452,17 @@ export default function LeadDetailPage() {
   );
 
   const secondaryActions: CrmRecordQuickAction[] = [
-    {
-      id: 'edit',
-      label: 'Edit',
-      icon: <Edit2 size={14} />,
-      title: 'Edit lead',
-      onClick: () => setIsEditModalOpen(true),
-    },
+    ...(isReadOnlyView
+      ? []
+      : [
+          {
+            id: 'edit',
+            label: 'Edit',
+            icon: <Edit2 size={14} />,
+            title: 'Edit lead',
+            onClick: () => setIsEditModalOpen(true),
+          },
+        ]),
     {
       id: 'share',
       label: 'Share',
@@ -514,7 +472,7 @@ export default function LeadDetailPage() {
       onClick: async () => {
         const shareData = {
           title: `${displayName} - Lead`,
-          text: `${displayName}${lead.organization ? ` from ${lead.organization}` : ''}`,
+          text: displayName,
           url: window.location.href,
         };
 
@@ -541,6 +499,7 @@ export default function LeadDetailPage() {
   const recordTabs = [
     { id: 'Activity' as const, label: 'Activity', icon: MessageSquare },
     { id: 'Details' as const, label: 'Details', icon: Info },
+    { id: 'History' as const, label: 'History', icon: History },
   ];
 
   return (
@@ -615,16 +574,7 @@ export default function LeadDetailPage() {
             <div className="min-w-0">
               <h1 className={cn(crmRecordChrome.title, 'inline-flex flex-wrap items-center gap-2')}>
                 <span className="truncate">{displayName}</span>
-                {highScore ? (
-                  <Star size={16} className="shrink-0 fill-[var(--warning,#ffa201)] text-[var(--warning,#ffa201)]" aria-label="High score lead" />
-                ) : null}
               </h1>
-              {lead.organization ? (
-                <p className={cn(crmRecordChrome.metaLine, 'mt-1')}>
-                  <Building2 size={14} className="shrink-0 opacity-80" />
-                  <span className="truncate">{lead.organization}</span>
-                </p>
-              ) : null}
               {locationLine ? (
                 <p className={cn(crmRecordChrome.metaLine, 'mt-0.5')}>
                   <MapPin size={14} className="shrink-0 opacity-80" />
@@ -807,14 +757,16 @@ export default function LeadDetailPage() {
                     <Settings2 size={13} />
                     Layout
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--crm-radius-ui)] text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--hs-link)]"
-                    title="Edit"
-                  >
-                    <Edit2 size={14} />
-                  </button>
+                  {!isReadOnlyView ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditModalOpen(true)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--crm-radius-ui)] text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--hs-link)]"
+                      title="Edit"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                  ) : null}
                 </>
               }
             />
@@ -862,42 +814,21 @@ export default function LeadDetailPage() {
                       <User size={13} />
                       Lead properties
                     </h3>
-                    {lead.leadScore != null && !Number.isNaN(Number(lead.leadScore)) ? (
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-bold tabular-nums',
-                            Number(lead.leadScore) >= 70 && 'bg-emerald-50 text-emerald-800 border-emerald-200',
-                            Number(lead.leadScore) >= 40 &&
-                              Number(lead.leadScore) < 70 &&
-                              'bg-amber-50 text-amber-900 border-amber-200',
-                            Number(lead.leadScore) < 40 && 'bg-slate-100 text-slate-600 border-[var(--border-color)]',
-                          )}
-                        >
-                          <Target size={11} aria-hidden />
-                          {lead.leadScore}/100
-                        </span>
-                        {hasAccess('leads:write') ? (
-                          <button
-                            type="button"
-                            disabled={scoreRefreshing}
-                            onClick={() => void refreshLeadScore()}
-                            className="text-[11px] font-semibold text-[var(--hs-link)] hover:underline disabled:opacity-50"
-                          >
-                            {scoreRefreshing ? 'Updating…' : 'Recalculate'}
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
                   </div>
                   <CRMLeadRecordFields
                     lead={lead}
-                    visibleKeys={recordFieldKeysForGrid}
+                    visibleKeys={visibleRecordKeys}
                     customFieldDefs={customFieldDefs}
                     pipelineName={pipelineName}
                     onApplyEmailFromFinder={applyEmailFromFinder}
                     layout="grid"
                   />
+                </div>
+              )}
+
+              {activeTab === 'History' && (
+                <div className="animate-in fade-in duration-300">
+                  <LeadUpdateHistoryPanel entityId={entityId} bare emptyLabel="No updates have been recorded for this lead yet." />
                 </div>
               )}
             </div>
@@ -965,19 +896,9 @@ export default function LeadDetailPage() {
               recordLabel={displayName}
             />
           ) : null}
-          <CRMLeadCompanySidebarCard lead={lead} show={visibleRecordKeys.includes('organization')} />
           {entityId ? (
             <SalesAgentRecordPanel recordType="Lead" recordId={entityId} />
           ) : null}
-          <CrmPlaybookRecommendedBanner relatedTo={entityId} relatedType="Lead" />
-          <CrmPlaybookPanel
-            relatedTo={entityId}
-            relatedType="Lead"
-            onApplied={() => {
-              void fetchActivities();
-              void fetchEmailTracking();
-            }}
-          />
         </aside>
       </div>
 
@@ -1029,6 +950,14 @@ export default function LeadDetailPage() {
         onClose={() => setIsAddPropertyModalOpen(false)}
         leadId={entityId}
         leadName={`${lead.firstName || ''} ${lead.lastName || ''}`.trim()}
+        onSuccess={() => setPropertiesRefreshKey((k) => k + 1)}
+      />
+      <AddPropertyModal
+        open={isAddFarmModalOpen}
+        onClose={() => setIsAddFarmModalOpen(false)}
+        leadId={entityId}
+        leadName={`${lead.firstName || ''} ${lead.lastName || ''}`.trim()}
+        defaultPropertyType="Farm"
         onSuccess={() => setPropertiesRefreshKey((k) => k + 1)}
       />
       <LinkWhatsAppModal

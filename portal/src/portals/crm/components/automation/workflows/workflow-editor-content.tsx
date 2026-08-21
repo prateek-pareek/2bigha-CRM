@@ -72,7 +72,6 @@ const TRIGGERS = [
   { value: "lead_stage_changed", label: "Lead — stage changed" },
   { value: "lead_pipeline_changed", label: "Lead — pipeline changed" },
   { value: "lead_status_changed", label: "Lead — status changed" },
-  { value: "lead_source_changed", label: "Lead — source changed" },
   { value: "lead_owner_changed", label: "Lead — owner changed" },
   {
     value: "lead_tracked_email_opened",

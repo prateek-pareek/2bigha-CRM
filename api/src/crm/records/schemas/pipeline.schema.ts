@@ -13,7 +13,6 @@ export class Pipeline {
   type:
     | 'deals'
     | 'leads'
-    | 'platform_opportunities'
     | 'proposals'
     | 'quotations'
     | 'contracts'

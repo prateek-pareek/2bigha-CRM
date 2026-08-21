@@ -26,15 +26,6 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'gender', label: 'Gender' },
   { key: 'mobileNo', label: 'Mobile' },
   { key: 'phone', label: 'Phone (alternate)' },
-  { key: 'organization', label: 'Company', recordOnly: true },
-  { key: 'jobTitle', label: 'Job Title', recordOnly: true },
-  { key: 'website', label: 'Website', recordOnly: true },
-  { key: 'linkedinUrl', label: 'LinkedIn URL' },
-  { key: 'source', label: 'Lead Source' },
-  { key: 'industry', label: 'Industry', recordOnly: true },
-  { key: 'annualRevenue', label: 'Annual Revenue', recordOnly: true },
-  { key: 'noOfEmployees', label: 'No. of Employees', recordOnly: true },
-  { key: 'territory', label: 'Territory', recordOnly: true },
   { key: 'relatedService', label: 'Related service', recordOnly: true },
   /** Shown when editing a lead (create panel omits this field; API sets owner on create). */
   { key: 'leadOwner', label: 'Lead Owner' },
@@ -47,7 +38,6 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   /** Add Lead "Group" (Seller/Buyer) — options managed in Settings. */
   { key: 'group', label: 'Group' },
   { key: 'notes', label: 'Notes' },
-  { key: 'leadScore', label: 'Lead score', recordOnly: true },
   { key: 'createdAt', label: 'Created', recordOnly: true },
 ];
 
@@ -98,7 +88,6 @@ export const CONTACT_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'stage', label: 'Stage' },
   { key: 'status', label: 'Status (legacy)' },
   { key: 'converted', label: 'Converted', recordOnly: true },
-  { key: 'leadScore', label: 'Lead score', recordOnly: true },
   { key: 'image', label: 'Image URL', recordOnly: true },
   { key: 'telegram', label: 'Telegram', recordOnly: true },
   { key: 'address', label: 'Address', recordOnly: true },

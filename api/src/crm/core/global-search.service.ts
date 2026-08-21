@@ -9,10 +9,6 @@ import {
   OrganizationDocument,
 } from '../schemas/organization.schema';
 import { Client, ClientDocument } from '../schemas/client.schema';
-import {
-  PlatformOpportunity,
-  PlatformOpportunityDocument,
-} from '../schemas/platform-opportunity.schema';
 import { AppCacheService } from '../../redis/app-cache.service';
 import {
   buildTokenAndFilter,
@@ -37,7 +33,6 @@ type SearchSlice = {
   contacts: unknown[];
   organizations: unknown[];
   clients: unknown[];
-  platformOpportunities: unknown[];
 };
 
 @Injectable()
@@ -53,8 +48,6 @@ export class GlobalSearchService {
     private orgModel: Model<OrganizationDocument>,
     @InjectModel(Client.name, 'crmConnection')
     private clientModel: Model<ClientDocument>,
-    @InjectModel(PlatformOpportunity.name, 'crmConnection')
-    private platformOpportunityModel: Model<PlatformOpportunityDocument>,
     private readonly appCache: AppCacheService,
   ) {}
 
@@ -80,7 +73,6 @@ export class GlobalSearchService {
       contacts: [],
       organizations: [],
       clients: [],
-      platformOpportunities: [],
     };
   }
 
@@ -98,14 +90,12 @@ export class GlobalSearchService {
       contacts,
       organizations,
       clients,
-      platformOpportunities,
     ] = await Promise.all([
       this.searchLeads(query, textQ, limit, maxTime),
       this.searchDeals(query, textQ, limit, maxTime),
       this.searchContacts(query, textQ, limit, maxTime),
       this.searchOrganizations(query, textQ, limit, maxTime),
       this.searchClients(query, textQ, limit, maxTime),
-      this.searchPlatformOpportunities(query, textQ, limit, maxTime),
     ]);
 
     return {
@@ -114,20 +104,18 @@ export class GlobalSearchService {
       contacts,
       organizations,
       clients,
-      platformOpportunities,
     };
   }
 
   private async searchByObjectId(id: string): Promise<SearchSlice> {
     const oid = new Types.ObjectId(id);
     const select = '_id firstName lastName email name title organization dealValue status opportunitySourcePlatform platformClientLabel';
-    const [lead, deal, contact, org, client, platform] = await Promise.all([
+    const [lead, deal, contact, org, client] = await Promise.all([
       this.leadModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
       this.dealModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
       this.contactModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
       this.orgModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
       this.clientModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
-      this.platformOpportunityModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
     ]);
     return {
       leads: lead ? [lead] : [],
@@ -135,7 +123,6 @@ export class GlobalSearchService {
       contacts: contact ? [contact] : [],
       organizations: org ? [org] : [],
       clients: client ? [client] : [],
-      platformOpportunities: platform ? [platform] : [],
     };
   }
 
@@ -300,28 +287,4 @@ export class GlobalSearchService {
     );
   }
 
-  private searchPlatformOpportunities(
-    query: string,
-    textQ: string,
-    limit: number,
-    maxTimeMS: number,
-  ) {
-    const regexFilter = buildTokenAndFilter(
-      ['title', 'opportunitySourcePlatform', 'platformClientLabel'],
-      query,
-    );
-    return this.searchWithTextThenRegex(
-      this.platformOpportunityModel as Model<unknown>,
-      textQ,
-      regexFilter,
-      {
-        _id: 1,
-        title: 1,
-        opportunitySourcePlatform: 1,
-        platformClientLabel: 1,
-      },
-      limit,
-      maxTimeMS,
-    );
-  }
 }

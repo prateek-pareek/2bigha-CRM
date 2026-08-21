@@ -9,7 +9,6 @@ import {
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Client, ClientDocument } from '../schemas/client.schema';
-import { LeadScoringService } from '../core/lead-scoring.service';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { WorkflowsService } from '../automation/workflows.service';
 import { LeadEngagementAutomationService } from '../automation/lead-engagement-automation.service';
@@ -36,7 +35,6 @@ export class EmailTrackingService implements OnModuleInit {
     private dealModel: Model<DealDocument>,
     @InjectModel(Client.name, 'crmConnection')
     private clientModel: Model<ClientDocument>,
-    private readonly leadScoringService: LeadScoringService,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => WorkflowsService))
@@ -551,19 +549,6 @@ export class EmailTrackingService implements OnModuleInit {
         });
       }
     }
-    if (
-      result?.module === 'leads' &&
-      result.entityId &&
-      Types.ObjectId.isValid(String(result.entityId))
-    ) {
-      void this.leadScoringService
-        .refreshLeadScore(String(result.entityId))
-        .catch((err: unknown) =>
-          this.logger.warn(
-            `Lead score refresh after open failed: ${err instanceof Error ? err.message : err}`,
-          ),
-        );
-    }
     return !!result;
   }
 
@@ -743,20 +728,6 @@ export class EmailTrackingService implements OnModuleInit {
           module: result.module,
         });
       }
-    }
-
-    if (
-      result?.module === 'leads' &&
-      result.entityId &&
-      Types.ObjectId.isValid(String(result.entityId))
-    ) {
-      void this.leadScoringService
-        .refreshLeadScore(String(result.entityId))
-        .catch((err: unknown) =>
-          this.logger.warn(
-            `Lead score refresh after click failed: ${err instanceof Error ? err.message : err}`,
-          ),
-        );
     }
 
     return result ? destinationUrl : null;

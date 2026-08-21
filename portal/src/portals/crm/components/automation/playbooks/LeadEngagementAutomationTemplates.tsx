@@ -35,7 +35,6 @@ const SEL =
   "w-full h-9 bg-white border border-[var(--border-color)] rounded-md px-3 text-sm text-[var(--text-main)] outline-none cursor-pointer focus:border-[var(--hs-link)] focus:ring-1 focus:ring-[var(--hs-link)]/30 appearance-none disabled:opacity-50";
 
 const STAGE_RULE_FIELDS: { field: string; label: string }[] = [
-  { field: "leadScore", label: "Lead score" },
   { field: "source", label: "Source" },
   { field: "stage", label: "Stage" },
   { field: "status", label: "Status" },
@@ -70,9 +69,9 @@ function newStageRule(
       ? [contextPipeline.name]
       : undefined,
     onlyIfStages: [],
-    field: "leadScore",
-    operator: "greater_than",
-    value: "70",
+    field: "source",
+    operator: "equals",
+    value: "",
     target: { stageName: stages[0] || "" },
   };
 }
@@ -1374,9 +1373,7 @@ export default function LeadEngagementAutomationTemplates({ canEdit }: Props) {
                                 ? rule.field === "stage" || rule.field === "status"
                                   ? "New, Contacted"
                                   : "Referral, Partner"
-                                : rule.field === "leadScore"
-                                  ? "80"
-                                  : "Value"
+                                : "Value"
                             }
                             value={rule.value || ""}
                             disabled={

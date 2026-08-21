@@ -2,7 +2,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Pipeline, PipelineDocument } from '../schemas/pipeline.schema';
-import { DEFAULT_PLATFORM_OPPORTUNITY_STAGES } from '../shared/platform-opportunity-pipeline.util';
 import { DEFAULT_PROPOSAL_PIPELINE_STAGES } from '../proposals/proposal-pipeline.util';
 import { DEFAULT_CONTRACT_PIPELINE_STAGES } from '../proposals/contract-pipeline.util';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
@@ -10,7 +9,6 @@ import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 export type CrmPipelineType =
   | 'deals'
   | 'leads'
-  | 'platform_opportunities'
   | 'proposals'
   | 'quotations'
   | 'contracts'
@@ -45,8 +43,6 @@ export class PipelinesService implements OnModuleInit {
       filter.$or = [{ type: 'deals' }, { type: { $exists: false } }];
     } else if (type === 'leads') {
       filter.type = 'leads';
-    } else if (type === 'platform_opportunities') {
-      filter.type = 'platform_opportunities';
     } else if (type === 'proposals') {
       filter.type = 'proposals';
     } else if (type === 'quotations') {
@@ -118,26 +114,6 @@ export class PipelinesService implements OnModuleInit {
           { name: 'Converted', probability: 100, order: 5, isDefault: false },
           { name: 'Disqualified', probability: 0, order: 6, isDefault: false },
         ],
-      });
-    }
-
-    const platformCount = await this.pipelineModel.countDocuments({
-      type: 'platform_opportunities',
-    });
-    if (platformCount === 0) {
-      await this.create({
-        name: 'Platform outreach',
-        type: 'platform_opportunities',
-        categoryType: 'freelancer',
-        isDefault: true,
-        stages: DEFAULT_PLATFORM_OPPORTUNITY_STAGES.map(
-          ({ name, probability, order, isDefault }) => ({
-            name,
-            probability,
-            order,
-            isDefault,
-          }),
-        ),
       });
     }
 

@@ -815,7 +815,6 @@ export function targetFieldsForEntity(
         { key: 'ownerLabel', label: 'Owner' },
       ];
     case 'contacts':
-    case 'leads':
       return [
         { key: 'firstName', label: 'First name' },
         { key: 'lastName', label: 'Last name' },
@@ -834,6 +833,27 @@ export function targetFieldsForEntity(
         { key: 'externalId', label: 'Source contact/lead ID' },
         { key: 'linkedinUrl', label: 'LinkedIn URL' },
         { key: 'source', label: 'Lead source' },
+        { key: 'status', label: 'Status' },
+        { key: 'stage', label: 'Stage' },
+        { key: 'ownerLabel', label: 'Owner' },
+      ];
+    case 'leads':
+      return [
+        { key: 'firstName', label: 'First name' },
+        { key: 'lastName', label: 'Last name' },
+        { key: 'email', label: 'Email' },
+        { key: 'mobileNo', label: 'Mobile' },
+        { key: 'phone', label: 'Phone' },
+        { key: 'jobTitle', label: 'Job title' },
+        { key: 'organization', label: 'Company name' },
+        { key: 'organizationExternalId', label: 'Primary source company ID' },
+        {
+          key: 'organizationExternalIds',
+          label: 'All source company IDs (list)',
+        },
+        { key: 'relatedContactExternalIds', label: 'Related contact IDs' },
+        { key: 'relatedDealExternalIds', label: 'Related deal IDs' },
+        { key: 'externalId', label: 'Source contact/lead ID' },
         { key: 'status', label: 'Status' },
         { key: 'stage', label: 'Stage' },
         { key: 'ownerLabel', label: 'Owner' },

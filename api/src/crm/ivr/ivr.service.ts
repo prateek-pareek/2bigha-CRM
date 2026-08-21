@@ -1,7 +1,40 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import * as XLSX from 'xlsx';
 import { CallLog, CallLogDocument } from './schemas/call-log.schema';
+import { Lead, LeadDocument } from '../records/schemas/lead.schema';
+import { LeadIntentService } from '../records/lead-intent.service';
+import { ExportQuotaService } from '../admin/export-quota.service';
+
+const CALL_LOG_EXPORT_HEADERS = [
+  '_id',
+  'direction',
+  'status',
+  'customerName',
+  'customerNumber',
+  'agentName',
+  'agentNumber',
+  'duration',
+  'callDate',
+  'followUpAt',
+  'callbackScheduledAt',
+  'notes',
+  'recordingUrl',
+  'createdAt',
+];
+
+const CALL_LOG_IMPORT_FIELDS = [
+  'customerName',
+  'customerNumber',
+  'direction',
+  'status',
+  'duration',
+  'callDate',
+  'agentName',
+  'agentNumber',
+  'notes',
+] as const;
 
 function normalizeE164(raw: string): string {
   const cleaned = String(raw || '').trim().replace(/[^\d+]/g, '');
@@ -35,6 +68,16 @@ export interface CallLogListQuery {
   direction?: string;
   dateFrom?: string;
   dateTo?: string;
+  /** Filters to calls tied to one CRM record (Lead Action Menu → Call History). */
+  relatedTo?: string;
+}
+
+export interface LogCallActivityDto {
+  leadId: string;
+  status: string;
+  notes?: string;
+  followUpAt?: string;
+  intents?: string[];
 }
 
 @Injectable()
@@ -44,6 +87,10 @@ export class IvrService {
   constructor(
     @InjectModel(CallLog.name, 'crmConnection')
     private readonly callLogModel: Model<CallLogDocument>,
+    @InjectModel(Lead.name, 'crmConnection')
+    private readonly leadModel: Model<LeadDocument>,
+    private readonly leadIntentService: LeadIntentService,
+    private readonly exportQuotaService: ExportQuotaService,
   ) {}
 
   private kommunoConfigured(): boolean {
@@ -216,6 +263,9 @@ export class IvrService {
     }
     if (query.agentNumber) filter.agentNumber = query.agentNumber;
     if (query.direction) filter.direction = query.direction;
+    if (query.relatedTo && Types.ObjectId.isValid(query.relatedTo)) {
+      filter.relatedTo = new Types.ObjectId(query.relatedTo);
+    }
     if (query.dateFrom || query.dateTo) {
       const range: Record<string, Date> = {};
       if (query.dateFrom) range.$gte = new Date(query.dateFrom);
@@ -266,6 +316,161 @@ export class IvrService {
       totalOutgoing,
       connected,
     };
+  }
+
+  /**
+   * Call Activity Form ("Set Activity") — logs a disposition without a real
+   * Kommuno session (status defaults to 'Not Answered' client-side), patches
+   * the Lead's callStatus/nextFollowUpAt, and records any Lead Intent chips
+   * toggled alongside it.
+   */
+  async logCallActivity(dto: LogCallActivityDto, user?: any) {
+    if (!Types.ObjectId.isValid(dto.leadId)) {
+      throw new BadRequestException('Invalid lead id');
+    }
+    const leadOid = new Types.ObjectId(dto.leadId);
+    const status = String(dto.status || 'Not Answered').trim() || 'Not Answered';
+    const followUpDate = dto.followUpAt ? new Date(dto.followUpAt) : undefined;
+
+    const callLog = await this.callLogModel.create({
+      sessionId: `manual-${new Types.ObjectId().toString()}`,
+      direction: 'Outgoing',
+      status,
+      notes: dto.notes?.trim() || undefined,
+      loggedManually: true,
+      relatedTo: leadOid,
+      relatedType: 'Lead',
+      followUpAt: followUpDate,
+      initiatedByUserId:
+        user?.userId && Types.ObjectId.isValid(String(user.userId))
+          ? new Types.ObjectId(String(user.userId))
+          : undefined,
+      agentName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : undefined,
+    });
+
+    await this.leadModel
+      .findByIdAndUpdate(leadOid, {
+        $set: {
+          callStatus: status,
+          ...(followUpDate ? { nextFollowUpAt: followUpDate, followUpReminderSentAt: null } : {}),
+        },
+      })
+      .exec();
+
+    if (dto.intents?.length) {
+      await this.leadIntentService.recordIntent(
+        dto.leadId,
+        dto.intents,
+        followUpDate,
+        'call_activity',
+        user,
+      );
+    }
+
+    return callLog;
+  }
+
+  /** Super Admin export — mirrors CRMService.exportToCsv's plain-CSV-string pattern for CallLog. */
+  async exportCallLogsToCsv(
+    options?: { dateFrom?: string; dateTo?: string },
+    user?: any,
+  ): Promise<string> {
+    await this.exportQuotaService.checkQuota(user?.userId);
+    const filter: Record<string, unknown> = {};
+    if (options?.dateFrom || options?.dateTo) {
+      const range: Record<string, Date> = {};
+      if (options.dateFrom) range.$gte = new Date(options.dateFrom);
+      if (options.dateTo) range.$lte = new Date(options.dateTo);
+      filter.createdAt = range;
+    }
+    const data = await this.callLogModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .limit(10000)
+      .lean();
+
+    const csvRows = [
+      CALL_LOG_EXPORT_HEADERS.join(','),
+      ...data.map((row) =>
+        CALL_LOG_EXPORT_HEADERS.map((field) => {
+          const value = (row as unknown as Record<string, unknown>)[field] ?? '';
+          const escaped = String(value).replace(/"/g, '""');
+          return `"${escaped}"`;
+        }).join(','),
+      ),
+    ];
+    await this.exportQuotaService.logExport(user, 'ivr', data.length, options);
+    return csvRows.join('\r\n');
+  }
+
+  /** Column headers of an uploaded CSV/XLSX — Import preview step. */
+  getCallLogFileHeaders(buffer: Buffer): string[] {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    return (rows[0] as string[]) || [];
+  }
+
+  /**
+   * Bulk-load call logs from CSV/XLSX (Super Admin). Simple create-only
+   * strategy for this phase — no dedupe/merge, mirroring the doc's minimal
+   * "upload the file, create the rows" requirement.
+   */
+  async importCallLogsFromCsv(
+    buffer: Buffer,
+    mapping: Record<string, string> | undefined,
+    user?: any,
+  ): Promise<{ created: number; skipped: number; errors: string[] }> {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet) as Record<string, unknown>[];
+
+    const get = (row: Record<string, unknown>, field: string) => {
+      const column = mapping?.[field] ?? field;
+      return row[column];
+    };
+
+    const docs: Record<string, unknown>[] = [];
+    const errors: string[] = [];
+    let skipped = 0;
+
+    rows.forEach((row, index) => {
+      const customerNumber = String(get(row, 'customerNumber') || '').trim();
+      if (!customerNumber) {
+        skipped++;
+        errors.push(`Row ${index + 2}: missing customerNumber`);
+        return;
+      }
+      const direction = String(get(row, 'direction') || 'Outgoing').trim();
+      const doc: Record<string, unknown> = {
+        sessionId: `import-${new Types.ObjectId().toString()}`,
+        direction: direction === 'Incoming' ? 'Incoming' : 'Outgoing',
+        customerNumber,
+        customerName: String(get(row, 'customerName') || '').trim() || undefined,
+        status: String(get(row, 'status') || 'Completed').trim() || 'Completed',
+        duration: Number(get(row, 'duration')) || 0,
+        agentName: String(get(row, 'agentName') || '').trim() || undefined,
+        agentNumber: String(get(row, 'agentNumber') || '').trim() || undefined,
+        notes: String(get(row, 'notes') || '').trim() || undefined,
+        loggedManually: true,
+        initiatedByUserId:
+          user?.userId && Types.ObjectId.isValid(String(user.userId))
+            ? new Types.ObjectId(String(user.userId))
+            : undefined,
+      };
+      const callDateRaw = get(row, 'callDate');
+      if (callDateRaw) {
+        const parsed = new Date(String(callDateRaw));
+        if (!Number.isNaN(parsed.getTime())) doc.callDate = parsed;
+      }
+      docs.push(doc);
+    });
+
+    if (docs.length) {
+      await this.callLogModel.insertMany(docs, { ordered: false });
+    }
+
+    return { created: docs.length, skipped, errors };
   }
 
   async updateFollowUp(id: string, body: { followUpAt?: string | null; callbackScheduledAt?: string | null }) {

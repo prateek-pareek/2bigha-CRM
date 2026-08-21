@@ -43,7 +43,7 @@ export class CRMController {
   ) {}
 
   @Get('distinct-values')
-  @Permissions('leads:read', 'contacts:read', 'organizations:read', 'deals:read', 'clients:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read', 'organizations:read', 'deals:read', 'clients:read')
   async getDistinctValues(
     @Query('module') module: string,
     @Query('field') field: string,
@@ -153,12 +153,6 @@ export class CRMController {
   @Permissions('leads:write', 'leads:move_pipeline')
   async patchLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateLead(id, dto, req.user);
-  }
-
-  @Post('leads/:id/recalculate-score')
-  @Permissions('leads:write')
-  recalculateLeadScore(@Param('id') id: string, @Request() req: any) {
-    return this.crmService.recalculateLeadScore(id, req.user);
   }
 
   // Deals
@@ -536,6 +530,35 @@ export class CRMController {
     );
   }
 
+  /** Team Members → Performance tab: one agent's today/week/month work snapshot. */
+  @Get('reports/agent-performance/:agentId')
+  @Permissions('settings:admin', 'dashboard:read')
+  async getAgentPerformanceSummary(@Param('agentId') agentId: string) {
+    return this.crmService.getAgentPerformanceSummary(agentId);
+  }
+
+  /** Agent Performance baseline report — calls/activities/leads per human agent, target-vs-actual. */
+  @Get('reports/agents')
+  @Permissions('dashboard:read', 'leads:read', 'deals:read')
+  async getAgentPerformanceLeaderboard(@Query('window') window?: string) {
+    return this.crmService.getAgentPerformanceLeaderboard(window || 'this_month');
+  }
+
+  @Get('agent-targets')
+  @Permissions('settings:admin')
+  async getAgentTargets() {
+    return this.crmService.getAgentTargets();
+  }
+
+  @Put('agent-targets/:agentId')
+  @Permissions('settings:admin')
+  async upsertAgentTarget(
+    @Param('agentId') agentId: string,
+    @Body() body: { leadsTarget?: number; callsTarget?: number; dealsTarget?: number; propertiesTarget?: number },
+  ) {
+    return this.crmService.upsertAgentTarget(agentId, body || {});
+  }
+
   /** Sales department health: work done, activity trends, rep leaderboard, pipeline snapshot. */
   @Get('reports/sales-health')
   @Permissions('dashboard:read', 'leads:read', 'deals:read')
@@ -622,15 +645,20 @@ export class CRMController {
     @Param('type') type: string,
     @Query('ids') ids?: string,
     @Query('pipelineId') pipelineId?: string,
+    @Request() req?: any,
   ) {
     const parsedIds = String(ids || '')
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean);
-    return this.crmService.exportToCsv(type, {
-      ids: parsedIds,
-      pipelineId,
-    });
+    return this.crmService.exportToCsv(
+      type,
+      {
+        ids: parsedIds,
+        pipelineId,
+      },
+      req?.user,
+    );
   }
 
   @Post('import/preview')
@@ -848,13 +876,13 @@ export class CRMController {
   }
 
   @Post('fetch-link-metadata')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   fetchLinkMetadata(@Body('url') url: string) {
     return this.crmService.fetchLinkMetadata(url);
   }
 
   @Get('proxy-image')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   async proxyImage(@Query('url') url: string, @Res() res: Response) {
     return this.crmService.proxyImage(url, res);
   }
@@ -973,7 +1001,6 @@ export class CRMController {
   @Get('settings/opportunity-platforms')
   @Permissions(
     'leads:read',
-    'platform-opportunities:read',
     'settings:read',
     'settings:write',
   )

@@ -15,9 +15,7 @@ import { GlobalSearchService } from '../core/global-search.service';
 import { ReportingService } from '../reporting/reporting.service';
 import { CrmAiService } from '../ai/crm-ai.service';
 import { WorkflowsService } from '../automation/workflows.service';
-import { PlaybooksService } from '../automation/playbooks.service';
 import { InboxAccountsService } from '../inbox/inbox-accounts.service';
-import { LeadScoringService } from '../core/lead-scoring.service';
 import { EmailTrackingService } from '../email/email-tracking.service';
 import { WebsiteEmailExtractorService } from '../email-intelligence/website-email-extractor.service';
 import { AuditLogService } from '../admin/audit-log.service';
@@ -95,10 +93,8 @@ export class SalesAgentService {
     private readonly crmAi: CrmAiService,
     @Inject(forwardRef(() => WorkflowsService))
     private readonly workflowsService: WorkflowsService,
-    private readonly playbooksService: PlaybooksService,
     @Inject(forwardRef(() => InboxAccountsService))
     private readonly inboxAccounts: InboxAccountsService,
-    private readonly leadScoring: LeadScoringService,
     private readonly emailTracking: EmailTrackingService,
     private readonly auditLog: AuditLogService,
     private readonly pipelinesService: PipelinesService,
@@ -1222,13 +1218,6 @@ export class SalesAgentService {
           String(input.recordId),
           reqUser,
         );
-      case 'get_playbook_guidance': {
-        const recs = await this.playbooksService.recommendations(
-          String(input.recordId),
-          String(input.recordType),
-        );
-        return { recommendations: recs };
-      }
       case 'draft_outreach_email':
         return this.crmAi.draftPersonOutreachEmail(
           reqUser,
@@ -1295,10 +1284,6 @@ export class SalesAgentService {
         );
         return deal ? { ok: true, stage: input.stageName } : { error: 'Update failed' };
       }
-      case 'recalculate_lead_score': {
-        const score = await this.leadScoring.refreshLeadScore(String(input.leadId));
-        return { ok: true, score };
-      }
       case 'enroll_workflow':
         return this.workflowsService.enrollInWorkflow(
           String(input.workflowId),
@@ -1355,7 +1340,7 @@ export class SalesAgentService {
       }
       case 'list_pipelines': {
         const pipelineType = input.type
-          ? (String(input.type) as 'leads' | 'deals' | 'platform_opportunities')
+          ? (String(input.type) as 'leads' | 'deals')
           : undefined;
         const pipelines = await this.pipelinesService.findAll(pipelineType);
         return this.trimPayload(pipelines);
@@ -1404,10 +1389,6 @@ export class SalesAgentService {
           lastOpenedAt: r.lastOpenedAt,
           repliedAt: r.repliedAt,
         }));
-      }
-      case 'get_playbook_detail': {
-        const pb = await this.playbooksService.findOne(String(input.playbookId));
-        return pb ? this.trimPayload(pb) : { error: 'Playbook not found' };
       }
       case 'schedule_call': {
         const act = await this.crmService.createActivity(
@@ -1680,7 +1661,6 @@ export class SalesAgentService {
           email: record.email,
           leadOwner: record.leadOwner,
           dealOwner: record.dealOwner,
-          leadScore: record.leadScore,
           value: record.value,
         }
         : null,

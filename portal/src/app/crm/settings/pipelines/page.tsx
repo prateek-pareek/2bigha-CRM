@@ -67,7 +67,6 @@ const OUTREACH_CONTEXT_FIELDS: { key: string; label: string }[] = [
   { key: 'organization', label: 'Company' },
   { key: 'jobTitle', label: 'Job title' },
   { key: 'industry', label: 'Industry' },
-  { key: 'linkedInPost', label: 'LinkedIn post / listing' },
   { key: 'customFields.requirements', label: 'Requirements' },
 ];
 

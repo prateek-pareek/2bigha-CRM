@@ -230,19 +230,6 @@ export default function CRMContactRecordFields({
             {contact.createdAt ? new Date(contact.createdAt).toLocaleDateString() : '—'}
           </div>
         );
-      case 'leadScore': {
-        const s = contact.leadScore;
-        if (s == null || Number.isNaN(Number(s))) return '—';
-        const n = Number(s);
-        const tier =
-          n >= 70 ? 'text-emerald-700' : n >= 40 ? 'text-amber-800' : 'text-slate-600';
-        return (
-          <div className="space-y-1">
-            <span className={`text-lg font-bold tabular-nums ${tier}`}>{n}</span>
-            <span className="text-text-muted text-xs block">out of 100 (from linked lead)</span>
-          </div>
-        );
-      }
       default:
         return contact[key] != null && contact[key] !== '' ? String(contact[key]) : '—';
     }
@@ -280,7 +267,6 @@ export default function CRMContactRecordFields({
       twitterHandle: 'X (Twitter)',
       telegram: 'Telegram',
       address: 'Address',
-      leadScore: 'Lead score',
       createdAt: 'Created',
     };
     return map[key] || key;

@@ -122,7 +122,6 @@ export default function CardCustomizationPage() {
     if (key === 'email') return 'example@mathionix.com';
     if (key === 'organization' || key === 'account') return 'Example Corporation';
     if (key === 'phone') return '+91 98765 43210';
-    if (key === 'leadScore') return 'Score 72';
     if (key === 'website') return 'https://example.com';
     if (key === 'industry') return 'Technology';
     return '—';

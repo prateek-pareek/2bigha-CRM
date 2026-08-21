@@ -14,11 +14,6 @@ import {
   OrganizationDocument,
 } from '../schemas/organization.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
-import {
-  PlatformOpportunity,
-  PlatformOpportunityDocument,
-} from '../schemas/platform-opportunity.schema';
-import { WebsiteLead, WebsiteLeadDocument } from '../schemas/website-lead.schema';
 import { Workflow, WorkflowDocument } from '../schemas/workflow.schema';
 import { CrmSegment, CrmSegmentDocument } from '../schemas/crm-segment.schema';
 import {
@@ -30,7 +25,6 @@ import {
   EmailCampaignDocument,
 } from '../schemas/email-campaign.schema';
 import { Pipeline, PipelineDocument } from '../schemas/pipeline.schema';
-import { Playbook, PlaybookDocument } from '../schemas/playbook.schema';
 import { CrmProposal, ProposalDocument } from '../schemas/proposal.schema';
 import {
   CrmProposalBlock,
@@ -50,10 +44,6 @@ import {
   PaymentTerm,
   PaymentTermDocument,
 } from '../schemas/payment-term.schema';
-import {
-  CrmSalesStrategy,
-  CrmSalesStrategyDocument,
-} from '../schemas/crm-sales-strategy.schema';
 import {
   PortalClientNeed,
   PortalClientNeedDocument,
@@ -93,10 +83,6 @@ export class CrmTrashService {
     organizationModel: Model<OrganizationDocument>,
     @InjectModel(Activity.name, 'crmConnection')
     activityModel: Model<ActivityDocument>,
-    @InjectModel(PlatformOpportunity.name, 'crmConnection')
-    platformOpportunityModel: Model<PlatformOpportunityDocument>,
-    @InjectModel(WebsiteLead.name, 'crmConnection')
-    websiteLeadModel: Model<WebsiteLeadDocument>,
     @InjectModel(Workflow.name, 'crmConnection')
     workflowModel: Model<WorkflowDocument>,
     @InjectModel(CrmSegment.name, 'crmConnection')
@@ -107,8 +93,6 @@ export class CrmTrashService {
     emailCampaignModel: Model<EmailCampaignDocument>,
     @InjectModel(Pipeline.name, 'crmConnection')
     pipelineModel: Model<PipelineDocument>,
-    @InjectModel(Playbook.name, 'crmConnection')
-    playbookModel: Model<PlaybookDocument>,
     @InjectModel(CrmProposal.name, 'crmConnection')
     proposalModel: Model<ProposalDocument>,
     @InjectModel(CrmProposalBlock.name, 'crmConnection')
@@ -123,8 +107,6 @@ export class CrmTrashService {
     serviceOfferingModel: Model<ServiceOfferingDocument>,
     @InjectModel(PaymentTerm.name, 'crmConnection')
     paymentTermModel: Model<PaymentTermDocument>,
-    @InjectModel(CrmSalesStrategy.name, 'crmConnection')
-    salesStrategyModel: Model<CrmSalesStrategyDocument>,
     @InjectModel(PortalClientNeed.name, 'crmConnection')
     portalNeedModel: Model<PortalClientNeedDocument>,
     @InjectModel(LeadEngagementAutomationTemplate.name, 'crmConnection')
@@ -140,14 +122,11 @@ export class CrmTrashService {
       clients: clientModel,
       organizations: organizationModel,
       activities: activityModel,
-      'platform-opportunities': platformOpportunityModel,
-      'website-leads': websiteLeadModel,
       workflows: workflowModel,
       segments: segmentModel,
       'email-templates': emailTemplateModel,
       'email-campaigns': emailCampaignModel,
       pipelines: pipelineModel,
-      playbooks: playbookModel,
       proposals: proposalModel,
       'proposal-blocks': proposalBlockModel,
       snippets: snippetModel,
@@ -155,7 +134,6 @@ export class CrmTrashService {
       'saved-views': savedViewModel,
       'service-offerings': serviceOfferingModel,
       'payment-terms': paymentTermModel,
-      'sales-strategies': salesStrategyModel,
       'portal-needs': portalNeedModel,
       'engagement-templates': engagementTemplateModel,
     };

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -8,6 +8,7 @@ import {
 import { CreatePropertyListingDto } from './dto/create-property-listing.dto';
 import { UpdatePropertyListingDto } from './dto/update-property-listing.dto';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
+import { Lead, LeadDocument } from '../records/schemas/lead.schema';
 
 export interface PropertyListingListQuery {
   page?: string | number;
@@ -25,6 +26,8 @@ export class PropertyListingsService {
   constructor(
     @InjectModel(PropertyListing.name, 'crmConnection')
     private readonly listingModel: Model<PropertyListingDocument>,
+    @InjectModel(Lead.name, 'crmConnection')
+    private readonly leadModel: Model<LeadDocument>,
   ) {}
 
   async create(
@@ -92,6 +95,8 @@ export class PropertyListingsService {
   async stats(): Promise<{
     total: number;
     byStatus: Record<string, number>;
+    /** Property/Farm dashboard split — 'farm' = propertyType 'Farm', 'property' = everything else. */
+    byType: { property: number; farm: number };
     totalValue: number;
     availableValue: number;
   }> {
@@ -99,10 +104,19 @@ export class PropertyListingsService {
     // aggregate() bypasses it, so exclude soft-deleted docs explicitly here.
     const notDeleted = { $match: { isDeleted: { $ne: true } } };
 
-    const [byStatusRows, totals] = await Promise.all([
+    const [byStatusRows, byTypeRows, totals] = await Promise.all([
       this.listingModel.aggregate([
         notDeleted,
         { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      this.listingModel.aggregate([
+        notDeleted,
+        {
+          $group: {
+            _id: { $cond: [{ $eq: ['$propertyType', 'Farm'] }, 'farm', 'property'] },
+            count: { $sum: 1 },
+          },
+        },
       ]),
       this.listingModel.aggregate([
         notDeleted,
@@ -125,14 +139,52 @@ export class PropertyListingsService {
     for (const row of byStatusRows) {
       byStatus[String(row._id || 'Unknown')] = row.count;
     }
+    const byType = { property: 0, farm: 0 };
+    for (const row of byTypeRows) {
+      if (row._id === 'farm') byType.farm = row.count;
+      else byType.property = row.count;
+    }
     const t = totals[0] || { total: 0, totalValue: 0, availableValue: 0 };
 
     return {
       total: t.total || 0,
       byStatus,
+      byType,
       totalValue: t.totalValue || 0,
       availableValue: t.availableValue || 0,
     };
+  }
+
+  /**
+   * Batch property/farm counts for a set of leads — powers the leads-table
+   * row counts + "Add Property"/"Add Farm" quick actions without N+1 calls.
+   */
+  async countsByLeadIds(
+    leadIds: string[],
+  ): Promise<Record<string, { propertyCount: number; farmCount: number }>> {
+    const oids = leadIds
+      .map((id) => (Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : null))
+      .filter((o): o is Types.ObjectId => !!o);
+    if (!oids.length) return {};
+
+    const rows = await this.listingModel.aggregate([
+      { $match: { leadId: { $in: oids }, isDeleted: { $ne: true } } },
+      {
+        $group: {
+          _id: { lead: '$leadId', isFarm: { $eq: ['$propertyType', 'Farm'] } },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const result: Record<string, { propertyCount: number; farmCount: number }> = {};
+    for (const row of rows) {
+      const leadId = String(row._id.lead);
+      if (!result[leadId]) result[leadId] = { propertyCount: 0, farmCount: 0 };
+      if (row._id.isFarm) result[leadId].farmCount += row.count;
+      else result[leadId].propertyCount += row.count;
+    }
+    return result;
   }
 
   async findOne(id: string): Promise<PropertyListingDocument> {
@@ -154,6 +206,73 @@ export class PropertyListingsService {
     });
     await listing.save();
     return listing;
+  }
+
+  /**
+   * Properties + farms listed per agent within a date range — merged
+   * client-side into the Agent Performance leaderboard (ReportingService
+   * lives in a different module and can't inject PropertyListing directly).
+   */
+  async countsByCreatedBy(options?: {
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<Record<string, { propertyCount: number; farmCount: number }>> {
+    const match: Record<string, unknown> = {
+      isDeleted: { $ne: true },
+      createdBy: { $exists: true, $ne: null },
+    };
+    if (options?.dateFrom || options?.dateTo) {
+      const range: Record<string, Date> = {};
+      if (options.dateFrom) range.$gte = new Date(options.dateFrom);
+      if (options.dateTo) range.$lte = new Date(options.dateTo);
+      match.createdAt = range;
+    }
+    const rows = await this.listingModel.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { agent: '$createdBy', isFarm: { $eq: ['$propertyType', 'Farm'] } },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+    const result: Record<string, { propertyCount: number; farmCount: number }> = {};
+    for (const row of rows) {
+      const agentId = String(row._id.agent);
+      if (!result[agentId]) result[agentId] = { propertyCount: 0, farmCount: 0 };
+      if (row._id.isFarm) result[agentId].farmCount += row.count;
+      else result[agentId].propertyCount += row.count;
+    }
+    return result;
+  }
+
+  /**
+   * Transfer Lead — full ownership transfer to another agent, distinct from
+   * bulk Reassign (`CRMService.bulkAssignLeads`). Restricted once the lead
+   * already has ≥1 property/farm listed, per the FRD.
+   */
+  async transferLead(leadId: string, ownerName: string) {
+    const trimmedOwner = ownerName.trim();
+    if (!trimmedOwner) throw new BadRequestException('Owner is required');
+    if (!Types.ObjectId.isValid(leadId)) {
+      throw new BadRequestException('Invalid lead id');
+    }
+    const propertyCount = await this.listingModel.countDocuments({
+      leadId: new Types.ObjectId(leadId),
+      isDeleted: { $ne: true },
+    });
+    if (propertyCount > 0) {
+      throw new ForbiddenException(
+        'Cannot transfer a lead with properties/farms already listed — remove or reassign the listings first.',
+      );
+    }
+    const updated = await this.leadModel
+      .findByIdAndUpdate(leadId, { $set: { leadOwner: trimmedOwner } }, { new: true })
+      .exec();
+    if (!updated) throw new NotFoundException('Lead not found');
+    // `_id` here (not just `leadId`) so the global AuditLogInterceptor attributes this
+    // action to the lead's entityId — surfaces in the lead's own Update History tab.
+    return { _id: leadId, leadId, ownerName: trimmedOwner };
   }
 
   async remove(id: string, deletedBy?: string): Promise<{ success: boolean }> {

@@ -175,6 +175,7 @@ export class AuditLogInterceptor implements NestInterceptor {
     if (path.includes('enroll')) return 'enroll';
     if (path.includes('cancel')) return 'cancel';
     if (path.includes('/start')) return 'start';
+    if (path.includes('transfer-lead')) return 'transfer';
 
     switch (method) {
       case 'POST':

@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneCall, Users, UserCheck } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneCall, Users, UserCheck, Upload, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import Pagination from "@/components/suite/shell/Pagination";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   CrmButton,
   CrmKpiCard,
@@ -60,6 +61,8 @@ function formatDate(v?: string | null): string {
 }
 
 export default function IvrCallLogsView({ mine }: { mine: boolean }) {
+  const { hasAccess } = usePermissions();
+  const canManageExportImport = hasAccess("admin:manage");
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<CallLogRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -67,6 +70,9 @@ export default function IvrCallLogsView({ mine }: { mine: boolean }) {
   const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState("");
   const [stats, setStats] = useState<Stats | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,6 +121,53 @@ export default function IvrCallLogsView({ mine }: { mine: boolean }) {
     setPage(1);
   }, [search]);
 
+  const handleImportFile = async (file: File) => {
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${CRM_API_URL}/crm/ivr/import`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message || "Import failed");
+        return;
+      }
+      toast.success(`Imported ${data.created} call log(s)${data.skipped ? `, skipped ${data.skipped}` : ""}`);
+      void load();
+    } catch {
+      toast.error("Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/ivr/export`, { headers: authHeaders() });
+      if (!res.ok) {
+        toast.error("Export failed");
+        return;
+      }
+      const csv = await res.text();
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `call-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="theme-crm-hubspot crm-list-page mx-auto w-full animate-in fade-in duration-500 pb-10">
       <CrmPageHeader
@@ -132,9 +185,39 @@ export default function IvrCallLogsView({ mine }: { mine: boolean }) {
           { label: mine ? "My Call Logs" : "Call Logs" },
         ]}
         actions={
-          <CrmButton variant="secondary" onClick={() => void load()}>
-            Refresh
-          </CrmButton>
+          <div className="flex items-center gap-2">
+            {!mine && canManageExportImport ? (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleImportFile(file);
+                    e.target.value = "";
+                  }}
+                />
+                <CrmButton
+                  variant="secondary"
+                  disabled={importing}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-1.5"
+                >
+                  {importing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  Import
+                </CrmButton>
+                <CrmButton variant="secondary" disabled={exporting} onClick={() => void handleExport()} className="gap-1.5">
+                  {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  Export
+                </CrmButton>
+              </>
+            ) : null}
+            <CrmButton variant="secondary" onClick={() => void load()}>
+              Refresh
+            </CrmButton>
+          </div>
         }
         className="mb-4"
       />

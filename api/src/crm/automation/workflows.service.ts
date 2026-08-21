@@ -5893,7 +5893,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       'lead_stage_changed',
       'lead_pipeline_changed',
       'lead_status_changed',
-      'lead_source_changed',
       'lead_owner_changed',
       'lead_tracked_email_opened',
       'lead_tracked_email_replied',
@@ -6468,7 +6467,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         throw new Error('Set property: invalid pipeline id');
       }
       value = new Types.ObjectId(id);
-    } else if (field === 'dealValue' || field === 'probability' || field === 'leadScore') {
+    } else if (field === 'dealValue' || field === 'probability') {
       const n = Number(rawValue);
       if (!Number.isFinite(n)) {
         throw new Error(`Set property: ${field} must be a number`);

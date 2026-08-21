@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus,
   LayoutGrid,
@@ -19,7 +19,6 @@ import {
   X,
   ChevronRight,
   Facebook,
-  Linkedin,
   Users,
   Loader2,
   Upload,
@@ -34,7 +33,6 @@ import {
   ChevronDown,
   GripVertical,
   Tag,
-  Target,
   Eye,
   EyeOff,
   Timer,
@@ -55,17 +53,17 @@ import { usePermissions } from '@/hooks/usePermissions';
 import CRMCalendarView from '@/components/crm/calendar/CRMCalendarView';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
+import AddPropertyModal from '@/components/crm/records/detail/AddPropertyModal';
+import CallActivityFormModal from '@/components/crm/records/detail/CallActivityFormModal';
+import CallHistoryPanel from '@/components/crm/records/detail/CallHistoryPanel';
+import LeadUpdateHistoryPanel from '@/components/crm/records/detail/LeadUpdateHistoryPanel';
 import LeadActivityPopup from '@/components/crm/records/detail/LeadActivityPopup';
-import WebsiteLeadsPanel from '@/components/crm/records/list/WebsiteLeadsPanel';
 import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import LeadCreatePanel from '@/components/crm/records/create/LeadCreatePanel';
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
 import { buildCrmListSearchParams, mergeDateRangeFilter, mergeLeadCategoryFilter, CRM_BOARD_PAGE_SIZE, unwrapCrmListPayload } from '@/lib/crm/list-query';
-import {
-  hasOutboundEmailSent,
-  type CrmEmailEngagementStats,
-} from '@/lib/crm/crmEmailEngagementStats';
+import type { CrmEmailEngagementStats } from '@/lib/crm/crmEmailEngagementStats';
 import { fetchEmailEngagementBatch } from '@/lib/crm/fetchEmailEngagementBatch';
 import {
   CRM_CARD_DEFAULT_FIELDS,
@@ -83,7 +81,6 @@ import {
 } from '@/lib/crm/shared/prefetch-cache';
 import { invalidateCrmAfterMutation } from '@/lib/crm/shared/invalidate-on-mutation';
 import { cn } from '@/lib/utils';
-import CrmEmailEngagementIcons from '@/components/crm/email/engagement/CrmEmailEngagementIcons';
 import { BulkEmailToolbarButton } from '@/components/crm/email/composer/BulkEmailToolbarButton';
 import LeadStageRulesPanel from '@/components/crm/records/detail/LeadStageRulesPanel';
 import { buildBulkEmailRecipients } from '@/lib/crm/bulk-email';
@@ -143,11 +140,9 @@ interface Lead {
   email: string;
   phone?: string;
   mobileNo?: string;
-  organization: string;
   status: string; // This is the stage name
   stage?: string;
   callStatus?: string;
-  source?: string;
   pipeline?: string;
   priority?: string;
   createdAt?: string;
@@ -155,11 +150,11 @@ interface Lead {
   leadOwner?: string;
   createdBy?: string;
   createdByName?: string;
-  leadScore?: number;
   lastEmailActivityAt?: string | null;
   clientId?: string;
   leadCategory?: string;
   group?: string;
+  nextFollowUpAt?: string | null;
   notes?: string;
 }
 
@@ -176,16 +171,17 @@ const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'status', label: 'Status' },
   { key: 'stage', label: 'Stage' },
   { key: 'callStatus', label: 'Call Status' },
-  { key: 'source', label: 'Lead Source' },
   { key: 'leadCategory', label: 'Lead Type' },
   { key: 'group', label: 'Group' },
   { key: 'priority', label: 'Priority' },
   { key: 'leadOwner', label: 'Lead Owner' },
   { key: 'createdByName', label: 'Created By' },
-  { key: 'leadScore', label: 'Score' },
   { key: 'pipeline', label: 'Pipeline' },
   { key: 'createdAt', label: 'Created Date' },
   { key: 'lastEmailActivityAt', label: 'Last Email Activity' },
+  { key: 'nextFollowUpAt', label: 'Next Follow-up' },
+  { key: 'propertiesCount', label: 'Properties' },
+  { key: 'farmsCount', label: 'Farms' },
 ];
 
 const STORAGE_KEY = 'leads_columns_v2';
@@ -200,12 +196,6 @@ function groupBadgeTone(group?: string): 'success' | 'info' | 'secondary' {
   if (g === 'seller') return 'success';
   if (g === 'buyer') return 'info';
   return 'secondary';
-}
-
-function leadScoreBadgeClass(score: number) {
-  if (score >= 70) return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-  if (score >= 40) return 'bg-amber-50 text-amber-900 border-amber-200';
-  return 'bg-slate-100 text-slate-600 border-[var(--border-color)]';
 }
 
 function loadColumns(): Column[] {
@@ -278,6 +268,20 @@ export default function LeadsPage() {
   const [selectedPipelineId, setSelectedPipelineId] = useState('');
   const [filters, setFilters] = useState<FilterCriteria[]>([]);
   const [filterProperties, setFilterProperties] = useState<FilterProperty[]>([]);
+  const searchParams = useSearchParams();
+  // Deep-link support for "click a group to view its leads" (Groups page) and similar links.
+  useEffect(() => {
+    const raw = searchParams.get('filters');
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) setFilters(parsed);
+    } catch {
+      // Ignore malformed filters params.
+    }
+    // Intentionally run once on mount only — the filter bar owns `filters` after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /** Lead-type tab bar (All Leads / Reference / Investor / Lead / Buyer lead, etc.) — '' = All Leads. */
   const [leadCategoryTabs, setLeadCategoryTabs] = useState<Array<{ _id: string; label: string }>>([]);
   const [activeLeadCategory, setActiveLeadCategory] = useState('');
@@ -299,7 +303,15 @@ export default function LeadsPage() {
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
   const [callLead, setCallLead] = useState<Lead | null>(null);
   const [activityLead, setActivityLead] = useState<Lead | null>(null);
-  const [showWebsiteLeads, setShowWebsiteLeads] = useState(false);
+  const [propertyLead, setPropertyLead] = useState<Lead | null>(null);
+  const [farmLead, setFarmLead] = useState<Lead | null>(null);
+  const [callActivityLead, setCallActivityLead] = useState<Lead | null>(null);
+  const [callHistoryLead, setCallHistoryLead] = useState<Lead | null>(null);
+  const [updateHistoryLead, setUpdateHistoryLead] = useState<Lead | null>(null);
+  const [transferLeadTarget, setTransferLeadTarget] = useState<Lead | null>(null);
+  const [transferOwnerName, setTransferOwnerName] = useState('');
+  const [transferring, setTransferring] = useState(false);
+  const [leadListingCounts, setLeadListingCounts] = useState<Record<string, { propertyCount: number; farmCount: number }>>({});
   const [isBulkEmailOpen, setIsBulkEmailOpen] = useState(false);
   const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
@@ -470,16 +482,6 @@ export default function LeadsPage() {
       emailSent: emailSentFilter,
     }),
     [lastActivityFilter, emailOpenFilterMode, emailOpenFilterDays, emailReplyFilter, emailSentFilter],
-  );
-
-  const leadNeedsOutreach = useCallback(
-    (_leadId: string) => {
-      if (emailSentFilter === 'not-sent') return true;
-      const stats = leadEmailStatsById[_leadId];
-      if (!stats) return false;
-      return !hasOutboundEmailSent(stats);
-    },
-    [leadEmailStatsById, emailSentFilter],
   );
 
   /** List table: “Last email activity” column visibility. */
@@ -1279,14 +1281,11 @@ export default function LeadsPage() {
       const hay = [
         name,
         l.email,
-        l.organization,
         l.mobileNo,
         l.phone,
         l.stage,
         l.status,
-        l.source,
         l.leadOwner,
-        l.leadScore != null ? String(l.leadScore) : '',
       ]
         .filter(Boolean)
         .join(' ')
@@ -1294,6 +1293,33 @@ export default function LeadsPage() {
       return hay.includes(q);
     });
   }, [pipelineLeads, apiFilters, filterProperties, search, needsClientFullList]);
+
+  // Batch property/farm counts for the leads currently on screen — avoids N+1 calls
+  // per row for the "Add Property"/"Add Farm" quick-action count badges.
+  useEffect(() => {
+    const ids = filteredLeads.map((l) => l._id).filter(Boolean);
+    if (!ids.length) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${CRM_API_URL}/crm/property-listings/counts-by-lead`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ids }),
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) setLeadListingCounts(data || {});
+      } catch {
+        // Non-critical — quick-action badges just stay at 0.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredLeads.map((l) => l._id).join(',')]);
 
   const boardLeads = filteredLeads;
 
@@ -1479,27 +1505,13 @@ export default function LeadsPage() {
             name={fullName}
             initials={initials}
             toneSeed={`${lead.firstName}${lead.lastName}${lead._id}`}
-            trailing={<CrmEmailEngagementIcons stats={leadEmailStatsById[lead._id]} />}
           />
         );
       }
       case 'email': return <span className="text-sm text-[#707070]">{lead.email || '—'}</span>;
       case 'phone': return <span className="text-sm text-[#707070]">{lead.mobileNo || lead.phone || '—'}</span>;
-      case 'source': return <span className="text-sm text-[#707070]">{lead.source || '—'}</span>;
       case 'priority': return <span className="text-sm text-[#707070]">{lead.priority || '—'}</span>;
       case 'leadOwner': return <CrmListOwnerCell name={lead.leadOwner || ''} />;
-      case 'leadScore': {
-        const s = lead.leadScore;
-        if (s == null || Number.isNaN(s)) {
-          return <span className="text-sm text-[#707070]">—</span>;
-        }
-        return (
-          <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold tabular-nums ${leadScoreBadgeClass(s)}`}>
-            <Target size={10} className="opacity-70 shrink-0" aria-hidden />
-            {s}
-          </span>
-        );
-      }
       case 'pipeline': {
         const name = lead.pipeline ? pipelineNameById.get(String(lead.pipeline)) : undefined;
         return <span className="text-sm text-[#707070]">{name || '—'}</span>;
@@ -1515,6 +1527,19 @@ export default function LeadsPage() {
         const iso = leadEmailStatsById[lead._id]?.latestActivityIso;
         return <span className="text-sm text-[#707070]">{iso ? new Date(iso).toLocaleString() : 'No activity'}</span>;
       }
+      case 'nextFollowUpAt': {
+        const due = lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt) : null;
+        const overdue = !!due && due.getTime() < Date.now();
+        return (
+          <span className={cn('text-sm', overdue ? 'font-semibold text-amber-700' : 'text-[#707070]')}>
+            {due ? due.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+          </span>
+        );
+      }
+      case 'propertiesCount':
+        return <span className="text-sm text-[#707070] tabular-nums">{leadListingCounts[lead._id]?.propertyCount ?? 0}</span>;
+      case 'farmsCount':
+        return <span className="text-sm text-[#707070] tabular-nums">{leadListingCounts[lead._id]?.farmCount ?? 0}</span>;
       default: {
         if (key.startsWith('cf_')) {
           const cfKey = key.replace('cf_', '');
@@ -1529,7 +1554,7 @@ export default function LeadsPage() {
         return null;
       }
     }
-  }, [pipelineNameById, customFieldDefs, leadEmailStatsById]);
+  }, [pipelineNameById, customFieldDefs, leadEmailStatsById, leadListingCounts]);
 
   return (
     <div className={CRM_LIST_PAGE}>
@@ -1695,19 +1720,6 @@ export default function LeadsPage() {
                   onShowMine={() => { setShowMyLeadsOnly(true); setPage(1); }}
                   onClearAll={() => { setSearch(''); setFilters([]); setDateRange(null); }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowWebsiteLeads((prev) => !prev)}
-                  aria-pressed={showWebsiteLeads}
-                  className={cn(
-                    'shrink-0 rounded-[var(--radius-md)] px-3 py-1.5 text-sm font-semibold transition-colors',
-                    showWebsiteLeads
-                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                      : 'border border-[var(--border-color)] text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
-                  )}
-                >
-                  Website Leads
-                </button>
                 {viewMode === 'list' && hasAccess('leads:write') ? (
                   <button
                     type="button"
@@ -1948,9 +1960,7 @@ export default function LeadsPage() {
           )}
 
           <div className="flex-1 overflow-auto custom-scrollbar">
-            {showWebsiteLeads ? (
-              <WebsiteLeadsPanel />
-            ) : loading ? (
+            {loading ? (
               <div className="w-full h-64 flex items-center justify-center"><Loader2 size={40} className="animate-spin text-text-muted" /></div>
             ) : viewMode === 'kanban' ? (
               <CrmKanbanBoard
@@ -2037,7 +2047,6 @@ export default function LeadsPage() {
                             className={cn(
                               canMoveLeadsAcrossPipelines ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
                               selectedIds.has(lead._id) ? 'ring-2 ring-[var(--primary)]/25' : '',
-                              leadNeedsOutreach(lead._id) && !selectedIds.has(lead._id) && 'ring-1 ring-amber-300',
                               exitingLeadIds.has(lead._id) && 'pointer-events-none translate-x-8 -rotate-2 scale-95 opacity-0',
                             )}
                             onClick={() => !exitingLeadIds.has(lead._id) && router.push(`/crm/leads/${lead._id}`)}
@@ -2085,13 +2094,27 @@ export default function LeadsPage() {
                                   ) : null}
                                   <CrmTableActionMenu
                                     menuAlign="right"
+                                    onView={() => router.push(`/crm/leads/${lead._id}?readonly=1`)}
                                     onNotes={() => setActivityLead(lead)}
+                                    onSetActivity={() => setCallActivityLead(lead)}
+                                    onCallHistory={() => setCallHistoryLead(lead)}
+                                    onUpdateHistory={() => setUpdateHistoryLead(lead)}
+                                    onAddProperty={() => setPropertyLead(lead)}
+                                    onAddFarm={() => setFarmLead(lead)}
                                     onReassign={
                                       hasAccess('leads:write')
                                         ? () => {
                                             setSelectedIds(new Set([lead._id]));
                                             setAssignOwner('');
                                             setAssignOpen(true);
+                                          }
+                                        : undefined
+                                    }
+                                    onTransfer={
+                                      hasAccess('leads:write')
+                                        ? () => {
+                                            setTransferOwnerName('');
+                                            setTransferLeadTarget(lead);
                                           }
                                         : undefined
                                     }
@@ -2120,16 +2143,11 @@ export default function LeadsPage() {
                                   {lead.mobileNo || lead.phone}
                                 </CrmKanbanMetaRow>
                               ) : null}
-                              {lead.organization ? (
-                                <CrmKanbanMetaRow icon={<MapPin size={15} strokeWidth={1.75} />}>
-                                  {lead.organization}
-                                </CrmKanbanMetaRow>
-                              ) : null}
                             </CrmKanbanMetaList>
                             <CrmKanbanCardFooter
                               left={
                                 <CrmKanbanAvatar size="sm">
-                                  {(lead.organization?.[0] || lead.firstName?.[0] || '?').toUpperCase()}
+                                  {(lead.firstName?.[0] || '?').toUpperCase()}
                                 </CrmKanbanAvatar>
                               }
                               actions
@@ -2243,7 +2261,6 @@ export default function LeadsPage() {
                             className={cn(
                               'group cursor-pointer transition-colors',
                               selectedIds.has(lead._id) && 'crm-table-row-selected',
-                              !selectedIds.has(lead._id) && leadNeedsOutreach(lead._id) && 'bg-amber-50/40',
                             )}
                             onClick={() => router.push(`/crm/leads/${lead._id}`)}
                           >
@@ -2274,16 +2291,52 @@ export default function LeadsPage() {
                                     onClick={() => openLeadWhatsApp(lead)}
                                   />
                                 ) : null}
+                                <CrmHoverActionIcon
+                                  icon={<Building2 size={12} />}
+                                  label="Add Property"
+                                  value={
+                                    leadListingCounts[lead._id]?.propertyCount
+                                      ? `${leadListingCounts[lead._id].propertyCount} listed`
+                                      : 'Add property'
+                                  }
+                                  tone="primary"
+                                  onClick={() => setPropertyLead(lead)}
+                                />
+                                <CrmHoverActionIcon
+                                  icon={<MapPin size={12} />}
+                                  label="Add Farm"
+                                  value={
+                                    leadListingCounts[lead._id]?.farmCount
+                                      ? `${leadListingCounts[lead._id].farmCount} listed`
+                                      : 'Add farm'
+                                  }
+                                  tone="primary"
+                                  onClick={() => setFarmLead(lead)}
+                                />
                                 <CrmTableActionMenu
                                   menuAlign="left"
+                                  onView={() => router.push(`/crm/leads/${lead._id}?readonly=1`)}
                                   onEdit={() => router.push(`/crm/leads/${lead._id}?edit=1`)}
                                   onNotes={() => setActivityLead(lead)}
+                                  onSetActivity={() => setCallActivityLead(lead)}
+                                  onCallHistory={() => setCallHistoryLead(lead)}
+                                  onUpdateHistory={() => setUpdateHistoryLead(lead)}
+                                  onAddProperty={() => setPropertyLead(lead)}
+                                  onAddFarm={() => setFarmLead(lead)}
                                   onReassign={
                                     hasAccess('leads:write')
                                       ? () => {
                                           setSelectedIds(new Set([lead._id]));
                                           setAssignOwner('');
                                           setAssignOpen(true);
+                                        }
+                                      : undefined
+                                  }
+                                  onTransfer={
+                                    hasAccess('leads:write')
+                                      ? () => {
+                                          setTransferOwnerName('');
+                                          setTransferLeadTarget(lead);
                                         }
                                       : undefined
                                   }
@@ -2491,6 +2544,115 @@ export default function LeadsPage() {
         leadName={`${callLead?.firstName || ''} ${callLead?.lastName || ''}`.trim()}
         relatedType="Lead"
       />
+      <AddPropertyModal
+        open={!!propertyLead}
+        onClose={() => setPropertyLead(null)}
+        leadId={propertyLead?._id}
+        leadName={propertyLead ? `${propertyLead.firstName || ''} ${propertyLead.lastName || ''}`.trim() : undefined}
+        onSuccess={() => setPropertyLead(null)}
+      />
+      <AddPropertyModal
+        open={!!farmLead}
+        onClose={() => setFarmLead(null)}
+        leadId={farmLead?._id}
+        leadName={farmLead ? `${farmLead.firstName || ''} ${farmLead.lastName || ''}`.trim() : undefined}
+        defaultPropertyType="Farm"
+        onSuccess={() => setFarmLead(null)}
+      />
+      <CallActivityFormModal
+        open={!!callActivityLead}
+        onClose={() => setCallActivityLead(null)}
+        leadId={callActivityLead?._id}
+        leadName={callActivityLead ? `${callActivityLead.firstName || ''} ${callActivityLead.lastName || ''}`.trim() : undefined}
+        onSuccess={() => void fetchLeadsList(selectedPipelineId || null)}
+      />
+      <CallHistoryPanel
+        open={!!callHistoryLead}
+        onClose={() => setCallHistoryLead(null)}
+        leadId={callHistoryLead?._id}
+        leadName={callHistoryLead ? `${callHistoryLead.firstName || ''} ${callHistoryLead.lastName || ''}`.trim() : undefined}
+      />
+      {updateHistoryLead ? (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-5 shadow-[var(--crm-shadow-raised)]">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[var(--text-main)]">
+                Update History — {`${updateHistoryLead.firstName || ''} ${updateHistoryLead.lastName || ''}`.trim()}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setUpdateHistoryLead(null)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-main)]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <LeadUpdateHistoryPanel entityId={updateHistoryLead._id} bare />
+          </div>
+        </div>
+      ) : null}
+      {transferLeadTarget ? (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-5 shadow-[var(--crm-shadow-raised)]">
+            <h3 className="mb-1 text-sm font-bold text-[var(--text-main)]">Transfer lead</h3>
+            <p className="mb-3 text-xs text-[var(--text-muted)]">
+              Full ownership transfer to another agent. Blocked if this lead already has a property or farm listed.
+            </p>
+            <label className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">New owner</label>
+            <input
+              type="text"
+              value={transferOwnerName}
+              onChange={(e) => setTransferOwnerName(e.target.value)}
+              placeholder="Owner name"
+              className="mb-4 h-9 w-full rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-2 text-sm text-[var(--text-main)] outline-none focus:border-[var(--primary)]"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTransferLeadTarget(null)}
+                disabled={transferring}
+                className="rounded-[var(--radius-md)] border border-[var(--border-color)] px-3 py-1.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--surface-dim)] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={transferring || !transferOwnerName.trim()}
+                onClick={async () => {
+                  if (!transferLeadTarget) return;
+                  setTransferring(true);
+                  try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(
+                      `${CRM_API_URL}/crm/property-listings/transfer-lead/${transferLeadTarget._id}`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ ownerName: transferOwnerName.trim() }),
+                      },
+                    );
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      toast.error(data?.message || 'Could not transfer this lead');
+                      return;
+                    }
+                    toast.success('Lead transferred');
+                    setTransferLeadTarget(null);
+                    void fetchLeadsList(selectedPipelineId || null);
+                  } catch {
+                    toast.error('Network error');
+                  } finally {
+                    setTransferring(false);
+                  }
+                }}
+                className="rounded-[var(--radius-md)] bg-[var(--primary)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {transferring ? 'Transferring…' : 'Transfer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <SendEmailModal
         isOpen={isBulkEmailOpen && selectedIds.size > 0}
         onClose={() => {

@@ -6,10 +6,7 @@ export type OutreachContextFieldKey =
   | 'organization'
   | 'jobTitle'
   | 'industry'
-  | 'source'
   | 'website'
-  | 'linkedinUrl'
-  | 'linkedInPost'
   | 'relatedServiceName'
   | 'customFields.requirements'
   | 'customFields.budget'
@@ -25,10 +22,7 @@ export const OUTREACH_CONTEXT_FIELD_DEFS: {
   { key: 'organization', label: 'Company / organization' },
   { key: 'jobTitle', label: 'Job title' },
   { key: 'industry', label: 'Industry' },
-  { key: 'source', label: 'Lead source' },
   { key: 'website', label: 'Website' },
-  { key: 'linkedinUrl', label: 'LinkedIn profile' },
-  { key: 'linkedInPost', label: 'LinkedIn post / listing context' },
   { key: 'relatedServiceName', label: 'Related service' },
   { key: 'customFields.requirements', label: 'Requirements (custom field)' },
   { key: 'customFields.budget', label: 'Budget (custom field)' },
@@ -80,17 +74,6 @@ function readNested(
     if (cf && typeof cf === 'object' && !Array.isArray(cf)) {
       const v = (cf as Record<string, unknown>)[cfKey];
       if (v != null && String(v).trim()) return String(v).trim();
-    }
-    return '';
-  }
-  if (key === 'linkedInPost') {
-    const lip = context.linkedInPost;
-    if (lip && typeof lip === 'object') {
-      const o = lip as Record<string, unknown>;
-      const parts = [o.title, o.description, o.url, o.authorName]
-        .map((x) => (x != null ? String(x).trim() : ''))
-        .filter(Boolean);
-      return parts.join(' — ');
     }
     return '';
   }

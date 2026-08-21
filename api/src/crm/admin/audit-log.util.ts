@@ -24,11 +24,9 @@ export function moduleToRelatedType(module: string): string {
     organizations: 'Organization',
     organization: 'Organization',
     companies: 'Organization',
-    'platform-opportunities': 'PlatformOpportunity',
     workflows: 'Workflow',
     proposals: 'Proposal',
     pipelines: 'Pipeline',
-    playbooks: 'Playbook',
   };
   if (map[m]) return map[m];
   if (m.endsWith('s') && map[m.slice(0, -1)]) return map[m.slice(0, -1)];
@@ -50,11 +48,9 @@ export function formatModuleLabel(module: string): string {
     'email-templates': 'email template',
     workspace: 'workspace',
     pipelines: 'pipeline',
-    playbooks: 'playbook',
     proposals: 'proposal',
     'service-offerings': 'service offering',
     workflows: 'workflow',
-    'platform-opportunities': 'platform opportunity',
     'inbox-accounts': 'inbox account',
   };
   const key = String(module || '').toLowerCase();
@@ -169,9 +165,6 @@ export function crmRecordPath(
   if (t === 'client' || t === 'clients') return `/crm/clients/${id}`;
   if (t === 'organization' || t === 'organizations') {
     return `/crm/organizations/${id}`;
-  }
-  if (t === 'platformopportunity') {
-    return `/crm/platform-opportunities/${id}`;
   }
   return null;
 }

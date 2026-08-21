@@ -225,6 +225,18 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         href: "/crm/settings/trash",
         icon: Trash2,
       },
+      {
+        name: "Export Quota",
+        description: "Daily export limits for Super Admins, across Lead Manager and IVR exports.",
+        href: "/crm/settings/export-quota",
+        icon: Shield,
+      },
+      {
+        name: "Export History",
+        description: "Review past Lead Manager and IVR export attempts.",
+        href: "/crm/settings/export-history",
+        icon: FileText,
+      },
     ],
   },
 ];

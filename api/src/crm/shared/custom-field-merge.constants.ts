@@ -14,8 +14,6 @@ export const CUSTOM_FIELD_MERGEABLE_CORE: Record<string, Set<string>> = {
     'organization',
     'jobTitle',
     'website',
-    'linkedinUrl',
-    'source',
     'industry',
     'noOfEmployees',
     'territory',

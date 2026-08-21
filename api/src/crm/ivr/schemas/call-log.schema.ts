@@ -52,9 +52,26 @@ export class CallLog {
 
   @Prop({
     default: 'Initiated',
-    enum: ['Initiated', 'Ringing', 'Connected', 'Missed', 'Failed', 'Completed'],
+    enum: [
+      'Initiated',
+      'Ringing',
+      'Connected',
+      'Missed',
+      'Failed',
+      'Completed',
+      // Call Activity Form disposition default (manually-logged rows, not from Kommuno).
+      'Not Answered',
+    ],
   })
   status: string;
+
+  /** Disposition notes captured on the Call Activity Form. */
+  @Prop({ trim: true })
+  notes?: string;
+
+  /** True for rows created from the Call Activity Form ("Set Activity") rather than a real Kommuno session. */
+  @Prop({ default: false })
+  loggedManually?: boolean;
 
   @Prop()
   callDate?: Date;
@@ -91,3 +108,4 @@ export const CallLogSchema = SchemaFactory.createForClass(CallLog);
 CallLogSchema.index({ direction: 1, createdAt: -1 });
 CallLogSchema.index({ callDate: -1 });
 CallLogSchema.index({ initiatedByUserId: 1, createdAt: -1 });
+CallLogSchema.index({ relatedTo: 1, createdAt: -1 });

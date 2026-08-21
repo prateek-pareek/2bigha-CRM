@@ -12,14 +12,11 @@ import {
   getDefaultCountryCodeFromPhone,
   getNationalDigitsFromPhone,
 } from '@/lib/crm/phone-country-codes';
-import { CRM_API_URL } from '@/lib/crm/config';
 import OpportunitySourcePlatformField from '@/components/crm/platform/OpportunitySourcePlatformField';
-import SocialPostPreview from '@/components/crm/sales/SocialPostPreview';
 import CrmMultiEmailListField from '@/components/crm/email/engagement/CrmMultiEmailListField';
 import { CrmFormSection, CrmFormGrid } from '@/components/crm/records/forms/crm-form-primitives';
 import { usePermissions } from '@/hooks/usePermissions';
 
-const EMPLOYEE_OPTIONS = ['1-10', '11-50', '51-200', '201-500', '500+'];
 const STATUS_OPTIONS = ['New', 'Qualified', 'Replied', 'Opportunity'];
 const CALL_STATUS_OPTIONS = ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'];
 
@@ -34,9 +31,9 @@ const SECTION_LABEL: Record<string, string> = {
 
 function sectionForKey(key: string): string {
   if (key.startsWith('cf:')) return 'custom';
-  if (['salutation', 'firstName', 'lastName', 'email', 'additionalEmails', 'gender', 'mobileNo', 'phone', 'linkedinUrl', 'twitterHandle'].includes(key)) return 'contact';
-  if (['organization', 'jobTitle', 'website', 'industry', 'annualRevenue', 'noOfEmployees', 'territory', 'relatedService'].includes(key)) return 'company';
-  if (['source', 'pipeline', 'stage', 'status', 'callStatus', 'leadOwner', 'leadCategory', 'group', 'notes'].includes(key)) return 'lead';
+  if (['salutation', 'firstName', 'lastName', 'email', 'additionalEmails', 'gender', 'mobileNo', 'phone', 'twitterHandle'].includes(key)) return 'contact';
+  if (['relatedService'].includes(key)) return 'company';
+  if (['pipeline', 'stage', 'status', 'callStatus', 'leadOwner', 'leadCategory', 'group', 'notes'].includes(key)) return 'lead';
   return 'other';
 }
 
@@ -49,7 +46,7 @@ const SEL =
   'w-full h-[38px] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-main)] outline-none cursor-pointer shadow-[var(--crm-shadow-input)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/25 transition-all appearance-none';
 
 /** Fields that span both columns in CRMS 2-col layout */
-const FULL_WIDTH_KEYS = new Set(['additionalEmails', 'linkedinUrl', 'twitterHandle', 'website', 'relatedService', 'notes']);
+const FULL_WIDTH_KEYS = new Set(['additionalEmails', 'twitterHandle', 'relatedService', 'notes']);
 
 interface CRMLeadFormFieldsProps {
   visibleKeys: string[];
@@ -92,26 +89,6 @@ export default function CRMLeadFormFields({
     ? visibleKeys
     : visibleKeys.filter((k) => k !== 'annualRevenue');
   const [idWarnings, setIdWarnings] = useState<Record<string, string>>({});
-  const [sourceMetadata, setSourceMetadata] = useState<any>(null);
-  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
-
-  const fetchSourceMetadata = useCallback(async (url: string) => {
-    if (!url || !url.startsWith('http')) return;
-    setIsFetchingMetadata(true);
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
-    try {
-      const res = await fetch(`${CRM_API_URL}/crm/fetch-link-metadata`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url }),
-      });
-      if (res.ok) setSourceMetadata(await res.json());
-    } catch (err) {
-      console.error('[CRMLeadFormFields] fetch-link-metadata failed:', err);
-    } finally {
-      setIsFetchingMetadata(false);
-    }
-  }, []);
 
   const runIdentifierCheck = useCallback(async (form: HTMLFormElement | null) => {
     if (!identifierContext || !form) return;
@@ -123,13 +100,11 @@ export default function CRMLeadFormFields({
       email: String(fd.get('email') ?? '').trim() || undefined,
       mobileNo: combinePhoneFromForm(fd, 'mobileNo') || undefined,
       phone: combinePhoneFromForm(fd, 'phone') || undefined,
-      linkedinUrl: String(fd.get('linkedinUrl') ?? '').trim() || undefined,
     });
     setIdWarnings({
       email: conflicts.email?.message || '',
       mobileNo: conflicts.mobileNo?.message || '',
       phone: conflicts.phone?.message || '',
-      linkedinUrl: conflicts.linkedinUrl?.message || '',
     });
   }, [identifierContext]);
 
@@ -220,105 +195,11 @@ export default function CRMLeadFormFields({
         return phoneField('mobileNo', 'Phone number', idWarnings.mobileNo);
       case 'phone':
         return phoneField('phone', 'Phone number (alternate)', idWarnings.phone);
-      case 'organization':
-        return (
-          <div key={key}>
-            <label className={LBL}>Company name</label>
-            <input name="organization" type="text" placeholder="Acme Inc." className={INP} />
-          </div>
-        );
-      case 'jobTitle':
-        return (
-          <div key={key}>
-            <label className={LBL}>Job title</label>
-            <input name="jobTitle" type="text" className={INP} />
-          </div>
-        );
-      case 'website':
-        return (
-          <div key={key}>
-            <label className={LBL}>Website URL</label>
-            <input name="website" type="url" placeholder="https://..." className={INP} />
-          </div>
-        );
-      case 'linkedinUrl':
-        return (
-          <div key={key}>
-            <label className={LBL}>LinkedIn profile</label>
-            <input name="linkedinUrl" type="url" placeholder="https://linkedin.com/in/..." onBlur={identifierContext ? onBlurId : undefined} className={INP} />
-            {idWarnings.linkedinUrl && <p className="text-xs text-[#f2545b] mt-0.5">{idWarnings.linkedinUrl}</p>}
-          </div>
-        );
       case 'twitterHandle':
         return (
           <div key={key}>
             <label className={LBL}>X (Twitter) handle</label>
             <input name="twitterHandle" type="text" placeholder="@username" className={INP} />
-          </div>
-        );
-      case 'source':
-        return (
-          <div key={key}>
-            <label className={LBL}>Lead source</label>
-            <input
-              name="source"
-              type="text"
-              placeholder="Paste LinkedIn, Threads or Facebook post URL..."
-              className={INP}
-              onBlur={(e) => {
-                let val = e.target.value.trim();
-                // If user pasted a full <iframe ...> embed code, extract the src URL
-                const iframeSrc = val.match(/src=["']([^"']+)["']/);
-                if (iframeSrc) {
-                  val = iframeSrc[1];
-                  e.target.value = val;
-                }
-                if (
-                  val.includes('linkedin.com') ||
-                  val.includes('threads.com') ||
-                  val.includes('threads.net') ||
-                  val.includes('facebook.com') ||
-                  val.includes('fb.watch')
-                ) void fetchSourceMetadata(val);
-              }}
-            />
-            {isFetchingMetadata && (
-              <div className="mt-1 text-xs font-bold text-primary animate-pulse flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-primary" /> Fetching post preview...
-              </div>
-            )}
-            {sourceMetadata && <SocialPostPreview metadata={sourceMetadata} />}
-            <input type="hidden" name="sourceMetadata" value={sourceMetadata ? JSON.stringify(sourceMetadata) : ''} />
-          </div>
-        );
-      case 'industry':
-        return (
-          <div key={key}>
-            <label className={LBL}>Industry</label>
-            <input name="industry" type="text" className={INP} />
-          </div>
-        );
-      case 'annualRevenue':
-        return (
-          <div key={key}>
-            <label className={LBL}>Annual revenue</label>
-            <input name="annualRevenue" type="number" placeholder="0" className={INP} />
-          </div>
-        );
-      case 'noOfEmployees':
-        return (
-          <div key={key}>
-            <label className={LBL}>Number of employees</label>
-            <select name="noOfEmployees" className={SEL}>
-              {['', ...EMPLOYEE_OPTIONS].map((o) => <option key={o} value={o}>{o || '—'}</option>)}
-            </select>
-          </div>
-        );
-      case 'territory':
-        return (
-          <div key={key}>
-            <label className={LBL}>Territory</label>
-            <input name="territory" type="text" className={INP} />
           </div>
         );
       case 'relatedService':

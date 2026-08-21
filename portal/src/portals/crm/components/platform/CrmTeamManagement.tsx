@@ -50,7 +50,7 @@ interface CrmTeamManagementProps {
     variant?: CrmTeamManagementVariant;
 }
 
-type PermissionEditorTab = "role" | "crm" | "mail" | "sales-data" | "data";
+type PermissionEditorTab = "role" | "crm" | "mail" | "sales-data" | "data" | "history" | "performance";
 
 export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementProps) {
     const [users, setUsers] = useState<StaffUser[]>([]);
@@ -595,6 +595,8 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                             { key: "mail", label: "Mail" },
                                             { key: "sales-data", label: "Sales Data" },
                                             { key: "data", label: "Data Scope" },
+                                            { key: "history", label: "History" },
+                                            { key: "performance", label: "Performance" },
                                         ].map((tab) => (
                                             <button
                                                 key={tab.key}
@@ -1019,6 +1021,14 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                         })}
                                     </div>
                                 )}
+
+                                {activePermissionTab === "history" && (
+                                    <TeamMemberHistoryTab userId={editingUser._id} />
+                                )}
+
+                                {activePermissionTab === "performance" && (
+                                    <TeamMemberPerformanceTab userId={editingUser._id} />
+                                )}
                             </div>
                         </div>
 
@@ -1050,6 +1060,124 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                     }
                 }}
             />
+        </div>
+    );
+}
+
+/** Team Members → History tab: reuses the same per-record audit-log endpoint the Lead detail page's "Update History" tab uses, scoped to this team member's own profile edits. */
+function TeamMemberHistoryTab({ userId }: { userId: string }) {
+    const [entries, setEntries] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        api
+            .get(`/crm/audit-logs/entity/${userId}`)
+            .then((res: any) => {
+                if (!cancelled) setEntries(Array.isArray(res.data) ? res.data : []);
+            })
+            .catch(() => {
+                if (!cancelled) setEntries([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [userId]);
+
+    if (loading) {
+        return (
+            <div className="flex justify-center py-8">
+                <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)]" />
+            </div>
+        );
+    }
+    if (!entries.length) {
+        return <p className="py-4 text-xs text-[var(--text-muted)]">No profile edits have been recorded yet.</p>;
+    }
+    return (
+        <ol className="space-y-2">
+            {entries.map((entry) => (
+                <li key={entry._id} className="rounded-md border border-[var(--surface-dim)] bg-[#fafbfc] p-3 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-[var(--text-main)]">{entry.action}</span>
+                        <span className="text-[var(--text-muted)]">{new Date(entry.createdAt).toLocaleString()}</span>
+                    </div>
+                    {entry.changes ? (
+                        <ul className="mt-1.5 space-y-0.5">
+                            {Object.entries(entry.changes).map(([field, diff]: [string, any]) => (
+                                <li key={field} className="text-[var(--text-muted)]">
+                                    <span className="font-semibold text-[var(--text-main)]">{field}:</span>{" "}
+                                    {String(diff?.old ?? "—")} → {String(diff?.new ?? "—")}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : null}
+                </li>
+            ))}
+        </ol>
+    );
+}
+
+/** Team Members → Performance tab: per-agent calls/leads/deals snapshot, reusing ReportingService's window-comparison pattern. */
+function TeamMemberPerformanceTab({ userId }: { userId: string }) {
+    const [summary, setSummary] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        api
+            .get(`/crm/reports/agent-performance/${userId}`)
+            .then((res: any) => {
+                if (!cancelled) setSummary(res.data || null);
+            })
+            .catch(() => {
+                if (!cancelled) setSummary(null);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [userId]);
+
+    if (loading) {
+        return (
+            <div className="flex justify-center py-8">
+                <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)]" />
+            </div>
+        );
+    }
+    if (!summary) {
+        return <p className="py-4 text-xs text-[var(--text-muted)]">No performance data available yet.</p>;
+    }
+    const windows: Array<{ key: string; label: string }> = [
+        { key: "today", label: "Today" },
+        { key: "thisWeek", label: "This week" },
+        { key: "thisMonth", label: "This month" },
+    ];
+    return (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {windows.map(({ key, label }) => {
+                const snap = summary[key] || {};
+                return (
+                    <div key={key} className="rounded-md border border-[var(--surface-dim)] bg-white p-3">
+                        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
+                        <dl className="space-y-1 text-xs">
+                            <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Calls</dt><dd className="font-semibold">{snap.calls ?? 0}</dd></div>
+                            <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Leads created</dt><dd className="font-semibold">{snap.leadsCreated ?? 0}</dd></div>
+                            <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Leads converted</dt><dd className="font-semibold">{snap.leadsConverted ?? 0}</dd></div>
+                            <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Deals won</dt><dd className="font-semibold">{snap.dealsWon ?? 0}</dd></div>
+                            <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Meetings</dt><dd className="font-semibold">{snap.meetings ?? 0}</dd></div>
+                        </dl>
+                    </div>
+                );
+            })}
         </div>
     );
 }

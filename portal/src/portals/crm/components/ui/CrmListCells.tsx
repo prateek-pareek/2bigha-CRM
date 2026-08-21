@@ -227,6 +227,20 @@ type CrmTableActionMenuProps = {
   onWhatsApp?: () => void;
   onReassign?: () => void;
   onNotes?: () => void;
+  /** Read-only detail view — distinct from Edit (Lead Action Menu). */
+  onView?: () => void;
+  /** Opens the Call Activity Form to log a disposition ("Set Activity"). */
+  onSetActivity?: () => void;
+  /** Opens this record's call history panel. */
+  onCallHistory?: () => void;
+  /** Full ownership transfer — distinct from bulk Reassign; may be blocked server-side once properties/farms are listed. */
+  onTransfer?: () => void;
+  /** Add Property — also reachable as an always-visible row icon; listed here too per the Lead Action Menu spec. */
+  onAddProperty?: () => void;
+  /** Add Farm — also reachable as an always-visible row icon; listed here too per the Lead Action Menu spec. */
+  onAddFarm?: () => void;
+  /** Opens the per-record field-change history (audit log) panel. */
+  onUpdateHistory?: () => void;
   className?: string;
   /** Which edge the dropdown panel hangs from. Use "left" when this menu sits near the left edge of the table (e.g. a leading Action column) so the panel doesn't overflow off-screen. Defaults to "right" (panel's right edge pinned to the trigger). */
   menuAlign?: "left" | "right";
@@ -242,6 +256,13 @@ export function CrmTableActionMenu({
   onWhatsApp,
   onReassign,
   onNotes,
+  onView,
+  onSetActivity,
+  onCallHistory,
+  onTransfer,
+  onUpdateHistory,
+  onAddProperty,
+  onAddFarm,
   className,
   menuAlign = "right",
 }: CrmTableActionMenuProps) {
@@ -287,6 +308,16 @@ export function CrmTableActionMenu({
             )}
             onClick={(e) => e.stopPropagation()}
           >
+            {onView ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onView)}
+              >
+                <CrmIcon.Eye size={13} className="text-[#2f80ed]" />
+                View
+              </button>
+            ) : null}
             {onEdit ? (
               <button
                 type="button"
@@ -337,6 +368,56 @@ export function CrmTableActionMenu({
                 Notes &amp; follow-up
               </button>
             ) : null}
+            {onSetActivity ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onSetActivity)}
+              >
+                <CrmIcon.Target size={13} className="text-[#2f80ed]" />
+                Set Activity
+              </button>
+            ) : null}
+            {onCallHistory ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onCallHistory)}
+              >
+                <CrmIcon.Timer size={13} className="text-[#2f80ed]" />
+                Call History
+              </button>
+            ) : null}
+            {onAddProperty ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onAddProperty)}
+              >
+                <CrmNavIcon.Building size={13} className="text-[#2f80ed]" />
+                Add Property
+              </button>
+            ) : null}
+            {onAddFarm ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onAddFarm)}
+              >
+                <CrmIcon.MapPin size={13} className="text-[#2f80ed]" />
+                Add Farm
+              </button>
+            ) : null}
+            {onUpdateHistory ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onUpdateHistory)}
+              >
+                <CrmIcon.GitBranch size={13} className="text-[#2f80ed]" />
+                Update History
+              </button>
+            ) : null}
             {onReassign ? (
               <button
                 type="button"
@@ -345,6 +426,16 @@ export function CrmTableActionMenu({
               >
                 <CrmIcon.Users size={13} className="text-[#2f80ed]" />
                 Reassign
+              </button>
+            ) : null}
+            {onTransfer ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onTransfer)}
+              >
+                <CrmIcon.ArrowRight size={13} className="text-[#2f80ed]" />
+                Transfer
               </button>
             ) : null}
             {onClone ? (

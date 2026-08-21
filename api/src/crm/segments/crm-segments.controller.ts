@@ -23,13 +23,13 @@ export class CrmSegmentsController {
   constructor(private readonly segmentsService: CrmSegmentsService) {}
 
   @Get()
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   findAll(@Request() req: any) {
     return this.segmentsService.findAll(req.user);
   }
 
   @Get('for-record')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   findForRecord(
     @Request() req: any,
     @Query('module') module: string,
@@ -40,7 +40,7 @@ export class CrmSegmentsController {
   }
 
   @Post('preview-counts')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   previewCounts(
     @Request() req: any,
     @Body()
@@ -48,7 +48,6 @@ export class CrmSegmentsController {
       listType?: 'dynamic' | 'static';
       leadFilters?: CrmFilterCriterion[];
       contactFilters?: CrmFilterCriterion[];
-      platformOpportunityFilters?: CrmFilterCriterion[];
       members?: Array<{ module: CrmSegmentMemberModule; entityId: string }>;
     },
   ) {
@@ -56,7 +55,7 @@ export class CrmSegmentsController {
   }
 
   @Post('preview-members')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   previewMembers(
     @Request() req: any,
     @Body()
@@ -64,7 +63,6 @@ export class CrmSegmentsController {
       listType?: 'dynamic' | 'static';
       leadFilters?: CrmFilterCriterion[];
       contactFilters?: CrmFilterCriterion[];
-      platformOpportunityFilters?: CrmFilterCriterion[];
       members?: Array<{ module: CrmSegmentMemberModule; entityId: string }>;
       module: string;
       page?: number;
@@ -76,7 +74,7 @@ export class CrmSegmentsController {
   }
 
   @Post(':id/clone')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   clone(@Request() req: any, @Param('id') id: string) {
     return this.segmentsService.clone(id, req.user);
   }
@@ -110,7 +108,7 @@ export class CrmSegmentsController {
   }
 
   @Get(':id/members')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   listMembers(
     @Request() req: any,
     @Param('id') id: string,
@@ -128,13 +126,13 @@ export class CrmSegmentsController {
   }
 
   @Get(':id')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   findOne(@Request() req: any, @Param('id') id: string) {
     return this.segmentsService.findOne(id, req.user);
   }
 
   @Post()
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   create(
     @Request() req: any,
     @Body()
@@ -144,14 +142,13 @@ export class CrmSegmentsController {
       listType?: 'dynamic' | 'static';
       leadFilters?: CrmFilterCriterion[];
       contactFilters?: CrmFilterCriterion[];
-      platformOpportunityFilters?: CrmFilterCriterion[];
     },
   ) {
     return this.segmentsService.create(body, req.user);
   }
 
   @Put(':id')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   update(
     @Request() req: any,
     @Param('id') id: string,
@@ -162,20 +159,19 @@ export class CrmSegmentsController {
       listType?: 'dynamic' | 'static';
       leadFilters?: CrmFilterCriterion[];
       contactFilters?: CrmFilterCriterion[];
-      platformOpportunityFilters?: CrmFilterCriterion[];
     }>,
   ) {
     return this.segmentsService.update(id, body, req.user);
   }
 
   @Delete(':id')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   delete(@Param('id') id: string) {
     return this.segmentsService.delete(id);
   }
 
   @Post(':id/members')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   addMember(
     @Request() req: any,
     @Param('id') id: string,
@@ -186,7 +182,7 @@ export class CrmSegmentsController {
   }
 
   @Delete(':id/members/:module/:entityId')
-  @Permissions('leads:read', 'contacts:read', 'platform-opportunities:read')
+  @Permissions('leads:read', 'contacts:read')
   removeMember(
     @Request() req: any,
     @Param('id') id: string,

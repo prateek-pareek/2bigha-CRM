@@ -109,11 +109,6 @@ export function summarizeSearchSlice(data: Record<string, unknown>): unknown {
       'industry',
     ]),
     clients: pick(data.clients as unknown[], ['name', 'email', 'company']),
-    platformOpportunities: pick(data.platformOpportunities as unknown[], [
-      'title',
-      'platform',
-      'status',
-    ]),
     projects: pick(data.projects as unknown[], ['key', 'name']),
     issues: pick(data.issues as unknown[], ['key', 'summary', 'status']),
     pages: pick(data.pages as unknown[], ['title']),

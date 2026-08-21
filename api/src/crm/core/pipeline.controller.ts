@@ -27,7 +27,6 @@ export class PipelineController {
   @Permissions(
     'leads:read',
     'deals:read',
-    'platform-opportunities:read',
     'proposals:read',
     'legal:read',
     'settings:read',
@@ -37,7 +36,6 @@ export class PipelineController {
     type?:
       | 'deals'
       | 'leads'
-      | 'platform_opportunities'
       | 'proposals'
       | 'quotations'
       | 'contracts'

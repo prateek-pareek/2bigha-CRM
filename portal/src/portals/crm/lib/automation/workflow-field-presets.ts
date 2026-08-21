@@ -40,7 +40,6 @@ export const WORKFLOW_BUILTIN_VALUE_OPTIONS: Record<string, string[]> = {
 const NUMBER_FIELDS = new Set([
   "dealValue",
   "probability",
-  "leadScore",
   "annualRevenue",
   "noOfEmployees",
   "exchangeRate",

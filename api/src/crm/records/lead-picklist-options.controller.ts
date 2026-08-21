@@ -7,6 +7,7 @@ import {
   Post,
   Put,
   Query,
+  Request,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -35,6 +36,13 @@ export class LeadPicklistOptionsController {
     );
   }
 
+  /** Groups list with per-group lead count + creator, for the top-level Groups page. */
+  @Get('groups-with-counts')
+  @Permissions('leads:read')
+  groupsWithCounts(@Query('search') search?: string) {
+    return this.service.findAllWithLeadCounts('group', search);
+  }
+
   @Get(':id')
   @Permissions('leads:read', 'leads:write')
   findOne(@Param('id') id: string) {
@@ -43,8 +51,13 @@ export class LeadPicklistOptionsController {
 
   @Post()
   @Permissions('settings:write')
-  create(@Body() body: Record<string, unknown>) {
-    return this.service.create(body as any);
+  create(@Body() body: Record<string, unknown>, @Request() req: any) {
+    const user = req.user;
+    const name = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : undefined;
+    return this.service.create(body as any, {
+      id: user?.userId || user?._id,
+      name: name || user?.email,
+    });
   }
 
   @Put(':id')

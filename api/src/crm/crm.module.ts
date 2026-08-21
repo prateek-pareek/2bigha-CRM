@@ -48,12 +48,6 @@ import {
 import { PostmasterService } from './email/postmaster.service';
 import { PostmasterSyncCronService } from './email/postmaster-sync-cron.service';
 import { PostmasterController } from './email/postmaster.controller';
-import {
-  CrmSalesStrategy,
-  CrmSalesStrategySchema,
-} from './schemas/crm-sales-strategy.schema';
-import { CrmSalesStrategiesService } from './strategies/crm-sales-strategies.service';
-import { CrmSalesStrategiesController } from './strategies/crm-sales-strategies.controller';
 import { CrmTrashController } from './admin/crm-trash.controller';
 import { CrmTrashService } from './admin/crm-trash.service';
 import { CrmSegment, CrmSegmentSchema } from './schemas/crm-segment.schema';
@@ -163,15 +157,9 @@ import {
 } from './schemas/deal-engagement-automation-template.schema';
 import { DealEngagementAutomationService } from './automation/deal-engagement-automation.service';
 import { DealEngagementAutomationController } from './automation/deal-engagement-automation.controller';
-import { Playbook, PlaybookSchema } from './schemas/playbook.schema';
-import { PlaybooksService } from './automation/playbooks.service';
-import { PlaybooksController } from './automation/playbooks.controller';
 import { DuplicatesService } from './admin/duplicates.service';
 import { DuplicatesController } from './admin/duplicates.controller';
-import { DomainCompanySyncService } from './admin/domain-company-sync.service';
-import { DomainCompanySyncController } from './admin/domain-company-sync.controller';
 import { UsersModule } from '../users/users.module';
-import { LeadScoringService } from './core/lead-scoring.service';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { CrmProposal, CrmProposalSchema } from './schemas/proposal.schema';
 import {
@@ -201,6 +189,23 @@ import {
 } from './records/schemas/lead-picklist-option.schema';
 import { LeadPicklistOptionsService } from './records/lead-picklist-options.service';
 import { LeadPicklistOptionsController } from './records/lead-picklist-options.controller';
+import {
+  LeadIntentEvent,
+  LeadIntentEventSchema,
+} from './records/schemas/lead-intent-event.schema';
+import { LeadIntentService } from './records/lead-intent.service';
+import { LeadIntentController } from './records/lead-intent.controller';
+import {
+  ExportQuotaConfig,
+  ExportQuotaConfigSchema,
+} from './admin/schemas/export-quota-config.schema';
+import { ExportLog, ExportLogSchema } from './admin/schemas/export-log.schema';
+import { ExportQuotaService } from './admin/export-quota.service';
+import { ExportQuotaController } from './admin/export-quota.controller';
+import {
+  AgentTarget,
+  AgentTargetSchema,
+} from './reporting/schemas/agent-target.schema';
 import { CrmAiService } from './ai/crm-ai.service';
 import { CrmAiController } from './ai/crm-ai.controller';
 import {
@@ -247,27 +252,6 @@ import { PmProgressReadService } from './pm-bridge/pm-progress-read.service';
 import {
   PM_PROGRESS_READ_PORT,
 } from './shared/pm-progress-read.port';
-import {
-  PlatformOpportunity,
-  PlatformOpportunitySchema,
-} from './schemas/platform-opportunity.schema';
-import { PlatformOpportunitiesService } from './opportunities/platform-opportunities.service';
-import { PlatformOpportunitiesController } from './opportunities/platform-opportunities.controller';
-import {
-  WebsiteLead,
-  WebsiteLeadSchema,
-} from './schemas/website-lead.schema';
-import {
-  WebsiteChatSession,
-  WebsiteChatSessionSchema,
-} from './schemas/website-chat-session.schema';
-import { WebsiteInboundService } from './website/website-inbound.service';
-import { WebsiteInboundPublicController } from './website/website-inbound-public.controller';
-import {
-  WebsiteChatsController,
-  WebsiteLeadsController,
-} from './website/website-inbound.controller';
-import { WebsitePublicApiKeyGuard } from './shared/website-public-api-key.guard';
 import { EmailIntelligenceService } from './email-intelligence/email-intelligence.service';
 import { WebsiteEmailExtractorService } from './email-intelligence/website-email-extractor.service';
 import {
@@ -360,12 +344,15 @@ import {
           name: WorkflowTriggerProgress.name,
           schema: WorkflowTriggerProgressSchema,
         },
-        { name: Playbook.name, schema: PlaybookSchema },
         { name: CrmProposal.name, schema: CrmProposalSchema },
         { name: CrmProposalBlock.name, schema: CrmProposalBlockSchema },
         { name: CrmProposalBranding.name, schema: CrmProposalBrandingSchema },
         { name: ServiceOffering.name, schema: ServiceOfferingSchema },
         { name: LeadPicklistOption.name, schema: LeadPicklistOptionSchema },
+        { name: LeadIntentEvent.name, schema: LeadIntentEventSchema },
+        { name: ExportQuotaConfig.name, schema: ExportQuotaConfigSchema },
+        { name: ExportLog.name, schema: ExportLogSchema },
+        { name: AgentTarget.name, schema: AgentTargetSchema },
         { name: PortalClientNeed.name, schema: PortalClientNeedSchema },
         {
           name: ClientPortalAccessAssignment.name,
@@ -388,12 +375,6 @@ import {
         },
         { name: CrmGlobalSettings.name, schema: CrmGlobalSettingsSchema },
         {
-          name: PlatformOpportunity.name,
-          schema: PlatformOpportunitySchema,
-        },
-        { name: WebsiteLead.name, schema: WebsiteLeadSchema },
-        { name: WebsiteChatSession.name, schema: WebsiteChatSessionSchema },
-        {
           name: LeadEngagementAutomationTemplate.name,
           schema: LeadEngagementAutomationTemplateSchema,
         },
@@ -402,7 +383,6 @@ import {
           schema: DealEngagementAutomationTemplateSchema,
         },
         { name: PostmasterDomainSnapshot.name, schema: PostmasterDomainSnapshotSchema },
-        { name: CrmSalesStrategy.name, schema: CrmSalesStrategySchema },
         { name: CrmAssociation.name, schema: CrmAssociationSchema },
         { name: CrmObjectType.name, schema: CrmObjectTypeSchema },
         { name: CrmObjectRecord.name, schema: CrmObjectRecordSchema },
@@ -444,23 +424,18 @@ import {
     WorkflowsController,
     LeadEngagementAutomationController,
     DealEngagementAutomationController,
-    PlaybooksController,
     DuplicatesController,
-    DomainCompanySyncController,
     ProposalsController,
     ProposalBlocksController,
     ProposalBrandingController,
     ServiceOfferingsController,
     LeadPicklistOptionsController,
+    LeadIntentController,
+    ExportQuotaController,
     CrmAiController,
-    PlatformOpportunitiesController,
-    WebsiteInboundPublicController,
-    WebsiteLeadsController,
-    WebsiteChatsController,
     EmailIntelligenceController,
     EmailFinderLegacyController,
     PostmasterController,
-    CrmSalesStrategiesController,
     CrmTrashController,
     CrmMigrationController,
     AssociationsController,
@@ -471,19 +446,18 @@ import {
     LeadEngagementAutomationService,
     DealEngagementAutomationService,
     WorkflowsService,
-    PlaybooksService,
     DuplicatesService,
-    DomainCompanySyncService,
     ProposalsService,
     ProposalExportService,
     ProposalBlocksService,
     ProposalBrandingService,
     ServiceOfferingsService,
     LeadPicklistOptionsService,
+    LeadIntentService,
+    ExportQuotaService,
     CrmAiService,
     CrmProposalAiSettingsService,
     CrmContractAiSettingsService,
-    LeadScoringService,
     CRMService,
     CrmMigrationService,
     CrmEmailEngagementBatchService,
@@ -521,9 +495,6 @@ import {
       provide: PM_PROGRESS_READ_PORT,
       useExisting: PmProgressReadService,
     },
-    PlatformOpportunitiesService,
-    WebsiteInboundService,
-    WebsitePublicApiKeyGuard,
     EmailTrackingService,
     WhatsAppService,
     MetaLeadAdsService,
@@ -542,7 +513,6 @@ import {
     AuditLogInterceptor,
     PostmasterService,
     PostmasterSyncCronService,
-    CrmSalesStrategiesService,
     CrmTrashService,
     AssociationsService,
     CustomObjectsService,
@@ -566,10 +536,8 @@ import {
     PipelinesService,
     ReportingService,
     WorkflowsService,
-    PlaybooksService,
     CrmAiService,
     InboxAccountsService,
-    LeadScoringService,
     EmailTrackingService,
     WebsiteEmailExtractorService,
     AuditLogInterceptor,

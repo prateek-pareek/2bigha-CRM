@@ -32,6 +32,8 @@ export const CRM_SETTINGS_ITEMS: CrmSettingsItem[] = [
   { name: "Wiki", href: "/crm/settings/wiki", requiredPermission: "settings-wiki:read" },
   { name: "Duplicate Management", href: "/crm/settings/duplicates", requiredPermission: "settings-duplicates:read" },
   { name: "Trash", href: "/crm/settings/trash", requiredPermission: "admin:manage" },
+  { name: "Export Quota", href: "/crm/settings/export-quota", requiredPermission: "admin:manage" },
+  { name: "Export History", href: "/crm/settings/export-history", requiredPermission: "admin:manage" },
 ];
 
 export function canAccessCrmSetting(

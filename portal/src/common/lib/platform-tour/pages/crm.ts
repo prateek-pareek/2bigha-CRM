@@ -86,30 +86,6 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
     ],
   },
   {
-    prefix: '/crm/website-leads',
-    steps: [
-      {
-        element: '[data-tour="main-content"]',
-        title: 'Website leads',
-        description:
-          'Form submissions and enquiries from your marketing site appear here. Review, assign owners, and push into the main leads pipeline.',
-        side: 'top',
-      },
-    ],
-  },
-  {
-    prefix: '/crm/website-chats',
-    steps: [
-      {
-        element: '[data-tour="main-content"]',
-        title: 'Website chats',
-        description:
-          'Live chat conversations from your site. Follow up on visitor questions and convert chats into leads or contacts.',
-        side: 'top',
-      },
-    ],
-  },
-  {
     prefix: '/crm/platform-opportunities',
     steps: [
       {
@@ -189,18 +165,6 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         title: 'Email finder',
         description:
           'Look up professional email addresses for prospects by name and company. Save results directly to contacts or leads.',
-        side: 'top',
-      },
-    ],
-  },
-  {
-    prefix: '/crm/playbooks',
-    steps: [
-      {
-        element: '[data-tour="main-content"]',
-        title: 'Playbooks',
-        description:
-          'Run guided sales playbooks with step-by-step scripts and recommendations. Great for onboarding new reps on consistent talk tracks.',
         side: 'top',
       },
     ],

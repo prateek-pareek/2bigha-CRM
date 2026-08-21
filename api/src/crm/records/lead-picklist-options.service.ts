@@ -5,9 +5,14 @@ import {
   LeadPicklistOption,
   LeadPicklistOptionDocument,
 } from './schemas/lead-picklist-option.schema';
+import { Lead, LeadDocument } from './schemas/lead.schema';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 
-export type LeadPicklistKey = 'leadCategory' | 'group' | 'checklistItem';
+export type LeadPicklistKey =
+  | 'leadCategory'
+  | 'group'
+  | 'checklistItem'
+  | 'leadIntent';
 
 /** Seeded once on first boot so the tab bar / dropdowns / checklist aren't empty on day one. */
 const DEFAULT_OPTIONS: Record<LeadPicklistKey, string[]> = {
@@ -20,6 +25,15 @@ const DEFAULT_OPTIONS: Record<LeadPicklistKey, string[]> = {
     'KYC Verified',
     'Agreement Signed',
   ],
+  // Mirrors the FRD's Add Lead "Lead Intent" chip set — admin-editable like the others.
+  leadIntent: [
+    'Buyer',
+    'Seller',
+    'Subscription',
+    'Farm',
+    'Property Management',
+    'Investor',
+  ],
 };
 
 @Injectable()
@@ -29,6 +43,8 @@ export class LeadPicklistOptionsService implements OnModuleInit {
   constructor(
     @InjectModel(LeadPicklistOption.name, 'crmConnection')
     private model: Model<LeadPicklistOptionDocument>,
+    @InjectModel(Lead.name, 'crmConnection')
+    private leadModel: Model<LeadDocument>,
   ) {}
 
   async onModuleInit() {
@@ -52,12 +68,17 @@ export class LeadPicklistOptionsService implements OnModuleInit {
     }
   }
 
-  async create(data: Partial<LeadPicklistOption>): Promise<LeadPicklistOption> {
+  async create(
+    data: Partial<LeadPicklistOption>,
+    creator?: { id?: string; name?: string },
+  ): Promise<LeadPicklistOption> {
     const doc = new this.model({
       listKey: String(data.listKey ?? '').trim(),
       label: String(data.label ?? '').trim(),
       sortOrder: data.sortOrder ?? 0,
       isActive: data.isActive !== false,
+      createdBy: creator?.id ?? undefined,
+      createdByName: creator?.name ?? undefined,
     });
     return doc.save();
   }
@@ -93,6 +114,42 @@ export class LeadPicklistOptionsService implements OnModuleInit {
       .exec();
     if (!doc) throw new NotFoundException('Option not found');
     return doc as LeadPicklistOption;
+  }
+
+  /**
+   * Groups page: every 'group' option plus its live lead count and creator,
+   * optionally filtered by name — backs the top-level Groups section (create,
+   * search, lead count, creator, click-through to filtered leads).
+   */
+  async findAllWithLeadCounts(
+    listKey: 'group',
+    search?: string,
+  ): Promise<Array<LeadPicklistOption & { _id: unknown; leadCount: number }>> {
+    const query: Record<string, unknown> = { listKey, isActive: true };
+    const trimmedSearch = search?.trim();
+    if (trimmedSearch) {
+      query.label = { $regex: trimmedSearch, $options: 'i' };
+    }
+    const options = await this.model
+      .find(query)
+      .sort({ sortOrder: 1, label: 1 })
+      .lean()
+      .exec();
+    if (!options.length) return [];
+
+    const labels = options.map((o) => o.label);
+    const counts = await this.leadModel.aggregate([
+      { $match: { group: { $in: labels }, isDeleted: { $ne: true } } },
+      { $group: { _id: '$group', count: { $sum: 1 } } },
+    ]);
+    const countByLabel = new Map<string, number>(
+      counts.map((c) => [c._id, c.count]),
+    );
+
+    return options.map((option) => ({
+      ...option,
+      leadCount: countByLabel.get(option.label) ?? 0,
+    })) as Array<LeadPicklistOption & { _id: unknown; leadCount: number }>;
   }
 
   async remove(id: string): Promise<void> {
