@@ -3,37 +3,36 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowUpRight,
-  Bath,
-  Bed,
-  Check,
   Home,
+  Loader2,
   Mail,
   Phone,
   Ruler,
   Trash2,
   User,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CRM_API_URL } from "@/lib/crm/config";
 import { CRM_PANEL } from "@/lib/crm/ui";
 import { cn } from "@/lib/utils";
 import { CrmPageHeader, CrmSectionCard, CrmSoftBadge, CrmStatusBadge } from "@/components/crm/ui";
 import CrmRecordDetailSkeleton from "@/components/crm/records/detail/CrmRecordDetailSkeleton";
+import { fetchThirdPartyPropertyById, deleteThirdPartyProperty, fetchLeadSubscriptionMock, requestPropertyLegalVerification } from "@/lib/crm/property-listings/third-party-api";
+import PmWorkflowPanel from "@/components/crm/property-listings/PmWorkflowPanel";
+import LegalVerificationReviewPanel from "@/components/crm/property-listings/LegalVerificationReviewPanel";
 import {
   formatAddress,
+  formatIndianLandAmount,
+  formatListingArea,
   formatPrice,
+  legalStatusBadgeTone,
+  pmStageBadgeTone,
+  resolveAreaBigha,
   statusBadgeTone,
   approvalStatusBadgeTone,
+  LISTING_BUCKETS,
+  type LeadSubscriptionMock,
   type PropertyListingRecord,
-  type PropertyListingApprovalStatus,
 } from "@/lib/crm/property-listings/types";
-
-function authHeaders(): HeadersInit {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  return { Authorization: `Bearer ${token}` };
-}
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === undefined || value === null || value === "") return null;
@@ -53,32 +52,24 @@ export default function PropertyListingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [listing, setListing] = useState<PropertyListingRecord | null>(null);
   const [activeImage, setActiveImage] = useState(0);
-  const [savingApproval, setSavingApproval] = useState(false);
-  const [linkedLead, setLinkedLead] = useState<{ _id: string; firstName?: string; lastName?: string } | null>(
-    null,
-  );
+  const [sub, setSub] = useState<LeadSubscriptionMock | null>(null);
+  const [requestBusy, setRequestBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/property-listings/${id}`, {
-        headers: authHeaders(),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.message || "Failed to load property listing");
+      const data = await fetchThirdPartyPropertyById(id);
+      if (!data) {
+        toast.error("Property listing not found");
         return;
       }
       setListing(data);
       setActiveImage(0);
-
-      if (data?.leadId) {
-        fetch(`${CRM_API_URL}/crm/leads/${data.leadId}`, { headers: authHeaders() })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((lead) => setLinkedLead(lead))
-          .catch(() => setLinkedLead(null));
+      if (data.leadId && data.listingBucket !== "pm") {
+        const subscription = await fetchLeadSubscriptionMock(data.leadId);
+        setSub(subscription);
       } else {
-        setLinkedLead(null);
+        setSub(null);
       }
     } catch {
       toast.error("Failed to load property listing");
@@ -93,46 +84,29 @@ export default function PropertyListingDetailPage() {
 
   const remove = async () => {
     if (!confirm("Delete this property listing?")) return;
+    const bucket = listing?.listingBucket || "sell";
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/property-listings/${id}`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.message || "Failed to delete listing");
-        return;
-      }
+      await deleteThirdPartyProperty(id);
       toast.success("Listing deleted");
-      router.push("/crm/property-listings");
+      router.push(`/crm/property-listings?bucket=${bucket}`);
     } catch {
       toast.error("Failed to delete listing");
     }
   };
 
-  const setApprovalStatus = async (approvalStatus: PropertyListingApprovalStatus) => {
-    setSavingApproval(true);
+  const requestLegal = async () => {
+    setRequestBusy(true);
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/property-listings/${id}`, {
-        method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ approvalStatus }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.message || "Failed to update approval status");
-        return;
+      const next = await requestPropertyLegalVerification(id);
+      setListing(next);
+      toast.success("Legal Verification requested");
+      if (next.leadId) {
+        setSub(await fetchLeadSubscriptionMock(next.leadId));
       }
-      toast.success(
-        approvalStatus === "Approved"
-          ? "Listing approved — now visible in the main Listing view."
-          : "Listing rejected.",
-      );
-      setListing(data);
-    } catch {
-      toast.error("Failed to update approval status");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Request failed");
     } finally {
-      setSavingApproval(false);
+      setRequestBusy(false);
     }
   };
 
@@ -140,9 +114,27 @@ export default function PropertyListingDetailPage() {
     return <CrmRecordDetailSkeleton />;
   }
 
-  const leadName = linkedLead
-    ? [linkedLead.firstName, linkedLead.lastName].filter(Boolean).join(" ") || "Linked lead"
-    : null;
+  const areaBigha = resolveAreaBigha(listing);
+  const isPm = listing.listingBucket === "pm";
+  const bucketLabel =
+    LISTING_BUCKETS.find((b) => b.key === listing.listingBucket)?.label || listing.listingBucket;
+  const canRequestLegal =
+    !isPm &&
+    !!sub?.includesLegalVerification &&
+    listing.propertyLegal?.status !== "Pending" &&
+    (listing.propertyLegal != null ||
+      sub.legalVerificationAllowance == null ||
+      sub.legalVerificationUsed < sub.legalVerificationAllowance);
+
+  const legalAllowanceHint = (() => {
+    if (!sub || isPm) return null;
+    if (!sub.includesLegalVerification) return "Plan does not include Legal Verification";
+    if (sub.legalVerificationAllowance == null) {
+      return `${sub.legalVerificationUsed} used · unlimited remaining`;
+    }
+    const left = Math.max(0, sub.legalVerificationAllowance - sub.legalVerificationUsed);
+    return `${left} of ${sub.legalVerificationAllowance} verifications left`;
+  })();
 
   return (
     <div className="theme-crm-hubspot mx-auto w-full max-w-5xl animate-in fade-in duration-500 pb-10">
@@ -150,42 +142,60 @@ export default function PropertyListingDetailPage() {
         icon={<Home size={18} />}
         title={listing.title}
         badge={
-          <div className="flex items-center gap-1.5">
-            <CrmStatusBadge tone={statusBadgeTone(listing.status)}>{listing.status}</CrmStatusBadge>
-            <CrmStatusBadge tone={approvalStatusBadgeTone(listing.approvalStatus)}>
-              {listing.approvalStatus}
-            </CrmStatusBadge>
-            <CrmSoftBadge label={`For ${listing.listedFor}`} tone="secondary" />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <CrmSoftBadge label={bucketLabel} tone="secondary" />
+            {isPm && listing.pmStage ? (
+              <CrmStatusBadge tone={pmStageBadgeTone(listing.pmStage)}>
+                {listing.pmStage}
+              </CrmStatusBadge>
+            ) : (
+              <>
+                <CrmStatusBadge tone={statusBadgeTone(listing.status)}>{listing.status}</CrmStatusBadge>
+                <CrmStatusBadge tone={approvalStatusBadgeTone(listing.approvalStatus)}>
+                  {listing.approvalStatus}
+                </CrmStatusBadge>
+              </>
+            )}
+            {listing.pmPlan ? <CrmSoftBadge label={`Plan: ${listing.pmPlan}`} tone="secondary" /> : null}
+            {listing.propertyLegal ? (
+              <CrmStatusBadge tone={legalStatusBadgeTone(listing.propertyLegal.status)}>
+                Legal: {listing.propertyLegal.status}
+              </CrmStatusBadge>
+            ) : null}
           </div>
         }
         description={formatAddress(listing)}
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },
-          { label: "Property Listings", href: "/crm/property-listings" },
+          {
+            label: "Property Listings",
+            href: `/crm/property-listings?bucket=${listing.listingBucket}`,
+          },
           { label: listing.title },
         ]}
         actions={
-          <div className="flex items-center gap-2">
-            {listing.approvalStatus !== "Approved" ? (
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
+            {legalAllowanceHint && !isPm ? (
+              <span className="text-[11px] text-[var(--text-muted)]">{legalAllowanceHint}</span>
+            ) : null}
+            {canRequestLegal ? (
               <button
                 type="button"
-                disabled={savingApproval}
-                onClick={() => void setApprovalStatus("Approved")}
-                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 shadow-[var(--crm-shadow-input)] transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                disabled={requestBusy}
+                onClick={() => void requestLegal()}
+                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-800 shadow-[var(--crm-shadow-input)] transition-colors hover:bg-sky-100 disabled:opacity-60"
               >
-                <Check size={14} /> Approve
+                {requestBusy ? <Loader2 size={14} className="animate-spin" /> : null}
+                Request Legal Verification
               </button>
             ) : null}
-            {listing.approvalStatus !== "Rejected" ? (
-              <button
-                type="button"
-                disabled={savingApproval}
-                onClick={() => void setApprovalStatus("Rejected")}
-                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-xs font-semibold text-[var(--text-muted)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--error-light)] hover:text-[var(--error)] disabled:opacity-50"
-              >
-                <X size={14} /> Reject
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => router.push(`/crm/property-listings/${id}/edit`)}
+              className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-xs font-semibold text-[var(--text-main)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--surface-dim)]"
+            >
+              Edit
+            </button>
             <button
               type="button"
               onClick={() => void remove()}
@@ -234,41 +244,59 @@ export default function PropertyListingDetailPage() {
           </div>
         )}
 
+        {isPm ? (
+          <PmWorkflowPanel listing={listing} onUpdated={setListing} />
+        ) : listing.propertyLegal ? (
+          <LegalVerificationReviewPanel listing={listing} onUpdated={setListing} />
+        ) : null}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <CrmSectionCard title="Overview">
-            <DetailRow label="Price" value={formatPrice(listing.price, listing.currency)} />
-            <DetailRow label="Property type" value={listing.propertyType} />
-            <DetailRow label="Listed for" value={listing.listedFor} />
-            <DetailRow
-              label="Bedrooms"
-              value={
-                typeof listing.bedrooms === "number" ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Bed size={13} /> {listing.bedrooms}
-                  </span>
-                ) : undefined
-              }
-            />
-            <DetailRow
-              label="Bathrooms"
-              value={
-                typeof listing.bathrooms === "number" ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Bath size={13} /> {listing.bathrooms}
-                  </span>
-                ) : undefined
-              }
-            />
-            <DetailRow
-              label="Area"
-              value={
-                typeof listing.areaSqft === "number" ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Ruler size={13} /> {listing.areaSqft} sqft
-                  </span>
-                ) : undefined
-              }
-            />
+            {isPm ? (
+              <>
+                <DetailRow label="PM plan" value={listing.pmPlan} />
+                <DetailRow label="PM stage" value={listing.pmStage} />
+                <DetailRow label="Property type" value={listing.propertyType} />
+                <DetailRow label="Area" value={formatListingArea(listing)} />
+                <DetailRow label="Khasra" value={listing.khasraNumber} />
+                <DetailRow
+                  label="Maps link"
+                  value={
+                    listing.googleMapsLink ? (
+                      <a
+                        href={listing.googleMapsLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[#2f80ed] underline"
+                      >
+                        Open map
+                      </a>
+                    ) : undefined
+                  }
+                />
+              </>
+            ) : (
+              <>
+                <DetailRow label="Total" value={formatIndianLandAmount(listing.price)} />
+                <DetailRow label="Price" value={formatPrice(listing.price, listing.currency)} />
+                <DetailRow label="Property type" value={listing.propertyType} />
+                <DetailRow label="Listed for" value={listing.listedFor} />
+                <DetailRow
+                  label="Area"
+                  value={
+                    areaBigha != null ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Ruler size={13} /> {areaBigha} Bigha
+                      </span>
+                    ) : (
+                      formatListingArea(listing)
+                    )
+                  }
+                />
+                <DetailRow label="Views" value={listing.viewCount ?? 0} />
+                <DetailRow label="Likes" value={listing.likeCount ?? 0} />
+              </>
+            )}
             <DetailRow
               label="Listed on"
               value={listing.listedDate ? new Date(listing.listedDate).toLocaleDateString() : undefined}
@@ -277,9 +305,12 @@ export default function PropertyListingDetailPage() {
 
           <CrmSectionCard title="Location & contact">
             <DetailRow label="Address" value={listing.address} />
+            <DetailRow label="Village / Area" value={listing.village} />
+            <DetailRow label="Tehsil" value={listing.tehsil} />
             <DetailRow label="City" value={listing.city} />
+            <DetailRow label="District" value={listing.district} />
             <DetailRow label="State" value={listing.state} />
-            <DetailRow label="Zip code" value={listing.zipCode} />
+            <DetailRow label="Pincode" value={listing.zipCode} />
             <DetailRow label="Country" value={listing.country} />
             {listing.contactName && (
               <DetailRow
@@ -313,19 +344,6 @@ export default function PropertyListingDetailPage() {
             )}
           </CrmSectionCard>
         </div>
-
-        {leadName && (
-          <CrmSectionCard title="Linked lead">
-            <button
-              type="button"
-              onClick={() => router.push(`/crm/leads/${listing.leadId}`)}
-              className="flex w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--surface-dim)] px-3 py-2.5 text-left transition-colors hover:border-[var(--primary)]/40"
-            >
-              <span className="text-sm font-medium text-[var(--text-main)]">{leadName}</span>
-              <ArrowUpRight size={15} className="shrink-0 text-[var(--text-muted)]" />
-            </button>
-          </CrmSectionCard>
-        )}
 
         {listing.description && (
           <CrmSectionCard title="Description">

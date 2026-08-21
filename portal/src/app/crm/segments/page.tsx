@@ -90,14 +90,8 @@ export default function CrmSegmentsPage() {
     rows = [...rows].sort((a, b) => {
       if (sortKey === "name") return a.name.localeCompare(b.name);
       if (sortKey === "members") {
-        const am =
-          (a.leadCount ?? 0) +
-          (a.contactCount ?? 0) +
-          (a.platformOpportunityCount ?? 0);
-        const bm =
-          (b.leadCount ?? 0) +
-          (b.contactCount ?? 0) +
-          (b.platformOpportunityCount ?? 0);
+        const am = (a.leadCount ?? 0) + (a.contactCount ?? 0);
+        const bm = (b.leadCount ?? 0) + (b.contactCount ?? 0);
         return bm - am;
       }
       const at = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
@@ -111,11 +105,7 @@ export default function CrmSegmentsPage() {
     const dynamic = segments.filter((s) => s.listType === "dynamic").length;
     const staticCount = segments.length - dynamic;
     const members = segments.reduce(
-      (sum, s) =>
-        sum +
-        (s.leadCount ?? 0) +
-        (s.contactCount ?? 0) +
-        (s.platformOpportunityCount ?? 0),
+      (sum, s) => sum + (s.leadCount ?? 0) + (s.contactCount ?? 0),
       0,
     );
     return { dynamic, staticCount, members };
@@ -183,7 +173,7 @@ export default function CrmSegmentsPage() {
         bordered={false}
         title="Segments"
         badge={<CrmCountBadge>{segments.length}</CrmCountBadge>}
-        description="Reusable lists of leads, contacts, and platform opportunities — for campaigns, automation, and reporting."
+        description="Reusable lists of leads and contacts — for campaigns, automation, and reporting."
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },
           { label: "Segments" },
@@ -435,7 +425,6 @@ export default function CrmSegmentsPage() {
                 <th className="sticky top-0 z-10">Type</th>
                 <th className="sticky top-0 z-10 text-right">Leads</th>
                 <th className="sticky top-0 z-10 text-right">Contacts</th>
-                <th className="sticky top-0 z-10 text-right">Opps</th>
                 <th className="sticky top-0 z-10 text-right">Total</th>
                 <th className="crm-table-actions sticky top-0 z-10 text-right text-[13px] font-semibold text-[#1f2020]">
                   Action
@@ -444,10 +433,7 @@ export default function CrmSegmentsPage() {
             </thead>
             <tbody>
               {filtered.map((seg) => {
-                const total =
-                  (seg.leadCount ?? 0) +
-                  (seg.contactCount ?? 0) +
-                  (seg.platformOpportunityCount ?? 0);
+                const total = (seg.leadCount ?? 0) + (seg.contactCount ?? 0);
                 return (
                   <tr
                     key={seg.id}
@@ -483,9 +469,6 @@ export default function CrmSegmentsPage() {
                     </td>
                     <td className="text-right text-sm font-medium tabular-nums text-[#1f2020]">
                       {seg.contactCount ?? 0}
-                    </td>
-                    <td className="text-right text-sm font-medium tabular-nums text-[#1f2020]">
-                      {seg.platformOpportunityCount ?? 0}
                     </td>
                     <td className="text-right text-sm font-semibold tabular-nums text-[#1f2020]">
                       {total}

@@ -7,10 +7,6 @@ export type CrmSettingsItem = {
 };
 
 export const CRM_SETTINGS_ITEMS: CrmSettingsItem[] = [
-  { name: "Email Deliverability", href: "/crm/settings/email-deliverability", requiredPermission: "settings-email-deliverability:read" },
-  { name: "Deliverability Health", href: "/crm/settings/email-deliverability/health", requiredPermission: "settings-deliverability-health:read" },
-  { name: "Deliverability Checklist", href: "/crm/settings/email-deliverability/checklist", requiredPermission: "settings-deliverability-health:read" },
-  { name: "Undeliverable Contacts", href: "/crm/settings/email-deliverability/undeliverable", requiredPermission: "settings-email-deliverability:read" },
   { name: "Email Templates", href: "/crm/settings/email-templates", requiredPermission: "settings-email-templates:read" },
   { name: "AI Outreach", href: "/crm/settings/ai-outreach", requiredPermission: "settings-ai-outreach:read" },
   { name: "AI Proposal Drafter", href: "/crm/settings/ai-proposal", requiredPermission: "settings:read" },

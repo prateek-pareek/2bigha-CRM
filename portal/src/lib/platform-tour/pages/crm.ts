@@ -86,18 +86,6 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
     ],
   },
   {
-    prefix: '/crm/platform-opportunities',
-    steps: [
-      {
-        element: '[data-tour="main-content"]',
-        title: 'Platform opportunities',
-        description:
-          'Track freelance and marketplace opportunities (e.g. Upwork-style bids). Manage pipeline stages from discovery through won/lost.',
-        side: 'top',
-      },
-    ],
-  },
-  {
     prefix: '/crm/clients/',
     steps: [
       {

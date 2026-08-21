@@ -82,12 +82,6 @@ export class IntegrationCatalogService {
           .exec();
         return { success: true, message: 'Meta Lead Ads disconnected' };
 
-      case 'google-postmaster':
-        await this.integrationModel
-          .deleteOne({ type: 'google_postmaster' })
-          .exec();
-        return { success: true, message: 'Google Postmaster disconnected' };
-
       case 'email-intelligence':
         await this.integrationModel
           .updateOne(
@@ -226,22 +220,6 @@ export class IntegrationCatalogService {
           connectionStatus: active ? 'connected' : 'disconnected',
           connectedAt: (doc as any)?.updatedAt ?? (doc as any)?.createdAt ?? null,
           detail: active ? `Page ${(doc as any)?.pageId} configured` : 'Not configured',
-        };
-      }
-
-      case 'google-postmaster': {
-        const doc = await this.integrationModel
-          .findOne({ type: 'google_postmaster' })
-          .lean()
-          .exec();
-        const cfg = (doc as any)?.config ?? {};
-        const connected = !!(cfg.refreshToken || (doc as any)?.refreshToken);
-        return {
-          connectionStatus: connected ? 'connected' : 'disconnected',
-          connectedAt: (doc as any)?.updatedAt ?? null,
-          detail: connected
-            ? cfg.connectedEmail || 'Google account linked'
-            : 'Not connected',
         };
       }
 

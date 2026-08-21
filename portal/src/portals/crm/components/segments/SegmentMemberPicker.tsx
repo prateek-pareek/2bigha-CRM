@@ -14,12 +14,9 @@ type SearchRecord = {
   organization?: string;
   name?: string;
   title?: string;
-  opportunitySourcePlatform?: string;
-  platformClientLabel?: string;
 };
 
 function moduleLabel(module: CrmSegmentMemberModule) {
-  if (module === "platform-opportunities") return "platform opportunities";
   return module;
 }
 
@@ -29,14 +26,7 @@ function recordLabel(row: SearchRecord) {
   return n || row.name || row.email || "Record";
 }
 
-function recordMeta(row: SearchRecord, module: CrmSegmentMemberModule) {
-  if (module === "platform-opportunities") {
-    return (
-      [row.opportunitySourcePlatform, row.platformClientLabel]
-        .filter(Boolean)
-        .join(" · ") || String(row._id)
-    );
-  }
+function recordMeta(row: SearchRecord) {
   return [row.email, row.organization].filter(Boolean).join(" · ") || String(row._id);
 }
 
@@ -82,12 +72,7 @@ export default function SegmentMemberPicker({
         );
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as Record<string, SearchRecord[]>;
-        const rows =
-          module === "leads"
-            ? data.leads || []
-            : module === "contacts"
-              ? data.contacts || []
-              : data.platformOpportunities || [];
+        const rows = module === "leads" ? data.leads || [] : data.contacts || [];
         if (!cancelled) setResults(rows.slice(0, 12));
       } catch {
         if (!cancelled) setResults([]);
@@ -126,11 +111,7 @@ export default function SegmentMemberPicker({
             onBlur={() => {
               window.setTimeout(() => setOpen(false), 150);
             }}
-            placeholder={
-              module === "platform-opportunities"
-                ? "Type title or platform…"
-                : "Type name or email…"
-            }
+            placeholder="Type name or email…"
             className="w-full rounded-md border border-[var(--border-color)] bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
           />
           {searching ? (
@@ -170,7 +151,7 @@ export default function SegmentMemberPicker({
                       )}
                     >
                       <span className="text-sm font-medium text-text-main">{recordLabel(row)}</span>
-                      <span className="text-xs text-text-muted">{recordMeta(row, module)}</span>
+                      <span className="text-xs text-text-muted">{recordMeta(row)}</span>
                       {already ? (
                         <span className="text-[10px] font-semibold text-primary">
                           Already in list

@@ -76,11 +76,9 @@ export default function LeadsDashboardPage() {
                     onUseLast30Days={() => setWindowFilter("last_30_days")}
                     windowFilter={windowFilter}
                     days={
-                      intakeKind === "platform"
-                        ? ws?.platformOpportunitiesAddedByDay || []
-                        : intakeKind === "deals"
-                          ? ws?.dealsAddedByDay || []
-                          : ws?.leadsAddedByDay || []
+                      intakeKind === "deals"
+                        ? ws?.dealsAddedByDay || []
+                        : ws?.leadsAddedByDay || []
                     }
                     onDateClick={(date) => setWindowFilter(`${date},${date}`)}
                   />

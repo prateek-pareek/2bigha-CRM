@@ -68,7 +68,6 @@ function CrmSearchPageContent() {
   const [visibleContacts, setVisibleContacts] = useState(INITIAL_VISIBLE);
   const [visibleOrgs, setVisibleOrgs] = useState(INITIAL_VISIBLE);
   const [visibleClients, setVisibleClients] = useState(INITIAL_VISIBLE);
-  const [visiblePlatform, setVisiblePlatform] = useState(INITIAL_VISIBLE);
 
   const runSearch = useCallback(async (q: string, signal?: AbortSignal) => {
     if (q.length < 2) {
@@ -114,7 +113,6 @@ function CrmSearchPageContent() {
     setVisibleContacts(INITIAL_VISIBLE);
     setVisibleOrgs(INITIAL_VISIBLE);
     setVisibleClients(INITIAL_VISIBLE);
-    setVisiblePlatform(INITIAL_VISIBLE);
   }, [queryFromUrl]);
 
   const leads = results?.leads ?? [];
@@ -122,7 +120,6 @@ function CrmSearchPageContent() {
   const contacts = results?.contacts ?? [];
   const organizations = results?.organizations ?? [];
   const clients = results?.clients ?? [];
-  const platformOpportunities = results?.platformOpportunities ?? [];
 
   const totalCount = useMemo(
     () =>
@@ -130,15 +127,13 @@ function CrmSearchPageContent() {
       deals.length +
       contacts.length +
       organizations.length +
-      clients.length +
-      platformOpportunities.length,
+      clients.length,
     [
       leads.length,
       deals.length,
       contacts.length,
       organizations.length,
       clients.length,
-      platformOpportunities.length,
     ],
   );
 
@@ -157,8 +152,8 @@ function CrmSearchPageContent() {
             Search CRM
           </h1>
           <p className="text-sm text-text-muted">
-            Find leads, contacts, deals, companies, clients, and platform
-            opportunities across your workspace.
+            Find leads, contacts, deals, companies, and clients across your
+            workspace.
           </p>
         </div>
 
@@ -231,26 +226,6 @@ function CrmSearchPageContent() {
         </div>
       ) : (
         <div className="space-y-12">
-          {platformOpportunities.length > 0 ? (
-            <SearchSection
-              title="Platform opportunities"
-              icon={<Briefcase size={16} className="text-primary" />}
-              total={platformOpportunities.length}
-              visible={visiblePlatform}
-              onShowMore={() => setVisiblePlatform((v) => v + INCREMENT)}
-            >
-              {platformOpportunities.slice(0, visiblePlatform).map((p) => (
-                <SearchCard
-                  key={p._id}
-                  href={`/crm/platform-opportunities/${p._id}`}
-                  title={p.title || "Opportunity"}
-                  subtitle={`${p.opportunitySourcePlatform || "Platform"}${p.platformClientLabel ? ` · ${p.platformClientLabel}` : ""}`}
-                  accent="#2f80ed"
-                />
-              ))}
-            </SearchSection>
-          ) : null}
-
           {leads.length > 0 ? (
             <SearchSection
               title="Leads"

@@ -60,16 +60,6 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     { perm: 'deals:import', label: 'Import deals (upload)' },
     { perm: 'deals:export', label: 'Export / download deals CSV' },
   ],
-  'platform-opportunities': [
-    {
-      perm: 'platform-opportunities:import',
-      label: 'Import platform opportunities',
-    },
-    {
-      perm: 'platform-opportunities:export',
-      label: 'Export / download opportunities CSV',
-    },
-  ],
   clients: [
     { perm: 'clients:import', label: 'Import clients (upload)' },
     { perm: 'clients:export', label: 'Export / download clients CSV' },
@@ -95,8 +85,6 @@ export const GLOBAL_PERMISSION_KEYS = new Set([
   'deals:move_pipeline',
   'deals:import',
   'deals:export',
-  'platform-opportunities:import',
-  'platform-opportunities:export',
   'clients:import',
   'clients:export',
   'inbox:connect',
@@ -198,7 +186,6 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
   { id: 'reports-revenue', label: 'Reports · Forecast', routes: ['/crm/reports/forecast/revenue'] },
   { id: 'reports', label: 'Reports · home', routes: ['/crm/reports'] },
   { id: 'leads', label: 'Leads', routes: ['/crm/leads', '/crm/segments'] },
-  { id: 'platform-opportunities', label: 'Platform opportunities', routes: ['/crm/platform-opportunities'] },
   { id: 'deals', label: 'Deals', routes: ['/crm/deals'] },
   { id: 'legal', label: 'Legal', routes: ['/crm/legal'] },
   { id: 'clients', label: 'Clients', routes: ['/crm/clients', '/client-portals'] },
@@ -211,8 +198,6 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
   { id: 'settings', label: 'Settings & templates', routes: ['/crm/settings'] },
   { id: 'proposals', label: 'Proposals & CVs', routes: ['/crm/proposals'] },
   { id: 'services', label: 'Services catalog', routes: ['/crm/services'] },
-  { id: 'settings-email-deliverability', label: 'Settings · Email Deliverability', routes: ['/crm/settings/email-deliverability'] },
-  { id: 'settings-deliverability-health', label: 'Settings · Deliverability Health', routes: ['/crm/settings/email-deliverability/health'] },
   { id: 'settings-email-templates', label: 'Settings · Email Templates', routes: ['/crm/settings/email-templates'] },
   { id: 'settings-ai-outreach', label: 'Settings · AI Outreach', routes: ['/crm/settings/ai-outreach'] },
   { id: 'settings-snippets', label: 'Settings · Snippets', routes: ['/crm/settings/snippets'] },

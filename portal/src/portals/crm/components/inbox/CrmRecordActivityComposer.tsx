@@ -19,8 +19,7 @@ export type CrmActivityRelatedType =
   | "Deal"
   | "Contact"
   | "Client"
-  | "Organization"
-  | "PlatformOpportunity";
+  | "Organization";
 
 const BASE_TYPES = ["Activity", "Note", "Call", "Task", "Meeting", "Email"] as const;
 

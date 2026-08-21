@@ -15,8 +15,6 @@ function relatedTypeFromModule(module: string): string {
   if (m === "contacts" || m === "contact") return "Contact";
   if (m === "clients" || m === "client") return "Client";
   if (m === "organizations" || m === "organization") return "Organization";
-  if (m === "platform-opportunities" || m === "platform_opportunities")
-    return "PlatformOpportunity";
   return "Contact";
 }
 

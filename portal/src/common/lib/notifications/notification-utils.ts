@@ -57,8 +57,6 @@ export function isCrmNotification(notification: AppNotification): boolean {
       "clients",
       "organizations",
       "inbox",
-      "platformopportunities",
-      "platform_opportunities",
     ].includes(module)
   ) {
     return true;
@@ -71,7 +69,6 @@ export function isCrmNotification(notification: AppNotification): boolean {
       "contact",
       "client",
       "organization",
-      "platformopportunity",
     ].includes(relatedType)
   ) {
     return true;
@@ -160,13 +157,6 @@ function resolveCrmEntityPath(metadata: Record<string, unknown>): string | null 
   const module = String(metadata.module || "").toLowerCase();
   const relatedType = String(metadata.relatedType || "").toLowerCase();
 
-  if (
-    module === "platformopportunities" ||
-    module === "platform_opportunities" ||
-    relatedType === "platformopportunity"
-  ) {
-    return `/crm/platform-opportunities/${entityId}`;
-  }
   if (module === "leads" || relatedType === "lead") {
     return `/crm/leads/${entityId}`;
   }

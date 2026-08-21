@@ -7,7 +7,26 @@ export type PropertyListingType =
   | "Office"
   | "Warehouse"
   | "Farm"
+  | "Agricultural"
+  | "Residential"
+  | "Industrial"
+  | "Farmhouse"
+  | "Farmland"
   | "Other";
+
+/** 2Bigha product streams — Buy / Sell / Farms marketplace vs Property Management (subscription). */
+export type ListingBucket = "buy" | "sell" | "farm" | "pm";
+
+export const LISTING_BUCKETS: { key: ListingBucket; label: string; description: string }[] = [
+  { key: "buy", label: "Buy", description: "Marketplace listings for buyers" },
+  { key: "sell", label: "Sell", description: "Seller / for-sale listings" },
+  { key: "farm", label: "Farms", description: "Farm & farmland marketplace listings" },
+  {
+    key: "pm",
+    label: "Property Management",
+    description: "Subscription PM cases with verification pipeline",
+  },
+];
 
 export type PropertyListingStatus =
   | "Available"
@@ -20,12 +39,204 @@ export type PropertyListingFor = "Sale" | "Rent";
 
 export type PropertyListingApprovalStatus = "Pending" | "Approved" | "Rejected";
 
+/** Area units used on 2Bigha / PM forms. */
+export type AreaUnit =
+  | "Bigha"
+  | "Katha"
+  | "Sq. Yard"
+  | "Sq. Ft"
+  | "Sq. M"
+  | "Acre"
+  | "Hectare"
+  | "Marla"
+  | "Kanal"
+  | "Guntha"
+  | "Cent";
+
+export const AREA_UNITS: AreaUnit[] = [
+  "Bigha",
+  "Katha",
+  "Sq. Yard",
+  "Sq. Ft",
+  "Sq. M",
+  "Acre",
+  "Hectare",
+  "Marla",
+  "Kanal",
+  "Guntha",
+  "Cent",
+];
+
+/** PM pipeline stages (from 2Bigha PM Process Flow). */
+export type PmPipelineStage =
+  | "Property Submitted"
+  | "Assigned to RM"
+  | "Assigned to Legal"
+  | "Assigned to Field Agent"
+  | "Visit Report Pending"
+  | "Visit Report Approved"
+  | "Visit Report Rejected";
+
+export const PM_PIPELINE_STAGES: PmPipelineStage[] = [
+  "Property Submitted",
+  "Assigned to RM",
+  "Assigned to Legal",
+  "Assigned to Field Agent",
+  "Visit Report Pending",
+  "Visit Report Approved",
+  "Visit Report Rejected",
+];
+
+/** High-level pipeline steps shown in the stage rail (doc §4). */
+export const PM_STAGE_RAIL: { key: string; match: PmPipelineStage[] }[] = [
+  { key: "Property Submitted", match: ["Property Submitted"] },
+  { key: "Assigned to RM", match: ["Assigned to RM"] },
+  { key: "Assigned to Legal", match: ["Assigned to Legal"] },
+  { key: "Assigned to Field Agent", match: ["Assigned to Field Agent"] },
+  {
+    key: "Visit Report",
+    match: ["Visit Report Pending", "Visit Report Approved", "Visit Report Rejected"],
+  },
+];
+
+export type PmLegalStatus = "Not started" | "In progress" | "Completed";
+export type PmVisitStatus = "Pending" | "Complete" | "Cancel";
+export type PmReportStatus = "Pending" | "Approved" | "Rejected";
+
+export interface PmChecklistItem {
+  id: string;
+  label: string;
+  checked: boolean;
+  note?: string;
+}
+
+export interface PmLegalVerification {
+  status: PmLegalStatus;
+  startedAt?: string;
+  completedAt?: string;
+  summary?: string;
+  checklist: PmChecklistItem[];
+}
+
+export interface PmFieldVisit {
+  status: PmVisitStatus;
+  scheduledAt?: string;
+  completedAt?: string;
+  notes?: string;
+}
+
+export interface PmVisitReport {
+  status: PmReportStatus;
+  submittedAt?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+  sections: PmChecklistItem[];
+}
+
+export const DEFAULT_LEGAL_CHECKLIST: PmChecklistItem[] = [
+  { id: "title_deed", label: "Title deed / ownership docs", checked: false },
+  { id: "khasra", label: "Khasra / land records match", checked: false },
+  { id: "encumbrance", label: "Encumbrance / lien check", checked: false },
+  { id: "boundary", label: "Boundary / survey consistency", checked: false },
+];
+
+export const DEFAULT_REPORT_SECTIONS: PmChecklistItem[] = [
+  { id: "location", label: "Location & access verified", checked: false },
+  { id: "boundaries", label: "Boundaries / markers", checked: false },
+  { id: "photos", label: "Site photos captured", checked: false },
+  { id: "owner", label: "Owner / occupant confirmation", checked: false },
+];
+
+export const PM_PLANS = ["Basic", "Standard", "Premium", "Featured"] as const;
+export type PmPlan = (typeof PM_PLANS)[number];
+
+/**
+ * Subscription-bundled property Legal Verification (2Bigha Legal Process Flow).
+ * Distinct from PM pipeline `legalVerification` (Assigned to Legal checklist).
+ */
+export type PropertyLegalStatus = "Pending" | "Verified" | "Rejected";
+
+export interface PropertyLegalNote {
+  text: string;
+  at: string;
+  by?: string;
+}
+
+export interface PropertyLegalReport {
+  fileName: string;
+  uploadedAt: string;
+  url?: string;
+}
+
+export interface PropertyLegalVerification {
+  status: PropertyLegalStatus;
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  /** Optional queue assignee (shared team by default; doc §3). */
+  assignedTo?: string;
+  /** Free-form notes from the legal reviewer (property-level). */
+  notes?: string;
+  /** Required when status is Rejected — shown back to the client/owner. */
+  rejectionReason?: string;
+  report?: PropertyLegalReport;
+  /** Prior review-pass notes when the property was reviewed before. */
+  priorNotes?: PropertyLegalNote[];
+  noteHistory?: PropertyLegalNote[];
+}
+
+export interface LeadSubscriptionMock {
+  plan: PmPlan;
+  expiryDate: string;
+  featuredUsed: number;
+  featuredAllowance: number;
+  /** Plan includes Request Legal Verification (doc §1). */
+  includesLegalVerification: boolean;
+  /** Cap on verification requests; null = unlimited. */
+  legalVerificationAllowance: number | null;
+  legalVerificationUsed: number;
+  invoices: { id: string; label: string; amount: number; date: string; status: string }[];
+}
+
+/** Whether the plan unlocks Legal Verification requests (doc §1). */
+export function planIncludesLegalVerification(plan: PmPlan | string | undefined): boolean {
+  return plan === "Standard" || plan === "Premium" || plan === "Featured";
+}
+
+/** Allowance for the plan; null = unlimited. Basic = 0. */
+export function planLegalVerificationAllowance(plan: PmPlan | string | undefined): number | null {
+  if (plan === "Featured") return null;
+  if (plan === "Premium") return 5;
+  if (plan === "Standard") return 2;
+  return 0;
+}
+
+export const PM_PROPERTY_TYPES: PropertyListingType[] = [
+  "Commercial",
+  "Residential",
+  "Agricultural",
+  "Industrial",
+  "Apartment",
+  "Office",
+  "Plot",
+  "Villa",
+  "Warehouse",
+  "Farmhouse",
+  "Farmland",
+  "Other",
+];
+
 export interface PropertyListingRecord {
   _id: string;
+  /** Product stream on 2Bigha — buy / sell / farm / pm. */
+  listingBucket: ListingBucket;
   title: string;
   address?: string;
   city?: string;
   state?: string;
+  district?: string;
+  village?: string;
+  tehsil?: string;
   zipCode?: string;
   country?: string;
   price: number;
@@ -35,6 +246,14 @@ export interface PropertyListingRecord {
   bedrooms?: number;
   bathrooms?: number;
   areaSqft?: number;
+  /** Area in Bigha (Rajasthan / 2Bigha convention ≈ 3,025 sq. yd). */
+  areaBigha?: number;
+  /** Generic numeric area — use with areaUnit (PM + multi-unit marketplace). */
+  areaValue?: number;
+  areaUnit?: AreaUnit;
+  viewCount?: number;
+  likeCount?: number;
+  verified?: boolean;
   status: PropertyListingStatus;
   approvalStatus: PropertyListingApprovalStatus;
   description?: string;
@@ -45,6 +264,24 @@ export interface PropertyListingRecord {
   contactPhone?: string;
   contactEmail?: string;
   leadId?: string;
+  /** PM-only */
+  pmPlan?: PmPlan;
+  khasraNumber?: string;
+  googleMapsLink?: string;
+  pmStage?: PmPipelineStage;
+  rmAssigneeName?: string;
+  legalAssigneeName?: string;
+  fieldAssigneeName?: string;
+  legalVerification?: PmLegalVerification;
+  fieldVisit?: PmFieldVisit;
+  visitReport?: PmVisitReport;
+  /**
+   * Subscription Legal Verification request (doc §§2–8) — marketplace / listed
+   * properties. Not the PM pipeline legal checklist.
+   */
+  propertyLegal?: PropertyLegalVerification;
+  /** Supporting docs for legal review (name + url). */
+  documents?: { name: string; url: string; uploadedAt?: string }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +295,11 @@ export const PROPERTY_TYPES: PropertyListingType[] = [
   "Office",
   "Warehouse",
   "Farm",
+  "Agricultural",
+  "Residential",
+  "Industrial",
+  "Farmhouse",
+  "Farmland",
   "Other",
 ];
 
@@ -68,6 +310,10 @@ export const PROPERTY_STATUSES: PropertyListingStatus[] = [
   "Rented",
   "Off Market",
 ];
+
+/** Rajasthan / 2Bigha: 1 Bigha ≈ 3,025.006 sq. yd (matches consumer app cards). */
+export const SQYD_PER_BIGHA = 3025.006;
+export const SQFT_PER_BIGHA = SQYD_PER_BIGHA * 9;
 
 export function statusTone(status: string): string {
   const s = status.toLowerCase();
@@ -102,9 +348,29 @@ export function approvalStatusBadgeTone(status: string): PropertyStatusBadgeTone
   return "warning";
 }
 
+export function pmStageBadgeTone(stage: string): PropertyStatusBadgeTone {
+  const s = stage.toLowerCase();
+  if (s.includes("approved")) return "success";
+  if (s.includes("rejected")) return "neutral";
+  if (s.includes("legal") || s.includes("field") || s.includes("visit")) return "info";
+  if (s.includes("rm")) return "warning";
+  return "warning";
+}
+
+export function legalStatusBadgeTone(
+  status: PropertyLegalStatus | string | undefined,
+): PropertyStatusBadgeTone {
+  const s = (status || "").toLowerCase();
+  if (s === "verified") return "success";
+  if (s === "rejected") return "neutral";
+  return "warning";
+}
+
 export interface PropertyListingStats {
   total: number;
   byStatus: Record<string, number>;
+  byBucket?: Record<string, number>;
+  byPmStage?: Record<string, number>;
   totalValue: number;
   availableValue: number;
 }
@@ -121,8 +387,10 @@ export function formatPrice(price: number, currency = "INR"): string {
   }
 }
 
-export function formatAddress(p: Pick<PropertyListingRecord, "address" | "city" | "state">): string {
-  return [p.address, p.city, p.state].filter(Boolean).join(", ") || "—";
+export function formatAddress(
+  p: Pick<PropertyListingRecord, "address" | "city" | "state" | "district" | "village">,
+): string {
+  return [p.address, p.village, p.city, p.district, p.state].filter(Boolean).join(", ") || "—";
 }
 
 /** Compact currency for KPI tiles, e.g. "₹1.2Cr" / "₹85L" via Intl compact notation. */
@@ -137,4 +405,78 @@ export function formatCompactPrice(price: number, currency = "INR"): string {
   } catch {
     return formatPrice(price, currency);
   }
+}
+
+function trimNum(n: number, maxFrac = 2): string {
+  return Number(n.toFixed(maxFrac)).toLocaleString("en-IN", {
+    maximumFractionDigits: maxFrac,
+  });
+}
+
+/**
+ * Consumer-app style amounts: "₹ 1 Cr", "₹ 10 Lakh", "₹ 77 Lakh".
+ * Falls back to standard currency formatting under ₹1 Lakh.
+ */
+export function formatIndianLandAmount(amount: number): string {
+  if (!Number.isFinite(amount) || amount < 0) return "—";
+  if (amount >= 1_00_00_000) {
+    return `₹ ${trimNum(amount / 1_00_00_000)} Cr`;
+  }
+  if (amount >= 1_00_000) {
+    return `₹ ${trimNum(amount / 1_00_000)} Lakh`;
+  }
+  return formatPrice(amount);
+}
+
+export function resolveAreaBigha(
+  listing: Pick<PropertyListingRecord, "areaBigha" | "areaSqft" | "areaValue" | "areaUnit">,
+): number | null {
+  if (typeof listing.areaBigha === "number" && listing.areaBigha > 0) {
+    return listing.areaBigha;
+  }
+  if (listing.areaUnit === "Bigha" && typeof listing.areaValue === "number" && listing.areaValue > 0) {
+    return listing.areaValue;
+  }
+  if (typeof listing.areaSqft === "number" && listing.areaSqft > 0) {
+    return listing.areaSqft / SQFT_PER_BIGHA;
+  }
+  return null;
+}
+
+export function formatListingArea(listing: PropertyListingRecord): string {
+  if (typeof listing.areaValue === "number" && listing.areaUnit) {
+    return `${listing.areaValue} ${listing.areaUnit}`;
+  }
+  const bigha = resolveAreaBigha(listing);
+  if (bigha != null) return `${Number(bigha.toFixed(2))} Bigha`;
+  if (typeof listing.areaSqft === "number") return `${listing.areaSqft} sqft`;
+  return "—";
+}
+
+export function areaBighaToSqYd(bigha: number): number {
+  return bigha * SQYD_PER_BIGHA;
+}
+
+/** Rate per Bigha, e.g. "₹ 10 Lakh/ Bigha". */
+export function formatRatePerBigha(price: number, areaBigha: number | null): string | null {
+  if (!areaBigha || areaBigha <= 0 || !Number.isFinite(price)) return null;
+  return `${formatIndianLandAmount(price / areaBigha)}/ Bigha`;
+}
+
+export function daysOnPlatform(listing: Pick<PropertyListingRecord, "listedDate" | "createdAt">): number {
+  const raw = listing.listedDate || listing.createdAt;
+  const start = new Date(raw).getTime();
+  if (!Number.isFinite(start)) return 0;
+  const days = Math.floor((Date.now() - start) / (1000 * 60 * 60 * 24));
+  return Math.max(0, days);
+}
+
+/** Display label aligned with 2Bigha consumer cards. */
+export function displayPropertyType(type: string): string {
+  if (type === "Farm" || type === "Farmland") return "Agricultural";
+  return type;
+}
+
+export function isMarketplaceBucket(bucket: ListingBucket): boolean {
+  return bucket === "buy" || bucket === "sell" || bucket === "farm";
 }

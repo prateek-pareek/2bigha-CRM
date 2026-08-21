@@ -76,19 +76,6 @@ export const INTEGRATION_CATALOG: IntegrationCatalogDefinition[] = [
     capabilities: ['lead_capture', 'webhooks'],
   },
   {
-    id: 'google-postmaster',
-    name: 'Google Postmaster Tools',
-    description:
-      'Monitor domain reputation, spam rates, and delivery errors from Google.',
-    category: 'email',
-    authType: 'oauth',
-    configurePath: '/crm/settings/integrations/postmaster',
-    accentColor: '#4285F4',
-    availability: 'live',
-    statusQuery: { type: 'google_postmaster' },
-    capabilities: ['domain_reputation', 'spam_metrics'],
-  },
-  {
     id: 'email-intelligence',
     name: 'Email intelligence',
     description:

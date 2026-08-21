@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Building2, Phone, EyeOff, ChevronDown, MapPin, Lock, ThumbsUp, CheckCircle2, History } from 'lucide-react';
+import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Building2, Phone, EyeOff, ChevronDown, MapPin, Lock, ThumbsUp, CheckCircle2, History, ClipboardList } from 'lucide-react';
 import FollowUpSequenceModal from '@/components/crm/automation/playbooks/FollowUpSequenceModal';
 import FollowUpSequenceCard from '@/components/crm/automation/playbooks/FollowUpSequenceCard';
 import Timeline from '@/components/crm/inbox/Timeline';
@@ -18,7 +18,10 @@ import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import LeadAssociationsPanel from '@/components/crm/records/associations/LeadAssociationsPanel';
 import LeadPropertiesPanel from '@/components/crm/records/associations/LeadPropertiesPanel';
+import LeadPmPanel from '@/components/crm/records/associations/LeadPmPanel';
+import LeadLegalVerificationPanel from '@/components/crm/records/associations/LeadLegalVerificationPanel';
 import AddPropertyModal from '@/components/crm/records/detail/AddPropertyModal';
+import AddPmPropertyModal from '@/components/crm/records/detail/AddPmPropertyModal';
 import LeadWhatsAppPanel from '@/components/crm/records/associations/LeadWhatsAppPanel';
 import LinkWhatsAppModal from '@/components/crm/records/detail/LinkWhatsAppModal';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
@@ -75,6 +78,7 @@ export default function LeadDetailPage() {
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [isAddPropertyModalOpen, setIsAddPropertyModalOpen] = useState(false);
   const [isAddFarmModalOpen, setIsAddFarmModalOpen] = useState(false);
+  const [isAddPmModalOpen, setIsAddPmModalOpen] = useState(false);
   const [propertiesRefreshKey, setPropertiesRefreshKey] = useState(0);
   const [isLinkWhatsAppModalOpen, setIsLinkWhatsAppModalOpen] = useState(false);
   const [whatsappLinksRefreshKey, setWhatsappLinksRefreshKey] = useState(0);
@@ -439,15 +443,22 @@ export default function LeadDetailPage() {
       id: 'add-farm',
       label: 'Farm',
       icon: <MapPin size={14} />,
-      title: 'Add a farm linked to this lead',
+      title: 'Add a farm listing linked to this lead',
       onClick: () => setIsAddFarmModalOpen(true),
     },
     {
       id: 'add-property',
       label: 'Property',
       icon: <Building2 size={14} />,
-      title: 'Add a property linked to this lead',
+      title: 'Add a sell listing linked to this lead',
       onClick: () => setIsAddPropertyModalOpen(true),
+    },
+    {
+      id: 'add-pm',
+      label: 'PM',
+      icon: <ClipboardList size={14} />,
+      title: 'Create a Property Management case for this lead',
+      onClick: () => setIsAddPmModalOpen(true),
     },
   );
 
@@ -883,6 +894,20 @@ export default function LeadDetailPage() {
             />
           ) : null}
           {entityId ? (
+            <LeadLegalVerificationPanel
+              leadId={entityId}
+              refreshKey={propertiesRefreshKey}
+              onRequested={() => setPropertiesRefreshKey((k) => k + 1)}
+            />
+          ) : null}
+          {entityId ? (
+            <LeadPmPanel
+              leadId={entityId}
+              refreshKey={propertiesRefreshKey}
+              onCreatePmClick={() => setIsAddPmModalOpen(true)}
+            />
+          ) : null}
+          {entityId ? (
             <LeadWhatsAppPanel
               leadId={entityId}
               refreshKey={whatsappLinksRefreshKey}
@@ -958,6 +983,13 @@ export default function LeadDetailPage() {
         leadId={entityId}
         leadName={`${lead.firstName || ''} ${lead.lastName || ''}`.trim()}
         defaultPropertyType="Farm"
+        onSuccess={() => setPropertiesRefreshKey((k) => k + 1)}
+      />
+      <AddPmPropertyModal
+        open={isAddPmModalOpen}
+        onClose={() => setIsAddPmModalOpen(false)}
+        leadId={entityId}
+        leadName={`${lead.firstName || ''} ${lead.lastName || ''}`.trim()}
         onSuccess={() => setPropertiesRefreshKey((k) => k + 1)}
       />
       <LinkWhatsAppModal

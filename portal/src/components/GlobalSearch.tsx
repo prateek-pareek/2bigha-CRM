@@ -134,25 +134,6 @@ export default function GlobalSearch() {
       {isOpen && typedResults ? (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-md shadow-lg border border-[var(--border-color)] overflow-hidden z-[100] animate-in slide-in-from-top-2 duration-200">
           <div className="max-h-[70vh] overflow-y-auto custom-scrollbar p-2">
-            {typedResults.platformOpportunities &&
-            typedResults.platformOpportunities.length > 0 ? (
-              <ResultSection
-                title="Platform opportunities"
-                icon={<Briefcase size={14} />}
-                items={typedResults.platformOpportunities}
-                render={(p) => (
-                  <ResultItem
-                    key={p._id}
-                    title={p.title || "Opportunity"}
-                    sub={`${p.opportunitySourcePlatform || "Platform"}${p.platformClientLabel ? ` · ${p.platformClientLabel}` : ""}`}
-                    onClick={() =>
-                      navigateTo(`/crm/platform-opportunities/${p._id}`)
-                    }
-                  />
-                )}
-              />
-            ) : null}
-
             {typedResults.leads && typedResults.leads.length > 0 ? (
               <ResultSection
                 title="Leads"

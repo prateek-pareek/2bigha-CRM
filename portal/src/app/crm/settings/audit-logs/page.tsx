@@ -47,9 +47,6 @@ function recordHref(module: string | undefined, entityId: string | undefined): s
   if (m === 'organizations' || m === 'organization' || m === 'companies') {
     return `/crm/organizations/${entityId}`;
   }
-  if (m === 'platform-opportunities') {
-    return `/crm/platform-opportunities/${entityId}`;
-  }
   return null;
 }
 

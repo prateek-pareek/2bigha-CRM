@@ -143,24 +143,6 @@ const INBOX_PROPERTIES: FilterProperty[] = [
   { key: 'createdAt', label: 'Received Date', type: 'date' },
 ];
 
-const PLATFORM_OPPORTUNITY_PROPERTIES: FilterProperty[] = [
-  { key: 'title', label: 'Opportunity Title', type: 'text' },
-  { key: 'opportunitySourcePlatform', label: 'Source Platform', type: 'text' },
-  { key: 'platformClientLabel', label: 'Client Label', type: 'text' },
-  {
-    key: 'platformEngagementStatus',
-    label: 'Engagement Status',
-    type: 'select',
-    options: BUILTIN_FILTER_OPTIONS.platformEngagementStatus,
-  },
-  { key: 'stage', label: 'Stage', type: 'select' },
-  { key: 'opportunityListingUrl', label: 'Listing URL', type: 'text' },
-  { key: 'ownerLabel', label: 'Owner', type: 'text' },
-  { key: 'notes', label: 'Notes', type: 'text' },
-  { key: 'source', label: 'Source', type: 'select', options: BUILTIN_FILTER_OPTIONS.source },
-  { key: 'createdAt', label: 'Created Date', type: 'date' },
-];
-
 function inferPropType(key: string): PropType {
   if (DATE_KEYS.has(key)) return 'date';
   if (NUMBER_KEYS.has(key)) return 'number';
@@ -208,9 +190,6 @@ export function getStaticProperties(
       break;
     case 'inbox':
       props = [...INBOX_PROPERTIES];
-      break;
-    case 'platform-opportunities':
-      props = [...PLATFORM_OPPORTUNITY_PROPERTIES];
       break;
     default:
       props = [];

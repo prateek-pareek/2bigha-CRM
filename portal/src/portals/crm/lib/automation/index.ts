@@ -1,7 +1,4 @@
 /** CRM automation module */
-export * from './playbook-field-options';
-export * from './playbook-types';
-export * from './playbook-ui';
 export * from './lead-engagement-automation';
 export * from './follow-up-cadence';
 export * from './workflow-action-utils';

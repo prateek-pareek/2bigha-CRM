@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Loader2, Sprout, X } from "lucide-react";
+import { ClipboardList, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { CrmButton } from "@/components/crm/ui";
 import {
-  EMPTY_PROPERTY_LISTING_DRAFT,
-  PropertyListingFormFields,
-  draftToCreateInput,
-  validatePropertyListingDraft,
-  type PropertyListingDraft,
-} from "@/components/crm/property-listings/PropertyListingForm";
+  EMPTY_PM_PROPERTY_DRAFT,
+  PmPropertyFormFields,
+  pmDraftToCreateInput,
+  validatePmPropertyDraft,
+  type PmPropertyDraft,
+} from "@/components/crm/property-listings/PmPropertyForm";
 import { createThirdPartyProperty } from "@/lib/crm/property-listings/third-party-api";
 import type { PropertyListingRecord } from "@/lib/crm/property-listings/types";
 
@@ -20,39 +20,30 @@ type Props = {
   leadId?: string;
   leadName?: string;
   onSuccess?: (property: PropertyListingRecord) => void;
-  /** 'Farm' / 'Agricultural' opens land-first form ("Add Farm" quick action). */
-  defaultPropertyType?: string;
 };
 
-/** Create a property/farm listing via the third-party mock API (linked to a lead when provided). */
-export default function AddPropertyModal({
+/** Create a Property Management case (subscription + verification pipeline). */
+export default function AddPmPropertyModal({
   open,
   onClose,
   leadId,
   leadName,
   onSuccess,
-  defaultPropertyType = "Apartment",
 }: Props) {
-  const isFarm =
-    defaultPropertyType === "Farm" || defaultPropertyType === "Agricultural";
-  const [draft, setDraft] = useState<PropertyListingDraft>(EMPTY_PROPERTY_LISTING_DRAFT);
+  const [draft, setDraft] = useState<PmPropertyDraft>(EMPTY_PM_PROPERTY_DRAFT);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    setDraft({
-      ...EMPTY_PROPERTY_LISTING_DRAFT,
-      propertyType: isFarm ? "Agricultural" : defaultPropertyType,
-    });
-  }, [open, defaultPropertyType, isFarm]);
+    if (open) setDraft({ ...EMPTY_PM_PROPERTY_DRAFT });
+  }, [open]);
 
   if (!open) return null;
 
-  const set = <K extends keyof PropertyListingDraft>(key: K, value: PropertyListingDraft[K]) =>
+  const set = <K extends keyof PmPropertyDraft>(key: K, value: PmPropertyDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
   const save = async () => {
-    const error = validatePropertyListingDraft(draft);
+    const error = validatePmPropertyDraft(draft);
     if (error) {
       toast.error(error);
       return;
@@ -60,17 +51,13 @@ export default function AddPropertyModal({
     setSaving(true);
     try {
       const created = await createThirdPartyProperty(
-        draftToCreateInput(draft, {
-          leadId,
-          approvalStatus: "Approved",
-          listingBucket: isFarm ? "farm" : "sell",
-        }),
+        pmDraftToCreateInput(draft, { leadId }),
       );
-      toast.success(isFarm ? "Farm listing submitted" : "Property listing submitted");
+      toast.success("PM property submitted — now in Property Submitted stage");
       onSuccess?.(created);
       onClose();
     } catch {
-      toast.error(isFarm ? "Failed to save farm" : "Failed to save property");
+      toast.error("Failed to submit PM property");
     } finally {
       setSaving(false);
     }
@@ -81,19 +68,17 @@ export default function AddPropertyModal({
       <div className="w-full max-w-xl overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary-light)] text-[var(--primary)]">
-              {isFarm ? <Sprout size={16} /> : <Building2 size={16} />}
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+              <ClipboardList size={16} />
             </span>
             <div>
               <h3 className="text-sm font-semibold text-[var(--text-main)]">
-                {isFarm ? "Add farm" : "Add property"}
+                Create PM property
               </h3>
               <p className="text-xs text-[var(--text-muted)]">
                 {leadName
-                  ? `Linked to ${leadName} · submitted to third-party API (mock)`
-                  : leadId
-                    ? "Linked to this lead · third-party API (mock)"
-                    : "Third-party listing API (mock)"}
+                  ? `Linked to ${leadName} · subscription + verification pipeline`
+                  : "Property Management · third-party API (mock)"}
               </p>
             </div>
           </div>
@@ -107,7 +92,7 @@ export default function AddPropertyModal({
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto p-4">
-          <PropertyListingFormFields draft={draft} onChange={set} farmMode={isFarm} />
+          <PmPropertyFormFields draft={draft} onChange={set} />
         </div>
 
         <div className="flex justify-end gap-2 border-t border-[var(--border-color)] px-4 py-3">
@@ -120,14 +105,8 @@ export default function AddPropertyModal({
             onClick={() => void save()}
             className="gap-2 bg-emerald-600 hover:bg-emerald-700"
           >
-            {saving ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : isFarm ? (
-              <Sprout size={14} />
-            ) : (
-              <Building2 size={14} />
-            )}
-            {saving ? "Submitting…" : isFarm ? "Submit farm" : "Submit property"}
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardList size={14} />}
+            {saving ? "Submitting…" : "Submit PM property"}
           </CrmButton>
         </div>
       </div>

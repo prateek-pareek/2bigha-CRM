@@ -10,7 +10,6 @@ export async function fetchCrmPipelines(
   type:
     | "leads"
     | "deals"
-    | "platform_opportunities"
     | "proposals"
     | "quotations"
     | "contracts",

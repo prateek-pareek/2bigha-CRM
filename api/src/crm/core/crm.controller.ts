@@ -29,7 +29,7 @@ import { InboxOAuthService } from '../inbox/inbox-oauth.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RbacGuard } from '../crm-users/rbac.guard';
 import { Permissions } from '../crm-users/permissions.decorator';
-import { canViewCrmRevenue, isCrmTopAdmin, redactCrmRevenueForUser } from '../shared/crm-admin-access.util';
+import { canViewCrmRevenue, redactCrmRevenueForUser } from '../shared/crm-admin-access.util';
 
 @Controller('crm')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -584,36 +584,6 @@ export class CRMController {
     return this.crmService.getReportSummaryCharts(window || 'today', owner);
   }
 
-  /** Opens/clicks per saved email template (tracked sends with templateId). */
-  @Get('reports/email-templates')
-  @Permissions(
-    'settings:write',
-    'leads:read',
-    'deals:read',
-    'contacts:read',
-  )
-  getEmailTemplatePerformance(
-    @Query('days') days?: string,
-    @Query('owner') owner?: string,
-  ) {
-    return this.crmService.getEmailTemplatePerformance(days || '30', owner);
-  }
-
-  /** Opens/clicks grouped by sending address (fromEmail) for all tracked sends in the period. */
-  @Get('reports/email-senders')
-  @Permissions(
-    'settings:write',
-    'leads:read',
-    'deals:read',
-    'contacts:read',
-  )
-  getEmailSenderPerformance(
-    @Query('days') days?: string,
-    @Query('owner') owner?: string,
-  ) {
-    return this.crmService.getEmailSenderPerformance(days || '30', owner);
-  }
-
   /** Action queue: leads needing outreach, stale follow-up, unopened tracked emails. */
   @Get('reports/attention')
   @Permissions('dashboard:read', 'leads:read')
@@ -934,47 +904,6 @@ export class CRMController {
       );
     }
     return this.crmService.deleteCurrencyRate(code);
-  }
-
-  @Get('settings/email-deliverability')
-  @Permissions('settings:write', 'admin:manage')
-  getEmailDeliverabilitySettings() {
-    return this.crmService.getEmailDeliverabilitySettings();
-  }
-
-  @Put('settings/email-deliverability')
-  @Permissions('settings:write', 'admin:manage')
-  updateEmailDeliverabilitySettings(
-    @Body()
-    body: {
-      enforceSendLimits?: boolean;
-      maxEmailsPerHourPerAccount?: number;
-      maxEmailsPerDayPerAccount?: number;
-      enableWarmupRamp?: boolean;
-      commercialMailingAddress?: string;
-      requireCommercialFooter?: boolean;
-      blockHighRiskComposerSends?: boolean;
-      emailTrackingEnabled?: boolean;
-      optOutFooterStyle?: 'natural' | 'formal';
-      enforceHumanOutreachChecks?: boolean;
-      minOutreachBodyWords?: number;
-      maxOutreachBodyWords?: number;
-      maxOutreachParagraphs?: number;
-      blockNonHumanOutreachSends?: boolean;
-    },
-  ) {
-    return this.crmService.updateEmailDeliverabilitySettings(body || {});
-  }
-
-  @Get('settings/email-deliverability/health')
-  @Permissions('settings:write', 'admin:manage')
-  getEmailDeliverabilityHealth(@Request() req: any) {
-    if (!isCrmTopAdmin(req.user, req.crmDbUser ?? req.user?.crmDbUser)) {
-      throw new ForbiddenException(
-        'Deliverability health is restricted to top administrators.',
-      );
-    }
-    return this.crmService.getEmailDeliverabilityHealth();
   }
 
   @Get('settings/workflow-scheduler')

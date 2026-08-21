@@ -358,6 +358,12 @@ const crmGroups = [
                 href: '/crm/property-listings',
                 icon: CrmNavIcon.Home,
                 permission: 'property_listings:read',
+                children: [
+                    { name: 'Buy', href: '/crm/property-listings?bucket=buy', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
+                    { name: 'Sell', href: '/crm/property-listings?bucket=sell', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
+                    { name: 'Farms', href: '/crm/property-listings?bucket=farm', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
+                    { name: 'Property Management', href: '/crm/property-listings?bucket=pm', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
+                ],
             },
         ],
     },
@@ -415,7 +421,26 @@ const crmGroups = [
         name: 'Commercials',
         items: [
             { name: 'Deals', href: '/crm/deals', icon: CrmNavIcon.Deals, permission: 'deals:read' },
-            { name: 'Legal', href: '/crm/legal', icon: CrmNavIcon.Legal, permission: 'legal:read' },
+            {
+                name: 'Legal',
+                href: '/crm/legal/verification',
+                icon: CrmNavIcon.Legal,
+                permission: 'legal:read',
+                children: [
+                    {
+                        name: 'Verification',
+                        href: '/crm/legal/verification',
+                        icon: CrmNavIcon.Legal,
+                        permission: 'legal:read',
+                    },
+                    {
+                        name: 'Cases',
+                        href: '/crm/legal',
+                        icon: CrmNavIcon.Legal,
+                        permission: 'legal:read',
+                    },
+                ],
+            },
             {
                 name: 'Proposals',
                 href: '/crm/proposals',

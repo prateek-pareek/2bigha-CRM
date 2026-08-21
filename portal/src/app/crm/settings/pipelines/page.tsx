@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { GitBranch, Plus, Trash2, CheckCircle2, Loader2, Save, ChevronLeft, Handshake, Users, Pencil, ChevronDown, GripVertical, Briefcase, ScrollText, FileText } from 'lucide-react';
-import { DEFAULT_PLATFORM_OPPORTUNITY_STAGES } from '@/lib/crm/platform-opportunity-pipeline';
+import { GitBranch, Plus, Trash2, CheckCircle2, Loader2, Save, ChevronLeft, Handshake, Users, Pencil, ChevronDown, GripVertical, ScrollText, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { CRM_API_URL } from '@/lib/crm/config';
@@ -55,7 +54,7 @@ type PipelineOutreachAiContext = {
 interface Pipeline {
   _id: string;
   name: string;
-  type?: 'deals' | 'leads' | 'platform_opportunities' | 'proposals' | 'contracts';
+  type?: 'deals' | 'leads' | 'proposals' | 'contracts';
   categoryType?: 'it_consulting' | 'freelancer';
   stages: Stage[];
   isDefault: boolean;
@@ -157,10 +156,9 @@ function SortableStageRow({
 }
 
 export default function PipelinesManagementPage() {
-  const [activeTab, setActiveTab] = useState<'deals' | 'leads' | 'platform_opportunities' | 'proposals' | 'contracts'>('deals');
+  const [activeTab, setActiveTab] = useState<'deals' | 'leads' | 'proposals' | 'contracts'>('deals');
   const [dealsPipelines, setDealsPipelines] = useState<Pipeline[]>([]);
   const [leadsPipelines, setLeadsPipelines] = useState<Pipeline[]>([]);
-  const [platformPipelines, setPlatformPipelines] = useState<Pipeline[]>([]);
   const [proposalPipelines, setProposalPipelines] = useState<Pipeline[]>([]);
   const [contractPipelines, setContractPipelines] = useState<Pipeline[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,13 +169,13 @@ export default function PipelinesManagementPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Pipeline | null>(null);
   const [newPipeline, setNewPipeline] = useState<{
     name: string;
-    type: 'deals' | 'leads' | 'platform_opportunities' | 'proposals' | 'contracts';
+    type: 'deals' | 'leads' | 'proposals' | 'contracts';
     categoryType: 'it_consulting' | 'freelancer';
     stages: Stage[];
     outreachAiContext?: PipelineOutreachAiContext;
   }>({
     name: '',
-    type: 'deals' as 'deals' | 'leads' | 'platform_opportunities' | 'proposals' | 'contracts',
+    type: 'deals' as 'deals' | 'leads' | 'proposals' | 'contracts',
     categoryType: 'it_consulting',
     outreachAiContext: { useGlobalSettings: true, missingContextAction: 'draft_anyway' },
     stages: [
@@ -235,24 +233,20 @@ export default function PipelinesManagementPage() {
         ? leadsPipelines
         : activeTab === 'proposals'
           ? proposalPipelines
-          : activeTab === 'contracts'
-            ? contractPipelines
-            : platformPipelines;
+          : contractPipelines;
 
   const fetchPipelines = async () => {
     setLoading(true);
     const token = localStorage.getItem('token');
     try {
-      const [dealsRes, leadsRes, platformRes, proposalsRes, contractsRes] = await Promise.all([
+      const [dealsRes, leadsRes, proposalsRes, contractsRes] = await Promise.all([
         fetch(`${CRM_API_URL}/crm/pipelines?type=deals`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${CRM_API_URL}/crm/pipelines?type=leads`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${CRM_API_URL}/crm/pipelines?type=platform_opportunities`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${CRM_API_URL}/crm/pipelines?type=proposals`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${CRM_API_URL}/crm/pipelines?type=contracts`, { headers: { 'Authorization': `Bearer ${token}` } }),
       ]);
       if (dealsRes.ok) setDealsPipelines(await dealsRes.json());
       if (leadsRes.ok) setLeadsPipelines(await leadsRes.json());
-      if (platformRes.ok) setPlatformPipelines(await platformRes.json());
       if (proposalsRes.ok) setProposalPipelines(await proposalsRes.json());
       if (contractsRes.ok) setContractPipelines(await contractsRes.json());
     } catch (err) {
@@ -346,15 +340,7 @@ export default function PipelinesManagementPage() {
               { id: 'l3', name: 'Qualified', probability: 40, order: 3, isDefault: false },
               { id: 'l4', name: 'Converted', probability: 100, order: 4, isDefault: false },
             ]
-          : activeTab === 'platform_opportunities'
-            ? DEFAULT_PLATFORM_OPPORTUNITY_STAGES.map((s, i) => ({
-                id: `p${i + 1}`,
-                name: s.name,
-                probability: s.probability,
-                order: s.order,
-                isDefault: s.isDefault,
-              }))
-            : activeTab === 'proposals'
+          : activeTab === 'proposals'
               ? [
                   { id: 'pr1', name: 'Draft', probability: 10, order: 1, isDefault: true },
                   { id: 'pr2', name: 'Internal Review', probability: 25, order: 2, isDefault: false },
@@ -440,7 +426,6 @@ export default function PipelinesManagementPage() {
         {([
           { id: 'deals' as const, label: 'Deal Pipelines', icon: Handshake },
           { id: 'leads' as const, label: 'Lead Pipelines', icon: Users },
-          { id: 'platform_opportunities' as const, label: 'Platform Pipelines', icon: Briefcase },
           { id: 'proposals' as const, label: 'Proposal Pipelines', icon: ScrollText },
           { id: 'contracts' as const, label: 'Contract Pipelines', icon: FileText },
         ]).map(({ id, label, icon: Icon }) => (
@@ -478,9 +463,7 @@ export default function PipelinesManagementPage() {
                 ? 'lead'
                 : activeTab === 'proposals'
                   ? 'proposal'
-                  : activeTab === 'contracts'
-                    ? 'contract'
-                  : 'platform opportunity'}{' '}
+                  : 'contract'}{' '}
             pipeline to get started.
           </p>
           <button

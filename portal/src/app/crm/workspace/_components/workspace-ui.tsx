@@ -186,15 +186,6 @@ export type WorkspacePayload = {
     byStage?: Array<{ stage: string; count: number }>;
     stageEntered?: Array<{ stage: string; count: number }>;
   }>;
-  platformOpportunitiesAddedByDay?: Array<{
-    date: string;
-    total: number;
-    byPipeline: Array<{
-      pipelineId: string | null;
-      pipelineName: string;
-      count: number;
-    }>;
-  }>;
   dealsAddedByDay?: Array<{
     date: string;
     total: number;
@@ -236,7 +227,6 @@ export type WorkspacePayload = {
       organization?: string;
       leadOwner?: string;
       status?: string;
-      entityType?: "lead" | "platformOpportunity";
       createdAt: string;
     }>;
     yesterday: Array<{
@@ -246,7 +236,6 @@ export type WorkspacePayload = {
       organization?: string;
       leadOwner?: string;
       status?: string;
-      entityType?: "lead" | "platformOpportunity";
       createdAt: string;
     }>;
     thisWeek: Array<{
@@ -256,25 +245,9 @@ export type WorkspacePayload = {
       organization?: string;
       leadOwner?: string;
       status?: string;
-      entityType?: "lead" | "platformOpportunity";
       createdAt: string;
     }>;
   };
-};
-
-export type DeliverabilityHealthSummary = {
-  summary: {
-    totalAccounts: number;
-    warningAccounts: number;
-    actionRequiredAccounts: number;
-  };
-  accounts: Array<{
-    accountId: string;
-    email: string;
-    displayName: string;
-    healthStatus: "healthy" | "warning" | "action_required";
-    factorsAffectingDeliverability: string[];
-  }>;
 };
 
 export type DealsPipelineOption = {
@@ -295,9 +268,6 @@ export function recordHref(
   if (t === "client" || t === "clients") return `/crm/clients/${relatedTo}`;
   if (t === "organization" || t === "organizations") {
     return `/crm/organizations/${relatedTo}`;
-  }
-  if (t === "platformopportunity") {
-    return `/crm/platform-opportunities/${relatedTo}`;
   }
   return null;
 }
@@ -388,7 +358,6 @@ export function emptyWorkspacePayload(): WorkspacePayload {
     atRiskDeals: [],
     nextStepRequired: [],
     leadsAddedByDay: [],
-    platformOpportunitiesAddedByDay: [],
     dealsAddedByDay: [],
     leadFollowUpWeek: {
       weekStart: "",
@@ -452,8 +421,6 @@ export function mergeWorkspacePayload(
     atRiskDeals: patch.atRiskDeals ?? base.atRiskDeals,
     nextStepRequired: patch.nextStepRequired ?? base.nextStepRequired,
     leadsAddedByDay: patch.leadsAddedByDay ?? base.leadsAddedByDay,
-    platformOpportunitiesAddedByDay:
-      patch.platformOpportunitiesAddedByDay ?? base.platformOpportunitiesAddedByDay,
     dealsAddedByDay: patch.dealsAddedByDay ?? base.dealsAddedByDay,
     leadFollowUpWeek: patch.leadFollowUpWeek ?? base.leadFollowUpWeek,
     leadFollowUpByWindow: patch.leadFollowUpByWindow ?? base.leadFollowUpByWindow,
@@ -674,7 +641,7 @@ function DayLeadsExpanded({
   ownerId,
 }: {
   date: string;
-  kind?: "leads" | "deals" | "platform";
+  kind?: "leads" | "deals";
   ownerLabel?: string | null;
   ownerId?: string | null;
 }) {
@@ -708,12 +675,7 @@ function DayLeadsExpanded({
         Boolean,
       ) as string[];
       filter.push({
-        property:
-          kind === "platform"
-            ? "ownerLabel"
-            : kind === "deals"
-              ? "dealOwner"
-              : "leadOwner",
+        property: kind === "deals" ? "dealOwner" : "leadOwner",
         operator: "equals",
         value: ownerValues.join("||"),
       });
@@ -721,11 +683,9 @@ function DayLeadsExpanded({
     q.set("filters", JSON.stringify(filter));
 
     const endpoint =
-      kind === "platform"
-        ? `${CRM_API_URL}/crm/platform-opportunities?${q}`
-        : kind === "deals"
-          ? `${CRM_API_URL}/crm/deals?${q}`
-          : `${CRM_API_URL}/crm/leads?${q}`;
+      kind === "deals"
+        ? `${CRM_API_URL}/crm/deals?${q}`
+        : `${CRM_API_URL}/crm/leads?${q}`;
 
     fetch(endpoint, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -736,26 +696,6 @@ function DayLeadsExpanded({
           : (data?.data || data?.leads || data?.deals || data?.items || []);
         setLeads(
           (rows as Array<Record<string, unknown>>).map((row) => {
-            if (kind === "platform") {
-              const title = String(row.title || "").trim();
-              const client = String(row.platformClientLabel || "").trim();
-              const platform = String(row.opportunitySourcePlatform || "").trim();
-              const id = String(row._id || row.id || "");
-              return {
-                id,
-                name: title || client || "Platform opportunity",
-                email: "",
-                organization: client || platform || undefined,
-                leadOwner: String(row.ownerLabel || "") || undefined,
-                status:
-                  String(row.stage || row.platformEngagementStatus || "New").trim() ||
-                  "New",
-                createdAt: row.createdAt
-                  ? new Date(String(row.createdAt)).toISOString()
-                  : new Date().toISOString(),
-                href: id ? `/crm/platform-opportunities/${id}` : undefined,
-              };
-            }
             if (kind === "deals") {
               const id = String(row._id || row.id || "");
               return {
@@ -802,22 +742,14 @@ function DayLeadsExpanded({
   if (loading) {
     return (
       <div className="p-3 text-xs text-[var(--text-muted)] animate-pulse border-t border-[var(--border-color)]">
-        {kind === "platform"
-          ? "Loading platform opportunities..."
-          : kind === "deals"
-            ? "Loading deals..."
-            : "Loading leads..."}
+        {kind === "deals" ? "Loading deals..." : "Loading leads..."}
       </div>
     );
   }
   if (!leads.length) {
     return (
       <div className="p-3 text-xs text-[var(--text-muted)] border-t border-[var(--border-color)]">
-        {kind === "platform"
-          ? "No platform opportunities found for this date."
-          : kind === "deals"
-            ? "No deals found for this date."
-            : "No leads found for this date."}
+        {kind === "deals" ? "No deals found for this date." : "No leads found for this date."}
       </div>
     );
   }
@@ -840,8 +772,8 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
   showDealsTab = true,
 }: {
   days: NonNullable<WorkspacePayload["leadsAddedByDay"]> | NonNullable<WorkspacePayload["dealsAddedByDay"]>;
-  kind?: "leads" | "deals" | "platform";
-  onKindChange?: (kind: "leads" | "deals" | "platform") => void;
+  kind?: "leads" | "deals";
+  onKindChange?: (kind: "leads" | "deals") => void;
   onDateClick?: (date: string) => void;
   ownerLabel?: string | null;
   ownerId?: string | null;
@@ -851,28 +783,19 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
 }) {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [customDateForDay, setCustomDateForDay] = useState<Record<string, string>>({});
-  const isPlatform = kind === "platform";
   const isDeals = kind === "deals";
 
   useEffect(() => {
     setExpandedDay(null);
   }, [kind]);
 
-  const title = isPlatform
-    ? "Platform opportunities by day"
-    : isDeals
-      ? "Deals added by day"
-      : "Leads added by day";
-  const emptyMessage = isPlatform
-    ? "No new platform opportunities in this period for the current workspace view."
-    : isDeals
-      ? "No new deals in this period for the current workspace view."
-      : "No new leads or stage moves in this period for the current workspace view.";
-  const action = isPlatform
-    ? { href: "/crm/platform-opportunities", label: "Open opportunities" }
-    : isDeals
-      ? { href: "/crm/deals", label: "Open deals" }
-      : { href: "/crm/leads", label: "Open leads" };
+  const title = isDeals ? "Deals added by day" : "Leads added by day";
+  const emptyMessage = isDeals
+    ? "No new deals in this period for the current workspace view."
+    : "No new leads or stage moves in this period for the current workspace view.";
+  const action = isDeals
+    ? { href: "/crm/deals", label: "Open deals" }
+    : { href: "/crm/leads", label: "Open leads" };
 
   const kindToggle = onKindChange ? (
     <div className="inline-flex rounded-md border border-[var(--border-color)] bg-white p-0.5 shrink-0">
@@ -902,24 +825,11 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
           Deals
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={() => onKindChange("platform")}
-        className={cn(
-          "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
-          kind === "platform"
-            ? "bg-[var(--hs-link)] text-white"
-            : "text-[var(--text-muted)] hover:text-[var(--text-main)]",
-        )}
-      >
-        Platform opportunity
-      </button>
     </div>
   ) : null;
 
   if (!days.length) {
     const showLast30Cta =
-      !isPlatform &&
       !!onUseLast30Days &&
       windowFilter !== "last_30_days" &&
       !String(windowFilter || "").includes(",");
@@ -963,7 +873,7 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
           const effectiveDate = customDateForDay[day.date] || day.date;
           const byStage = day.byStage || [];
           const stageEntered =
-            !isPlatform && !isDeals && "stageEntered" in day
+            !isDeals && "stageEntered" in day
               ? (day as { stageEntered?: Array<{ stage: string; count: number }> })
                   .stageEntered || []
               : [];
@@ -1007,7 +917,7 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
                 ) : null}
               </p>
             </div>
-            {!isPlatform && byStage.length > 0 && (
+            {byStage.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {byStage.map((s) => (
                   <span
@@ -1037,7 +947,7 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
                 </span>
               ))}
             </div>
-            {!isPlatform && !isDeals && stageEntered.length > 0 && (
+            {!isDeals && stageEntered.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {stageEntered.map((s) => (
                   <span

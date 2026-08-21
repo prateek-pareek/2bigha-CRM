@@ -21,7 +21,7 @@ export class Integration {
   name: string; // 'Microsoft Teams', 'WhatsApp', etc.
 
   @Prop({ required: true })
-  type: string; // 'webhook', 'api_key', 'whatsapp', 'google_postmaster', etc.
+  type: string; // 'webhook', 'api_key', 'whatsapp', etc.
 
   /** Stable catalog id when installed via the integrations marketplace. */
   @Prop({ index: true })

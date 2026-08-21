@@ -41,13 +41,6 @@ import {
   EmailCampaign,
   EmailCampaignSchema,
 } from './schemas/email-campaign.schema';
-import {
-  PostmasterDomainSnapshot,
-  PostmasterDomainSnapshotSchema,
-} from './schemas/postmaster-domain-snapshot.schema';
-import { PostmasterService } from './email/postmaster.service';
-import { PostmasterSyncCronService } from './email/postmaster-sync-cron.service';
-import { PostmasterController } from './email/postmaster.controller';
 import { CrmTrashController } from './admin/crm-trash.controller';
 import { CrmTrashService } from './admin/crm-trash.service';
 import { CrmSegment, CrmSegmentSchema } from './schemas/crm-segment.schema';
@@ -382,7 +375,6 @@ import {
           name: DealEngagementAutomationTemplate.name,
           schema: DealEngagementAutomationTemplateSchema,
         },
-        { name: PostmasterDomainSnapshot.name, schema: PostmasterDomainSnapshotSchema },
         { name: CrmAssociation.name, schema: CrmAssociationSchema },
         { name: CrmObjectType.name, schema: CrmObjectTypeSchema },
         { name: CrmObjectRecord.name, schema: CrmObjectRecordSchema },
@@ -435,7 +427,6 @@ import {
     CrmAiController,
     EmailIntelligenceController,
     EmailFinderLegacyController,
-    PostmasterController,
     CrmTrashController,
     CrmMigrationController,
     AssociationsController,
@@ -511,8 +502,6 @@ import {
     ClearoutEmailProvider,
     AnymailEmailProvider,
     AuditLogInterceptor,
-    PostmasterService,
-    PostmasterSyncCronService,
     CrmTrashService,
     AssociationsService,
     CustomObjectsService,
@@ -541,7 +530,6 @@ import {
     EmailTrackingService,
     WebsiteEmailExtractorService,
     AuditLogInterceptor,
-    PostmasterService,
     AssociationsService,
     CustomObjectsService,
     CRMUsersModule,

@@ -236,16 +236,9 @@ export default function LeadStatusPanel({
         ) : (
           <ul className="divide-y divide-[var(--surface-dim)]">
             {filteredLeadIntakeRows.map((l) => (
-              <li key={`${l.entityType || "lead"}-${l.id}`}>
+              <li key={`lead-${l.id}`}>
                 <NextLink
-                  href={
-                    recordHref(
-                      l.entityType === "platformOpportunity"
-                        ? "platformopportunity"
-                        : "lead",
-                      l.id,
-                    ) || `/crm/leads/${l.id}`
-                  }
+                  href={recordHref("lead", l.id) || `/crm/leads/${l.id}`}
                   className="flex items-start justify-between gap-3 rounded-md py-3 -mx-2 px-2 hover:bg-[var(--background)]"
                 >
                   <div className="min-w-0">
@@ -259,17 +252,8 @@ export default function LeadStatusPanel({
                       <span className="inline-flex rounded-full border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-0.5 text-xs font-medium text-[var(--text-muted)]">
                         {String(l.status || "New").trim() || "New"}
                       </span>
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-                          l.entityType === "platformOpportunity"
-                            ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-200"
-                            : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-200",
-                        )}
-                      >
-                        {l.entityType === "platformOpportunity"
-                          ? "Platform"
-                          : "Lead"}
+                      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-200">
+                        Lead
                       </span>
                     </p>
                     <p className="mt-1 text-sm text-[var(--text-muted)]">

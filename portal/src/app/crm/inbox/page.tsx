@@ -1916,12 +1916,6 @@ export default function CRMInboxPage() {
                     </p>
                   )}
                 </div>
-                <Link
-                  href="/crm/settings/email-deliverability/health"
-                  className="shrink-0 text-xs font-bold uppercase tracking-wider text-primary hover:underline"
-                >
-                  View health logs
-                </Link>
               </div>
             )}
           <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3 flex-wrap border-b border-[var(--border-color)]">
@@ -1996,13 +1990,6 @@ export default function CRMInboxPage() {
                   >
                     <Filter size={15} />
                   </button>
-                  <Link
-                    href="/crm/settings/email-deliverability/health"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]"
-                    title="Mailbox settings"
-                  >
-                    <Settings size={15} />
-                  </Link>
                   <button
                     type="button"
                     onClick={handleHeaderSync}

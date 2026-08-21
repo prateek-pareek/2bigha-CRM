@@ -35,7 +35,6 @@ import {
   type WorkspaceWindowFilter,
   type WorkspacePayload,
   type LeadFollowUpStats,
-  type DeliverabilityHealthSummary,
   type DealsPipelineOption,
   type WorkspaceSection,
   canViewAllCrmWorkspaces,
@@ -79,8 +78,8 @@ export type WorkspaceShellContext = {
   setCompareStart: Dispatch<SetStateAction<string>>;
   compareEnd: string;
   setCompareEnd: Dispatch<SetStateAction<string>>;
-  intakeKind: "leads" | "deals" | "platform";
-  setIntakeKind: Dispatch<SetStateAction<"leads" | "deals" | "platform">>;
+  intakeKind: "leads" | "deals";
+  setIntakeKind: Dispatch<SetStateAction<"leads" | "deals">>;
   isSummaryLeadsLoading: boolean;
   viewAll: boolean;
   hasAccess: (permission: string) => boolean;
@@ -136,8 +135,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   const { user, isLoaded: permLoaded, hasAccess } = usePermissions();
   const viewAll = canViewAllCrmWorkspaces(user);
   const canViewRevenueForecast = canViewCrmRevenue(user);
-  /** Deliverability health flags — top admins only (same gate as revenue forecast). */
-  const canViewDeliverabilityHealth = canViewRevenueForecast;
   const sectionTitle = workspaceSectionTitle(section);
   const accessibleEmployeeIds = (user as any)?.salesWorkspaceAccessibleEmployees || [];
   const canSeeOwnerPicker = viewAll || accessibleEmployeeIds.length > 0;
@@ -166,9 +163,7 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   const mainTab = section;
   const mainTabRef = useRef(mainTab);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [deliverabilityHealth, setDeliverabilityHealth] =
-    useState<DeliverabilityHealthSummary | null>(null);
-  const [intakeKind, setIntakeKind] = useState<"leads" | "deals" | "platform">("leads");
+  const [intakeKind, setIntakeKind] = useState<"leads" | "deals">("leads");
 
   useEffect(() => {
     mainTabRef.current = mainTab;
@@ -215,32 +210,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
       })
       .catch(() => { });
   }, [permLoaded, canSeeOwnerPicker]);
-
-  useEffect(() => {
-    if (!permLoaded || !canViewDeliverabilityHealth) {
-      setDeliverabilityHealth(null);
-      return;
-    }
-    let cancelled = false;
-    const token = getCrmAuthToken();
-    fetch(`${CRM_API_URL}/crm/settings/email-deliverability/health`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return (await res.json()) as DeliverabilityHealthSummary;
-      })
-      .then((data) => {
-        if (!cancelled) setDeliverabilityHealth(data);
-      })
-      .catch(() => {
-        if (!cancelled) setDeliverabilityHealth(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [permLoaded, canViewDeliverabilityHealth]);
 
   useEffect(() => {
     if (!permLoaded) return;
@@ -348,12 +317,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
         }
         if (json.leadsAddedByDay && !Array.isArray(json.leadsAddedByDay)) {
           json.leadsAddedByDay = [];
-        }
-        if (
-          json.platformOpportunitiesAddedByDay &&
-          !Array.isArray(json.platformOpportunitiesAddedByDay)
-        ) {
-          json.platformOpportunitiesAddedByDay = [];
         }
         if (json.dealsAddedByDay && !Array.isArray(json.dealsAddedByDay)) {
           json.dealsAddedByDay = [];
@@ -497,26 +460,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
     return rows.reduce((s, d) => s + (d.total || 0), 0);
   }, [ws?.leadsAddedByDay]);
 
-  const deliverabilityIssues = useMemo(() => {
-    const accounts = deliverabilityHealth?.accounts || [];
-    return accounts
-      .filter((account) => account.healthStatus !== "healthy")
-      .map((account) => ({
-        ...account,
-        issueCount: account.factorsAffectingDeliverability.length,
-      }));
-  }, [deliverabilityHealth]);
-
-  const deliverabilityIssueCount =
-    (deliverabilityHealth?.summary.actionRequiredAccounts || 0) +
-    (deliverabilityHealth?.summary.warningAccounts || 0);
-
-  const platformOppsAddedWindowTotal = useMemo(() => {
-    const rows = ws?.platformOpportunitiesAddedByDay;
-    if (!rows?.length) return 0;
-    return rows.reduce((s, d) => s + (d.total || 0), 0);
-  }, [ws?.platformOpportunitiesAddedByDay]);
-
   const dealsAddedWindowTotal = useMemo(() => {
     const rows = ws?.dealsAddedByDay;
     if (!rows?.length) return 0;
@@ -524,11 +467,7 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   }, [ws?.dealsAddedByDay]);
 
   const intakeAddedWindowTotal =
-    intakeKind === "platform"
-      ? platformOppsAddedWindowTotal
-      : intakeKind === "deals"
-        ? dealsAddedWindowTotal
-        : leadsAddedWindowTotal;
+    intakeKind === "deals" ? dealsAddedWindowTotal : leadsAddedWindowTotal;
 
   const maxStageValue = useMemo(() => {
     if (!ws?.pipelineByStage.length) return 1;

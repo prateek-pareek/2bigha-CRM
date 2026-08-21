@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Building2, Loader2, Plus } from "lucide-react";
-import { CRM_API_URL } from "@/lib/crm/config";
 import { cn } from "@/lib/utils";
+import { fetchThirdPartyPropertyListings } from "@/lib/crm/property-listings/third-party-api";
 import {
   formatAddress,
   formatPrice,
@@ -29,13 +29,12 @@ export default function LeadPropertiesPanel({
     if (!leadId) return;
     let cancelled = false;
     setLoading(true);
-    const token = localStorage.getItem("token");
-    fetch(`${CRM_API_URL}/crm/property-listings?leadId=${encodeURIComponent(leadId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : { data: [] }))
+    fetchThirdPartyPropertyListings({ leadId, pageSize: 200 })
       .then((body) => {
-        if (!cancelled) setProperties(body?.data || []);
+        if (!cancelled) {
+          // Marketplace listings only — PM cases live in LeadPmPanel.
+          setProperties((body.data || []).filter((p) => p.listingBucket !== "pm"));
+        }
       })
       .catch(() => {
         if (!cancelled) setProperties([]);

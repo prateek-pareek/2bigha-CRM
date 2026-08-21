@@ -103,7 +103,7 @@ type ProposalRow = {
   clientEmail?: string;
   subject?: string;
   bodyHtml?: string;
-  relatedModule?: "lead" | "contact" | "deal" | "client" | "platform-opportunity";
+  relatedModule?: "lead" | "contact" | "deal" | "client";
   relatedTo?: string;
   totalAmount?: number;
   currency?: string;
@@ -123,7 +123,7 @@ type DraftShape = {
   clientEmail: string;
   subject: string;
   bodyHtml: string;
-  relatedModule?: "lead" | "contact" | "deal" | "client" | "platform-opportunity";
+  relatedModule?: "lead" | "contact" | "deal" | "client";
   relatedTo?: string;
 };
 
@@ -137,8 +137,7 @@ type ProposalPipeline = {
 type AiSourceModule =
   | "leads"
   | "contacts"
-  | "deals"
-  | "platform-opportunities";
+  | "deals";
 
 type AiSourceOption = {
   _id: string;
@@ -328,11 +327,6 @@ export function CrmDocumentsWorkspace({
         ].filter(Boolean);
         return bits.length ? `${title} (${bits.join(" · ")})` : title;
       }
-      if (module === "platform-opportunities") {
-        const title = row.title?.trim() || "Opportunity";
-        const bits = [row.opportunitySourcePlatform, row.platformClientLabel].filter(Boolean);
-        return bits.length ? `${title} (${bits.join(" · ")})` : title;
-      }
       const name = `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "Unnamed";
       const org =
         typeof row.organization === "string"
@@ -348,7 +342,6 @@ export function CrmDocumentsWorkspace({
   const aiRelatedModule = useCallback((module: AiSourceModule) => {
     if (module === "contacts") return "contact" as const;
     if (module === "deals") return "deal" as const;
-    if (module === "platform-opportunities") return "platform-opportunity" as const;
     return "lead" as const;
   }, []);
 
@@ -916,9 +909,7 @@ export function CrmDocumentsWorkspace({
             ? `${CRM_API_URL}/crm/leads?${params.toString()}`
             : aiSourceModule === "contacts"
               ? `${CRM_API_URL}/crm/contacts?${params.toString()}`
-              : aiSourceModule === "deals"
-                ? `${CRM_API_URL}/crm/deals?${params.toString()}`
-                : `${CRM_API_URL}/crm/platform-opportunities?${params.toString()}`;
+              : `${CRM_API_URL}/crm/deals?${params.toString()}`;
         const res = await fetch(endpoint, {
           headers: authHeaders(),
           cache: "no-store",
@@ -1485,7 +1476,6 @@ export function CrmDocumentsWorkspace({
                             <SelectItem value="leads">Lead</SelectItem>
                             <SelectItem value="contacts">Contact</SelectItem>
                             <SelectItem value="deals">Deal</SelectItem>
-                            <SelectItem value="platform-opportunities">Platform opportunity</SelectItem>
                           </SelectContent>
                         </Select>
                         <div className="relative">
@@ -1786,7 +1776,6 @@ export function CrmDocumentsWorkspace({
                         <SelectItem value="leads">Lead</SelectItem>
                         <SelectItem value="contacts">Contact</SelectItem>
                         <SelectItem value="deals">Deal</SelectItem>
-                        <SelectItem value="platform-opportunities">Platform opportunity</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1796,9 +1785,7 @@ export function CrmDocumentsWorkspace({
                         ? "Search lead"
                         : aiSourceModule === "contacts"
                           ? "Search contact"
-                          : aiSourceModule === "deals"
-                            ? "Search deal"
-                            : "Search platform opportunity"}
+                          : "Search deal"}
                     </Label>
                     <div className="relative">
                       <Input
@@ -1810,8 +1797,7 @@ export function CrmDocumentsWorkspace({
                         }}
                         onFocus={() => setAiSourceOpen(true)}
                         placeholder={
-                          aiSourceModule === "deals" ||
-                          aiSourceModule === "platform-opportunities"
+                          aiSourceModule === "deals"
                             ? "Type title or keywords…"
                             : "Type name or email…"
                         }
@@ -1835,15 +1821,6 @@ export function CrmDocumentsWorkspace({
                                     setAiSourceEntityId(row._id);
                                     setAiSourceQuery(aiSourceLabel(row, aiSourceModule));
                                     setAiSourceOpen(false);
-                                    if (aiSourceModule === "platform-opportunities") {
-                                      const parts = [
-                                        row.notes?.trim(),
-                                        row.sourceMetadata?.description?.trim(),
-                                        row.sourceMetadata?.title?.trim(),
-                                      ].filter(Boolean);
-                                      if (parts.length) setAiClientNeeds(parts.join("\n\n"));
-                                      setDraft((d) => ({ ...d, issuerProfile: "freelancer" }));
-                                    }
                                     if (aiSourceModule === "deals" && row.title) {
                                       setTplProjectTitle(row.title);
                                     }

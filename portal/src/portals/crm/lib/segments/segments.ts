@@ -5,8 +5,7 @@ export type CrmSegmentListType = "dynamic" | "static";
 
 export type CrmSegmentMemberModule =
   | "leads"
-  | "contacts"
-  | "platform-opportunities";
+  | "contacts";
 
 export type CrmSegment = {
   id: string;
@@ -16,11 +15,9 @@ export type CrmSegment = {
   listType: CrmSegmentListType;
   leadFilters: FilterCriteria[];
   contactFilters: FilterCriteria[];
-  platformOpportunityFilters: FilterCriteria[];
   members: Array<{ module: CrmSegmentMemberModule; entityId: string }>;
   leadCount?: number;
   contactCount?: number;
-  platformOpportunityCount?: number;
   memberCount?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -83,7 +80,6 @@ export async function createCrmSegment(body: {
   listType?: CrmSegmentListType;
   leadFilters?: FilterCriteria[];
   contactFilters?: FilterCriteria[];
-  platformOpportunityFilters?: FilterCriteria[];
 }): Promise<CrmSegment> {
   const res = await fetch(`${CRM_API_URL}/crm/segments`, {
     method: "POST",
@@ -100,7 +96,6 @@ export async function createCrmSegment(body: {
 export type CrmSegmentPreviewCounts = {
   leadCount: number;
   contactCount: number;
-  platformOpportunityCount: number;
   memberCount: number;
 };
 
@@ -108,7 +103,6 @@ export async function previewCrmSegmentCounts(body: {
   listType?: CrmSegmentListType;
   leadFilters?: FilterCriteria[];
   contactFilters?: FilterCriteria[];
-  platformOpportunityFilters?: FilterCriteria[];
   members?: Array<{ module: CrmSegmentMemberModule; entityId: string }>;
 }): Promise<CrmSegmentPreviewCounts> {
   const res = await fetch(`${CRM_API_URL}/crm/segments/preview-counts`, {
@@ -128,7 +122,6 @@ export async function previewCrmSegmentMembers(
     listType?: CrmSegmentListType;
     leadFilters?: FilterCriteria[];
     contactFilters?: FilterCriteria[];
-    platformOpportunityFilters?: FilterCriteria[];
     members?: Array<{ module: CrmSegmentMemberModule; entityId: string }>;
     module: CrmSegmentMemberModule;
     page?: number;
@@ -201,7 +194,6 @@ export async function updateCrmSegment(
     listType?: CrmSegmentListType;
     leadFilters?: FilterCriteria[];
     contactFilters?: FilterCriteria[];
-    platformOpportunityFilters?: FilterCriteria[];
   }>,
 ): Promise<CrmSegment> {
   const res = await fetch(`${CRM_API_URL}/crm/segments/${id}`, {

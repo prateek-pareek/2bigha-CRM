@@ -214,63 +214,6 @@ export class InboxAccountsController {
     );
   }
 
-  @Get('undeliverable-contacts')
-  @Permissions('leads:read', 'contacts:read', 'clients:read', 'inbox:read')
-  listUndeliverableContacts() {
-    return this.inboxAccountsService.listUndeliverableContacts();
-  }
-
-  @Post('undeliverable-contacts/flag')
-  @Permissions('leads:write', 'contacts:write', 'clients:write')
-  flagUndeliverableContact(
-    @Body() body: { email?: string; reason?: string },
-  ) {
-    return this.inboxAccountsService.flagEmailUndeliverable(
-      body?.email || '',
-      body?.reason,
-    );
-  }
-
-  @Post('undeliverable-contacts/resolve')
-  @Permissions('leads:write', 'contacts:write', 'clients:write')
-  resolveUndeliverableContact(
-    @Body()
-    body: {
-      module?: 'leads' | 'contacts' | 'clients';
-      entityId?: string;
-      email?: string;
-      action?: 'clear_email' | 'remove_contact' | 'allow_retry';
-    },
-  ) {
-    return this.inboxAccountsService.resolveUndeliverableContact({
-      module: body?.module || 'leads',
-      entityId: body?.entityId || '',
-      email: body?.email || '',
-      action: body?.action || 'clear_email',
-    });
-  }
-
-  @Post('undeliverable-contacts/bulk-delete')
-  @Permissions('leads:write', 'contacts:write', 'clients:write')
-  bulkDeleteUndeliverableContacts(
-    @Body()
-    body: {
-      items?: Array<{
-        module?: 'leads' | 'contacts' | 'clients';
-        entityId?: string;
-        email?: string;
-      }>;
-    },
-  ) {
-    return this.inboxAccountsService.bulkDeleteUndeliverableContacts(
-      (Array.isArray(body?.items) ? body.items : []).map((item) => ({
-        module: item?.module || 'leads',
-        entityId: item?.entityId || '',
-        email: item?.email,
-      })),
-    );
-  }
-
   @Get('suggested-send-from')
   @Permissions('inbox:read', 'leads:read', 'deals:read', 'contacts:read')
   suggestedSendFrom(

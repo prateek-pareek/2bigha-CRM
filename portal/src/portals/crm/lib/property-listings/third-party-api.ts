@@ -1,0 +1,196 @@
+/**
+ * Third-party listings API facade.
+ *
+ * - No NEXT_PUBLIC_2BIGHA_LISTINGS_API_URL → local mock (localStorage)
+ * - URL set → HTTP calls to that host (same /v1/... paths)
+ *
+ * UI should import from this module only — never from mock/http directly —
+ * so going live is a config change, not a code rewrite.
+ */
+
+export type {
+  CreateThirdPartyPropertyInput,
+  UpdateThirdPartyPropertyInput,
+  ThirdPartyListQuery,
+} from "./mock-third-party";
+
+export {
+  PM_RM_POOL,
+  PM_LEGAL_POOL,
+  PM_FIELD_POOL,
+  MOCK_THIRD_PARTY_LISTINGS,
+} from "./mock-third-party";
+
+export {
+  THIRD_PARTY_LISTINGS_API_URL,
+  useThirdPartyListingsMock,
+} from "./third-party-config";
+
+import type { PropertyLegalStatus } from "./types";
+import { useThirdPartyListingsMock } from "./third-party-config";
+import type { PmChecklistItem, PmVisitStatus } from "./types";
+import * as mock from "./mock-third-party";
+import * as http from "./third-party-http";
+import type {
+  CreateThirdPartyPropertyInput,
+  ThirdPartyListQuery,
+  UpdateThirdPartyPropertyInput,
+} from "./mock-third-party";
+
+const mockMode = () => useThirdPartyListingsMock();
+
+export async function fetchThirdPartyPropertyListings(query: ThirdPartyListQuery = {}) {
+  return mockMode() ? mock.fetchThirdPartyPropertyListings(query) : http.httpFetchListings(query);
+}
+
+export async function fetchThirdPartyPropertyById(id: string) {
+  return mockMode() ? mock.fetchThirdPartyPropertyById(id) : http.httpFetchById(id);
+}
+
+export async function fetchThirdPartyPropertyStats(
+  listingBucket?: Parameters<typeof mock.fetchThirdPartyPropertyStats>[0],
+) {
+  return mockMode()
+    ? mock.fetchThirdPartyPropertyStats(listingBucket)
+    : http.httpFetchStats(listingBucket);
+}
+
+export async function createThirdPartyProperty(input: CreateThirdPartyPropertyInput) {
+  return mockMode() ? mock.createThirdPartyProperty(input) : http.httpCreate(input);
+}
+
+export async function updateThirdPartyProperty(
+  id: string,
+  input: UpdateThirdPartyPropertyInput,
+) {
+  return mockMode() ? mock.updateThirdPartyProperty(id, input) : http.httpUpdate(id, input);
+}
+
+export async function deleteThirdPartyProperty(id: string) {
+  return mockMode() ? mock.deleteThirdPartyProperty(id) : http.httpDelete(id);
+}
+
+export async function assignPmToRm(id: string, rmName: string) {
+  return mockMode() ? mock.assignPmToRm(id, rmName) : http.httpAssignRm(id, rmName);
+}
+
+export async function assignPmToLegal(id: string, legalName: string) {
+  return mockMode() ? mock.assignPmToLegal(id, legalName) : http.httpAssignLegal(id, legalName);
+}
+
+export async function startPmLegalVerification(id: string, summary?: string) {
+  return mockMode()
+    ? mock.startPmLegalVerification(id, summary)
+    : http.httpStartLegal(id, summary);
+}
+
+export async function updatePmLegalChecklist(
+  id: string,
+  checklist: PmChecklistItem[],
+  summary?: string,
+) {
+  return mockMode()
+    ? mock.updatePmLegalChecklist(id, checklist, summary)
+    : http.httpUpdateLegalChecklist(id, checklist, summary);
+}
+
+export async function completePmLegalVerification(id: string, summary?: string) {
+  return mockMode()
+    ? mock.completePmLegalVerification(id, summary)
+    : http.httpCompleteLegal(id, summary);
+}
+
+export async function assignPmToFieldAgent(
+  id: string,
+  fieldName: string,
+  scheduledAt?: string,
+) {
+  return mockMode()
+    ? mock.assignPmToFieldAgent(id, fieldName, scheduledAt)
+    : http.httpAssignField(id, fieldName, scheduledAt);
+}
+
+export async function setPmFieldVisitStatus(
+  id: string,
+  status: PmVisitStatus,
+  notes?: string,
+) {
+  return mockMode()
+    ? mock.setPmFieldVisitStatus(id, status, notes)
+    : http.httpVisitStatus(id, status, notes);
+}
+
+export async function submitPmVisitReport(id: string) {
+  return mockMode() ? mock.submitPmVisitReport(id) : http.httpSubmitVisitReport(id);
+}
+
+export async function reviewPmVisitReport(
+  id: string,
+  decision: "Approved" | "Rejected",
+  rejectionReason?: string,
+  sections?: PmChecklistItem[],
+) {
+  return mockMode()
+    ? mock.reviewPmVisitReport(id, decision, rejectionReason, sections)
+    : http.httpReviewVisitReport(id, decision, rejectionReason, sections);
+}
+
+export async function fetchLeadSubscriptionMock(leadId: string) {
+  return mockMode()
+    ? mock.fetchLeadSubscriptionMock(leadId)
+    : http.httpLeadSubscription(leadId);
+}
+
+export async function fetchLegalVerificationQueue(query: mock.ThirdPartyListQuery = {}) {
+  return mockMode()
+    ? mock.fetchLegalVerificationQueue(query)
+    : http.httpFetchLegalVerificationQueue(query);
+}
+
+export async function requestPropertyLegalVerification(propertyId: string) {
+  return mockMode()
+    ? mock.requestPropertyLegalVerification(propertyId)
+    : http.httpRequestPropertyLegalVerification(propertyId);
+}
+
+export async function requestPropertyLegalVerificationBatch(propertyIds: string[]) {
+  return mockMode()
+    ? mock.requestPropertyLegalVerificationBatch(propertyIds)
+    : http.httpRequestPropertyLegalVerificationBatch(propertyIds);
+}
+
+export async function assignPropertyLegalReviewer(propertyId: string, assignedTo: string) {
+  return mockMode()
+    ? mock.assignPropertyLegalReviewer(propertyId, assignedTo)
+    : http.httpAssignPropertyLegalReviewer(propertyId, assignedTo);
+}
+
+export async function decidePropertyLegalVerification(
+  propertyId: string,
+  input: {
+    status: PropertyLegalStatus;
+    reviewedBy?: string;
+    notes?: string;
+    rejectionReason?: string;
+  },
+) {
+  return mockMode()
+    ? mock.decidePropertyLegalVerification(propertyId, input)
+    : http.httpDecidePropertyLegalVerification(propertyId, input);
+}
+
+export async function addPropertyLegalNote(propertyId: string, text: string, by?: string) {
+  return mockMode()
+    ? mock.addPropertyLegalNote(propertyId, text, by)
+    : http.httpAddPropertyLegalNote(propertyId, text, by);
+}
+
+export async function attachPropertyLegalReport(
+  propertyId: string,
+  fileName: string,
+  url?: string,
+) {
+  return mockMode()
+    ? mock.attachPropertyLegalReport(propertyId, fileName, url)
+    : http.httpAttachPropertyLegalReport(propertyId, fileName, url);
+}

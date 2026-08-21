@@ -24,12 +24,6 @@ export type CrmSearchResults = {
   }>;
   organizations?: Array<{ _id: string; name?: string; industry?: string }>;
   clients?: Array<{ _id: string; name?: string; email?: string }>;
-  platformOpportunities?: Array<{
-    _id: string;
-    title?: string;
-    opportunitySourcePlatform?: string;
-    platformClientLabel?: string;
-  }>;
 };
 
 export async function fetchCrmSearch(
@@ -60,7 +54,6 @@ export function crmSearchHasResults(data: CrmSearchResults | null | undefined) {
     (data.deals?.length ?? 0) > 0 ||
     (data.contacts?.length ?? 0) > 0 ||
     (data.organizations?.length ?? 0) > 0 ||
-    (data.clients?.length ?? 0) > 0 ||
-    (data.platformOpportunities?.length ?? 0) > 0
+    (data.clients?.length ?? 0) > 0
   );
 }

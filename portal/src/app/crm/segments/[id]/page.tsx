@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Briefcase,
   ChevronDown,
   ChevronRight,
   Contact,
@@ -73,35 +72,23 @@ type MemberRow = {
   organization?: string;
   status?: string;
   stage?: string;
-  title?: string;
-  opportunitySourcePlatform?: string;
-  platformClientLabel?: string;
-  platformEngagementStatus?: string;
   leadOwner?: string;
 };
 
-function displayName(row: MemberRow, module: CrmSegmentMemberModule) {
-  if (module === "platform-opportunities") {
-    return row.title || "Untitled opportunity";
-  }
+function displayName(row: MemberRow) {
   const n = `${row.firstName || ""} ${row.lastName || ""}`.trim();
   return n || row.email || "—";
 }
 
 function memberHref(module: CrmSegmentMemberModule, id: string) {
-  if (module === "platform-opportunities") {
-    return `/crm/platform-opportunities/${id}`;
-  }
   return `/crm/${module}/${id}`;
 }
 
 function tabLabel(module: CrmSegmentMemberModule) {
-  if (module === "platform-opportunities") return "Opportunities";
   return module;
 }
 
 function tabIcon(module: CrmSegmentMemberModule) {
-  if (module === "platform-opportunities") return Briefcase;
   if (module === "contacts") return Contact;
   return Users;
 }
@@ -110,13 +97,11 @@ function countForTab(
   counts: {
     leadCount?: number;
     contactCount?: number;
-    platformOpportunityCount?: number;
   },
   module: CrmSegmentMemberModule,
 ) {
   if (module === "leads") return counts.leadCount ?? 0;
-  if (module === "contacts") return counts.contactCount ?? 0;
-  return counts.platformOpportunityCount ?? 0;
+  return counts.contactCount ?? 0;
 }
 
 function listTypeLabel(type: CrmSegmentListType) {
@@ -147,7 +132,6 @@ export default function CrmSegmentDetailPage() {
   const [listType, setListType] = useState<CrmSegmentListType>("dynamic");
   const [leadFilters, setLeadFilters] = useState<FilterCriteria[]>([]);
   const [contactFilters, setContactFilters] = useState<FilterCriteria[]>([]);
-  const [platformOpportunityFilters, setPlatformOpportunityFilters] = useState<FilterCriteria[]>([]);
 
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [membersTotal, setMembersTotal] = useState(0);
@@ -172,7 +156,6 @@ export default function CrmSegmentDetailPage() {
 
   const [leadFiltersOpen, setLeadFiltersOpen] = useState(true);
   const [contactFiltersOpen, setContactFiltersOpen] = useState(true);
-  const [platformFiltersOpen, setPlatformFiltersOpen] = useState(true);
 
   const memberSearchRef = useRef<HTMLInputElement>(null);
   const memberPickerRef = useRef<HTMLInputElement>(null);
@@ -188,7 +171,6 @@ export default function CrmSegmentDetailPage() {
       setListType(seg.listType);
       setLeadFilters(seg.leadFilters || []);
       setContactFilters(seg.contactFilters || []);
-      setPlatformOpportunityFilters(seg.platformOpportunityFilters || []);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load segment");
       setSegment(null);
@@ -273,22 +255,18 @@ export default function CrmSegmentDetailPage() {
       description.trim() !== (segment.description || "") ||
       listType !== segment.listType ||
       JSON.stringify(leadFilters) !== JSON.stringify(segment.leadFilters || []) ||
-      JSON.stringify(contactFilters) !== JSON.stringify(segment.contactFilters || []) ||
-      JSON.stringify(platformOpportunityFilters) !==
-        JSON.stringify(segment.platformOpportunityFilters || [])
+      JSON.stringify(contactFilters) !== JSON.stringify(segment.contactFilters || [])
     );
-  }, [segment, name, description, listType, leadFilters, contactFilters, platformOpportunityFilters]);
+  }, [segment, name, description, listType, leadFilters, contactFilters]);
 
   const filtersDirty = useMemo(() => {
     if (!segment) return false;
     return (
       listType !== segment.listType ||
       JSON.stringify(leadFilters) !== JSON.stringify(segment.leadFilters || []) ||
-      JSON.stringify(contactFilters) !== JSON.stringify(segment.contactFilters || []) ||
-      JSON.stringify(platformOpportunityFilters) !==
-        JSON.stringify(segment.platformOpportunityFilters || [])
+      JSON.stringify(contactFilters) !== JSON.stringify(segment.contactFilters || [])
     );
-  }, [segment, listType, leadFilters, contactFilters, platformOpportunityFilters]);
+  }, [segment, listType, leadFilters, contactFilters]);
 
   // Saved membership preview (or static lists).
   useEffect(() => {
@@ -307,7 +285,6 @@ export default function CrmSegmentDetailPage() {
         listType,
         leadFilters,
         contactFilters,
-        platformOpportunityFilters,
         module: tab,
         page: membersPage,
         pageSize: membersPageSize,
@@ -338,7 +315,6 @@ export default function CrmSegmentDetailPage() {
     filtersDirty,
     leadFilters,
     contactFilters,
-    platformOpportunityFilters,
     tab,
     membersPage,
     membersPageSize,
@@ -358,7 +334,6 @@ export default function CrmSegmentDetailPage() {
         listType,
         leadFilters,
         contactFilters,
-        platformOpportunityFilters,
       })
         .then((counts) => {
           if (!cancelled) setPreviewCounts(counts);
@@ -374,23 +349,12 @@ export default function CrmSegmentDetailPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [
-    segment,
-    listType,
-    filtersDirty,
-    leadFilters,
-    contactFilters,
-    platformOpportunityFilters,
-  ]);
+  }, [segment, listType, filtersDirty, leadFilters, contactFilters]);
 
   const displayCounts = previewCounts ?? {
     leadCount: segment?.leadCount ?? 0,
     contactCount: segment?.contactCount ?? 0,
-    platformOpportunityCount: segment?.platformOpportunityCount ?? 0,
-    memberCount:
-      (segment?.leadCount ?? 0) +
-      (segment?.contactCount ?? 0) +
-      (segment?.platformOpportunityCount ?? 0),
+    memberCount: (segment?.leadCount ?? 0) + (segment?.contactCount ?? 0),
   };
 
   const totalMembers = displayCounts.memberCount;
@@ -414,7 +378,6 @@ export default function CrmSegmentDetailPage() {
         listType,
         leadFilters,
         contactFilters,
-        platformOpportunityFilters,
       });
       setSegment(updated);
       setPreviewCounts(null);
@@ -433,7 +396,6 @@ export default function CrmSegmentDetailPage() {
     listType,
     leadFilters,
     contactFilters,
-    platformOpportunityFilters,
     loadMembers,
   ]);
 
@@ -613,12 +575,6 @@ export default function CrmSegmentDetailPage() {
       if (e.altKey && e.key === "2" && !inField) {
         e.preventDefault();
         setTab("contacts");
-        return;
-      }
-
-      if (e.altKey && e.key === "3" && !inField) {
-        e.preventDefault();
-        setTab("platform-opportunities");
       }
     };
 
@@ -739,12 +695,6 @@ export default function CrmSegmentDetailPage() {
         {[
           { label: "Leads", value: displayCounts.leadCount ?? 0, icon: Users, accent: "text-sky-600 bg-sky-50" },
           { label: "Contacts", value: displayCounts.contactCount ?? 0, icon: Contact, accent: "text-violet-600 bg-violet-50" },
-          {
-            label: "Opportunities",
-            value: displayCounts.platformOpportunityCount ?? 0,
-            icon: Briefcase,
-            accent: "text-emerald-600 bg-emerald-50",
-          },
           { label: "Total members", value: totalMembers, icon: Layers, accent: "text-primary bg-primary/10" },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label} className={cn(HS_PANEL, "flex items-center gap-3 p-4")}>
@@ -832,20 +782,6 @@ export default function CrmSegmentDetailPage() {
               >
                 <CRMFilterBar module="contacts" filters={contactFilters} onChange={setContactFilters} />
               </FilterSection>
-              <FilterSection
-                title="Platform opportunity filters"
-                description="Platform opportunities matching all filters are included."
-                icon={Briefcase}
-                open={platformFiltersOpen}
-                onToggle={() => setPlatformFiltersOpen((v) => !v)}
-                count={platformOpportunityFilters.length}
-              >
-                <CRMFilterBar
-                  module="platform-opportunities"
-                  filters={platformOpportunityFilters}
-                  onChange={setPlatformOpportunityFilters}
-                />
-              </FilterSection>
               {isDirty ? (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />
@@ -864,7 +800,7 @@ export default function CrmSegmentDetailPage() {
             <div className="flex gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
               <Info className="h-4 w-4 shrink-0 mt-0.5 text-sky-600" />
               <p>
-                Search for leads, contacts, or platform opportunities in the member panel, or paste a record id under
+                Search for leads or contacts in the member panel, or paste a record id under
                 advanced options. Use <kbd className="rounded bg-white/80 px-1 text-[11px] font-mono">⌘⇧M</kbd> to
                 focus the add-member search.
               </p>
@@ -894,7 +830,6 @@ export default function CrmSegmentDetailPage() {
                     listType,
                     leadFilters,
                     contactFilters,
-                    platformOpportunityFilters,
                     module: tab,
                     page: membersPage,
                     pageSize: membersPageSize,
@@ -924,7 +859,7 @@ export default function CrmSegmentDetailPage() {
           </div>
 
           <div className="flex border-b border-[var(--border-color)]">
-            {(["leads", "contacts", "platform-opportunities"] as const).map((m) => {
+            {(["leads", "contacts"] as const).map((m) => {
               const count = countForTab(displayCounts, m);
               const Icon = tabIcon(m);
               return (
@@ -969,8 +904,7 @@ export default function CrmSegmentDetailPage() {
               </div>
               <p className="text-xs text-text-muted shrink-0 hidden sm:block">
                 <kbd className="rounded bg-surface-dim px-1 font-mono">Alt+1</kbd> leads ·{" "}
-                <kbd className="rounded bg-surface-dim px-1 font-mono">Alt+2</kbd> contacts ·{" "}
-                <kbd className="rounded bg-surface-dim px-1 font-mono">Alt+3</kbd> opportunities
+                <kbd className="rounded bg-surface-dim px-1 font-mono">Alt+2</kbd> contacts
               </p>
             </div>
 
@@ -1071,15 +1005,9 @@ export default function CrmSegmentDetailPage() {
                             />
                           </th>
                         ) : null}
-                        <th className="px-2 py-2.5">
-                          {tab === "platform-opportunities" ? "Title" : "Name"}
-                        </th>
-                        <th className="px-2 py-2.5">
-                          {tab === "platform-opportunities" ? "Platform" : "Email"}
-                        </th>
-                        <th className="px-2 py-2.5 hidden sm:table-cell">
-                          {tab === "platform-opportunities" ? "Client" : "Company"}
-                        </th>
+                        <th className="px-2 py-2.5">Name</th>
+                        <th className="px-2 py-2.5">Email</th>
+                        <th className="px-2 py-2.5 hidden sm:table-cell">Company</th>
                         <th className="px-2 py-2.5 hidden md:table-cell">
                           {tab === "leads" ? "Owner" : "Status"}
                         </th>
@@ -1098,7 +1026,7 @@ export default function CrmSegmentDetailPage() {
                                 type="checkbox"
                                 checked={selectedLeadIds.has(row._id)}
                                 onChange={() => toggleLeadSelected(row._id)}
-                                aria-label={`Select ${displayName(row, tab)}`}
+                                aria-label={`Select ${displayName(row)}`}
                                 className="h-3.5 w-3.5 rounded border-[var(--border-color)]"
                               />
                             </td>
@@ -1108,27 +1036,21 @@ export default function CrmSegmentDetailPage() {
                               href={memberHref(tab, row._id)}
                               className="font-medium text-primary hover:underline"
                             >
-                              {displayName(row, tab)}
+                              {displayName(row)}
                             </Link>
                           </td>
-                          <td className="px-2 py-2.5 text-text-muted">
-                            {tab === "platform-opportunities"
-                              ? row.opportunitySourcePlatform || "—"
-                              : row.email || "—"}
-                          </td>
+                          <td className="px-2 py-2.5 text-text-muted">{row.email || "—"}</td>
                           <td className="px-2 py-2.5 text-text-muted hidden sm:table-cell">
-                            {tab === "platform-opportunities"
-                              ? row.platformClientLabel || "—"
-                              : row.organization || "—"}
+                            {row.organization || "—"}
                           </td>
                           <td className="px-2 py-2.5 hidden md:table-cell">
                             {tab === "leads" ? (
                               <span className="text-text-muted">
                                 {row.leadOwner || "Unassigned"}
                               </span>
-                            ) : (row.platformEngagementStatus || row.status || row.stage) ? (
+                            ) : row.status || row.stage ? (
                               <span className="inline-flex rounded-full bg-surface-dim px-2 py-0.5 text-xs font-medium text-text-muted capitalize">
-                                {row.platformEngagementStatus || row.status || row.stage}
+                                {row.status || row.stage}
                               </span>
                             ) : (
                               <span className="text-text-muted">—</span>

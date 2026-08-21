@@ -17,7 +17,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { CrmButton } from '@/components/crm/ui';
 import { cn } from '@/lib/utils';
 import { CRM_TOOLBAR_SELECT } from '@/lib/crm/ui';interface CRMFilterBarProps {
-  module: 'leads' | 'contacts' | 'organizations' | 'deals' | 'activities' | 'inbox' | 'clients' | 'platform-opportunities' | 'legal';
+  module: 'leads' | 'contacts' | 'organizations' | 'deals' | 'activities' | 'inbox' | 'clients' | 'legal';
   filters: FilterCriteria[];
   onChange: (filters: FilterCriteria[]) => void;
   onClear?: () => void;
@@ -33,7 +33,6 @@ const MODULE_FILTER_LABEL: Record<CRMFilterBarProps['module'], string> = {
   activities: 'activities',
   inbox: 'inbox',
   clients: 'clients',
-  'platform-opportunities': 'platform opportunities',
   legal: 'legal cases',
 };
 

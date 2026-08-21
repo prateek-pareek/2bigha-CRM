@@ -126,7 +126,7 @@ export function defaultWorkspaceOwner(
 }
 
 export function resolveActivePipelineId(
-  type: "leads" | "deals" | "platform_opportunities",
+  type: "leads" | "deals",
   pipelines: Array<{ _id: string; isDefault?: boolean }>,
   user?: {
     assignedLeadsPipeline?: string;
@@ -141,11 +141,7 @@ export function resolveActivePipelineId(
     return { pipelineId: String(assigned), isDefault: !!row?.isDefault };
   }
   const storageKey =
-    type === "leads"
-      ? "crm_active_pipeline_leads"
-      : type === "deals"
-        ? "crm_active_pipeline_deals"
-        : "crm_active_pipeline_platform_opportunities";
+    type === "leads" ? "crm_active_pipeline_leads" : "crm_active_pipeline_deals";
   const saved =
     typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
   if (saved && pipelines.some((p) => String(p._id) === saved)) {
