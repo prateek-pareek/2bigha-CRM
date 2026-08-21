@@ -39,6 +39,7 @@ ARG NEXT_PUBLIC_CRM_API_URL
 ENV NEXT_PUBLIC_CRM_API_URL=$NEXT_PUBLIC_CRM_API_URL
 
 # Build the application
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # Stage 2: Production
