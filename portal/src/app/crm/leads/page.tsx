@@ -55,6 +55,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import CRMCalendarView from '@/components/crm/calendar/CRMCalendarView';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
+import TransferOwnershipModal from '@/components/crm/records/detail/TransferOwnershipModal';
 import LeadActivityPopup from '@/components/crm/records/detail/LeadActivityPopup';
 import WebsiteLeadsPanel from '@/components/crm/records/list/WebsiteLeadsPanel';
 import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
@@ -299,6 +300,7 @@ export default function LeadsPage() {
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
   const [callLead, setCallLead] = useState<Lead | null>(null);
   const [activityLead, setActivityLead] = useState<Lead | null>(null);
+  const [transferLead, setTransferLead] = useState<Lead | null>(null);
   const [showWebsiteLeads, setShowWebsiteLeads] = useState(false);
   const [isBulkEmailOpen, setIsBulkEmailOpen] = useState(false);
   const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
@@ -2095,6 +2097,11 @@ export default function LeadsPage() {
                                           }
                                         : undefined
                                     }
+                                    onTransfer={
+                                      isAdmin || hasAccess('leads:read:team') || hasAccess('leads:read:all')
+                                        ? () => setTransferLead(lead)
+                                        : undefined
+                                    }
                                     onDelete={
                                       hasAccess('leads:delete')
                                         ? () => handleDelete(lead._id)
@@ -2285,6 +2292,11 @@ export default function LeadsPage() {
                                           setAssignOwner('');
                                           setAssignOpen(true);
                                         }
+                                      : undefined
+                                  }
+                                  onTransfer={
+                                    isAdmin || hasAccess('leads:read:team') || hasAccess('leads:read:all')
+                                      ? () => setTransferLead(lead)
                                       : undefined
                                   }
                                   onDelete={
@@ -2490,6 +2502,19 @@ export default function LeadsPage() {
         leadId={callLead?._id}
         leadName={`${callLead?.firstName || ''} ${callLead?.lastName || ''}`.trim()}
         relatedType="Lead"
+      />
+      <TransferOwnershipModal
+        open={!!transferLead}
+        onClose={() => setTransferLead(null)}
+        entityType="Lead"
+        entityId={transferLead?._id || ''}
+        entityLabel={`${transferLead?.firstName || ''} ${transferLead?.lastName || ''}`.trim()}
+        currentModule={(transferLead as any)?.module}
+        onSuccess={() => {
+          setTransferLead(null);
+          void fetchLeadsList(selectedPipelineId || null);
+          invalidateCrmAfterMutation('leads', 'workspace', 'attention');
+        }}
       />
       <SendEmailModal
         isOpen={isBulkEmailOpen && selectedIds.size > 0}

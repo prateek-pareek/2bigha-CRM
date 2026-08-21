@@ -226,6 +226,7 @@ type CrmTableActionMenuProps = {
   onCall?: () => void;
   onWhatsApp?: () => void;
   onReassign?: () => void;
+  onTransfer?: () => void;
   onNotes?: () => void;
   className?: string;
   /** Which edge the dropdown panel hangs from. Use "left" when this menu sits near the left edge of the table (e.g. a leading Action column) so the panel doesn't overflow off-screen. Defaults to "right" (panel's right edge pinned to the trigger). */
@@ -241,6 +242,7 @@ export function CrmTableActionMenu({
   onCall,
   onWhatsApp,
   onReassign,
+  onTransfer,
   onNotes,
   className,
   menuAlign = "right",
@@ -345,6 +347,16 @@ export function CrmTableActionMenu({
               >
                 <CrmIcon.Users size={13} className="text-[#2f80ed]" />
                 Reassign
+              </button>
+            ) : null}
+            {onTransfer ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                onClick={runAndClose(onTransfer)}
+              >
+                <CrmIcon.Users size={13} className="text-[#2f80ed]" />
+                Transfer ownership
               </button>
             ) : null}
             {onClone ? (
