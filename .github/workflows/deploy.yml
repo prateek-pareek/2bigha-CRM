@@ -119,13 +119,24 @@ jobs:
             cd "$DEPLOY_PATH"
             echo "Deploying in directory: $(pwd)"
             git fetch origin main && git reset --hard origin/main
+            # This VPS already runs a shared Traefik (traefik-traefik-1, network
+            # traefik_network) for other apps - our own bundled `traefik` service
+            # must stay off, or it fights that one for ports 80/443. See
+            # docker-compose.shared-traefik.yml for what this actually changes
+            # (nothing about the existing Traefik or any other app on the box).
+            COMPOSE_FILES="-f docker-compose.yml -f docker-compose.shared-traefik.yml"
+            # One-time cleanup: an earlier deploy (before this override existed)
+            # left a stuck, never-fully-started traefik container behind. It
+            # never got as far as binding a port, so this is a no-op once it's
+            # gone - safe to keep here as a no-op on every future run too.
+            docker rm -f 2bighacrm-traefik 2>/dev/null || true
             # Shell-exported vars win over .env during compose interpolation, so
             # this pins the just-built tags without touching the checked-in .env
             # (which still holds JWT_SECRET, MONGO_URI, APP_DOMAIN, etc).
             export BACKEND_IMAGE="${{ needs.build-and-push.outputs.backend_image }}"
             export FRONTEND_IMAGE="${{ needs.build-and-push.outputs.frontend_image }}"
-            docker compose pull backend frontend
-            docker compose up -d --no-build
+            docker compose $COMPOSE_FILES pull backend frontend
+            docker compose $COMPOSE_FILES up -d --no-build
             docker image prune -f
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -92,6 +92,29 @@ docker compose logs -f traefik   # watch the certificate get issued
 
 Then open `https://crm.yourdomain.com`.
 
+### 5a. Already running Traefik for other apps on this VPS?
+
+If port 80/443 is already bound by another Traefik container (common if this
+VPS hosts more than one project), our bundled `traefik` service will fail to
+start with `address already in use`. Don't free the port — use the existing
+Traefik instead:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.shared-traefik.yml build
+docker compose -f docker-compose.yml -f docker-compose.shared-traefik.yml up -d
+```
+
+See the comments in `docker-compose.shared-traefik.yml` for exactly what this
+changes (only this project's own containers — nothing about the existing
+Traefik or any other app on the box). It assumes the existing Traefik uses a
+Docker network named `traefik_network` and a cert resolver named
+`letsencrypt` — check `docker network ls` and that Traefik's own compose file
+if yours differs, and adjust the override file's network name and this
+repo's `tls.certresolver` labels in `docker-compose.yml` to match.
+
+`.github/workflows/deploy.yml` already passes this override on every CI
+deploy, so once set up once this is automatic.
+
 ### 6a. Using Hostinger's managed MongoDB instead of the bundled container
 
 If you're pointing this at a Hostinger MongoDB database (or any external/managed

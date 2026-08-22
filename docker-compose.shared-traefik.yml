@@ -1,0 +1,37 @@
+# For a VPS that ALREADY runs a shared Traefik instance for other apps
+# (this project's own VPS does: `traefik-traefik-1`, network `traefik_network`,
+# host networking, routing apps.mathionix.tech and others via the same
+# entrypoints/certresolver names this repo's labels already use).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.shared-traefik.yml up -d
+#
+# This does NOT touch, restart, or reconfigure the existing shared Traefik or
+# any other app on the VPS - it only (a) stops our bundled `traefik` service
+# from starting, so it never fights the existing one for ports 80/443, and
+# (b) joins our backend/frontend to the same Docker network so the existing
+# Traefik's docker-provider discovery can see them (`traefik.enable=true`
+# labels already do the rest - those labels are unchanged from the base file).
+services:
+  # `profiles` with no active profile means this service is simply never
+  # started - compose still parses the block but skips it entirely, so it
+  # never attempts the port 80/443 bind that conflicts with the existing
+  # Traefik.
+  traefik:
+    profiles: ['unused-bundled-traefik']
+
+  backend:
+    networks:
+      - default
+      - traefik_network
+
+  frontend:
+    networks:
+      - default
+      - traefik_network
+
+networks:
+  # Pre-existing network created outside this compose project - do not let
+  # compose try to create/own/remove it.
+  traefik_network:
+    external: true
