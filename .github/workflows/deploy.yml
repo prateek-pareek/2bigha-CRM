@@ -124,7 +124,14 @@ jobs:
             # must stay off, or it fights that one for ports 80/443. See
             # docker-compose.shared-traefik.yml for what this actually changes
             # (nothing about the existing Traefik or any other app on the box).
-            COMPOSE_FILES="-f docker-compose.yml -f docker-compose.shared-traefik.yml"
+            #
+            # Compose also reads a COMPOSE_FILE list straight out of .env (e.g.
+            # "docker-compose.yml:docker-compose.external-db.yml" when using an
+            # external MongoDB) - passing -f on the command line would silently
+            # REPLACE that list instead of adding to it, so append rather than
+            # hardcode the full set.
+            BASE_COMPOSE_FILE=$(grep -E '^COMPOSE_FILE=' .env 2>/dev/null | tail -1 | cut -d= -f2-)
+            export COMPOSE_FILE="${BASE_COMPOSE_FILE:-docker-compose.yml}:docker-compose.shared-traefik.yml"
             # One-time cleanup: an earlier deploy (before this override existed)
             # left a stuck, never-fully-started traefik container behind. It
             # never got as far as binding a port, so this is a no-op once it's
@@ -135,8 +142,13 @@ jobs:
             # (which still holds JWT_SECRET, MONGO_URI, APP_DOMAIN, etc).
             export BACKEND_IMAGE="${{ needs.build-and-push.outputs.backend_image }}"
             export FRONTEND_IMAGE="${{ needs.build-and-push.outputs.frontend_image }}"
-            docker compose $COMPOSE_FILES pull backend frontend
-            docker compose $COMPOSE_FILES up -d --no-build
+            docker compose pull backend frontend
+            # --remove-orphans drops any container for a service no longer
+            # active in the current COMPOSE_FILE list (e.g. the bundled mongodb
+            # when external-db.yml is in play) - scoped to this compose
+            # project's own containers only, never touches other projects
+            # (mathionix-*, ellebeo-*, traefik-traefik-1, ...).
+            docker compose up -d --no-build --remove-orphans
             docker image prune -f
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
