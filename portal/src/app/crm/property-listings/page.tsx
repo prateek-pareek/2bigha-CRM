@@ -40,6 +40,11 @@ import {
   PropertyListingCardSkeleton,
   PropertyListingsCarousel,
 } from "@/components/crm/property-listings/PropertyListingCard";
+import { CrmHoverActionIcon, CrmTableActionMenu } from "@/components/crm/ui/CrmListCells";
+import { CrmIcon, CrmNavIcon } from "@/lib/crm/shared/icons";
+import { contactWhatsappUrl } from "@/lib/crm/crm-messaging-links";
+import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
+import PropertyActivityPopup from "@/components/crm/records/detail/PropertyActivityPopup";
 import {
   deleteThirdPartyProperty,
   fetchThirdPartyPropertyListings,
@@ -125,6 +130,8 @@ function PropertyListingsPageContent() {
   const [pageSize, setPageSize] = useState(25);
   const [stats, setStats] = useState<PropertyListingStats | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [callProperty, setCallProperty] = useState<PropertyListingRecord | null>(null);
+  const [notesProperty, setNotesProperty] = useState<PropertyListingRecord | null>(null);
 
   useEffect(() => {
     const fromUrl = searchParams.get("bucket");
@@ -591,13 +598,38 @@ function PropertyListingsPageContent() {
                     )}
                   </td>
                   <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-[#2f80ed]"
-                      onClick={() => editListing(p._id)}
-                    >
-                      Edit
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {p.contactPhone ? (
+                        <CrmHoverActionIcon
+                          icon={<CrmIcon.PhoneCall size={12} />}
+                          label="Call"
+                          value={p.contactPhone}
+                          tone="primary"
+                          onClick={() => setCallProperty(p)}
+                        />
+                      ) : null}
+                      {contactWhatsappUrl({ phone: p.contactPhone }) ? (
+                        <CrmHoverActionIcon
+                          icon={<CrmNavIcon.WhatsApp size={12} />}
+                          label="WhatsApp"
+                          value={p.contactPhone!}
+                          tone="whatsapp"
+                          onClick={() =>
+                            window.open(
+                              contactWhatsappUrl({ phone: p.contactPhone })!,
+                              "_blank",
+                              "noopener,noreferrer",
+                            )
+                          }
+                        />
+                      ) : null}
+                      <CrmTableActionMenu
+                        onView={() => openListing(p._id)}
+                        onEdit={() => editListing(p._id)}
+                        onNotes={() => setNotesProperty(p)}
+                        onDelete={() => void removeListing(p._id)}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -715,6 +747,21 @@ function PropertyListingsPageContent() {
           className="mt-3 rounded-[var(--crm-radius-ui)] border-t-0"
         />
       ) : null}
+
+      <CallLeadModal
+        open={!!callProperty}
+        onClose={() => setCallProperty(null)}
+        phone={callProperty?.contactPhone}
+        leadId={callProperty?._id}
+        leadName={callProperty?.title}
+        relatedType="Property"
+      />
+
+      <PropertyActivityPopup
+        open={!!notesProperty}
+        onClose={() => setNotesProperty(null)}
+        property={notesProperty}
+      />
     </div>
   );
 }

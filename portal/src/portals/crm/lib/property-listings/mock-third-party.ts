@@ -5,11 +5,6 @@
 
 import type {
   AreaUnit,
-  ListingBucket,
-  PmChecklistItem,
-  PmPipelineStage,
-  PmPlan,
-  PmVisitStatus,
   PropertyLegalStatus,
   PropertyListingApprovalStatus,
   PropertyListingFor,
@@ -17,18 +12,26 @@ import type {
   PropertyListingStats,
   PropertyListingStatus,
   PropertyListingType,
+  PropertyRecordBucket,
   LeadSubscriptionMock,
 } from "./types";
 import {
-  DEFAULT_LEGAL_CHECKLIST,
-  DEFAULT_REPORT_SECTIONS,
   planIncludesLegalVerification,
   planLegalVerificationAllowance,
 } from "./types";
+import type { PmPipelineStage, PmPlan } from "@/lib/crm/property-management/types";
+import {
+  DEFAULT_LEGAL_CHECKLIST,
+  DEFAULT_REPORT_SECTIONS,
+} from "@/lib/crm/property-management/types";
 
-export const PM_RM_POOL = ["Asha Mehta (RM)", "Ravi Sharma (RM)"];
-export const PM_LEGAL_POOL = ["Priya Desai (Legal)", "Ankit Verma (Legal)"];
-export const PM_FIELD_POOL = ["Suresh Yadav (Field)", "Neha Singh (Field)"];
+/**
+ * Legal reviewer pool for the subscription Legal Verification queue
+ * (@/app/crm/legal/verification) — distinct from PM's own legal-team pool
+ * (PM_LEGAL_POOL in @/lib/crm/property-management), even though today's
+ * mock data happens to use the same names.
+ */
+export const LEGAL_REVIEWER_POOL = ["Priya Desai (Legal)", "Ankit Verma (Legal)"];
 
 const STORAGE_KEY = "crm_tp_property_listings_v5";
 
@@ -402,7 +405,7 @@ export type ThirdPartyListQuery = {
   approvalStatus?: string;
   listedFor?: string;
   leadId?: string;
-  listingBucket?: ListingBucket | "all";
+  listingBucket?: PropertyRecordBucket | "all";
   pmStage?: string;
   /** Subscription Legal Verification status filter (doc §3). */
   legalStatus?: PropertyLegalStatus | "all" | "queued";
@@ -415,7 +418,7 @@ export type ThirdPartyListQuery = {
 };
 
 export type CreateThirdPartyPropertyInput = {
-  listingBucket: ListingBucket;
+  listingBucket: PropertyRecordBucket;
   title: string;
   address?: string;
   city?: string;
@@ -567,7 +570,7 @@ export async function fetchThirdPartyPropertyById(
 }
 
 export async function fetchThirdPartyPropertyStats(
-  listingBucket?: ListingBucket | "all",
+  listingBucket?: PropertyRecordBucket | "all",
 ): Promise<PropertyListingStats> {
   await delay(200);
   const listings =
@@ -684,7 +687,12 @@ export async function deleteThirdPartyProperty(id: string): Promise<void> {
   setStore(getStore().filter((l) => l._id !== id));
 }
 
-async function patchPm(
+/**
+ * Generic patch helper shared by every mutation on the one third-party
+ * listings collection (marketplace, subscription-legal, and — via
+ * @/lib/crm/property-management/mock-pm — PM pipeline updates).
+ */
+export async function patchPropertyListing(
   id: string,
   patch: Partial<PropertyListingRecord>,
 ): Promise<PropertyListingRecord> {
@@ -701,151 +709,6 @@ async function patchPm(
   next[idx] = updated;
   setStore(next);
   return updated;
-}
-
-/** RM takes ownership after property is submitted. */
-export async function assignPmToRm(id: string, rmName: string): Promise<PropertyListingRecord> {
-  return patchPm(id, {
-    rmAssigneeName: rmName,
-    pmStage: "Assigned to RM",
-  });
-}
-
-/** RM assigns Legal Manager. */
-export async function assignPmToLegal(
-  id: string,
-  legalName: string,
-): Promise<PropertyListingRecord> {
-  return patchPm(id, {
-    legalAssigneeName: legalName,
-    pmStage: "Assigned to Legal",
-    legalVerification: {
-      status: "Not started",
-      checklist: structuredClone(DEFAULT_LEGAL_CHECKLIST),
-    },
-  });
-}
-
-export async function startPmLegalVerification(
-  id: string,
-  summary?: string,
-): Promise<PropertyListingRecord> {
-  const current = await fetchThirdPartyPropertyById(id);
-  if (!current) throw new Error("Listing not found");
-  return patchPm(id, {
-    legalVerification: {
-      status: "In progress",
-      startedAt: new Date().toISOString(),
-      summary: summary || current.legalVerification?.summary,
-      checklist: current.legalVerification?.checklist || structuredClone(DEFAULT_LEGAL_CHECKLIST),
-    },
-  });
-}
-
-export async function updatePmLegalChecklist(
-  id: string,
-  checklist: PmChecklistItem[],
-  summary?: string,
-): Promise<PropertyListingRecord> {
-  const current = await fetchThirdPartyPropertyById(id);
-  if (!current) throw new Error("Listing not found");
-  return patchPm(id, {
-    legalVerification: {
-      ...(current.legalVerification || { status: "In progress", checklist: [] }),
-      status: current.legalVerification?.status === "Completed" ? "Completed" : "In progress",
-      checklist,
-      summary: summary ?? current.legalVerification?.summary,
-    },
-  });
-}
-
-export async function completePmLegalVerification(
-  id: string,
-  summary?: string,
-): Promise<PropertyListingRecord> {
-  const current = await fetchThirdPartyPropertyById(id);
-  if (!current) throw new Error("Listing not found");
-  return patchPm(id, {
-    legalVerification: {
-      status: "Completed",
-      startedAt: current.legalVerification?.startedAt || new Date().toISOString(),
-      completedAt: new Date().toISOString(),
-      summary: summary || current.legalVerification?.summary || "Verification complete",
-      checklist: current.legalVerification?.checklist || structuredClone(DEFAULT_LEGAL_CHECKLIST),
-    },
-  });
-}
-
-/** RM assigns Field Agent after legal review. */
-export async function assignPmToFieldAgent(
-  id: string,
-  fieldName: string,
-  scheduledAt?: string,
-): Promise<PropertyListingRecord> {
-  return patchPm(id, {
-    fieldAssigneeName: fieldName,
-    pmStage: "Assigned to Field Agent",
-    fieldVisit: {
-      status: "Pending",
-      scheduledAt: scheduledAt || new Date(Date.now() + 2 * 86400000).toISOString(),
-    },
-  });
-}
-
-export async function setPmFieldVisitStatus(
-  id: string,
-  status: PmVisitStatus,
-  notes?: string,
-): Promise<PropertyListingRecord> {
-  const current = await fetchThirdPartyPropertyById(id);
-  if (!current) throw new Error("Listing not found");
-  const now = new Date().toISOString();
-  return patchPm(id, {
-    fieldVisit: {
-      status,
-      scheduledAt: current.fieldVisit?.scheduledAt,
-      completedAt: status === "Complete" ? now : current.fieldVisit?.completedAt,
-      notes: notes ?? current.fieldVisit?.notes,
-    },
-  });
-}
-
-export async function submitPmVisitReport(id: string): Promise<PropertyListingRecord> {
-  const current = await fetchThirdPartyPropertyById(id);
-  if (!current) throw new Error("Listing not found");
-  return patchPm(id, {
-    pmStage: "Visit Report Pending",
-    fieldVisit: {
-      ...(current.fieldVisit || { status: "Complete" }),
-      status: "Complete",
-      completedAt: current.fieldVisit?.completedAt || new Date().toISOString(),
-    },
-    visitReport: {
-      status: "Pending",
-      submittedAt: new Date().toISOString(),
-      sections: structuredClone(DEFAULT_REPORT_SECTIONS).map((s) => ({ ...s, checked: true })),
-    },
-  });
-}
-
-export async function reviewPmVisitReport(
-  id: string,
-  decision: "Approved" | "Rejected",
-  rejectionReason?: string,
-  sections?: PmChecklistItem[],
-): Promise<PropertyListingRecord> {
-  const current = await fetchThirdPartyPropertyById(id);
-  if (!current) throw new Error("Listing not found");
-  return patchPm(id, {
-    pmStage: decision === "Approved" ? "Visit Report Approved" : "Visit Report Rejected",
-    visitReport: {
-      status: decision,
-      submittedAt: current.visitReport?.submittedAt || new Date().toISOString(),
-      reviewedAt: new Date().toISOString(),
-      rejectionReason: decision === "Rejected" ? rejectionReason : undefined,
-      sections: sections || current.visitReport?.sections || structuredClone(DEFAULT_REPORT_SECTIONS),
-    },
-  });
 }
 
 /** Mock subscription bound to a lead (PM doc §2 + Legal Verification doc §1). */
@@ -954,7 +817,7 @@ export async function requestPropertyLegalVerification(
       ]
     : undefined;
 
-  return patchPm(propertyId, {
+  return patchPropertyListing(propertyId, {
     propertyLegal: {
       status: "Pending",
       requestedAt: new Date().toISOString(),
@@ -981,12 +844,12 @@ export async function decidePropertyLegalVerification(
     throw new Error("Rejection reason is required");
   }
   const now = new Date().toISOString();
-  const reviewer = input.reviewedBy || PM_LEGAL_POOL[0];
+  const reviewer = input.reviewedBy || LEGAL_REVIEWER_POOL[0];
   const noteHistory = [...(current.propertyLegal.noteHistory || [])];
   if (input.notes?.trim()) {
     noteHistory.push({ text: input.notes.trim(), at: now, by: reviewer });
   }
-  return patchPm(propertyId, {
+  return patchPropertyListing(propertyId, {
     propertyLegal: {
       ...current.propertyLegal,
       status: input.status,
@@ -1011,7 +874,7 @@ export async function assignPropertyLegalReviewer(
 ): Promise<PropertyListingRecord> {
   const current = getStore().find((l) => l._id === propertyId);
   if (!current?.propertyLegal) throw new Error("No legal verification request on this property");
-  return patchPm(propertyId, {
+  return patchPropertyListing(propertyId, {
     propertyLegal: {
       ...current.propertyLegal,
       assignedTo: assignedTo.trim() || undefined,
@@ -1049,8 +912,8 @@ export async function addPropertyLegalNote(
   const trimmed = text.trim();
   if (!trimmed) throw new Error("Note text is required");
   const now = new Date().toISOString();
-  const author = by || PM_LEGAL_POOL[0];
-  return patchPm(propertyId, {
+  const author = by || LEGAL_REVIEWER_POOL[0];
+  return patchPropertyListing(propertyId, {
     propertyLegal: {
       ...current.propertyLegal,
       notes: trimmed,
@@ -1071,7 +934,7 @@ export async function attachPropertyLegalReport(
   const current = getStore().find((l) => l._id === propertyId);
   if (!current?.propertyLegal) throw new Error("No legal verification request on this property");
   const name = fileName.trim() || "Legal_Report.pdf";
-  return patchPm(propertyId, {
+  return patchPropertyListing(propertyId, {
     propertyLegal: {
       ...current.propertyLegal,
       report: {

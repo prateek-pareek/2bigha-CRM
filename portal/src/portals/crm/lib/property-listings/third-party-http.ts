@@ -6,15 +6,6 @@
  *   GET/POST          /v1/properties
  *   GET/PUT/DELETE    /v1/properties/:id
  *   GET               /v1/properties/stats
- *   POST              /v1/properties/:id/assign-rm
- *   POST              /v1/properties/:id/assign-legal
- *   POST              /v1/properties/:id/legal/start
- *   PUT               /v1/properties/:id/legal/checklist
- *   POST              /v1/properties/:id/legal/complete
- *   POST              /v1/properties/:id/assign-field
- *   POST              /v1/properties/:id/visit/status
- *   POST              /v1/properties/:id/visit/report
- *   POST              /v1/properties/:id/visit/report/review
  *   GET               /v1/leads/:leadId/subscription
  *   GET               /v1/legal-verifications
  *   POST              /v1/legal-verifications/request-batch
@@ -23,12 +14,14 @@
  *   POST              /v1/properties/:id/legal-verification/decide
  *   POST              /v1/properties/:id/legal-verification/notes
  *   POST              /v1/properties/:id/legal-verification/report
+ *
+ * PM pipeline endpoints (assign-rm, assign-legal, legal/*, assign-field,
+ * visit/*) live in @/lib/crm/property-management/http-pm — same base URL,
+ * same `request()` helper (exported below), separate module.
  */
 
 import type {
   LeadSubscriptionMock,
-  PmChecklistItem,
-  PmVisitStatus,
   PropertyLegalStatus,
   PropertyListingRecord,
   PropertyListingStats,
@@ -43,7 +36,8 @@ import type {
   UpdateThirdPartyPropertyInput,
 } from "./mock-third-party";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** Shared by @/lib/crm/property-management/http-pm — same base URL/auth, PM-only paths. */
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${THIRD_PARTY_LISTINGS_API_URL}${path}`;
   const res = await fetch(url, {
     ...init,
@@ -125,78 +119,6 @@ export async function httpUpdate(id: string, input: UpdateThirdPartyPropertyInpu
 
 export async function httpDelete(id: string): Promise<void> {
   await request(`/v1/properties/${encodeURIComponent(id)}`, { method: "DELETE" });
-}
-
-export async function httpAssignRm(id: string, rmName: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/assign-rm`,
-    { method: "POST", body: JSON.stringify({ rmName }) },
-  );
-}
-
-export async function httpAssignLegal(id: string, legalName: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/assign-legal`,
-    { method: "POST", body: JSON.stringify({ legalName }) },
-  );
-}
-
-export async function httpStartLegal(id: string, summary?: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/legal/start`,
-    { method: "POST", body: JSON.stringify({ summary }) },
-  );
-}
-
-export async function httpUpdateLegalChecklist(
-  id: string,
-  checklist: PmChecklistItem[],
-  summary?: string,
-) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/legal/checklist`,
-    { method: "PUT", body: JSON.stringify({ checklist, summary }) },
-  );
-}
-
-export async function httpCompleteLegal(id: string, summary?: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/legal/complete`,
-    { method: "POST", body: JSON.stringify({ summary }) },
-  );
-}
-
-export async function httpAssignField(id: string, fieldName: string, scheduledAt?: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/assign-field`,
-    { method: "POST", body: JSON.stringify({ fieldName, scheduledAt }) },
-  );
-}
-
-export async function httpVisitStatus(id: string, status: PmVisitStatus, notes?: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/visit/status`,
-    { method: "POST", body: JSON.stringify({ status, notes }) },
-  );
-}
-
-export async function httpSubmitVisitReport(id: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/visit/report`,
-    { method: "POST", body: JSON.stringify({}) },
-  );
-}
-
-export async function httpReviewVisitReport(
-  id: string,
-  decision: "Approved" | "Rejected",
-  rejectionReason?: string,
-  sections?: PmChecklistItem[],
-) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/visit/report/review`,
-    { method: "POST", body: JSON.stringify({ decision, rejectionReason, sections }) },
-  );
 }
 
 export async function httpLeadSubscription(leadId: string) {

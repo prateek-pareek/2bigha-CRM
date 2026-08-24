@@ -14,7 +14,7 @@ type Props = {
   phone?: string | null;
   leadId?: string;
   leadName?: string;
-  relatedType?: "Lead" | "Contact";
+  relatedType?: "Lead" | "Contact" | "Property";
   onSuccess?: () => void;
 };
 
@@ -90,7 +90,9 @@ export default function CallLeadModal({
               <Phone size={16} />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-[var(--text-main)]">Call lead</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-main)]">
+                {relatedType === "Property" ? "Call" : "Call lead"}
+              </h3>
               <p className="text-xs text-[var(--text-muted)]">
                 {leadName || "Outbound call"}
               </p>

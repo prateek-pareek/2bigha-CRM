@@ -19,6 +19,10 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 const STATUS_OPTIONS = ['New', 'Qualified', 'Replied', 'Opportunity'];
 const CALL_STATUS_OPTIONS = ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'];
+const LEAD_VERTICAL_OPTIONS: Array<{ value: 'property_listing' | 'property_management'; label: string }> = [
+  { value: 'property_listing', label: 'Property Listing' },
+  { value: 'property_management', label: 'Property Management' },
+];
 
 /** CRMS section titles (Add Contact / Add Lead offcanvas) */
 const SECTION_LABEL: Record<string, string> = {
@@ -33,7 +37,7 @@ function sectionForKey(key: string): string {
   if (key.startsWith('cf:')) return 'custom';
   if (['salutation', 'firstName', 'lastName', 'email', 'additionalEmails', 'gender', 'mobileNo', 'phone', 'twitterHandle'].includes(key)) return 'contact';
   if (['relatedService'].includes(key)) return 'company';
-  if (['pipeline', 'stage', 'status', 'callStatus', 'leadOwner', 'leadCategory', 'group', 'notes'].includes(key)) return 'lead';
+  if (['leadVertical', 'pipeline', 'stage', 'status', 'callStatus', 'leadOwner', 'leadCategory', 'group', 'notes'].includes(key)) return 'lead';
   return 'other';
 }
 
@@ -56,6 +60,9 @@ interface CRMLeadFormFieldsProps {
   setSelectedPipeline: (id: string) => void;
   selectedStage: string;
   setSelectedStage: (s: string) => void;
+  /** Which vertical (Property Listing vs Property Management) this lead belongs to — scopes the Pipeline dropdown. */
+  leadVertical?: 'property_listing' | 'property_management';
+  setLeadVertical?: (v: 'property_listing' | 'property_management') => void;
   variant: 'stack' | 'grid';
   isAdmin?: boolean;
   onDeleteCustom?: (id: string, name: string) => void;
@@ -76,6 +83,8 @@ export default function CRMLeadFormFields({
   setSelectedPipeline,
   selectedStage,
   setSelectedStage,
+  leadVertical = 'property_listing',
+  setLeadVertical,
   variant,
   isAdmin,
   onDeleteCustom,
@@ -112,6 +121,13 @@ export default function CRMLeadFormFields({
     void runIdentifierCheck(e.target.closest('form') as HTMLFormElement);
   }, [runIdentifierCheck]);
 
+  // Only offer pipelines that belong to the selected vertical (legacy pipelines with no
+  // leadVertical set are treated as Property Listing so they don't disappear entirely).
+  const pipelinesForVertical = pipelines.filter((p) =>
+    leadVertical === 'property_management'
+      ? p.leadVertical === 'property_management'
+      : p.leadVertical === 'property_listing' || !p.leadVertical,
+  );
   const currentPipeline = pipelines.find((p) => p._id === selectedPipeline);
   const stageOptions = currentPipeline
     ? [...currentPipeline.stages].sort((a: any, b: any) => a.order - b.order).map((s: any) => s.name)
@@ -219,12 +235,26 @@ export default function CRMLeadFormFields({
             <input name="leadOwner" type="text" placeholder="Owner name" className={INP} />
           </div>
         );
+      case 'leadVertical':
+        return (
+          <div key={key}>
+            <label className={LBL}>Lead Vertical<span className={REQ}>*</span></label>
+            <select
+              name="leadVertical"
+              value={leadVertical}
+              onChange={(e) => setLeadVertical?.(e.target.value as 'property_listing' | 'property_management')}
+              className={SEL}
+            >
+              {LEAD_VERTICAL_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        );
       case 'pipeline':
         return (
           <div key={key}>
             <label className={LBL}>Pipeline</label>
             <select name="pipeline" value={selectedPipeline} onChange={(e) => setSelectedPipeline(e.target.value)} className={SEL}>
-              {pipelines.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+              {pipelinesForVertical.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
             </select>
           </div>
         );
