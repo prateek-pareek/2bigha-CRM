@@ -51,6 +51,7 @@ import {
   fetchThirdPartyPropertyStats,
   updateThirdPartyProperty,
 } from "@/lib/crm/property-listings/third-party-api";
+import { fetchTwoBighaFarms, mapTwoBighaFarmToRecord } from "@/lib/crm/property-listings/backend-api";
 import {
   LISTING_BUCKETS,
   PROPERTY_STATUSES,
@@ -191,6 +192,18 @@ function PropertyListingsPageContent() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // FARMS is live 2bigha marketplace data (getFarms) — everything else
+      // (BUY/SELL/PM) is still the older mock, pending its own migration.
+      if (bucket === "farm") {
+        const { data, total: farmTotal } = await fetchTwoBighaFarms({
+          page,
+          limit: pageSize,
+          searchTerm: search.trim() || undefined,
+        });
+        setListings(data.map(mapTwoBighaFarmToRecord));
+        setTotal(farmTotal);
+        return;
+      }
       const data = await fetchThirdPartyPropertyListings({
         page: pmBoardMode ? 1 : page,
         pageSize: pmBoardMode ? 200 : pageSize,
@@ -222,11 +235,27 @@ function PropertyListingsPageContent() {
 
   const loadStats = useCallback(async () => {
     try {
+      if (bucket === "farm") {
+        // 2bigha's Farm API has no aggregate-stats query (per the Integration
+        // Handbook) — total comes from getFarms' real meta.total; portfolio
+        // value is only summed over the currently loaded page (approximate,
+        // not a true aggregate), which is still real data, unlike the mock.
+        const availableCount = listings.filter((l) => l.status === "Available").length;
+        setStats({
+          total,
+          byStatus: { Available: availableCount },
+          totalValue: listings.reduce((sum, l) => sum + (l.price || 0), 0),
+          availableValue: listings
+            .filter((l) => l.status === "Available")
+            .reduce((sum, l) => sum + (l.price || 0), 0),
+        });
+        return;
+      }
       setStats(await fetchThirdPartyPropertyStats(bucket));
     } catch {
       /* silent */
     }
-  }, [bucket]);
+  }, [bucket, listings, total]);
 
   useEffect(() => {
     void load();
@@ -258,10 +287,29 @@ function PropertyListingsPageContent() {
     return map;
   }, [listings]);
 
-  const openListing = (id: string) => router.push(`/crm/property-listings/${id}`);
-  const editListing = (id: string) => router.push(`/crm/property-listings/${id}/edit`);
+  // FARMS rows come live from 2bigha's own marketplace (read-only, not a CRM
+  // document) — view/edit/delete below would silently hit the unrelated mock
+  // store instead, so they're disabled here rather than failing confusingly.
+  const openListing = (id: string) => {
+    if (bucket === "farm") {
+      toast.error("Live 2bigha farm detail view isn't available here yet");
+      return;
+    }
+    router.push(`/crm/property-listings/${id}`);
+  };
+  const editListing = (id: string) => {
+    if (bucket === "farm") {
+      toast.error("Editing a live 2bigha farm listing isn't available here yet");
+      return;
+    }
+    router.push(`/crm/property-listings/${id}/edit`);
+  };
 
   const removeListing = async (id: string) => {
+    if (bucket === "farm") {
+      toast.error("Deleting a live 2bigha farm listing isn't available here yet");
+      return;
+    }
     if (!confirm("Delete this listing?")) return;
     try {
       await deleteThirdPartyProperty(id);

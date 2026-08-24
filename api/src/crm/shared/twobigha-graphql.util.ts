@@ -40,8 +40,8 @@ export async function twoBighaGraphqlRequest<T = any>(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': config.apiKey,
-      'X-API-Secret': config.apiSecret,
+      'x-key': config.apiKey,
+      'x-secret': config.apiSecret,
     },
     body: JSON.stringify({ query, variables }),
   });

@@ -346,6 +346,7 @@ const crmGroups = [
                     { name: 'Property Management', href: '/crm/property-listings?bucket=pm', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
                 ],
             },
+            { name: 'Approval Queue', href: '/crm/property-approval', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
         ],
     },
     {
@@ -406,6 +407,11 @@ const crmGroups = [
                 href: '/crm/legal/verification',
                 icon: CrmNavIcon.Legal,
                 permission: 'legal:read',
+                children: [
+                    { name: 'Legal Cases', href: '/crm/legal', icon: CrmNavIcon.Legal, permission: 'legal:read' },
+                    { name: 'Verification', href: '/crm/legal/verification', icon: CrmNavIcon.Legal, permission: 'legal:read' },
+                    { name: '2bigha Verification Queue', href: '/crm/legal/verification-queue', icon: CrmNavIcon.Legal, permission: 'legal:read' },
+                ],
             },
             {
                 name: 'Proposals',

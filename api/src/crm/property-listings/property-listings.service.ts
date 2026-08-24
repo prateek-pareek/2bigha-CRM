@@ -9,7 +9,9 @@ import { CreatePropertyListingDto } from './dto/create-property-listing.dto';
 import { UpdatePropertyListingDto } from './dto/update-property-listing.dto';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 import { Lead, LeadDocument } from '../records/schemas/lead.schema';
-import { TwoBighaPropertyService } from './twobigha-property.service';
+import { ApprovalQueueBucket, TwoBighaPropertyService } from './twobigha-property.service';
+
+const APPROVAL_QUEUE_BUCKETS: ApprovalQueueBucket[] = ['pending', 'approved', 'rejected'];
 
 export interface PropertyListingListQuery {
   page?: string | number;
@@ -127,6 +129,24 @@ export class PropertyListingsService {
     searchTerm?: string;
   }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
     return this.twoBighaService.listFarms(params);
+  }
+
+  /**
+   * Live read-through to 2bigha's Property Approval Queue
+   * (getPendingApprovalProperties/getApprovedProperties/getRejectedProperties).
+   * Read-only — the handbook documents no confirmed approve/reject mutation,
+   * so this only backs a review screen, not an action.
+   */
+  async listTwoBighaApprovalQueue(
+    bucket: string,
+    params: { page?: number; limit?: number; searchTerm?: string },
+  ): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
+    if (!APPROVAL_QUEUE_BUCKETS.includes(bucket as ApprovalQueueBucket)) {
+      throw new BadRequestException(
+        `Invalid approval-queue bucket "${bucket}" — expected one of ${APPROVAL_QUEUE_BUCKETS.join(', ')}`,
+      );
+    }
+    return this.twoBighaService.listApprovalQueue(bucket as ApprovalQueueBucket, params);
   }
 
   async findAll(query: PropertyListingListQuery = {}): Promise<{
