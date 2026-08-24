@@ -34,6 +34,35 @@ export class PropertyListingsController {
     return this.listingsService.stats();
   }
 
+  /** Live read-through to 2bigha's getPropertyBySlug — the property-detail display screen operation per the Integration Handbook. */
+  @Get('twobigha/by-slug/:slug')
+  @Permissions('property_listings:read')
+  getTwoBighaDetailBySlug(@Param('slug') slug: string) {
+    return this.listingsService.getTwoBighaDetailBySlug(slug);
+  }
+
+  /** Live read-through to 2bigha's getFarms — farm search/listing. */
+  @Get('twobigha/farms')
+  @Permissions('property_listings:read')
+  listTwoBighaFarms(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('searchTerm') searchTerm?: string,
+  ) {
+    return this.listingsService.listTwoBighaFarms({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      searchTerm,
+    });
+  }
+
+  /** Live read-through to 2bigha's getFarmBySlug — the farm-detail display operation. */
+  @Get('twobigha/farms/by-slug/:slug')
+  @Permissions('property_listings:read')
+  getTwoBighaFarmBySlug(@Param('slug') slug: string) {
+    return this.listingsService.getTwoBighaFarmBySlug(slug);
+  }
+
   /** Leads-table batch counts (property + farm) — avoids N+1 calls per row. */
   @Post('counts-by-lead')
   @Permissions('property_listings:read')
@@ -83,5 +112,12 @@ export class PropertyListingsController {
   @Permissions('property_listings:delete')
   remove(@Param('id') id: string, @Request() req: any) {
     return this.listingsService.remove(id, req.user?.userId);
+  }
+
+  /** Manual retry for a listing whose last sync to 2bigha failed (or is still mock-only). */
+  @Post(':id/sync-2bigha')
+  @Permissions('property_listings:write')
+  retrySync(@Param('id') id: string) {
+    return this.listingsService.retrySync(id);
   }
 }

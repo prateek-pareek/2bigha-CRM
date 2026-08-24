@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CRMUsersService } from './crm-users.service';
 import { CRMUsersController } from './crm-users.controller';
+import { TwoBighaAgentService } from './twobigha-agent.service';
 import { CRMUser, CRMUserSchema } from './schemas/user.schema';
 import { Role, RoleSchema } from './schemas/role.schema';
 import { Permission, PermissionSchema } from './schemas/permission.schema';
@@ -24,7 +25,7 @@ import { UsersModule } from '../users/users.module';
     TrashModule,
   ],
   controllers: [CRMUsersController],
-  providers: [CRMUsersService],
+  providers: [CRMUsersService, TwoBighaAgentService],
   exports: [CRMUsersService, MongooseModule],
 })
 export class CRMUsersModule {}

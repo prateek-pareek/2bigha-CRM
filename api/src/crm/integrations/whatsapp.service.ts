@@ -9,6 +9,7 @@ import { Integration } from '../schemas/integration.schema';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { AiSensyClient } from './aisensy-client.util';
 import { StorageService } from '../../storage/storage.service';
+import { resolvePublicMediaUrl } from '../../storage/media-url.util';
 
 const META_API = 'https://graph.facebook.com/v18.0';
 
@@ -77,6 +78,7 @@ export class WhatsAppService {
     sourceLabel?: string;
     aisensyProjectId?: string;
     aisensyProjectApiPassword?: string;
+    aisensyPropertyShareCampaign?: string;
   } | null> {
     const config = await this.integrationModel
       .findOne({ type: 'whatsapp' })
@@ -100,6 +102,9 @@ export class WhatsAppService {
         : undefined,
       aisensyProjectApiPassword: config.aisensyProjectApiPassword
         ? String(config.aisensyProjectApiPassword)
+        : undefined,
+      aisensyPropertyShareCampaign: config.aisensyPropertyShareCampaign
+        ? String(config.aisensyPropertyShareCampaign)
         : undefined,
     };
   }
@@ -844,5 +849,138 @@ export class WhatsAppService {
     });
     this.emitWhatsAppEvent(phone, saved);
     return saved;
+  }
+
+  /**
+   * Sends an already-uploaded document (e.g. a generated property-share PDF)
+   * as its own WhatsApp message — the "Share Property" send path. Mirrors
+   * `sendMessage`'s structure/error shape.
+   *
+   * Meta: a free-form `type: 'document'` session message — same 24h
+   * customer-care-window rule WhatsApp applies to free text (enforced today
+   * only client-side, via `getWhatsAppCareWindow`, same as the text composer).
+   * AiSensy: there is no ad-hoc/session document send on AiSensy's public
+   * API (it's campaign/template-scoped, see AiSensyClient's doc comment) —
+   * this falls back to `sendTemplateMessage` against a pre-approved
+   * `aisensyPropertyShareCampaign` (a document-header template), or fails
+   * with guidance if none is configured.
+   */
+  async sendDocumentMessage(
+    to: string,
+    mediaUrl: string,
+    filename: string,
+    caption?: string,
+    userId?: string,
+    module?: string,
+    entityId?: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const config = await this.getConfig();
+    if (!config)
+      return { success: false, error: 'WhatsApp not configured or inactive' };
+
+    const phone = to.replace(/\D/g, '');
+    if (phone.length < 10)
+      return { success: false, error: 'Invalid phone number' };
+
+    const absoluteUrl = resolvePublicMediaUrl(mediaUrl) || mediaUrl;
+
+    if (config.provider === 'aisensy') {
+      if (!config.aisensyPropertyShareCampaign) {
+        return {
+          success: false,
+          error:
+            'AiSensy needs a pre-approved document template — configure an "AiSensy Property Share Campaign" under Settings → Integrations → WhatsApp, or switch the property PDF to a downloadable link instead.',
+        };
+      }
+      return this.sendTemplateMessage({
+        to: phone,
+        name: config.aisensyPropertyShareCampaign,
+        language: 'en',
+        bodyPreview: caption || filename,
+        userId,
+        module,
+        entityId,
+        mediaUrl: absoluteUrl,
+        mediaFilename: filename,
+      });
+    }
+
+    try {
+      const res = await fetch(`${META_API}/${config.phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: phone,
+          type: 'document',
+          document: {
+            link: absoluteUrl,
+            filename,
+            ...(caption ? { caption } : {}),
+          },
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        this.logger.error(`WhatsApp document send failed: ${JSON.stringify(data)}`);
+        return {
+          success: false,
+          error:
+            data?.error?.message ||
+            data?.error?.error_user_msg ||
+            'Send failed',
+        };
+      }
+
+      const msgId = data?.messages?.[0]?.id;
+      const saved = await this.messageModel.create({
+        waId: phone,
+        direction: 'outbound',
+        body: caption || '',
+        messageId: msgId,
+        sentBy: userId ? new Types.ObjectId(userId) : undefined,
+        module,
+        entityId: entityId ? new Types.ObjectId(entityId) : undefined,
+        status: 'sent',
+        attachment: { type: 'document', url: mediaUrl, filename },
+        meta: data,
+      });
+      this.emitWhatsAppEvent(phone, saved);
+
+      return { success: true, messageId: msgId };
+    } catch (e: any) {
+      this.logger.error(`WhatsApp document send error: ${e?.message}`);
+      return { success: false, error: e?.message || 'Send failed' };
+    }
+  }
+
+  /**
+   * Every attachment ever exchanged with this contact, newest first —
+   * powers the chat's "Shared Media" panel. Deliberately a dedicated query
+   * rather than a filter over `getConversations`' page, since that call is
+   * paginated and older shares would fall off the loaded page.
+   */
+  async getSharedMedia(waId: string): Promise<{
+    images: WhatsAppMessage[];
+    documents: WhatsAppMessage[];
+    videos: WhatsAppMessage[];
+    audio: WhatsAppMessage[];
+  }> {
+    const messages = await this.messageModel
+      .find({ waId, attachment: { $exists: true } })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    const images = messages.filter((m) => m.attachment?.type === 'image');
+    const documents = messages.filter((m) => m.attachment?.type === 'document');
+    const videos = messages.filter((m) => m.attachment?.type === 'video');
+    const audio = messages.filter((m) => m.attachment?.type === 'audio');
+    return { images, documents, videos, audio };
   }
 }

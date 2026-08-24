@@ -270,6 +270,24 @@ export class Lead {
 
   @Prop({ type: Types.ObjectId })
   deletedBy?: Types.ObjectId;
+
+  /** 2bigha-side lead id once synced (see TwoBighaLeadService, createLead). Unset until a sync attempt succeeds. */
+  @Prop({ trim: true, index: true })
+  twobighaLeadId?: string;
+
+  /** 'skipped' = no `clientId` linked yet, or the linked Client hasn't synced to 2bigha itself — createLead needs a 2bigha platform-user id. */
+  @Prop({
+    enum: ['not_synced', 'synced', 'mock', 'failed', 'skipped'],
+    default: 'not_synced',
+    index: true,
+  })
+  twobighaSyncStatus?: 'not_synced' | 'synced' | 'mock' | 'failed' | 'skipped';
+
+  @Prop({ trim: true })
+  twobighaSyncError?: string;
+
+  @Prop()
+  twobighaSyncedAt?: Date;
 }
 
 export const LeadSchema = SchemaFactory.createForClass(Lead);

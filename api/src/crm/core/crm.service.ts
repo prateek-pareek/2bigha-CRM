@@ -118,6 +118,7 @@ import { SalesAgentTriggerService } from '../sales-agent/sales-agent-cron.servic
 import { AssociationsService } from '../associations/associations.service';
 import { LeadIntentService } from '../records/lead-intent.service';
 import { ExportQuotaService } from '../admin/export-quota.service';
+import { TwoBighaLeadService } from '../records/twobigha-lead.service';
 
 type ImportDuplicateStrategy = 'create' | 'skip' | 'merge' | 'replace';
 type ImportRowOutcome = 'created' | 'merged' | 'replaced' | 'skipped';
@@ -164,6 +165,7 @@ export class CRMService {
     private readonly leadIntentService: LeadIntentService,
     private readonly exportQuotaService: ExportQuotaService,
     private readonly roleAuditLog: RoleAuditLogService,
+    private readonly twoBighaLeadService: TwoBighaLeadService,
   ) { }
 
   private notifySalesAgent(event: {
@@ -2285,6 +2287,38 @@ export class CRMService {
     if (dto.clientId) {
       await this.clientModel
         .updateOne({ _id: dto.clientId }, { $addToSet: { associatedLeads: lead._id } })
+        .exec();
+    }
+
+    // 0.5 Sync this lead to 2bigha (createLead) — needs the linked Client's
+    // own 2bigha platform-user id (see TwoBighaClientService). Never throws;
+    // a 2bigha outage, or simply no linked/synced client yet, must not block
+    // creating the lead locally — the sync status is stored instead.
+    {
+      const linkedClient = dto.clientId
+        ? await this.clientModel.findById(dto.clientId).select('twobighaUserId').lean().exec()
+        : null;
+      const syncResult = await this.twoBighaLeadService.syncLeadCreate({
+        _id: String(lead._id),
+        twobighaClientId: (linkedClient as any)?.twobighaUserId,
+        leadSource: dto.source,
+        note: dto.notes,
+      });
+      await this.leadModel
+        .updateOne(
+          { _id: lead._id },
+          {
+            $set: {
+              twobighaLeadId: syncResult.twobighaLeadId,
+              twobighaSyncStatus: syncResult.status,
+              twobighaSyncError:
+                syncResult.status === 'failed' || syncResult.status === 'skipped'
+                  ? syncResult.error
+                  : undefined,
+              twobighaSyncedAt: syncResult.syncedAt,
+            },
+          },
+        )
         .exec();
     }
 

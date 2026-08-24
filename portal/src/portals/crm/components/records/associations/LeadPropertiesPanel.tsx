@@ -4,13 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Building2, Loader2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchThirdPartyPropertyListings } from "@/lib/crm/property-listings/third-party-api";
 import {
-  formatAddress,
-  formatPrice,
-  statusTone,
-  type PropertyListingRecord,
-} from "@/lib/crm/property-listings/types";
+  fetchBackendPropertyListingsByLead,
+  type BackendPropertyListing,
+} from "@/lib/crm/property-listings/backend-api";
+import { formatAddress, formatPrice, statusTone } from "@/lib/crm/property-listings/types";
 
 /** Properties linked to this lead, with a shortcut to add a new one. */
 export default function LeadPropertiesPanel({
@@ -22,19 +20,16 @@ export default function LeadPropertiesPanel({
   onAddClick: () => void;
   refreshKey?: number;
 }) {
-  const [properties, setProperties] = useState<PropertyListingRecord[]>([]);
+  const [properties, setProperties] = useState<BackendPropertyListing[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!leadId) return;
     let cancelled = false;
     setLoading(true);
-    fetchThirdPartyPropertyListings({ leadId, pageSize: 200 })
-      .then((body) => {
-        if (!cancelled) {
-          // Marketplace listings only — PM cases live in LeadPmPanel.
-          setProperties((body.data || []).filter((p) => p.listingBucket !== "pm"));
-        }
+    fetchBackendPropertyListingsByLead(leadId)
+      .then((data) => {
+        if (!cancelled) setProperties(data);
       })
       .catch(() => {
         if (!cancelled) setProperties([]);
@@ -86,14 +81,29 @@ export default function LeadPropertiesPanel({
                   {formatAddress(p)} · {formatPrice(p.price, p.currency)}
                 </p>
               </div>
-              <span
-                className={cn(
-                  "shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold",
-                  statusTone(p.status),
-                )}
-              >
-                {p.status}
-              </span>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span
+                  className={cn(
+                    "rounded-md border px-1.5 py-0.5 text-[10px] font-semibold",
+                    statusTone(p.status || "Available"),
+                  )}
+                >
+                  {p.status || "Available"}
+                </span>
+                {/* 2bigha sync indicator — see TwoBighaPropertyService/property-listing.schema.ts */}
+                {p.twobighaSyncStatus === "failed" || p.twobighaSyncStatus === "unsupported" ? (
+                  <span
+                    className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                    title={p.twobighaSyncError}
+                  >
+                    2bigha: {p.twobighaSyncStatus === "unsupported" ? "manual only" : "not synced"}
+                  </span>
+                ) : p.twobighaSyncStatus === "mock" ? (
+                  <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                    2bigha: mock
+                  </span>
+                ) : null}
+              </div>
             </Link>
           ))}
         </div>

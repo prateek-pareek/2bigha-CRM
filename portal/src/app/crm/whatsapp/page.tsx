@@ -8,6 +8,7 @@ import {
   Check,
   CheckCheck,
   FileText,
+  Image as ImageIcon,
   Link2,
   Loader2,
   MessageCircle,
@@ -16,6 +17,7 @@ import {
   Plus,
   Search,
   Send,
+  Share2,
   Smile,
   User,
 } from "lucide-react";
@@ -28,6 +30,8 @@ import WhatsAppNavTabs from "@/components/crm/whatsapp/WhatsAppNavTabs";
 import LinkLeadModal from "@/components/crm/whatsapp/LinkLeadModal";
 import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
 import AddPropertyModal from "@/components/crm/records/detail/AddPropertyModal";
+import SharePropertyModal from "@/components/crm/whatsapp/SharePropertyModal";
+import SharedMediaPanel from "@/components/crm/whatsapp/SharedMediaPanel";
 import {
   formatWaWindowCountdown,
   getWhatsAppCareWindow,
@@ -117,6 +121,8 @@ export default function WhatsAppChatsPage() {
   const [linkLeadModalOpen, setLinkLeadModalOpen] = useState(false);
   const [callModalOpen, setCallModalOpen] = useState(false);
   const [addPropertyModalOpen, setAddPropertyModalOpen] = useState(false);
+  const [sharePropertyModalOpen, setSharePropertyModalOpen] = useState(false);
+  const [sharedMediaOpen, setSharedMediaOpen] = useState(false);
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -435,6 +441,14 @@ export default function WhatsAppChatsPage() {
                 <div className="flex items-center gap-2">
                   <CrmButton
                     variant="secondary"
+                    onClick={() => setSharePropertyModalOpen(true)}
+                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
+                    title="Share property"
+                  >
+                    <Share2 size={14} /> Share property
+                  </CrmButton>
+                  <CrmButton
+                    variant="secondary"
                     onClick={() => setAddPropertyModalOpen(true)}
                     className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
                     title="Add property"
@@ -456,6 +470,14 @@ export default function WhatsAppChatsPage() {
                   >
                     Send template
                   </CrmButton>
+                  <button
+                    type="button"
+                    onClick={() => setSharedMediaOpen(true)}
+                    title="Shared media"
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+                  >
+                    <ImageIcon size={14} />
+                  </button>
                 </div>
               </div>
 
@@ -683,6 +705,27 @@ export default function WhatsAppChatsPage() {
           onClose={() => setAddPropertyModalOpen(false)}
           leadId={linkedLead?.leadId}
           leadName={linkedLead?.leadName}
+        />
+      )}
+
+      {selectedWaId && (
+        <SharePropertyModal
+          open={sharePropertyModalOpen}
+          onClose={() => setSharePropertyModalOpen(false)}
+          waId={selectedWaId}
+          leadId={linkedLead?.leadId}
+          leadName={linkedLead?.leadName}
+          onSuccess={() => {
+            if (selectedWaId) void loadThread(selectedWaId);
+          }}
+        />
+      )}
+
+      {selectedWaId && (
+        <SharedMediaPanel
+          open={sharedMediaOpen}
+          onClose={() => setSharedMediaOpen(false)}
+          waId={selectedWaId}
         />
       )}
     </div>

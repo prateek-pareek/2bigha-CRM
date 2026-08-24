@@ -52,6 +52,7 @@ import { appendCrmListFilters, parseCrmFiltersQuery } from '../shared/crm-list-f
 import { CRMService } from '../core/crm.service';
 import { AssociationsService } from '../associations/associations.service';
 import { hasCrmAdminJwtBypass } from '../shared/crm-admin-access.util';
+import { TwoBighaClientService } from './twobigha-client.service';
 
 @Injectable()
 export class ClientsService {
@@ -62,6 +63,7 @@ export class ClientsService {
     private activityModel: Model<ActivityDocument>,
     private readonly crmService: CRMService,
     private readonly associationsService: AssociationsService,
+    private readonly twoBighaClientService: TwoBighaClientService,
   ) {}
 
   private _cleanData(data: any) {
@@ -123,6 +125,26 @@ export class ClientsService {
     }
 
     const client = await new this.clientModel(payload).save();
+
+    // Sync the underlying platform-user record to 2bigha (adminCreateUser)
+    // — never throws; a 2bigha outage or missing email must not block
+    // creating the client locally, the sync status is stored instead.
+    const syncResult = await this.twoBighaClientService.syncClientCreate({
+      _id: String(client._id),
+      name: client.name,
+      email: client.email,
+      phone: client.phone,
+      whatsappNumber: client.whatsappNumber,
+      address: client.address,
+      role: client.role,
+    });
+    client.twobighaUserId = syncResult.twobighaUserId ?? client.twobighaUserId;
+    client.twobighaSyncStatus = syncResult.status;
+    client.twobighaSyncError =
+      syncResult.status === 'failed' || syncResult.status === 'skipped' ? syncResult.error : undefined;
+    client.twobighaSyncedAt = syncResult.syncedAt;
+    await client.save();
+
     const populated = await this.clientModel
       .findById(client._id)
       .populate('organization')

@@ -121,6 +121,16 @@ export class Integration {
   @Prop()
   aisensyProjectApiPassword?: string;
 
+  /**
+   * AiSensy Campaign name for a pre-approved WhatsApp template whose HEADER
+   * is a document — the fallback send path for "Share Property" on the
+   * `aisensy` provider, since AiSensy has no ad-hoc/session document send
+   * (see `WhatsAppService.sendDocumentMessage`). Unset means property-share
+   * sends fail with a message telling the admin to configure this.
+   */
+  @Prop()
+  aisensyPropertyShareCampaign?: string;
+
   @Prop({
     enum: ['oauth', 'api_key', 'webhook', 'manual'],
   })

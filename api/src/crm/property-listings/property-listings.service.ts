@@ -9,6 +9,7 @@ import { CreatePropertyListingDto } from './dto/create-property-listing.dto';
 import { UpdatePropertyListingDto } from './dto/update-property-listing.dto';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 import { Lead, LeadDocument } from '../records/schemas/lead.schema';
+import { TwoBighaPropertyService } from './twobigha-property.service';
 
 export interface PropertyListingListQuery {
   page?: string | number;
@@ -28,13 +29,14 @@ export class PropertyListingsService {
     private readonly listingModel: Model<PropertyListingDocument>,
     @InjectModel(Lead.name, 'crmConnection')
     private readonly leadModel: Model<LeadDocument>,
+    private readonly twoBighaService: TwoBighaPropertyService,
   ) {}
 
   async create(
     dto: CreatePropertyListingDto,
     userId?: string,
   ): Promise<PropertyListingDocument> {
-    return this.listingModel.create({
+    const created = await this.listingModel.create({
       ...dto,
       listedDate: dto.listedDate ? new Date(dto.listedDate) : new Date(),
       leadId:
@@ -46,6 +48,85 @@ export class PropertyListingsService {
           ? new Types.ObjectId(userId)
           : undefined,
     });
+    await this.syncToTwoBigha(created);
+    return created;
+  }
+
+  /**
+   * Push this listing to 2bigha — createProperty/updateProperty for every
+   * propertyType except 'Farm', which routes to 2bigha's separate Farm API
+   * (createFarmByAdmin) instead — and persist the outcome. Never throws — a
+   * 2bigha outage or missing/mock credentials must not block adding/editing
+   * a property on a Lead locally; the sync status is stored instead so it
+   * can be retried (see `retrySync`) once the underlying issue is resolved.
+   */
+  private async syncToTwoBigha(listing: PropertyListingDocument): Promise<void> {
+    const input = {
+      _id: String(listing._id),
+      title: listing.title,
+      address: listing.address,
+      city: listing.city,
+      state: listing.state,
+      zipCode: listing.zipCode,
+      country: listing.country,
+      price: listing.price,
+      propertyType: listing.propertyType,
+      areaSqft: listing.areaSqft,
+      description: listing.description,
+      status: listing.status,
+      contactName: listing.contactName,
+      contactPhone: listing.contactPhone,
+      images: listing.images,
+      twobighaPropertyId: listing.twobighaPropertyId,
+    };
+    const isFarm = listing.propertyType === 'Farm';
+    const result = isFarm
+      ? listing.twobighaPropertyId
+        ? await this.twoBighaService.syncFarmUpdate(input)
+        : await this.twoBighaService.syncFarmCreate(input)
+      : listing.twobighaPropertyId
+        ? await this.twoBighaService.syncPropertyUpdate(input)
+        : await this.twoBighaService.syncPropertyCreate(input);
+
+    listing.twobighaPropertyId = result.twobighaPropertyId ?? listing.twobighaPropertyId;
+    listing.twobighaSyncStatus = result.status;
+    listing.twobighaSyncError =
+      result.status === 'failed' || result.status === 'unsupported' ? result.error : undefined;
+    listing.twobighaSyncedAt = result.syncedAt;
+    if (result.detail) listing.twobighaDetail = result.detail;
+    await listing.save();
+  }
+
+  /** Manual retry for a listing whose last 2bigha sync failed (or is still mock-only). */
+  async retrySync(id: string): Promise<PropertyListingDocument> {
+    const listing = await this.findOne(id);
+    await this.syncToTwoBigha(listing);
+    return listing;
+  }
+
+  /**
+   * Live read-through to 2bigha's `getPropertyBySlug` — "the operation to
+   * use for a property-detail display screen" per the handbook. For a
+   * property/farm this CRM created, prefer the `twobighaDetail` snapshot
+   * already stored on the listing (from the last create/update sync); this
+   * is for the case where the CRM has a 2bigha slug from elsewhere.
+   */
+  async getTwoBighaDetailBySlug(slug: string): Promise<Record<string, unknown> | null> {
+    return this.twoBighaService.getPropertyDetailBySlug(slug);
+  }
+
+  /** Live read-through to 2bigha's `getFarmBySlug` — the farm-detail display operation. */
+  async getTwoBighaFarmBySlug(slug: string): Promise<Record<string, unknown> | null> {
+    return this.twoBighaService.getFarmDetailBySlug(slug);
+  }
+
+  /** Live read-through to 2bigha's `getFarms` — farm search/listing, for pulling 2bigha-native farm data into the CRM. */
+  async listTwoBighaFarms(params: {
+    page?: number;
+    limit?: number;
+    searchTerm?: string;
+  }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
+    return this.twoBighaService.listFarms(params);
   }
 
   async findAll(query: PropertyListingListQuery = {}): Promise<{
@@ -205,6 +286,7 @@ export class PropertyListingsService {
       listedDate: dto.listedDate ? new Date(dto.listedDate) : listing.listedDate,
     });
     await listing.save();
+    await this.syncToTwoBigha(listing);
     return listing;
   }
 
