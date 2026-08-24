@@ -111,14 +111,14 @@ function buildPropertyShareHtml(input: PropertyShareInput): string {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-    .brand-name { font-size: 20px; font-weight: 800; color: #1a1a1a; }
-    .brand-name .accent { color: #4caf50; }
-    .brand-tagline { font-size: 8px; letter-spacing: 0.08em; color: #4b5563; text-transform: uppercase; }
-    .category { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: #2e7d32; text-transform: uppercase; margin: 10px 0 8px; }
-    .layout { display: flex; gap: 20px; align-items: flex-start; }
+    .brand-row { display: flex; align-items: center; margin-bottom: 3px; }
+    .brand-name { font-size: 30px; font-weight: 900; letter-spacing: -1.6px; color: #111; line-height: 1; }
+    .brand-name .accent { display: inline-block; margin: 0 1px; padding: 1px 4px 2px; background: #258659; color: #fff; letter-spacing: -1px; }
+    .brand-tagline { font-size: 8px; font-weight: 800; letter-spacing: 0.08em; color: #1f2937; text-transform: uppercase; }
+    .category { font-family: Impact, "Arial Narrow", sans-serif; font-size: 20px; font-weight: 400; letter-spacing: 0.025em; color: #5b9134; text-transform: uppercase; margin: 34px 0 6px; }
+    .layout { display: flex; gap: 28px; align-items: flex-start; }
     .media-col { flex: 1.15; min-width: 0; }
-    .hero-wrap { position: relative; border-radius: 10px; overflow: hidden; background: #e5e7eb; height: 300px; }
+    .hero-wrap { position: relative; overflow: hidden; background: #e5e7eb; height: 340px; border: 1px solid #1d3557; }
     .hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .area-badge {
       position: absolute; left: 14px; bottom: 14px;
@@ -128,20 +128,19 @@ function buildPropertyShareHtml(input: PropertyShareInput): string {
     .area-value { display: block; font-size: 15px; font-weight: 700; }
     .area-caption { display: block; font-size: 9px; opacity: 0.85; }
     .thumb-row { display: flex; gap: 8px; margin-top: 8px; }
-    .thumb { flex: 1; height: 70px; border-radius: 6px; overflow: hidden; background: #e5e7eb; }
+    .thumb { flex: 1; height: 58px; overflow: hidden; background: #e5e7eb; }
     .thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .table-col { flex: 1; min-width: 0; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .table-col { flex: 0.82; min-width: 0; overflow: hidden; border: 1px solid #202020; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .overview-title {
-      background: linear-gradient(135deg, #2e7d32, #1b5e20);
-      color: #fff; font-weight: 700; font-size: 14px;
-      padding: 12px 16px; text-align: center;
+      background: #578e31;
+      color: #fff; font-family: Impact, "Arial Narrow", sans-serif; font-weight: 400; letter-spacing: 0.02em; font-size: 24px;
+      padding: 12px 16px; text-align: center; border-bottom: 1px solid #202020;
     }
-    tr:nth-child(odd) td { background: #a5d6a7; }
-    tr:nth-child(even) td { background: #c8e6c9; }
-    td { padding: 10px 14px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-    .row-label { font-weight: 700; color: #1b3a1d; width: 42%; }
-    .row-value { color: #1a1a1a; word-break: break-word; }
+    td { height: 36px; padding: 7px 13px; border-bottom: 1px solid #202020; }
+    tr:last-child td { border-bottom: 0; }
+    .row-label { background: #578e31; font-family: Impact, "Arial Narrow", sans-serif; font-size: 17px; font-weight: 400; letter-spacing: 0.015em; color: #fff; width: 40%; border-right: 1px solid #202020; }
+    .row-value { background: #9bd34d; color: #1a1a1a; word-break: break-word; }
   </style>
 </head>
 <body>

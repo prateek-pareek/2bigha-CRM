@@ -63,6 +63,27 @@ export class PropertyListingsController {
     return this.listingsService.getTwoBighaFarmBySlug(slug);
   }
 
+  /**
+   * Live read-through to 2bigha's Property Approval Queue — `:bucket` is
+   * one of pending|approved|rejected, mapping to getPendingApprovalProperties/
+   * getApprovedProperties/getRejectedProperties. Read-only review screen: no
+   * confirmed approve/reject mutation exists in the documented API yet.
+   */
+  @Get('twobigha/approval-queue/:bucket')
+  @Permissions('property_listings:read')
+  listTwoBighaApprovalQueue(
+    @Param('bucket') bucket: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('searchTerm') searchTerm?: string,
+  ) {
+    return this.listingsService.listTwoBighaApprovalQueue(bucket, {
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      searchTerm,
+    });
+  }
+
   /** Leads-table batch counts (property + farm) — avoids N+1 calls per row. */
   @Post('counts-by-lead')
   @Permissions('property_listings:read')

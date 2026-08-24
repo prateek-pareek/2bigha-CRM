@@ -244,6 +244,8 @@ export class WhatsAppService {
     entityId?: string;
     mediaUrl?: string;
     mediaFilename?: string;
+    /** Media recorded against the chat when this template has a header attachment. */
+    mediaType?: 'image' | 'document' | 'video' | 'audio';
   }): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const config = await this.getConfig();
     if (!config)
@@ -298,7 +300,7 @@ export class WhatsAppService {
           : undefined,
         status: 'sent',
         attachment: params.mediaUrl ? {
-          type: 'image',
+          type: params.mediaType || 'image',
           url: params.mediaUrl,
           filename: params.mediaFilename
         } : undefined,
@@ -902,6 +904,7 @@ export class WhatsAppService {
         entityId,
         mediaUrl: absoluteUrl,
         mediaFilename: filename,
+        mediaType: 'document',
       });
     }
 

@@ -72,10 +72,21 @@ const PROPERTY_TYPE_MAP: Record<string, string> = {
  * Representative subset of the documented `Property!` response shape (the
  * handbook lists several dozen fields — the doc itself notes some, like
  * `location`/`boundary`/`geoJson`, are free-form JSON best fetched only when
- * actually needed). Shared by create/update/getPropertyBySlug so every read
- * of a 2bigha property returns the same detail shape for display.
+ * actually needed). Shared by create/update/getPropertyBySlug/approval-queue
+ * so every read of a 2bigha property returns the same detail shape for
+ * display.
+ *
+ * Deliberately does NOT request `images` — confirmed live against 2bigha
+ * that any property with no photos crashes the *entire* query with
+ * "Cannot return null for non-nullable field Property.images"
+ * (2bigha declares `images` non-null but its own resolver returns null for
+ * a photo-less property, which GraphQL propagates as a hard field error,
+ * not just a null `images`). Since that's unfixable from the query side,
+ * images are left out of every operation sharing this fragment; fetch them
+ * per-property via `getPropertyMedia` instead once that's wired up (see the
+ * "Property media management" gap in the integration priority list).
  */
-const PROPERTY_DETAIL_FIELDS = `
+export const PROPERTY_DETAIL_FIELDS = `
   id
   uuid
   propertyName
@@ -103,10 +114,6 @@ const PROPERTY_DETAIL_FIELDS = `
   createdAt
   updatedAt
   publishedAt
-  images {
-    url
-    alt
-  }
 `;
 
 const CREATE_PROPERTY_MUTATION = `
@@ -259,6 +266,92 @@ const CREATE_FARM_MUTATION = `
     }
   }
 `;
+
+/**
+ * Property Approval Queue — per the Integration Handbook's list of
+ * approval-related read operations. None confirmed against a live 2bigha
+ * environment yet (no credentials were configured while this was written)
+ * — modeled by analogy with the sibling `getFarms` query above: same
+ * `GetPropertiesInput!` input shape the handbook attributes to the Property
+ * domain's `properties` query (page/limit/searchTerm), same
+ * `{ data { property, seo }, meta }` list envelope. If any of these three
+ * errors with a GraphQL validation failure (not an auth failure), confirm
+ * the actual input/field names via introspection before relying on this.
+ *
+ * Deliberately read-only: the handbook documents these three queries but no
+ * approve/reject mutation, so there is nothing here to action a listing —
+ * only to review it.
+ */
+const GET_PENDING_APPROVAL_PROPERTIES_QUERY = `
+  query GetPendingApprovalProperties($input: GetPropertiesInput!) {
+    getPendingApprovalProperties(input: $input) {
+      data {
+        property {
+          ${PROPERTY_DETAIL_FIELDS}
+        }
+        seo {
+          slug
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
+const GET_APPROVED_PROPERTIES_QUERY = `
+  query GetApprovedProperties($input: GetPropertiesInput!) {
+    getApprovedProperties(input: $input) {
+      data {
+        property {
+          ${PROPERTY_DETAIL_FIELDS}
+        }
+        seo {
+          slug
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
+const GET_REJECTED_PROPERTIES_QUERY = `
+  query GetRejectedProperties($input: GetPropertiesInput!) {
+    getRejectedProperties(input: $input) {
+      data {
+        property {
+          ${PROPERTY_DETAIL_FIELDS}
+        }
+        seo {
+          slug
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
+export type ApprovalQueueBucket = 'pending' | 'approved' | 'rejected';
+
+const APPROVAL_QUEUE_QUERIES: Record<ApprovalQueueBucket, { query: string; field: string }> = {
+  pending: { query: GET_PENDING_APPROVAL_PROPERTIES_QUERY, field: 'getPendingApprovalProperties' },
+  approved: { query: GET_APPROVED_PROPERTIES_QUERY, field: 'getApprovedProperties' },
+  rejected: { query: GET_REJECTED_PROPERTIES_QUERY, field: 'getRejectedProperties' },
+};
 
 @Injectable()
 export class TwoBighaPropertyService {
@@ -592,6 +685,43 @@ export class TwoBighaPropertyService {
       };
     } catch (e: any) {
       this.logger.error(`2bigha getFarms failed: ${e?.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Property Approval Queue read-through — `getPendingApprovalProperties` /
+   * `getApprovedProperties` / `getRejectedProperties` depending on `bucket`.
+   * Read-only review data; see the module-level comment above
+   * APPROVAL_QUEUE_QUERIES for the "no approve/reject mutation" caveat.
+   * Returns `null` in mock mode, same as listFarms/getPropertyDetailBySlug —
+   * there's no meaningful mock queue to fabricate.
+   */
+  async listApprovalQueue(
+    bucket: ApprovalQueueBucket,
+    params: { page?: number; limit?: number; searchTerm?: string },
+  ): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
+    const config = getTwoBighaConfig();
+    if (!config) return null;
+
+    const { query, field } = APPROVAL_QUEUE_QUERIES[bucket];
+    try {
+      const data = await twoBighaGraphqlRequest<
+        Record<string, { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null>
+      >(config, query, {
+        input: {
+          page: params.page ?? 1,
+          limit: params.limit ?? 20,
+          searchTerm: params.searchTerm || undefined,
+        },
+      });
+      const result = data?.[field];
+      return {
+        data: result?.data || [],
+        meta: result?.meta,
+      };
+    } catch (e: any) {
+      this.logger.error(`2bigha ${field} failed: ${e?.message}`);
       return null;
     }
   }

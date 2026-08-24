@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -15,13 +16,53 @@ import { RbacGuard } from '../crm-users/rbac.guard';
 import { Permissions } from '../crm-users/permissions.decorator';
 import { resolveListPagination, CRM_MAX_BOARD_PAGE_SIZE } from '../../common/lib/pagination/list-pagination';
 import { LegalCaseService } from './legal-case.service';
+import {
+  LegalVerificationBucket,
+  TwoBighaLegalVerificationService,
+} from './twobigha-legal-verification.service';
 import { CreateLegalCaseDto } from './dto/create-legal-case.dto';
 import { UpdateLegalCaseDto } from './dto/update-legal-case.dto';
+
+const LEGAL_VERIFICATION_BUCKETS: LegalVerificationBucket[] = ['pending', 'verified'];
 
 @Controller('crm/legal-cases')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class LegalCaseController {
-  constructor(private readonly legalCaseService: LegalCaseService) {}
+  constructor(
+    private readonly legalCaseService: LegalCaseService,
+    private readonly twoBighaLegalVerificationService: TwoBighaLegalVerificationService,
+  ) {}
+
+  /**
+   * Live read-through to 2bigha's Legal Verification Queue — `:bucket` is
+   * one of pending|verified, mapping to getPendingVerificationProperties/
+   * getVerifiedProperties. Read-only review screen: distinct from this
+   * CRM's own legal-case CRUD below, and from the PM-adapter-backed
+   * `/crm/legal/verification` workflow. No confirmed verify/reject mutation
+   * exists in the documented API yet.
+   */
+  @Get('twobigha/verification-queue/:bucket')
+  @Permissions('legal:read')
+  listTwoBighaVerificationQueue(
+    @Param('bucket') bucket: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('searchTerm') searchTerm?: string,
+  ) {
+    if (!LEGAL_VERIFICATION_BUCKETS.includes(bucket as LegalVerificationBucket)) {
+      throw new BadRequestException(
+        `Invalid legal-verification bucket "${bucket}" — expected one of ${LEGAL_VERIFICATION_BUCKETS.join(', ')}`,
+      );
+    }
+    return this.twoBighaLegalVerificationService.listLegalVerificationQueue(
+      bucket as LegalVerificationBucket,
+      {
+        page: page ? Number(page) : undefined,
+        limit: limit ? Number(limit) : undefined,
+        searchTerm,
+      },
+    );
+  }
 
   @Post()
   @Permissions('legal:write')

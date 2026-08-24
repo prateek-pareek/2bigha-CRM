@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Loader2, X } from "lucide-react";
+import { FileText, Loader2, Music2, Video, X } from "lucide-react";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { fetchSharedMedia, type SharedMediaResult } from "@/lib/crm/whatsapp/property-share-api";
 
@@ -112,6 +112,50 @@ export default function SharedMediaPanel({ open, onClose, waId }: Props) {
                   </div>
                 ) : (
                   <p className="text-xs text-[var(--text-muted)]">No documents shared yet.</p>
+                )}
+              </section>
+
+              <section>
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  Videos ({media?.videos.length ?? 0})
+                </h4>
+                {media?.videos.length ? (
+                  <div className="space-y-2">
+                    {media.videos.map((m) => (
+                      <div key={m._id} className="rounded-md border border-[var(--border-color)] bg-[var(--surface-dim)] p-2">
+                        <video controls preload="metadata" className="w-full rounded" src={toAbsolute(m.attachment!.url)}>
+                          Your browser cannot play this video.
+                        </video>
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
+                          <Video size={12} /> {m.attachment?.filename || "Video"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--text-muted)]">No videos shared yet.</p>
+                )}
+              </section>
+
+              <section>
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  Audio ({media?.audio.length ?? 0})
+                </h4>
+                {media?.audio.length ? (
+                  <div className="space-y-2">
+                    {media.audio.map((m) => (
+                      <div key={m._id} className="rounded-md border border-[var(--border-color)] bg-[var(--surface-dim)] p-2">
+                        <p className="mb-1 flex items-center gap-1 text-xs font-medium text-[var(--text-main)]">
+                          <Music2 size={14} /> {m.attachment?.filename || "Audio message"}
+                        </p>
+                        <audio controls preload="metadata" className="w-full" src={toAbsolute(m.attachment!.url)}>
+                          Your browser cannot play this audio.
+                        </audio>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--text-muted)]">No audio shared yet.</p>
                 )}
               </section>
             </div>

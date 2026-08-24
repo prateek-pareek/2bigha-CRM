@@ -6,6 +6,7 @@ import { Lead, LeadSchema } from '../records/schemas/lead.schema';
 import { Contact, ContactSchema } from '../records/schemas/contact.schema';
 import { LegalCaseService } from './legal-case.service';
 import { LegalCaseController } from './legal-case.controller';
+import { TwoBighaLegalVerificationService } from './twobigha-legal-verification.service';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { LegalCaseController } from './legal-case.controller';
     ),
   ],
   controllers: [LegalCaseController],
-  providers: [LegalCaseService],
+  providers: [LegalCaseService, TwoBighaLegalVerificationService],
   exports: [LegalCaseService],
 })
 export class LegalModule {}
