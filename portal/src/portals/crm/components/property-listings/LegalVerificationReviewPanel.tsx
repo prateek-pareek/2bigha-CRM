@@ -13,7 +13,7 @@ import {
 } from "@/components/crm/ui";
 import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
 import {
-  PM_LEGAL_POOL,
+  LEGAL_REVIEWER_POOL,
   addPropertyLegalNote,
   assignPropertyLegalReviewer,
   attachPropertyLegalReport,
@@ -37,7 +37,7 @@ export default function LegalVerificationReviewPanel({ listing, onUpdated }: Pro
   const [busy, setBusy] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const [reviewer, setReviewer] = useState(
-    legal?.assignedTo || PM_LEGAL_POOL[0],
+    legal?.assignedTo || LEGAL_REVIEWER_POOL[0],
   );
   const [notes, setNotes] = useState(legal?.notes || "");
   const [rejectionReason, setRejectionReason] = useState(legal?.rejectionReason || "");
@@ -204,7 +204,7 @@ export default function LegalVerificationReviewPanel({ listing, onUpdated }: Pro
             disabled={busy}
             onChange={(e) => setReviewer(e.target.value)}
           >
-            {PM_LEGAL_POOL.map((name) => (
+            {LEGAL_REVIEWER_POOL.map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>

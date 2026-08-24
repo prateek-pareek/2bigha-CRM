@@ -28,7 +28,7 @@ import {
 import { crmModalChrome } from "@/lib/crm/chrome";
 import { CRM_LIST_PAGE, CRM_TOOLBAR_SELECT } from "@/lib/crm/ui";
 import {
-  PM_LEGAL_POOL,
+  LEGAL_REVIEWER_POOL,
   decidePropertyLegalVerification,
   fetchLegalVerificationQueue,
 } from "@/lib/crm/property-listings/third-party-api";
@@ -289,7 +289,7 @@ function LegalVerificationDashboardContent() {
         >
           <option value="all">All reviewers</option>
           <option value="unassigned">Unassigned</option>
-          {PM_LEGAL_POOL.map((name) => (
+          {LEGAL_REVIEWER_POOL.map((name) => (
             <option key={name} value={name}>
               {name}
             </option>

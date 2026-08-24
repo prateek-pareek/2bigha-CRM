@@ -18,13 +18,13 @@ import {
   startPmLegalVerification,
   submitPmVisitReport,
   updatePmLegalChecklist,
-} from "@/lib/crm/property-listings/third-party-api";
+} from "@/lib/crm/property-management/pm-api";
 import {
   PM_STAGE_RAIL,
   pmStageBadgeTone,
   type PmChecklistItem,
-  type PropertyListingRecord,
-} from "@/lib/crm/property-listings/types";
+} from "@/lib/crm/property-management/types";
+import type { PropertyListingRecord } from "@/lib/crm/property-listings/types";
 
 type Props = {
   listing: PropertyListingRecord;

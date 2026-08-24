@@ -53,21 +53,23 @@ import {
 } from "@/lib/crm/property-listings/third-party-api";
 import {
   LISTING_BUCKETS,
-  PM_PIPELINE_STAGES,
   PROPERTY_STATUSES,
   formatAddress,
   formatCompactPrice,
   formatListingArea,
   formatPrice,
   isMarketplaceBucket,
-  pmStageBadgeTone,
   statusBadgeTone,
   approvalStatusBadgeTone,
-  type ListingBucket,
-  type PmPipelineStage,
+  type PropertyRecordBucket,
   type PropertyListingRecord,
   type PropertyListingStats,
 } from "@/lib/crm/property-listings/types";
+import {
+  PM_PIPELINE_STAGES,
+  pmStageBadgeTone,
+  type PmPipelineStage,
+} from "@/lib/crm/property-management/types";
 
 const VIEW_MODE_KEY = "crm_property_listings_view_mode_v1";
 const PM_VIEW_MODE_KEY = "crm_pm_listings_view_mode_v1";
@@ -89,7 +91,7 @@ const PM_BOARD_STAGES: { key: string; stages: PmPipelineStage[] }[] = [
   },
 ];
 
-function parseBucket(raw: string | null): ListingBucket {
+function parseBucket(raw: string | null): PropertyRecordBucket {
   if (raw === "buy" || raw === "sell" || raw === "farm" || raw === "pm") return raw;
   return "sell";
 }
@@ -120,7 +122,7 @@ function PropertyListingsPageContent() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [pmStageFilter, setPmStageFilter] = useState<string>("all");
-  const [bucket, setBucket] = useState<ListingBucket>(() =>
+  const [bucket, setBucket] = useState<PropertyRecordBucket>(() =>
     parseBucket(searchParams.get("bucket")),
   );
   const [viewMode, setViewMode] = useState<CrmViewMode>("grid");
@@ -154,7 +156,7 @@ function PropertyListingsPageContent() {
   }, [bucket]);
 
   const changeBucket = useCallback(
-    (next: ListingBucket) => {
+    (next: PropertyRecordBucket) => {
       setBucket(next);
       setPage(1);
       setPmStageFilter("all");

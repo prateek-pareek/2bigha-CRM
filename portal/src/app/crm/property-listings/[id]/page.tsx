@@ -25,7 +25,6 @@ import {
   formatListingArea,
   formatPrice,
   legalStatusBadgeTone,
-  pmStageBadgeTone,
   resolveAreaBigha,
   statusBadgeTone,
   approvalStatusBadgeTone,
@@ -33,6 +32,7 @@ import {
   type LeadSubscriptionMock,
   type PropertyListingRecord,
 } from "@/lib/crm/property-listings/types";
+import { pmStageBadgeTone } from "@/lib/crm/property-management/types";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === undefined || value === null || value === "") return null;
