@@ -23,9 +23,6 @@ export class AgentTarget {
   callsTarget?: number;
 
   @Prop({ default: 0 })
-  dealsTarget?: number;
-
-  @Prop({ default: 0 })
   propertiesTarget?: number;
 }
 

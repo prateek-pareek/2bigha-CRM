@@ -47,7 +47,7 @@ export interface CRMLegalCaseFormFieldsProps {
   initialData?: Record<string, any> | null;
 }
 
-/** Reusable field set for the Legal Case create + edit panel (modeled on CRMDealFormFields). */
+/** Reusable field set for the Legal Case create + edit panel. */
 export default function CRMLegalCaseFormFields({
   pipelines,
   selectedPipeline,

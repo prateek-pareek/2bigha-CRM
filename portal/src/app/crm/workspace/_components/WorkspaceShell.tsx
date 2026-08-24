@@ -35,7 +35,6 @@ import {
   type WorkspaceWindowFilter,
   type WorkspacePayload,
   type LeadFollowUpStats,
-  type DealsPipelineOption,
   type WorkspaceSection,
   canViewAllCrmWorkspaces,
   greetingForHour,
@@ -61,8 +60,6 @@ export type WorkspaceShellContext = {
   error: string | null;
   isTabLoading: boolean;
   metrics: {
-    pipelineValue: number;
-    openDeals: number;
     attentionTotal: number;
     overdueTasks: number;
     repliesReceived: number;
@@ -78,8 +75,6 @@ export type WorkspaceShellContext = {
   setCompareStart: Dispatch<SetStateAction<string>>;
   compareEnd: string;
   setCompareEnd: Dispatch<SetStateAction<string>>;
-  intakeKind: "leads" | "deals";
-  setIntakeKind: Dispatch<SetStateAction<"leads" | "deals">>;
   isSummaryLeadsLoading: boolean;
   viewAll: boolean;
   hasAccess: (permission: string) => boolean;
@@ -95,13 +90,6 @@ export type WorkspaceShellContext = {
   filteredTasks: WorkspacePayload["priorityTasks"];
   renderedTasks: WorkspacePayload["priorityTasks"];
   setVisibleTaskCount: Dispatch<SetStateAction<number>>;
-  dealSearch: string;
-  setDealSearch: Dispatch<SetStateAction<string>>;
-  dealStageFilter: string;
-  setDealStageFilter: Dispatch<SetStateAction<string>>;
-  filteredDealsClosingSoon: NonNullable<WorkspacePayload["dealsClosingSoon"]>;
-  renderedDealsClosingSoon: NonNullable<WorkspacePayload["dealsClosingSoon"]>;
-  setVisibleDealCount: Dispatch<SetStateAction<number>>;
   activityTypeFilter: string;
   setActivityTypeFilter: Dispatch<SetStateAction<string>>;
   filteredActivities: WorkspacePayload["recentActivities"];
@@ -149,8 +137,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   const [owners, setOwners] = useState<
     Array<{ _id: string; firstName: string; lastName: string; email?: string }>
   >([]);
-  const [dealPipelines, setDealPipelines] = useState<DealsPipelineOption[]>([]);
-  const [selectedAnalyticsPipeline, setSelectedAnalyticsPipeline] = useState("all");
   const [ws, setWs] = useState<WorkspacePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadedSections, setLoadedSections] = useState<Set<WorkspaceSection>>(
@@ -163,7 +149,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   const mainTab = section;
   const mainTabRef = useRef(mainTab);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [intakeKind, setIntakeKind] = useState<"leads" | "deals">("leads");
 
   useEffect(() => {
     mainTabRef.current = mainTab;
@@ -175,11 +160,8 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   const [leadFollowUpView, setLeadFollowUpView] = useState<"today" | "yesterday" | "thisWeek">("thisWeek");
   const [leadIntakeView, setLeadIntakeView] = useState<"today" | "yesterday" | "thisWeek">("thisWeek");
   const [leadIntakeStatusView, setLeadIntakeStatusView] = useState<string>("all");
-  const [dealSearch, setDealSearch] = useState("");
-  const [dealStageFilter, setDealStageFilter] = useState("all");
   const [activityTypeFilter, setActivityTypeFilter] = useState("all");
   const [visibleTaskCount, setVisibleTaskCount] = useState(INITIAL_WORKSPACE_ITEMS);
-  const [visibleDealCount, setVisibleDealCount] = useState(INITIAL_WORKSPACE_ITEMS);
   const [visibleActivityCount, setVisibleActivityCount] = useState(INITIAL_WORKSPACE_ITEMS);
   const [visibleNeverContactedCount, setVisibleNeverContactedCount] = useState(INITIAL_WORKSPACE_ITEMS);
   const [visibleStaleLeadCount, setVisibleStaleLeadCount] = useState(INITIAL_WORKSPACE_ITEMS);
@@ -210,29 +192,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
       })
       .catch(() => { });
   }, [permLoaded, canSeeOwnerPicker]);
-
-  useEffect(() => {
-    if (!permLoaded) return;
-    const cached = crmCachePeek<DealsPipelineOption[]>(crmCacheKeys.pipelines("deals"));
-    if (cached) setDealPipelines(cached.data);
-    const token = getCrmAuthToken();
-    const shouldFetch = !cached || crmCacheShouldRevalidate(cached.ageMs);
-    if (!shouldFetch) return;
-    fetch(`${CRM_API_URL}/crm/pipelines?type=deals`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setDealPipelines(data);
-          crmCacheSet(crmCacheKeys.pipelines("deals"), data);
-        }
-      })
-      .catch(() => {
-        if (!cached) setDealPipelines([]);
-      });
-  }, [permLoaded]);
 
   const loadWorkspace = useCallback(
     async (
@@ -317,9 +276,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
         }
         if (json.leadsAddedByDay && !Array.isArray(json.leadsAddedByDay)) {
           json.leadsAddedByDay = [];
-        }
-        if (json.dealsAddedByDay && !Array.isArray(json.dealsAddedByDay)) {
-          json.dealsAddedByDay = [];
         }
         setWs((prev) =>
           options?.merge ? mergeWorkspacePayload(prev, json) : mergeWorkspacePayload(null, json),
@@ -434,15 +390,11 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   const metrics = useMemo(() => {
     if (!ws) {
       return {
-        pipelineValue: 0,
-        openDeals: 0,
         attentionTotal: 0,
         overdueTasks: 0,
         repliesReceived: 0,
       };
     }
-    const pipelineValue = ws.pipelineByStage.reduce((s, x) => s + x.value, 0);
-    const openDeals = ws.pipelineByStage.reduce((s, x) => s + x.count, 0);
     const a = ws.attention;
     const attentionTotal =
       (a?.neverContactedLeads?.length ?? 0) +
@@ -451,59 +403,8 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
       (a?.openedTrackedEmails?.length ?? 0);
     const overdueTasks = ws.priorityTasks.filter((t) => t.overdue).length;
     const repliesReceived = a?.replyReceivedEmails?.length ?? 0;
-    return { pipelineValue, openDeals, attentionTotal, overdueTasks, repliesReceived };
+    return { attentionTotal, overdueTasks, repliesReceived };
   }, [ws]);
-
-  const leadsAddedWindowTotal = useMemo(() => {
-    const rows = ws?.leadsAddedByDay;
-    if (!rows?.length) return 0;
-    return rows.reduce((s, d) => s + (d.total || 0), 0);
-  }, [ws?.leadsAddedByDay]);
-
-  const dealsAddedWindowTotal = useMemo(() => {
-    const rows = ws?.dealsAddedByDay;
-    if (!rows?.length) return 0;
-    return rows.reduce((s, d) => s + (d.total || 0), 0);
-  }, [ws?.dealsAddedByDay]);
-
-  const intakeAddedWindowTotal =
-    intakeKind === "deals" ? dealsAddedWindowTotal : leadsAddedWindowTotal;
-
-  const maxStageValue = useMemo(() => {
-    if (!ws?.pipelineByStage.length) return 1;
-    return Math.max(...ws.pipelineByStage.map((s) => s.value), 1);
-  }, [ws]);
-
-  const stagePerformance = useMemo(() => {
-    if (!ws?.pipelineByStage?.length) return [];
-    const total = ws.pipelineByStage.reduce((sum, s) => sum + (s.count || 0), 0);
-    return ws.pipelineByStage.map((stage, index, arr) => {
-      const prev = index > 0 ? arr[index - 1] : null;
-      const stageCount = stage.count || 0;
-      const prevCount = prev?.count || 0;
-      return {
-        stage: stage.stage,
-        count: stageCount,
-        value: stage.value || 0,
-        sharePct: total > 0 ? (stageCount / total) * 100 : 0,
-        conversionFromPrevPct:
-          index === 0 ? null : prevCount > 0 ? (stageCount / prevCount) * 100 : 0,
-      };
-    });
-  }, [ws]);
-
-  const analyticsPipelineStageSet = useMemo(() => {
-    if (selectedAnalyticsPipeline === "all") return null;
-    const selected = dealPipelines.find((p) => p._id === selectedAnalyticsPipeline);
-    const names = (selected?.stages || []).map((s) => String(s?.name || "").trim()).filter(Boolean);
-    if (!names.length) return null;
-    return new Set(names);
-  }, [dealPipelines, selectedAnalyticsPipeline]);
-
-  const filteredStagePerformance = useMemo(() => {
-    if (!analyticsPipelineStageSet) return stagePerformance;
-    return stagePerformance.filter((row) => analyticsPipelineStageSet.has(row.stage));
-  }, [stagePerformance, analyticsPipelineStageSet]);
 
   const tasksDueToday = useMemo(() => {
     if (!ws) return 0;
@@ -545,26 +446,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
     });
   }, [ws, taskSearch, taskFilter]);
 
-  const dealStages = useMemo(() => {
-    if (!ws) return [];
-    return ws.pipelineByStage.map((s) => s.stage).filter(Boolean);
-  }, [ws]);
-
-  const filteredDealsClosingSoon = useMemo(() => {
-    if (!ws) return [];
-    const q = dealSearch.trim().toLowerCase();
-    return ws.dealsClosingSoon.filter((d) => {
-      const matchesQuery =
-        !q ||
-        d.title.toLowerCase().includes(q) ||
-        d.stage.toLowerCase().includes(q) ||
-        String(d.dealOwner || "").toLowerCase().includes(q);
-      if (!matchesQuery) return false;
-      if (dealStageFilter === "all") return true;
-      return d.stage === dealStageFilter;
-    });
-  }, [ws, dealSearch, dealStageFilter]);
-
   const filteredActivities = useMemo(() => {
     if (!ws) return [];
     if (activityTypeFilter === "all") return ws.recentActivities;
@@ -574,10 +455,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   const renderedTasks = useMemo(
     () => filteredTasks.slice(0, visibleTaskCount),
     [filteredTasks, visibleTaskCount],
-  );
-  const renderedDealsClosingSoon = useMemo(
-    () => filteredDealsClosingSoon.slice(0, visibleDealCount),
-    [filteredDealsClosingSoon, visibleDealCount],
   );
   const renderedActivities = useMemo(
     () => filteredActivities.slice(0, visibleActivityCount),
@@ -624,7 +501,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
   }, [leadIntakeRows, leadIntakeStatusView]);
 
   useEffect(() => setVisibleTaskCount(INITIAL_WORKSPACE_ITEMS), [taskSearch, taskFilter, owner, windowFilter]);
-  useEffect(() => setVisibleDealCount(INITIAL_WORKSPACE_ITEMS), [dealSearch, dealStageFilter, owner, windowFilter]);
   useEffect(() => setVisibleActivityCount(INITIAL_WORKSPACE_ITEMS), [activityTypeFilter, owner, windowFilter]);
   useEffect(() => setVisibleNeverContactedCount(INITIAL_WORKSPACE_ITEMS), [owner, windowFilter, ws?.attention.neverContactedLeads?.length]);
   useEffect(() => setVisibleStaleLeadCount(INITIAL_WORKSPACE_ITEMS), [owner, windowFilter, ws?.attention.staleLeads?.length]);
@@ -637,22 +513,16 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
 
   const sectionDescription = (() => {
     if (mainTab === "summary") {
-      return "Executive snapshot — revenue, conversion, pipeline health, and recent deals.";
-    }
-    if (mainTab === "deals") {
-      return "Live pipeline health — open deals, win/loss, closing risk, and created trend.";
+      return "Executive snapshot — conversion, lead health, and recent activity.";
     }
     if (mainTab === "prospecting") {
       return "Live leads snapshot — new volume, stage mix, outreach gaps, and recent intake.";
-    }
-    if (mainTab === "revenue_summary") {
-      return "Pipeline value, revenue trend, and weighted forecast.";
     }
     if (mainTab === "growth") {
       return "Growth strategy — MoM/QoQ trends, retention, channels, and target vs achievement.";
     }
     if (mainTab === "work_queue") {
-      return "Work queue, follow-ups, tasks due, and deals missing a next step.";
+      return "Work queue, follow-ups, and tasks due.";
     }
     if (mainTab === "work") {
       return "Daily workload — queues, task urgency, and what needs action today.";
@@ -666,9 +536,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
     if (mainTab === "tasks") {
       return "Priority tasks due across your pipeline.";
     }
-    if (mainTab === "next_step") {
-      return "Open deals missing a clear next action.";
-    }
     if (mainTab === "activity") {
       return "Recent CRM activity across owners.";
     }
@@ -680,7 +547,7 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
     }
     if (viewAll) {
       return owner === "All"
-        ? "Team summary — pipeline, queues, and tasks across all owners."
+        ? "Team summary — queues and tasks across all owners."
         : selectedOwnerLabel
           ? `Viewing ${selectedOwnerLabel}’s workspace.`
           : "Loading workspace for the selected rep…";
@@ -835,7 +702,7 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
             mainTab !== "calendar" ? (
               <CrmEmptyState
                 title="Assignment required for CRM access"
-                description="You have tool access enabled, but no CRM module permissions are assigned yet. Ask an admin to enable Leads, Deals, or other Sales modules."
+                description="You have tool access enabled, but no CRM module permissions are assigned yet. Ask an admin to enable Leads or other Sales modules."
                 icon={<ShieldCheck className="h-7 w-7 text-[var(--hs-link)]" strokeWidth={1.5} />}
                 action={
                   <Button
@@ -865,8 +732,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
               setCompareStart,
               compareEnd,
               setCompareEnd,
-              intakeKind,
-              setIntakeKind,
               isSummaryLeadsLoading,
               viewAll,
               hasAccess,
@@ -882,13 +747,6 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
               filteredTasks,
               renderedTasks,
               setVisibleTaskCount,
-              dealSearch,
-              setDealSearch,
-              dealStageFilter,
-              setDealStageFilter,
-              filteredDealsClosingSoon,
-              renderedDealsClosingSoon,
-              setVisibleDealCount,
               activityTypeFilter,
               setActivityTypeFilter,
               filteredActivities,

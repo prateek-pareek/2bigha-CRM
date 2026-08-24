@@ -11,7 +11,7 @@ import {
 } from "@/lib/crm/sales-agent";
 
 type Props = {
-  recordType: "Lead" | "Deal" | "Contact";
+  recordType: "Lead" | "Contact";
   recordId: string;
 };
 

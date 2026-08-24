@@ -10,7 +10,6 @@ import {
   CustomFieldDocument,
 } from '../schemas/custom-field.schema';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import {
   Organization,
@@ -40,8 +39,6 @@ export class CustomFieldsService {
     private customFieldModel: Model<CustomFieldDocument>,
     @InjectModel(Lead.name, 'crmConnection')
     private leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private contactModel: Model<ContactDocument>,
     @InjectModel(Organization.name, 'crmConnection')
@@ -197,8 +194,6 @@ export class CustomFieldsService {
     switch (moduleName) {
       case 'leads':
         return this.leadModel;
-      case 'deals':
-        return this.dealModel;
       case 'contacts':
         return this.contactModel;
       case 'organizations':

@@ -27,7 +27,7 @@ export class CustomField {
   type: CustomFieldType;
 
   @Prop({ required: true })
-  module: string; // 'leads', 'deals', 'contacts', 'organizations', 'clients'
+  module: string; // 'leads', 'contacts', 'organizations', 'clients'
 
   @Prop({ type: [String], default: [] })
   options: string[]; // For SELECT type

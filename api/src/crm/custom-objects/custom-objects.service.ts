@@ -25,7 +25,6 @@ const BUILTIN_KEYS = new Set([
   'leads',
   'contacts',
   'organizations',
-  'deals',
   'clients',
   'activities',
   'pipelines',

@@ -21,7 +21,7 @@ export interface SavedViewData {
 }
 
 interface CRMSavedViewsProps {
-  module: 'leads' | 'contacts' | 'organizations' | 'deals' | 'clients' | 'inbox' | 'activities';
+  module: 'leads' | 'contacts' | 'organizations' | 'clients' | 'inbox' | 'activities';
   currentFilters: FilterCriteria[];
   currentColumns: { key: string; label: string; visible: boolean }[];
   onApplyView: (view: SavedViewData | null) => void;
@@ -34,7 +34,6 @@ const MODULE_LABELS: Record<string, string> = {
   leads: 'Leads',
   contacts: 'Contacts',
   organizations: 'Organizations',
-  deals: 'Deals',
   clients: 'Clients',
   inbox: 'Inbox',
   activities: 'Activities',

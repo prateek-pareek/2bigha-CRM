@@ -1,5 +1,4 @@
 import type { PlatformTourStep } from '../types';
-import { CLIENT_PORTALS_PAGE_TOURS } from './client-portals';
 import { CRM_PAGE_TOURS } from './crm';
 import { HRMS_PAGE_TOURS } from './hrms';
 import { PM_PAGE_TOURS } from './pm';
@@ -13,7 +12,6 @@ const ALL_PAGE_TOURS: PageTourEntry[] = [
   ...PM_PAGE_TOURS,
   ...SOCIAL_PAGE_TOURS,
   ...VAULT_PAGE_TOURS,
-  ...CLIENT_PORTALS_PAGE_TOURS,
 ];
 
 function matchesPrefix(pathname: string, prefix: string): boolean {

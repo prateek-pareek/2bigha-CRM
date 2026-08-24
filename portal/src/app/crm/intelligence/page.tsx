@@ -89,7 +89,7 @@ export default function DataIntelligencePage() {
                 Data intelligence
               </h1>
               <p className="text-sm text-[var(--text-muted)]">
-                Ask questions about CRM pipeline, leads, deals, and PM data.
+                Ask questions about CRM pipeline, leads, contacts, and PM data.
               </p>
             </div>
           </div>
@@ -189,7 +189,7 @@ export default function DataIntelligencePage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={loading || configured === false}
-          placeholder="Ask anything about leads, deals, pipeline, or projects…"
+          placeholder="Ask anything about leads, contacts, pipeline, or projects…"
           className="flex-1 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-4 py-3 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400/30 disabled:opacity-50"
         />
         <button

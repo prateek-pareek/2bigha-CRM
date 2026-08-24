@@ -37,7 +37,6 @@ import {
   SalesAgentSettingsDocument,
 } from './schemas/sales-agent-settings.schema';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { PipelinesService } from '../core/pipelines.service';
 import { SalesAgentPolicyService } from './sales-agent-policy.service';
 import { SALES_AGENT_TOOLS } from './sales-agent.tools';
@@ -81,8 +80,6 @@ export class SalesAgentService {
     private settingsModel: Model<SalesAgentSettingsDocument>,
     @InjectModel(Lead.name, 'crmConnection')
     private leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     private readonly anthropic: AnthropicClientService,
     @Inject(forwardRef(() => CRMService))
     private readonly crmService: CRMService,
@@ -114,9 +111,6 @@ export class SalesAgentService {
     if (recordType === 'Lead') {
       const lead = await this.leadModel.findById(recordId).select('agentContext').lean().exec();
       agentContext = (lead as any)?.agentContext;
-    } else if (recordType === 'Deal') {
-      const deal = await this.dealModel.findById(recordId).select('agentContext').lean().exec();
-      agentContext = (deal as any)?.agentContext;
     }
     const [recentRuns, pendingApprovals] = await Promise.all([
       this.runModel
@@ -470,16 +464,10 @@ export class SalesAgentService {
     if (input.leadId && Types.ObjectId.isValid(String(input.leadId))) {
       return { recordType: 'Lead', recordId: new Types.ObjectId(String(input.leadId)) };
     }
-    if (input.dealId && Types.ObjectId.isValid(String(input.dealId))) {
-      return { recordType: 'Deal', recordId: new Types.ObjectId(String(input.dealId)) };
-    }
     if (input.entityId && input.module) {
       const mod = String(input.module);
       if (mod === 'leads' && Types.ObjectId.isValid(String(input.entityId))) {
         return { recordType: 'Lead', recordId: new Types.ObjectId(String(input.entityId)) };
-      }
-      if (mod === 'deals' && Types.ObjectId.isValid(String(input.entityId))) {
-        return { recordType: 'Deal', recordId: new Types.ObjectId(String(input.entityId)) };
       }
       if (mod === 'contacts' && Types.ObjectId.isValid(String(input.entityId))) {
         return { recordType: 'Contact', recordId: new Types.ObjectId(String(input.entityId)) };
@@ -487,7 +475,7 @@ export class SalesAgentService {
     }
     if (input.entityType && input.entityId && Types.ObjectId.isValid(String(input.entityId))) {
       const et = String(input.entityType);
-      if (et === 'Lead' || et === 'Deal' || et === 'Contact') {
+      if (et === 'Lead' || et === 'Contact') {
         return {
           recordType: et as SalesAgentRecordType,
           recordId: new Types.ObjectId(String(input.entityId)),
@@ -522,11 +510,6 @@ export class SalesAgentService {
     const patch: Record<string, unknown> = { ...dto };
     if (dto.enabledLeadPipelineIds) {
       patch.enabledLeadPipelineIds = dto.enabledLeadPipelineIds
-        .filter((id) => Types.ObjectId.isValid(id))
-        .map((id) => new Types.ObjectId(id));
-    }
-    if (dto.enabledDealPipelineIds) {
-      patch.enabledDealPipelineIds = dto.enabledDealPipelineIds
         .filter((id) => Types.ObjectId.isValid(id))
         .map((id) => new Types.ObjectId(id));
     }
@@ -802,7 +785,7 @@ export class SalesAgentService {
       userId: '',
       isWorkspaceAdmin: true,
       effectiveOwner: 'All',
-      permissions: ['admin:read', 'leads:write', 'deals:write', 'inbox:send'],
+      permissions: ['admin:read', 'leads:write', 'inbox:send'],
     };
   }
 
@@ -1197,7 +1180,7 @@ export class SalesAgentService {
             ctx.isWorkspaceAdmin ? undefined : owner,
             reqUser,
             window,
-            'attention,tasks,deals,activity,leads',
+            'attention,tasks,activity,leads',
           ),
         );
       }
@@ -1207,10 +1190,6 @@ export class SalesAgentService {
       case 'get_lead': {
         const lead = await this.crmService.findOneLead(String(input.leadId), reqUser);
         return lead ? this.trimPayload(lead) : { error: 'Lead not found' };
-      }
-      case 'get_deal': {
-        const deal = await this.crmService.findOneDeal(String(input.dealId), reqUser);
-        return deal ? this.trimPayload(deal) : { error: 'Deal not found' };
       }
       case 'get_record_context':
         return this.getRecordContext(
@@ -1276,14 +1255,6 @@ export class SalesAgentService {
         );
         return lead ? { ok: true, stage: input.stageName } : { error: 'Update failed' };
       }
-      case 'update_deal_stage': {
-        const deal = await this.crmService.updateDeal(
-          String(input.dealId),
-          { stage: String(input.stageName) },
-          reqUser,
-        );
-        return deal ? { ok: true, stage: input.stageName } : { error: 'Update failed' };
-      }
       case 'enroll_workflow':
         return this.workflowsService.enrollInWorkflow(
           String(input.workflowId),
@@ -1300,47 +1271,20 @@ export class SalesAgentService {
         return this.crmService.convertLead(
           String(input.leadId),
           {
-            type: input.type as 'contact' | 'organization' | 'deal' | 'client',
+            type: input.type as 'contact' | 'organization' | 'client',
             pipelineId: input.pipelineId ? String(input.pipelineId) : undefined,
             stage: input.stage ? String(input.stage) : undefined,
           },
           reqUser,
         );
-      case 'create_deal':
-        return this.crmService.createDeal(
-          {
-            title: String(input.name),
-            lead: input.leadId,
-            pipeline: input.pipelineId,
-            stage: input.stage || 'Qualification',
-            dealValue: input.value,
-            expectedClosureDate: input.expectedCloseDate,
-          },
-          reqUser,
-        );
-      case 'update_deal_value': {
-        const patch: Record<string, unknown> = {};
-        if (input.value != null) patch.dealValue = Number(input.value);
-        if (input.expectedCloseDate) patch.expectedClosureDate = input.expectedCloseDate;
-        if (input.probability != null) patch.probability = Number(input.probability);
-        const deal = await this.crmService.updateDeal(String(input.dealId), patch, reqUser);
-        return deal ? { ok: true } : { error: 'Update failed' };
-      }
       case 'assign_owner': {
-        const patch =
-          input.recordType === 'Deal'
-            ? { dealOwner: String(input.ownerName) }
-            : { leadOwner: String(input.ownerName) };
-        if (input.recordType === 'Deal') {
-          const deal = await this.crmService.updateDeal(String(input.recordId), patch, reqUser);
-          return deal ? { ok: true } : { error: 'Update failed' };
-        }
+        const patch = { leadOwner: String(input.ownerName) };
         const lead = await this.crmService.updateLead(String(input.recordId), patch, reqUser);
         return lead ? { ok: true } : { error: 'Update failed' };
       }
       case 'list_pipelines': {
         const pipelineType = input.type
-          ? (String(input.type) as 'leads' | 'deals')
+          ? (String(input.type) as 'leads')
           : undefined;
         const pipelines = await this.pipelinesService.findAll(pipelineType);
         return this.trimPayload(pipelines);
@@ -1621,15 +1565,10 @@ export class SalesAgentService {
       const lead = await this.leadModel.findById(recordId).lean().exec();
       record = lead as Record<string, unknown> | null;
       agentContext = (lead as any)?.agentContext;
-    } else if (recordType === 'Deal') {
-      const deal = await this.dealModel.findById(recordId).lean().exec();
-      record = deal as Record<string, unknown> | null;
-      agentContext = (deal as any)?.agentContext;
     }
 
-    const modMap: Record<string, 'leads' | 'deals' | 'contacts'> = {
+    const modMap: Record<string, 'leads' | 'contacts'> = {
       Lead: 'leads',
-      Deal: 'deals',
       Contact: 'contacts',
     };
     const mod = modMap[recordType];
@@ -1660,7 +1599,6 @@ export class SalesAgentService {
           pipeline: record.pipeline,
           email: record.email,
           leadOwner: record.leadOwner,
-          dealOwner: record.dealOwner,
           value: record.value,
         }
         : null,
@@ -1686,8 +1624,6 @@ export class SalesAgentService {
     const patch = { agentContext: memory };
     if (recordType === 'Lead') {
       await this.leadModel.findByIdAndUpdate(recordId, { $set: patch }).exec();
-    } else if (recordType === 'Deal') {
-      await this.dealModel.findByIdAndUpdate(recordId, { $set: patch }).exec();
     }
   }
 
@@ -1711,12 +1647,6 @@ export class SalesAgentService {
         if (r.module === 'leads' && r.entityId) {
           candidates.push({
             recordType: 'Lead',
-            recordId: r.entityId,
-            trigger: 'email_reply_received',
-          });
-        } else if (r.module === 'deals' && r.entityId) {
-          candidates.push({
-            recordType: 'Deal',
             recordId: r.entityId,
             trigger: 'email_reply_received',
           });
@@ -1767,13 +1697,6 @@ export class SalesAgentService {
       if (!lead || lead.converted) return false;
       const pid = String((lead as any).pipeline || '');
       if (pid && !settings.enabledLeadPipelineIds.some((p) => String(p) === pid)) {
-        return false;
-      }
-    }
-    if (recordType === 'Deal' && settings.enabledDealPipelineIds?.length) {
-      const deal = await this.dealModel.findById(recordId).select('pipeline').lean().exec();
-      const pid = String((deal as any)?.pipeline || '');
-      if (pid && !settings.enabledDealPipelineIds.some((p) => String(p) === pid)) {
         return false;
       }
     }

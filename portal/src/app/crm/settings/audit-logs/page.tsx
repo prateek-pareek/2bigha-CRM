@@ -41,7 +41,6 @@ function recordHref(module: string | undefined, entityId: string | undefined): s
   if (!entityId) return null;
   const m = (module || '').toLowerCase();
   if (m === 'leads' || m === 'lead') return `/crm/leads/${entityId}`;
-  if (m === 'deals' || m === 'deal') return `/crm/deals/${entityId}`;
   if (m === 'contacts' || m === 'contact') return `/crm/contacts/${entityId}`;
   if (m === 'clients' || m === 'client') return `/crm/clients/${entityId}`;
   if (m === 'organizations' || m === 'organization' || m === 'companies') {

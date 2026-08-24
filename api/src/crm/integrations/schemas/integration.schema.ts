@@ -28,7 +28,7 @@ export class Integration {
   providerId?: string;
 
   @Prop({ default: 'all' })
-  module: string; // 'leads', 'deals', 'contacts', 'all'
+  module: string; // 'leads', 'contacts', 'all'
 
   @Prop({ type: Object, default: {} })
   config: Record<string, any>; // { webhookUrl: '...' }

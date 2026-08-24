@@ -27,7 +27,6 @@ function isPureNumericString(value: string): boolean {
 /** Built-in CRM fields that are stored/compared as numbers. */
 const NUMERIC_FIELDS = new Set([
   'annualRevenue',
-  'dealValue',
   'probability',
 ]);
 
@@ -64,9 +63,6 @@ function fieldsForProperty(property: string, module: string): string[] {
   ) {
     return ['firstName', 'lastName'];
   }
-  if (property === 'stage' && module === 'deals') {
-    return ['status', 'stage'];
-  }
   return [property];
 }
 
@@ -100,11 +96,22 @@ function emptyFieldCondition(
     : { $and: fields.map(simpleEmpty) };
 }
 
+/** UI-facing labels for the `leadVertical` select filter -> raw enum values stored on Lead. */
+const LEAD_VERTICAL_LABEL_TO_VALUE: Record<string, string> = {
+  'property listing': 'property_listing',
+  'property management': 'property_management',
+};
+
 function criterionToMongo(
   criterion: CrmFilterCriterion,
   module: string,
 ): Record<string, unknown> | null {
-  const { property, operator, value } = criterion;
+  const { property, operator } = criterion;
+  let { value } = criterion;
+  if (property === 'leadVertical' && value) {
+    const mapped = LEAD_VERTICAL_LABEL_TO_VALUE[value.trim().toLowerCase()];
+    if (mapped) value = mapped;
+  }
 
   const buildTextCondition = (
     op: string,

@@ -12,7 +12,7 @@ export class ExportLog {
   @Prop({ trim: true })
   userName?: string;
 
-  /** 'leads' | 'deals' | 'contacts' | 'ivr' | any other entity type routed through exportToCsv. */
+  /** 'leads' | 'contacts' | 'ivr' | any other entity type routed through exportToCsv. */
   @Prop({ required: true, index: true })
   exportType: string;
 

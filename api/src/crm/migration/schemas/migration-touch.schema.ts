@@ -23,7 +23,7 @@ export class CrmMigrationTouch {
   })
   jobId: Types.ObjectId;
 
-  /** organizations | contacts | leads | deals | activities */
+  /** organizations | contacts | leads | activities */
   @Prop({ required: true })
   entityType: string;
 

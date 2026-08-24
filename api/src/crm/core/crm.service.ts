@@ -11,7 +11,6 @@ import { CrmGlobalSettings, CrmGlobalSettingsDocument } from '../schemas/crm-glo
 import { Model, Types } from 'mongoose';
 import { MailService } from '../../mail/mail.service';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import {
   Organization,
   OrganizationDocument,
@@ -28,7 +27,6 @@ import { TeamsBotService } from '../../teams-bot/teams-bot.service';
 import { PipelinesService } from './pipelines.service';
 import { WorkflowsService } from '../automation/workflows.service';
 import { LeadEngagementAutomationService } from '../automation/lead-engagement-automation.service';
-import { DealEngagementAutomationService } from '../automation/deal-engagement-automation.service';
 import { appendCrmListFilters, CrmFilterCriterion } from '../shared/crm-list-filters';
 import {
   CRM_BUILTIN_OPPORTUNITY_SOURCE_PLATFORMS,
@@ -83,28 +81,8 @@ import {
   EmailTracking,
   EmailTrackingDocument,
 } from '../schemas/email-tracking.schema';
-import {
-  PortalClientNeed,
-  PortalClientNeedDocument,
-} from '../schemas/portal-client-need.schema';
 import { InboxIdleService } from '../inbox/inbox-idle.service';
-import {
-  ClientPortalAccessAssignment,
-  ClientPortalAccessAssignmentDocument,
-} from '../schemas/client-portal-access-assignment.schema';
-import {
-  ClientPortalAccessLog,
-  ClientPortalAccessLogDocument,
-} from '../schemas/client-portal-access-log.schema';
 import { User, UserDocument } from '../../users/schemas/user.schema';
-import {
-  ClientPortalUpdate,
-  ClientPortalUpdateDocument,
-} from '../schemas/client-portal-update.schema';
-import {
-  PortalChatMessage,
-  PortalChatMessageDocument,
-} from '../schemas/portal-chat-message.schema';
 import * as bcrypt from 'bcrypt';
 import {
   PM_PROGRESS_READ_PORT,
@@ -115,11 +93,6 @@ import {
   canViewCrmRevenue,
   redactCrmRevenueForUser,
 } from '../shared/crm-admin-access.util';
-import { resolveStageProbability } from '../shared/deal-stage-probability.util';
-import {
-  dealContractMonths,
-  normalizeDealPricingType,
-} from '../shared/deal-pricing.util';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { AppCacheService } from '../../redis/app-cache.service';
 import {
@@ -154,8 +127,6 @@ export class CRMService {
   constructor(
     @InjectModel(Lead.name, 'crmConnection')
     private leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Organization.name, 'crmConnection')
     private organizationModel: Model<OrganizationDocument>,
     @InjectModel(Contact.name, 'crmConnection')
@@ -172,25 +143,14 @@ export class CRMService {
     private accountModel: Model<UserEmailAccountDocument>,
     @InjectModel(EmailTracking.name, 'crmConnection')
     private trackingModel: Model<EmailTrackingDocument>,
-    @InjectModel(PortalClientNeed.name, 'crmConnection')
-    private portalClientNeedModel: Model<PortalClientNeedDocument>,
-    @InjectModel(ClientPortalAccessAssignment.name, 'crmConnection')
-    private portalAccessAssignmentModel: Model<ClientPortalAccessAssignmentDocument>,
-    @InjectModel(ClientPortalAccessLog.name, 'crmConnection')
-    private portalAccessLogModel: Model<ClientPortalAccessLogDocument>,
     @InjectModel(User.name)
     private hrmsUserModel: Model<UserDocument>,
-    @InjectModel(ClientPortalUpdate.name, 'crmConnection')
-    private portalUpdateModel: Model<ClientPortalUpdateDocument>,
-    @InjectModel(PortalChatMessage.name, 'crmConnection')
-    private portalChatMessageModel: Model<PortalChatMessageDocument>,
     private readonly reportingService: ReportingService,
     private readonly teamsBotService: TeamsBotService,
     private readonly pipelinesService: PipelinesService,
     @Inject(forwardRef(() => WorkflowsService))
     private readonly workflowsService: WorkflowsService,
     private readonly leadEngagementAutomation: LeadEngagementAutomationService,
-    private readonly dealEngagementAutomation: DealEngagementAutomationService,
     private readonly inboxIdleService: InboxIdleService,
     @Inject(PM_PROGRESS_READ_PORT)
     private readonly pmProgressReadService: PmProgressReadPort,
@@ -210,11 +170,9 @@ export class CRMService {
     trigger:
       | 'lead_created'
       | 'lead_stage_changed'
-      | 'deal_created'
-      | 'deal_stage_changed'
       | 'website_inbound'
       | 'email_reply_received';
-    recordType: 'Lead' | 'Deal';
+    recordType: 'Lead';
     recordId: string;
     user?: any;
     metadata?: Record<string, unknown>;
@@ -249,7 +207,7 @@ export class CRMService {
   >();
 
   private async bustCrmCache(
-    entity: 'leads' | 'contacts' | 'organizations' | 'deals',
+    entity: 'leads' | 'contacts' | 'organizations',
     recordId?: string,
   ): Promise<void> {
     await this.appCache.invalidateCrm(entity, recordId);
@@ -323,12 +281,8 @@ export class CRMService {
 
     if (fieldKey === 'stage' || fieldKey === 'status') {
       // Contacts/leads both have stage; contacts share lead pipelines.
-      const types: Array<'leads' | 'deals'> =
-        moduleName === 'leads' || moduleName === 'contacts'
-          ? ['leads']
-          : moduleName === 'deals'
-            ? ['deals']
-            : [];
+      const types: Array<'leads'> =
+        moduleName === 'leads' || moduleName === 'contacts' ? ['leads'] : [];
 
       const stages: string[] = [];
       for (const type of types) {
@@ -356,7 +310,6 @@ export class CRMService {
     let model: Model<any>;
     switch (moduleName) {
       case 'leads': model = this.leadModel; break;
-      case 'deals': model = this.dealModel; break;
       case 'organizations': model = this.organizationModel; break;
       case 'contacts': model = this.contactModel; break;
       case 'clients': model = this.clientModel; break;
@@ -379,12 +332,10 @@ export class CRMService {
       'mobileNo', 'jobTitle', 'source', 'industry', 'annualRevenue', 'noOfEmployees',
       'territory', 'linkedinUrl', 'twitterHandle', 'relatedService',
       'leadOwner', 'telegram', 'gender', 'address', 'name', 'website', 'title',
-      'dealValue', 'probability', 'dealOwner', 'contactPerson', 'expectedClosureDate',
-      'closedDate', 'currency', 'content', 'type', 'createdAt', 'subject', 'from', 'to',
+      'contactPerson', 'currency', 'content', 'type', 'createdAt', 'subject', 'from', 'to',
       'opportunitySourcePlatform', 'platformClientLabel', 'platformEngagementStatus',
       'opportunityListingUrl', 'ownerLabel', 'notes',
-      'salutation', 'pricingType', 'nextStep', 'expectedDealValue', 'exchangeRate',
-      'contractMonths', 'converted', 'callStatus',
+      'salutation', 'converted', 'callStatus',
     ]);
     if (!isCustom && !allowed.has(rawKey)) {
       return this.getFilterCatalogOptions(moduleName, rawKey, pipelineId);
@@ -735,32 +686,18 @@ export class CRMService {
     void this.associationsService.mirrorArrayDiff(opts).catch(() => undefined);
   }
 
-  /** Keep contact ↔ deal / company / contact edges in sync (HubSpot-style). */
+  /** Keep contact ↔ company / contact edges in sync (HubSpot-style). */
   private async syncContactAssociationMirrors(
     contactId: string,
     prev: Record<string, unknown>,
     next: {
-      associatedDeals: Types.ObjectId[];
       associatedOrganizations: Types.ObjectId[];
       associatedContacts: Types.ObjectId[];
     },
   ): Promise<void> {
     const cid = new Types.ObjectId(contactId);
-    const prevD = this.objectIdListFromDocField(prev.associatedDeals);
     const prevO = this.objectIdListFromDocField(prev.associatedOrganizations);
     const prevP = this.objectIdListFromDocField(prev.associatedContacts);
-
-    const { removed: rd, added: ad } = this.setDiffIds(prevD, next.associatedDeals);
-    for (const id of rd) {
-      await this.dealModel
-        .updateOne({ _id: id }, { $pull: { associatedContacts: cid } })
-        .exec();
-    }
-    for (const id of ad) {
-      await this.dealModel
-        .updateOne({ _id: id }, { $addToSet: { associatedContacts: cid } })
-        .exec();
-    }
 
     const { removed: ro, added: ao } = this.setDiffIds(prevO, next.associatedOrganizations);
     for (const id of ro) {
@@ -791,14 +728,6 @@ export class CRMService {
     }
 
     // Associations v2 dual-write (best-effort; arrays already updated above).
-    this.queueAssociationMirror({
-      fromType: 'contacts',
-      fromId: contactId,
-      toType: 'deals',
-      associationType: 'contact_deal',
-      added: ad,
-      removed: rd,
-    });
     this.queueAssociationMirror({
       fromType: 'contacts',
       fromId: contactId,
@@ -854,73 +783,17 @@ export class CRMService {
     });
   }
 
-  private async syncDealAssociationMirrors(
-    dealId: string,
-    prev: Record<string, unknown>,
-    next: {
-      associatedContacts: Types.ObjectId[];
-      associatedCompanies: Types.ObjectId[];
-    },
-  ): Promise<void> {
-    const did = new Types.ObjectId(dealId);
-    const prevC = this.objectIdListFromDocField(prev.associatedContacts);
-    const prevCo = this.objectIdListFromDocField(prev.associatedCompanies);
-
-    const { removed: rc, added: ac } = this.setDiffIds(prevC, next.associatedContacts);
-    for (const id of rc) {
-      await this.contactModel
-        .updateOne({ _id: id }, { $pull: { associatedDeals: did } })
-        .exec();
-    }
-    for (const id of ac) {
-      await this.contactModel
-        .updateOne({ _id: id }, { $addToSet: { associatedDeals: did } })
-        .exec();
-    }
-
-    const { removed: rco, added: aco } = this.setDiffIds(prevCo, next.associatedCompanies);
-    for (const id of rco) {
-      await this.organizationModel
-        .updateOne({ _id: id }, { $pull: { associatedDeals: did } })
-        .exec();
-    }
-    for (const id of aco) {
-      await this.organizationModel
-        .updateOne({ _id: id }, { $addToSet: { associatedDeals: did } })
-        .exec();
-    }
-
-    this.queueAssociationMirror({
-      fromType: 'deals',
-      fromId: dealId,
-      toType: 'contacts',
-      associationType: 'contact_deal',
-      added: ac,
-      removed: rc,
-    });
-    this.queueAssociationMirror({
-      fromType: 'deals',
-      fromId: dealId,
-      toType: 'organizations',
-      associationType: 'deal_company',
-      added: aco,
-      removed: rco,
-    });
-  }
-
   private async syncOrganizationAssociationMirrors(
     orgId: string,
     prev: Record<string, unknown>,
     next: {
       associatedContacts: Types.ObjectId[];
       associatedLeads: Types.ObjectId[];
-      associatedDeals: Types.ObjectId[];
     },
   ): Promise<void> {
     const oid = new Types.ObjectId(orgId);
     const prevC = this.objectIdListFromDocField(prev.associatedContacts);
     const prevL = this.objectIdListFromDocField(prev.associatedLeads);
-    const prevD = this.objectIdListFromDocField(prev.associatedDeals);
 
     const { removed: rc, added: ac } = this.setDiffIds(prevC, next.associatedContacts);
     for (const id of rc) {
@@ -949,18 +822,6 @@ export class CRMService {
         .exec();
     }
 
-    const { removed: rd, added: ad } = this.setDiffIds(prevD, next.associatedDeals);
-    for (const id of rd) {
-      await this.dealModel
-        .updateOne({ _id: id }, { $pull: { associatedCompanies: oid } })
-        .exec();
-    }
-    for (const id of ad) {
-      await this.dealModel
-        .updateOne({ _id: id }, { $addToSet: { associatedCompanies: oid } })
-        .exec();
-    }
-
     this.queueAssociationMirror({
       fromType: 'organizations',
       fromId: orgId,
@@ -976,14 +837,6 @@ export class CRMService {
       associationType: 'lead_company',
       added: al,
       removed: rl,
-    });
-    this.queueAssociationMirror({
-      fromType: 'organizations',
-      fromId: orgId,
-      toType: 'deals',
-      associationType: 'deal_company',
-      added: ad,
-      removed: rd,
     });
   }
 
@@ -1120,7 +973,7 @@ export class CRMService {
     }
   }
 
-  /** Remove CSV mapping keys that are not stored on Lead/Contact/Deal documents. */
+  /** Remove CSV mapping keys that are not stored on Lead/Contact documents. */
   private stripImportRoutingFields(d: Record<string, any>): void {
     delete d.organizationId;
     delete d.hubspotCompanyId;
@@ -1226,39 +1079,6 @@ export class CRMService {
     const orgName = mappedData.organization;
     if (orgName && typeof orgName === 'string' && orgName.trim()) {
       return this.ensureOrganization(orgName.trim(), mappedData);
-    }
-    return null;
-  }
-
-  private async findContactIdForDealImport(
-    mappedData: Record<string, any>,
-  ): Promise<Types.ObjectId | null> {
-    const raw = mappedData.contactPerson;
-    if (raw != null && String(raw).trim() !== '') {
-      const s = String(raw).trim();
-      if (Types.ObjectId.isValid(s)) return new Types.ObjectId(s);
-    }
-    const email = mappedData.contactEmail;
-    if (email && typeof email === 'string' && email.includes('@')) {
-      const c = await this.contactModel
-        .findOne({ email: this.emailRegexForMatch(email.trim()) })
-        .exec();
-      if (c) return c._id as Types.ObjectId;
-    }
-    const hs =
-      mappedData.hubspotContactId ?? mappedData.hsContactId ?? null;
-    if (hs != null && String(hs).trim() !== '') {
-      const id = String(hs).trim();
-      const c = await this.contactModel
-        .findOne({
-          $or: [
-            { 'customFields.hubspot_contact_id': id },
-            { 'customFields.hs_object_id': id },
-            { 'customFields.hs_contact_id': id },
-          ],
-        })
-        .exec();
-      if (c) return c._id as Types.ObjectId;
     }
     return null;
   }
@@ -1793,9 +1613,6 @@ export class CRMService {
           String(existing._id),
           previousContact,
           {
-            associatedDeals: this.objectIdListFromDocField(
-              updatedContact.associatedDeals,
-            ),
             associatedOrganizations: this.objectIdListFromDocField(
               updatedContact.associatedOrganizations,
             ),
@@ -1817,14 +1634,10 @@ export class CRMService {
       await this.syncContactAssociationMirrors(
         String(created._id),
         {
-          associatedDeals: [],
           associatedOrganizations: [],
           associatedContacts: [],
         },
         {
-          associatedDeals: this.objectIdListFromDocField(
-            created.associatedDeals,
-          ),
           associatedOrganizations: this.objectIdListFromDocField(
             created.associatedOrganizations,
           ),
@@ -1955,57 +1768,6 @@ export class CRMService {
     }
   }
 
-  /** 'won' | 'lost' for a terminal deal stage name, else null for an in-progress stage. */
-  private dealStageOutcome(stage?: string): 'won' | 'lost' | null {
-    const s = String(stage || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[_-]+/g, ' ');
-    if (!s) return null;
-    if (s === 'won' || s === 'closed won' || s.includes('closed won')) return 'won';
-    if (s === 'lost' || s === 'closed lost' || s.includes('closed lost')) return 'lost';
-    return null;
-  }
-
-  /**
-   * Pushes a Deal's closed-won/closed-lost outcome onto its linked Lead (and,
-   * transitively, the Lead's synced Contact via syncContactFromLead). Deal.stage
-   * and Lead.stage track different pipelines and are NOT synced field-for-field —
-   * only the terminal won/lost outcome, which Lead.status/converted already
-   * model, is meaningful to mirror across. A deal still moving through
-   * mid-pipeline stages (Qualification, Proposal, ...) leaves the Lead untouched.
-   */
-  private async syncLeadFromDeal(deal: any): Promise<any> {
-    const leadId = deal?.lead;
-    if (!leadId) return null;
-
-    const outcome = this.dealStageOutcome(deal.stage);
-    if (!outcome) return null;
-
-    const patch: Record<string, unknown> =
-      outcome === 'won' ? { status: 'Won', converted: true } : { status: 'Lost' };
-
-    const updatedLead = await this.leadModel
-      .findByIdAndUpdate(leadId, patch, { returnDocument: 'after' })
-      .exec();
-    if (updatedLead) {
-      await this.syncContactFromLeadSafe(updatedLead);
-    }
-    return updatedLead;
-  }
-
-  private async syncLeadFromDealSafe(deal: any): Promise<any> {
-    try {
-      return await this.syncLeadFromDeal(deal);
-    } catch (err: any) {
-      console.error(
-        '[CRMService] syncLeadFromDeal failed:',
-        err?.message || err,
-      );
-      return null;
-    }
-  }
-
   /**
    * Keeps Contacts in sync with Clients by email. Called after client create/update.
    * Deleting a client does not delete the contact.
@@ -2105,46 +1867,7 @@ export class CRMService {
         (s: { name?: string }) => s?.name !== 'total_revenue',
       );
     }
-    if (Array.isArray(redacted?.charts?.salesTrend)) {
-      redacted.charts.salesTrend = redacted.charts.salesTrend.map(
-        (row: Record<string, unknown>) => ({ ...row, revenue: 0 }),
-      );
-    }
-    if (redacted?.outcomes) {
-      redacted.outcomes = {
-        ...redacted.outcomes,
-        wonValue: 0,
-        lostValue: 0,
-      };
-    }
-    if (redacted?.revenuePeriods) {
-      redacted.revenuePeriods = {
-        ...redacted.revenuePeriods,
-        mtd: 0,
-        ytd: 0,
-        weightedPipeline: 0,
-        grossPipeline: 0,
-        avgDealSize: 0,
-      };
-    }
-    if (Array.isArray(redacted?.charts?.dealsByStage)) {
-      redacted.charts.dealsByStage = redacted.charts.dealsByStage.map(
-        (row: Record<string, unknown>) => ({ ...row, amount: 0 }),
-      );
-    }
     return redacted;
-  }
-
-  async getRevenueForecastReport(
-    owner?: string,
-    pipelineId?: string,
-    months?: number,
-  ) {
-    return this.reportingService.getRevenueForecastReport({
-      owner,
-      pipelineId,
-      months,
-    });
   }
 
   async getBoardReports(days: number | string = 30, owner?: string) {
@@ -2219,7 +1942,7 @@ export class CRMService {
         const label =
           await this.reportingService.getHrmsDisplayOwnerLabel(oid);
         effectiveOwner = label || q;
-        // Always match legacy rows that stored the user id hex in leadOwner/dealOwner.
+        // Always match legacy rows that stored the user id hex in leadOwner.
         ownerMatchExtras.push(String(oid));
         pushEmailIfDistinct(
           await this.reportingService.getHrmsUserEmail(oid),
@@ -2274,7 +1997,7 @@ export class CRMService {
 
         scopedAuthorId = allOids;
 
-        // Resolve all teammates' names/emails for DB string-matching (Leads/Deals)
+        // Resolve all teammates' names/emails for DB string-matching (Leads)
         for (const aid of allOids) {
           const label = await this.reportingService.getHrmsDisplayOwnerLabel(aid);
           if (label) ownerMatchExtras.push(label);
@@ -2300,13 +2023,6 @@ export class CRMService {
       }
     }
 
-    const dealAccessFilter = this.resolveWorkspaceDealAccessFilter(
-      reqUser,
-      effectiveOwner,
-      scopedAuthorId,
-      ownerMatchExtras,
-    );
-
     return redactCrmRevenueForUser(
       reqUser,
       await this.reportingService.getSalesWorkspace(
@@ -2315,84 +2031,7 @@ export class CRMService {
         ownerMatchExtras.length ? ownerMatchExtras : undefined,
         windowQuery,
         sectionsQuery,
-        dealAccessFilter,
       ),
-    );
-  }
-
-  /**
-   * Sales workspace deal cards/pipeline use the same visibility as GET /crm/deals:
-   * - `deals:read:all` (or full CRM data access): all deals, or ownership of the selected owner
-   * - otherwise: dealOwner / createdBy / sharedWith for the signed-in user only
-   * Also respects `assignedDealsPipeline` when set on the user.
-   */
-  private resolveWorkspaceDealAccessFilter(
-    reqUser: any,
-    effectiveOwner: string,
-    scopedAuthorId: Types.ObjectId | Types.ObjectId[] | null,
-    ownerMatchExtras: string[],
-  ): Record<string, unknown> | null {
-    const pipelineScope = reqUser?.assignedDealsPipeline
-      ? { pipeline: reqUser.assignedDealsPipeline }
-      : null;
-
-    const withPipeline = (
-      access: Record<string, unknown> | null,
-    ): Record<string, unknown> | null => {
-      if (!pipelineScope) return access;
-      if (!access || Object.keys(access).length === 0) return pipelineScope;
-      return { $and: [pipelineScope, access] };
-    };
-
-    const ownershipFor = (
-      userId: Types.ObjectId | null,
-      labels: string[],
-    ): Record<string, unknown> => {
-      const mineOr: Record<string, unknown>[] = [];
-      const uniqueLabels = [
-        ...new Set(
-          labels
-            .map((l) => String(l || '').trim().replace(/\s+/g, ' '))
-            .filter((l) => !!l && l !== 'All' && l !== 'All authorized'),
-        ),
-      ];
-      for (const label of uniqueLabels) {
-        const flex = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-        mineOr.push({ dealOwner: { $regex: `^${flex}$`, $options: 'i' } });
-      }
-      if (userId) {
-        mineOr.push({ createdBy: userId });
-        mineOr.push({ sharedWith: userId });
-        mineOr.push({ dealOwner: String(userId) });
-      }
-      if (mineOr.length === 0) {
-        return { _id: { $in: [] } };
-      }
-      return { $or: mineOr };
-    };
-
-    if (!this.canReadAllModuleData('deals', reqUser)) {
-      // Same as deals list: never expand to teammates via workspace owner picker.
-      return withPipeline(this.dealOwnershipFilter(reqUser));
-    }
-
-    if (!effectiveOwner || effectiveOwner === 'All') {
-      return withPipeline(null);
-    }
-
-    if (Array.isArray(scopedAuthorId) && scopedAuthorId.length > 0) {
-      const parts = scopedAuthorId.map((id) =>
-        ownershipFor(id, ownerMatchExtras),
-      );
-      return withPipeline(
-        parts.length === 1 ? parts[0] : { $or: parts },
-      );
-    }
-
-    const singleId =
-      scopedAuthorId && !Array.isArray(scopedAuthorId) ? scopedAuthorId : null;
-    return withPipeline(
-      ownershipFor(singleId, [effectiveOwner, ...ownerMatchExtras]),
     );
   }
 
@@ -2424,14 +2063,14 @@ export class CRMService {
     return hasCrmFullDataAccess(user);
   }
 
-  private canReadAllModuleData(moduleKey: 'leads' | 'deals' | 'contacts', user?: any): boolean {
+  private canReadAllModuleData(moduleKey: 'leads' | 'contacts', user?: any): boolean {
     if (hasCrmFullDataAccess(user)) return true;
     const perms = this.crmPermissionSet(user);
     return perms.has(`${moduleKey}:read:all`);
   }
 
   /** Middle tier between "own" and "all" — Team Lead/Manager scoped to their own team only. */
-  private canReadTeamModuleData(moduleKey: 'leads' | 'deals' | 'contacts', user?: any): boolean {
+  private canReadTeamModuleData(moduleKey: 'leads' | 'contacts', user?: any): boolean {
     if (hasCrmFullDataAccess(user)) return true;
     const perms = this.crmPermissionSet(user);
     return perms.has(`${moduleKey}:read:team`);
@@ -2456,7 +2095,7 @@ export class CRMService {
 
   /** Self + direct reports, matched the same way as *OwnershipFilter (owner label, createdBy, sharedWith). */
   private async teamOwnershipFilter(
-    ownerField: 'leadOwner' | 'dealOwner',
+    ownerField: 'leadOwner',
     user?: any,
   ): Promise<Record<string, unknown>> {
     const selfId = this.userObjectId(user);
@@ -2474,7 +2113,7 @@ export class CRMService {
   }
 
   private canReadModule(
-    moduleKey: 'leads' | 'deals' | 'contacts' | 'clients' | 'organizations',
+    moduleKey: 'leads' | 'contacts' | 'clients' | 'organizations',
     user?: any,
   ): boolean {
     if (hasCrmFullDataAccess(user)) return true;
@@ -2501,19 +2140,6 @@ export class CRMService {
       mineOr.push({ sharedWith: userId } as any);
       // Legacy rows may store the user ObjectId hex in leadOwner.
       mineOr.push({ leadOwner: String(userId) });
-    }
-    return { $or: mineOr };
-  }
-
-  private dealOwnershipFilter(user?: any): Record<string, unknown> {
-    const ownerName = this.ownerLabel(user);
-    const userId = this.userObjectId(user);
-    const mineOr: Record<string, unknown>[] = [{ dealOwner: ownerName }];
-    if (userId) {
-      mineOr.push({ createdBy: userId } as any);
-      mineOr.push({ sharedWith: userId } as any);
-      // Legacy rows may store the user ObjectId hex in dealOwner.
-      mineOr.push({ dealOwner: String(userId) });
     }
     return { $or: mineOr };
   }
@@ -2593,6 +2219,15 @@ export class CRMService {
     }
     if (typeof dto.group === 'string') {
       dto.group = dto.group.trim() || undefined;
+    }
+    // Property Listing / Property Management vertical — reject unknown values rather than
+    // letting a stray client payload silently drop it (schema default only applies when unset).
+    if (dto.leadVertical !== undefined) {
+      dto.leadVertical =
+        dto.leadVertical === 'property_management' ||
+        dto.leadVertical === 'property_listing'
+          ? dto.leadVertical
+          : undefined;
     }
     if (typeof dto.notes === 'string') {
       dto.notes = dto.notes.trim() || undefined;
@@ -2761,6 +2396,7 @@ export class CRMService {
       search?: string;
       mine?: boolean;
       leadType?: 'standard' | 'platform';
+      leadVertical?: 'property_listing' | 'property_management';
       filters?: CrmFilterCriterion[];
       emailEngagement?: CrmEmailEngagementListFilter | null;
       includeConverted?: boolean;
@@ -2795,6 +2431,7 @@ export class CRMService {
       search?: string;
       mine?: boolean;
       leadType?: 'standard' | 'platform';
+      leadVertical?: 'property_listing' | 'property_management';
       filters?: CrmFilterCriterion[];
       emailEngagement?: CrmEmailEngagementListFilter | null;
       includeConverted?: boolean;
@@ -2867,6 +2504,25 @@ export class CRMService {
       };
     }
 
+    if (listOpts?.leadVertical === 'property_management') {
+      filter = { $and: [filter, { leadVertical: 'property_management' }] };
+    } else if (listOpts?.leadVertical === 'property_listing') {
+      // Leads created before this field existed default to 'property_listing' at the
+      // schema level but older documents in the DB may still have it unset — include those too.
+      filter = {
+        $and: [
+          filter,
+          {
+            $or: [
+              { leadVertical: { $exists: false } },
+              { leadVertical: null },
+              { leadVertical: 'property_listing' },
+            ],
+          },
+        ],
+      };
+    }
+
     if (listOpts?.search?.trim()) {
       const searchFields =
         listOpts.leadType === 'platform'
@@ -2902,7 +2558,7 @@ export class CRMService {
     );
     const skip = (page - 1) * pageSize;
     const outreachSelect =
-      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt';
+      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType leadVertical opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt';
     const [data, count] = await Promise.all([
       this.leadModel
         .find(filter)
@@ -2937,7 +2593,6 @@ export class CRMService {
       { path: 'associatedOrganizations', select: 'name industry' },
       { path: 'associatedLeads', select: 'firstName lastName email status stage' },
       { path: 'associatedContacts', select: 'firstName lastName email stage' },
-      { path: 'associatedDeals', select: 'title stage dealValue' },
     ];
     let lead: Lead | null = null;
     if (isMongoObjectIdString(id)) {
@@ -3032,6 +2687,11 @@ export class CRMService {
       // A changed/cleared follow-up date needs a fresh reminder cycle.
       dto.followUpReminderSentAt = null;
     }
+    if (dto.leadVertical !== undefined) {
+      if (dto.leadVertical !== 'property_management' && dto.leadVertical !== 'property_listing') {
+        delete dto.leadVertical;
+      }
+    }
     let pendingIntentUpdate: { intents: string[]; followUpAt?: Date } | null = null;
     if (dto.leadIntents !== undefined) {
       const rawIntents: unknown[] = Array.isArray(dto.leadIntents) ? dto.leadIntents : [];
@@ -3051,7 +2711,6 @@ export class CRMService {
       'associatedOrganizations',
       'associatedLeads',
       'associatedContacts',
-      'associatedDeals',
     ] as const;
     for (const key of leadAssocKeys) {
       if (dto[key] !== undefined) {
@@ -3166,19 +2825,6 @@ export class CRMService {
           fromId: id,
           toType: 'contacts',
           associationType: 'lead_contact',
-          added,
-          removed,
-        });
-      }
-      if (dto.associatedDeals !== undefined) {
-        const prevD = this.objectIdListFromDocField(prevAny.associatedDeals);
-        const nextD = this.normalizeObjectIdArray(dto.associatedDeals);
-        const { removed, added } = this.setDiffIds(prevD, nextD);
-        this.queueAssociationMirror({
-          fromType: 'leads',
-          fromId: id,
-          toType: 'deals',
-          associationType: 'lead_deal',
           added,
           removed,
         });
@@ -3380,1534 +3026,6 @@ export class CRMService {
     return updated;
   }
 
-  // --- Deals ---
-  async createDeal(dto: any, user?: any): Promise<Deal> {
-    const requestedDealRecordId = dto.recordId;
-    delete dto.recordId;
-
-    if (!canViewCrmRevenue(user)) {
-      delete dto.dealValue;
-      delete dto.expectedDealValue;
-      delete dto.dealValueINR;
-      delete dto.dealValueUSD;
-    }
-
-    // Enforce assigned pipeline for restricted employees
-    if (user && user.assignedDealsPipeline) {
-      dto.pipeline = user.assignedDealsPipeline;
-    }
-
-    // Auto-create Organization if provided as a name string (not an ObjectId)
-    if (
-      dto.organization &&
-      typeof dto.organization === 'string' &&
-      !dto.organization.match(/^[0-9a-fA-F]{24}$/)
-    ) {
-      await this.ensureOrganization(dto.organization, {});
-    }
-
-    // Auto-create Contact if contactPerson provided as a name string
-    if (
-      dto.contactPerson &&
-      typeof dto.contactPerson === 'string' &&
-      !dto.contactPerson.match(/^[0-9a-fA-F]{24}$/)
-    ) {
-      const existingContact = await this.contactModel
-        .findOne({
-          $or: [
-            {
-              firstName: {
-                $regex: new RegExp(
-                  `^${dto.contactPerson.trim().split(' ')[0]}`,
-                  'i',
-                ),
-              },
-            },
-          ],
-        })
-        .exec();
-      if (existingContact) {
-        dto.contactPerson = existingContact._id;
-      } else {
-        try {
-          const parts = dto.contactPerson.trim().split(' ');
-          const newContact = await this.contactModel.create({
-            firstName: parts[0],
-            lastName: parts.slice(1).join(' ') || '',
-            organization: dto.organization || undefined,
-            recordId: await this.nextRecordId(this.contactModel),
-          });
-          dto.contactPerson = newContact._id;
-        } catch (err) {
-          console.error(
-            `[CRMService] Failed to auto-create contact "${dto.contactPerson}":`,
-            err.message,
-          );
-          delete dto.contactPerson;
-        }
-      }
-    }
-
-    // Final casting for DB safety
-    dto.pipeline = this.toObjectIdSafe(dto.pipeline);
-    dto.lead = this.toObjectIdSafe(dto.lead);
-    dto.contactPerson = this.toObjectIdSafe(dto.contactPerson);
-    dto.propertyListingId = this.toObjectIdSafe(dto.propertyListingId);
-    if (dto.sharedWith !== undefined) {
-      dto.sharedWith = this.normalizeObjectIdArray(dto.sharedWith);
-    }
-
-    this.normalizeAssociations(dto);
-
-    dto.recordId = await this.nextRecordId(
-      this.dealModel,
-      requestedDealRecordId,
-    );
-
-    if (user) {
-      const ownerLabel = this.repOwnerLabelFromUser(user);
-      const raw = String(dto.dealOwner ?? '').trim();
-      const bogus = /^(administrator|admin|unknown)$/i.test(raw);
-      if (!raw || bogus) {
-        dto.dealOwner = ownerLabel;
-      }
-    }
-
-    await this.applyDealStageProbability(dto, null);
-    this.normalizeDealPricingFields(dto);
-
-    const deal = await new this.dealModel(dto).save();
-
-    // Sync associations mirroring for new deal
-    const prev = { associatedContacts: [], associatedCompanies: [] };
-    await this.syncDealAssociationMirrors(deal._id.toString(), prev, {
-      associatedContacts: this.objectIdListFromDocField(deal.associatedContacts),
-      associatedCompanies: this.objectIdListFromDocField(deal.associatedCompanies),
-    });
-    if (user) {
-      await this.createActivity({
-        type: 'System',
-        title: 'Deal Created',
-        content: `Deal created by ${user.firstName} ${user.lastName} with initial stage '${dto.stage || 'Qualification'}'`,
-        relatedTo: deal._id,
-        relatedType: 'Deal',
-        author: user.userId || user._id,
-      });
-    }
-    this.workflowsService.dispatch({
-      trigger: 'deal_created',
-      entityType: 'Deal',
-      entityId: deal._id,
-      record: this.entityPlain(deal),
-      user,
-    });
-    this.notifySalesAgent({
-      trigger: 'deal_created',
-      recordType: 'Deal',
-      recordId: String(deal._id),
-      user,
-    });
-    await this.bustCrmCache('deals', String(deal._id));
-    return redactCrmRevenueForUser(user, deal.toObject ? deal.toObject() : deal) as any;
-  }
-
-  /**
-   * Keep deal.probability aligned with the pipeline stage (HubSpot/Salesforce style).
-   * Syncs on create, and on update when stage or pipeline changes.
-   */
-  private async applyDealStageProbability(
-    dto: Record<string, any>,
-    existing?: {
-      pipeline?: unknown;
-      stage?: string;
-      probability?: number;
-    } | null,
-  ): Promise<void> {
-    const stageChanging =
-      dto.stage !== undefined &&
-      String(dto.stage) !== String(existing?.stage ?? '');
-    const pipelineChanging =
-      dto.pipeline !== undefined &&
-      String(dto.pipeline) !== String(existing?.pipeline ?? '');
-    const shouldSync = !existing || stageChanging || pipelineChanging;
-    if (!shouldSync) return;
-
-    const pipelineId = dto.pipeline ?? existing?.pipeline;
-    const stageName = dto.stage ?? existing?.stage;
-    if (!pipelineId || !stageName) return;
-
-    try {
-      const pipeline = await this.pipelinesService.findOne(String(pipelineId));
-      if (!pipeline?.stages?.length) return;
-      const fallback =
-        dto.probability !== undefined
-          ? Number(dto.probability)
-          : Number(existing?.probability) || 0;
-      dto.probability = resolveStageProbability(
-        pipeline.stages,
-        String(stageName),
-        Number.isFinite(fallback) ? fallback : 0,
-      );
-    } catch {
-      // leave probability unchanged if pipeline lookup fails
-    }
-  }
-
-  private normalizeDealPricingFields(dto: Record<string, any>): void {
-    if (dto.pricingType !== undefined || dto.contractMonths !== undefined) {
-      dto.pricingType = normalizeDealPricingType(dto.pricingType);
-      if (dto.pricingType === 'monthly') {
-        const months = Number(dto.contractMonths);
-        dto.contractMonths =
-          Number.isFinite(months) && months > 0
-            ? Math.min(60, Math.max(1, Math.round(months)))
-            : dealContractMonths({
-                pricingType: 'monthly',
-                contractMonths: dto.contractMonths,
-              });
-      } else {
-        dto.contractMonths = null;
-      }
-    }
-  }
-
-  private async getEffectiveExchangeRate(dealRate?: number): Promise<number> {
-    if (dealRate && dealRate > 1) return dealRate;
-    const settings = await this.getGlobalSettings();
-    return settings.usdToInr;
-  }
-
-  private async enrichDealCurrenciesAsync(deal: any): Promise<any> {
-    const value = Number(deal.dealValue) || 0;
-    const currency = (deal.currency || 'USD').toUpperCase();
-    const exchangeRate = await this.getEffectiveExchangeRate(Number(deal.exchangeRate));
-    if (currency === 'INR') {
-      deal.dealValueINR = value;
-      deal.dealValueUSD = Math.round((value / exchangeRate) * 100) / 100;
-    } else {
-      deal.dealValueUSD = value;
-      deal.dealValueINR = Math.round(value * exchangeRate);
-    }
-    return deal;
-  }
-
-  /** Sync fallback — uses hardcoded default; prefer enrichDealCurrenciesAsync when possible. */
-  private enrichDealCurrencies(deal: any): any {
-    const value = Number(deal.dealValue) || 0;
-    const currency = (deal.currency || 'USD').toUpperCase();
-    const exchangeRate = Number(deal.exchangeRate) > 1 ? Number(deal.exchangeRate) : 83;
-    if (currency === 'INR') {
-      deal.dealValueINR = value;
-      deal.dealValueUSD = Math.round((value / exchangeRate) * 100) / 100;
-    } else {
-      deal.dealValueUSD = value;
-      deal.dealValueINR = Math.round(value * exchangeRate);
-    }
-    return deal;
-  }
-
-  /**
-   * List deals for the board. Optional `pipeline` + `unassigned` match the deals UI:
-   * non-default pipeline = strict pipeline id; default pipeline = that id OR deals with no pipeline.
-   * `assignedDealsPipeline` users keep legacy strict assignment (query params ignored).
-   */
-  private async populateDealsForList(
-    deals: any[],
-    user?: any,
-  ): Promise<any[]> {
-    const canReadContacts = this.canReadModule('contacts', user);
-    const populated = await Promise.all(
-      deals.map(async (d: any) => {
-        if (d.lead && Types.ObjectId.isValid(d.lead)) {
-          d.lead = await this.leadModel.findById(d.lead).lean().exec();
-        }
-        if (
-          canReadContacts &&
-          d.contactPerson &&
-          Types.ObjectId.isValid(d.contactPerson)
-        ) {
-          d.contactPerson = await this.contactModel
-            .findById(d.contactPerson)
-            .lean()
-            .exec();
-        } else if (!canReadContacts) {
-          d.contactPerson = null;
-          d.associatedContacts = [];
-        }
-        return this.enrichDealCurrenciesAsync(d);
-      }),
-    );
-    return redactCrmRevenueForUser(user, populated);
-  }
-
-  async findAllDeals(
-    user?: any,
-    pipelineId?: string,
-    includeUnassignedForDefaultPipeline?: boolean,
-    listOpts?: {
-      page?: number;
-      pageSize?: number;
-      search?: string;
-      filters?: CrmFilterCriterion[];
-    },
-  ): Promise<ScalableListResult<Deal>> {
-    const normalized = {
-      ...listOpts,
-      page: listOpts?.page && listOpts.page > 0 ? listOpts.page : CRM_DEFAULT_PAGE,
-      pageSize: clampPageSize(
-        listOpts?.pageSize ?? CRM_DEFAULT_PAGE_SIZE,
-        CRM_MAX_BOARD_PAGE_SIZE,
-      ),
-    };
-    const cache = this.appCache.resolveCrmListCache('deals', user, {
-      pipelineId,
-      includeUnassignedForDefaultPipeline,
-      listOpts: normalized,
-    });
-    if (cache) {
-      return this.appCache.getOrSet(cache.key, cache.ttl, () =>
-        this.findAllDealsDb(
-          user,
-          pipelineId,
-          includeUnassignedForDefaultPipeline,
-          normalized,
-        ),
-      );
-    }
-    return this.findAllDealsDb(
-      user,
-      pipelineId,
-      includeUnassignedForDefaultPipeline,
-      normalized,
-    );
-  }
-
-  private async findAllDealsDb(
-    user?: any,
-    pipelineId?: string,
-    includeUnassignedForDefaultPipeline?: boolean,
-    listOpts?: {
-      page?: number;
-      pageSize?: number;
-      search?: string;
-      filters?: CrmFilterCriterion[];
-    },
-  ): Promise<ScalableListResult<Deal>> {
-    const filter: any = {};
-
-    if (user && user.assignedDealsPipeline) {
-      filter.pipeline = user.assignedDealsPipeline;
-    } else if (
-      pipelineId &&
-      typeof pipelineId === 'string' &&
-      isMongoObjectIdString(pipelineId.trim())
-    ) {
-      const pid = new Types.ObjectId(pipelineId.trim());
-      if (includeUnassignedForDefaultPipeline) {
-        filter.$or = [
-          { pipeline: pid },
-          { pipeline: null },
-          { pipeline: { $exists: false } },
-        ];
-      } else {
-        filter.pipeline = pid;
-      }
-    }
-
-    let finalFilter =
-      user && !this.canReadAllModuleData('deals', user)
-        ? { $and: [filter, this.dealOwnershipFilter(user)] }
-        : filter;
-
-    if (listOpts?.search?.trim()) {
-      finalFilter = this.appendCrmTextSearchFilter(finalFilter, listOpts.search, [
-        'title',
-        'status',
-        'stage',
-        'dealOwner',
-      ]);
-    }
-
-    if (listOpts?.filters?.length) {
-      finalFilter = appendCrmListFilters(
-        finalFilter,
-        listOpts.filters,
-        'deals',
-      );
-    }
-
-    const page = Math.max(1, listOpts?.page ?? CRM_DEFAULT_PAGE);
-    const pageSize = clampPageSize(
-      listOpts?.pageSize ?? CRM_DEFAULT_PAGE_SIZE,
-      CRM_MAX_BOARD_PAGE_SIZE,
-    );
-    const skip = (page - 1) * pageSize;
-    const [deals, count] = await Promise.all([
-      this.dealModel
-        .find(finalFilter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(pageSize)
-        .maxTimeMS(CRM_LIST_MAX_TIME_MS)
-        .lean()
-        .exec(),
-      countDocumentsCapped(this.dealModel, finalFilter),
-    ]);
-    const data = (await this.populateDealsForList(deals, user)) as Deal[];
-    return buildScalableListResult(data, {
-      page,
-      pageSize,
-      total: count.total,
-      totalIsApproximate: count.approximate,
-    });
-  }
-  async findOneDeal(id: string, user?: any): Promise<Deal | null> {
-    const key = this.appCache.crmDetailKey('deals', id, user);
-    return this.appCache.getOrSet(key, this.appCache.crmDetailTtl(), () =>
-      this.findOneDealDb(id, user),
-    );
-  }
-
-  private async findOneDealDb(id: string, user?: any): Promise<Deal | null> {
-    let dealObj = null as any;
-    if (isMongoObjectIdString(id)) {
-      dealObj = await this.dealModel.findById(id).lean().exec();
-    }
-    if (!dealObj) {
-      dealObj = await this.dealModel.findOne({ recordId: id }).lean().exec();
-    }
-    if (!dealObj) return null;
-
-    // Safe manual population
-    if (dealObj.lead && Types.ObjectId.isValid(dealObj.lead)) {
-      (dealObj as any).lead = await this.leadModel
-        .findById(dealObj.lead)
-        .lean()
-        .exec();
-    }
-    const canReadContacts = this.canReadModule('contacts', user);
-    if (
-      canReadContacts &&
-      dealObj.contactPerson &&
-      Types.ObjectId.isValid(dealObj.contactPerson)
-    ) {
-      (dealObj as any).contactPerson = await this.contactModel
-        .findById(dealObj.contactPerson)
-        .lean()
-        .exec();
-    } else if (!canReadContacts) {
-      (dealObj as any).contactPerson = null;
-    }
-    if (dealObj.organization && Types.ObjectId.isValid(dealObj.organization)) {
-      (dealObj as any).organization = await this.organizationModel
-        .findById(dealObj.organization)
-        .lean()
-        .exec();
-    }
-
-    const ac = (dealObj as any).associatedContacts;
-    if (canReadContacts && Array.isArray(ac) && ac.length) {
-      (dealObj as any).associatedContacts = (
-        await Promise.all(
-          ac.map(async (cid: unknown) => {
-            const oid = String(cid);
-            if (!Types.ObjectId.isValid(oid)) return null;
-            return this.contactModel
-              .findById(oid)
-              .select('firstName lastName email')
-              .lean()
-              .exec();
-          }),
-        )
-      ).filter(Boolean);
-    } else if (!canReadContacts) {
-      (dealObj as any).associatedContacts = [];
-    }
-    const aco = (dealObj as any).associatedCompanies;
-    if (Array.isArray(aco) && aco.length) {
-      (dealObj as any).associatedCompanies = (
-        await Promise.all(
-          aco.map(async (oid: unknown) => {
-            const s = String(oid);
-            if (!Types.ObjectId.isValid(s)) return null;
-            return this.organizationModel
-              .findById(s)
-              .select('name website industry')
-              .lean()
-              .exec();
-          }),
-        )
-      ).filter(Boolean);
-    }
-
-    // Final guard: check if user is restricted and deal belongs to their pipeline
-    if (user && user.assignedDealsPipeline) {
-      if (String(dealObj.pipeline) !== user.assignedDealsPipeline) {
-        return null;
-      }
-    }
-    if (user && !this.canReadAllModuleData('deals', user)) {
-      const ownerName = this.ownerLabel(user);
-      const userId = this.userObjectId(user);
-      const byOwner = String((dealObj as any).dealOwner || '').trim() === ownerName;
-      const byCreator =
-        !!userId && String((dealObj as any).createdBy || '') === String(userId);
-      const byShared =
-        !!userId &&
-        Array.isArray((dealObj as any).sharedWith) &&
-        (dealObj as any).sharedWith.some((u: any) => String(u) === String(userId));
-      if (!byOwner && !byCreator && !byShared) return null;
-    }
-    return redactCrmRevenueForUser(
-      user,
-      await this.enrichDealCurrenciesAsync(dealObj),
-    ) as any;
-  }
-
-  /**
-   * Deals for the client’s company that carry client-portal settings (manage on each deal).
-   */
-  async findPortalDealsForClient(
-    clientId: string,
-    user?: any,
-  ): Promise<
-    Array<{
-      _id: string;
-      recordId?: string;
-      title: string;
-      stage: string;
-      portalToken?: string;
-      portalDomain?: string;
-      portalScopeSummary?: string;
-      portalPmProjectId?: string | null;
-    }>
-  > {
-    const resolvedId = await this.resolveDocumentId(
-      this.clientModel,
-      clientId,
-    );
-    if (!resolvedId) return [];
-
-    const client = await this.clientModel
-      .findById(resolvedId)
-      .select('organization')
-      .populate('organization', 'name')
-      .lean()
-      .exec();
-    if (!client) return [];
-
-    const orgRef = (client as { organization?: unknown }).organization;
-    if (!orgRef) return [];
-
-    const orgIdStr =
-      typeof orgRef === 'object' &&
-        orgRef !== null &&
-        '_id' in (orgRef as object)
-        ? String((orgRef as { _id: Types.ObjectId })._id)
-        : String(orgRef);
-    if (!Types.ObjectId.isValid(orgIdStr)) return [];
-
-    const oid = new Types.ObjectId(orgIdStr);
-    const orgName =
-      typeof orgRef === 'object' &&
-        orgRef !== null &&
-        'name' in (orgRef as object) &&
-        typeof (orgRef as { name?: string }).name === 'string'
-        ? (orgRef as { name: string }).name.trim()
-        : '';
-
-    const orClause: Record<string, unknown>[] = [
-      { organization: oid },
-      { associatedCompanies: oid },
-    ];
-    if (orgName) {
-      orClause.push({ organization: orgName });
-    }
-
-    const filter: Record<string, unknown> = { $or: orClause };
-    if (user && user.assignedDealsPipeline) {
-      const p = String(user.assignedDealsPipeline);
-      if (!Types.ObjectId.isValid(p)) return [];
-      filter.pipeline = new Types.ObjectId(p);
-    }
-
-    const deals = await this.dealModel
-      .find(filter)
-      .select(
-        'title stage portalToken portalDomain portalScopeSummary portalPmProjectId recordId createdAt',
-      )
-      .sort({ createdAt: -1 })
-      .lean()
-      .exec();
-
-    return deals.map((d: any) => ({
-      _id: String(d._id),
-      recordId: d.recordId,
-      title: d.title || 'Untitled deal',
-      stage: d.stage || '',
-      portalToken: d.portalToken,
-      portalDomain: d.portalDomain || '',
-      portalScopeSummary: d.portalScopeSummary,
-      portalPmProjectId: d.portalPmProjectId ? String(d.portalPmProjectId) : null,
-    }));
-  }
-
-  /**
-   * Admin view: list all deals that have client portal enabled,
-   * including high-level signals of client submissions.
-   */
-  async findAllClientPortals(user?: any): Promise<
-    Array<{
-      dealId: string;
-      dealTitle: string;
-      dealStage: string;
-      clientName: string;
-      organizationName: string;
-      portalToken: string;
-      portalDomain?: string;
-      portalScopeSummary?: string;
-      portalPmProjectId?: string | null;
-      portalGoogleLoginEnabled?: boolean;
-      portalHasPassword?: boolean;
-      portalNeedsCount: number;
-      openPortalNeedsCount: number;
-      inquiriesCount: number;
-      assignedEmployeesCount: number;
-      myPortalRole: 'viewer' | 'manager' | 'portal_admin' | null;
-      lastInquiryAt: string | null;
-      updatedAt: string | null;
-    }>
-  > {
-    const isAdmin = this.isCrmWorkspaceAdmin(user);
-    const filter: Record<string, unknown> = {
-      portalToken: { $exists: true, $nin: [null, ''] },
-    };
-
-    // Non-admin users only see portals they are explicitly assigned to
-    if (!isAdmin && user?._id && Types.ObjectId.isValid(String(user._id))) {
-      const myAssignments = await this.portalAccessAssignmentModel
-        .find({
-          employeeId: new Types.ObjectId(String(user._id)),
-          active: true,
-        })
-        .select('deal')
-        .lean()
-        .exec();
-      
-      const assignedDealIds = myAssignments.map(a => a.deal);
-      if (assignedDealIds.length === 0) {
-        return [];
-      }
-      filter._id = { $in: assignedDealIds };
-    }
-
-    const deals = await this.dealModel
-      .find(filter)
-      .select(
-        'title stage portalToken portalDomain portalScopeSummary portalPmProjectId portalGoogleLoginEnabled portalPasswordHash contactPerson organization updatedAt portalDocuments portalMilestones portalDeadlines',
-      )
-      .populate('contactPerson', 'firstName lastName email')
-      .populate('organization', 'name')
-      .sort({ updatedAt: -1 })
-      .limit(CRM_MAX_BOARD_PAGE_SIZE)
-      .maxTimeMS(CRM_LIST_MAX_TIME_MS)
-      .lean()
-      .exec();
-
-    const dealIds = deals
-      .map((d: any) => String(d._id))
-      .filter((id) => Types.ObjectId.isValid(id))
-      .map((id) => new Types.ObjectId(id));
-
-    const [needsAgg, inquiryAgg, assignmentAgg] = await Promise.all([
-      this.portalClientNeedModel.aggregate([
-        { $match: { deal: { $in: dealIds } } },
-        {
-          $group: {
-            _id: '$deal',
-            total: { $sum: 1 },
-            open: {
-              $sum: { $cond: [{ $eq: ['$status', 'open'] }, 1, 0] },
-            },
-          },
-        },
-      ]),
-      this.activityModel.aggregate([
-        {
-          $match: {
-            relatedType: 'Deal',
-            relatedTo: { $in: dealIds },
-            'metadata.source': 'client-portal',
-          },
-        },
-        {
-          $group: {
-            _id: '$relatedTo',
-            count: { $sum: 1 },
-            lastAt: { $max: '$createdAt' },
-          },
-        },
-      ]),
-      this.portalAccessAssignmentModel
-        .find({ deal: { $in: dealIds }, active: true })
-        .select('deal employeeId role createdAt')
-        .lean()
-        .exec(),
-    ]);
-
-    const needsByDeal = new Map(
-      needsAgg.map((r: any) => [String(r._id), { total: Number(r.total || 0), open: Number(r.open || 0) }]),
-    );
-    const inquiryByDeal = new Map(
-      inquiryAgg.map((r: any) => [String(r._id), { count: Number(r.count || 0), lastAt: r.lastAt ? new Date(r.lastAt).toISOString() : null }]),
-    );
-
-    // assignmentAgg is now the full list of assignment rows
-    const allAssignmentRows = assignmentAgg as Array<{ deal: any; employeeId: any; role: string; createdAt?: any }>;
-    const allAssigneeEmployeeIds = [...new Set(
-      allAssignmentRows
-        .map((r) => String(r.employeeId))
-        .filter((id) => Types.ObjectId.isValid(id)),
-    )].map((id) => new Types.ObjectId(id));
-
-    const assigneeUsers = await this.hrmsUserModel
-      .find({ _id: { $in: allAssigneeEmployeeIds } })
-      .select('firstName lastName email')
-      .lean()
-      .exec();
-    const assigneeUserById = new Map((assigneeUsers as any[]).map((u) => [String(u._id), u]));
-
-    // Group assignment rows by dealId
-    const assignmentsByDealId = new Map<string, Array<{ employeeId: string; employeeName: string; employeeEmail: string; role: string; grantedAt: string | null }>>();
-    for (const row of allAssignmentRows) {
-      const dealStr = String(row.deal);
-      const u = assigneeUserById.get(String(row.employeeId));
-      const entry = {
-        employeeId: String(row.employeeId),
-        employeeName: `${(u as any)?.firstName || ''} ${(u as any)?.lastName || ''}`.trim() || 'Unknown',
-        employeeEmail: (u as any)?.email || '',
-        role: row.role,
-        grantedAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
-      };
-      if (!assignmentsByDealId.has(dealStr)) assignmentsByDealId.set(dealStr, []);
-      assignmentsByDealId.get(dealStr)!.push(entry);
-    }
-
-    const myRolesByDeal = new Map<string, 'viewer' | 'manager' | 'portal_admin'>();
-    if (!isAdmin && user?._id && Types.ObjectId.isValid(String(user._id))) {
-      for (const row of allAssignmentRows) {
-        if (String(row.employeeId) === String(user._id)) {
-          myRolesByDeal.set(String(row.deal), row.role as 'viewer' | 'manager' | 'portal_admin');
-        }
-      }
-    }
-
-    return deals.map((d: any) => {
-      const id = String(d._id);
-      const n = needsByDeal.get(id) || { total: 0, open: 0 };
-      const i = inquiryByDeal.get(id) || { count: 0, lastAt: null };
-      const cp = d.contactPerson as any;
-      return {
-        dealId: id,
-        dealTitle: d.title || 'Untitled deal',
-        dealStage: d.stage || '',
-        clientName: cp ? `${cp.firstName || ''} ${cp.lastName || ''}`.trim() : '',
-        organizationName: d?.organization?.name || d?.organization || '',
-        portalToken: d.portalToken,
-        portalDomain: d.portalDomain || '',
-        portalScopeSummary: d.portalScopeSummary,
-        portalPmProjectId: d.portalPmProjectId ? String(d.portalPmProjectId) : null,
-        portalGoogleLoginEnabled: Boolean(d.portalGoogleLoginEnabled),
-        portalHasPassword: Boolean(d.portalPasswordHash),
-        portalNeedsCount: n.total,
-        openPortalNeedsCount: n.open,
-        inquiriesCount: i.count,
-        assignedEmployeesCount: (assignmentsByDealId.get(id) || []).length,
-        assignedEmployees: assignmentsByDealId.get(id) || [],
-        myPortalRole: isAdmin ? 'portal_admin' : myRolesByDeal.get(id) || null,
-        lastInquiryAt: i.lastAt,
-        updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
-        portalDocuments: d.portalDocuments || [],
-        portalMilestones: d.portalMilestones || [],
-        portalDeadlines: d.portalDeadlines || [],
-      };
-    });
-  }
-
-  private portalRoleRank(role?: string | null): number {
-    if (role === 'portal_admin') return 3;
-    if (role === 'manager') return 2;
-    if (role === 'viewer') return 1;
-    return 0;
-  }
-
-  private async resolvePortalDealObjectId(
-    dealIdOrRecordId: string,
-  ): Promise<Types.ObjectId | null> {
-    const resolvedId = await this.resolveDocumentId(this.dealModel, dealIdOrRecordId);
-    if (!resolvedId || !Types.ObjectId.isValid(resolvedId)) return null;
-    return new Types.ObjectId(resolvedId);
-  }
-
-  async getClientPortalAccessAssignments(
-    dealIdOrRecordId: string,
-  ): Promise<
-    Array<{
-      employeeId: string;
-      employeeName: string;
-      employeeEmail: string;
-      role: 'viewer' | 'manager' | 'portal_admin';
-      active: boolean;
-      grantedAt: string | null;
-    }>
-  > {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) return [];
-    const rows = await this.portalAccessAssignmentModel
-      .find({ deal: dealId, active: true })
-      .sort({ updatedAt: -1 })
-      .lean()
-      .exec();
-    const employeeIds = rows
-      .map((r) => String(r.employeeId))
-      .filter((id) => Types.ObjectId.isValid(id))
-      .map((id) => new Types.ObjectId(id));
-    const users = await this.hrmsUserModel
-      .find({ _id: { $in: employeeIds } })
-      .select('firstName lastName email')
-      .lean()
-      .exec();
-    const userById = new Map(users.map((u: any) => [String(u._id), u]));
-    return rows.map((r: any) => {
-      const u = userById.get(String(r.employeeId));
-      return {
-        employeeId: String(r.employeeId),
-        employeeName: `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || 'Unknown',
-        employeeEmail: u?.email || '',
-        role: r.role,
-        active: r.active !== false,
-        grantedAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
-      };
-    });
-  }
-
-  async assignClientPortalEmployee(
-    dealIdOrRecordId: string,
-    employeeId: string,
-    role: 'viewer' | 'manager' | 'portal_admin',
-    actor?: any,
-  ) {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) throw new BadRequestException('Deal not found');
-    if (!Types.ObjectId.isValid(employeeId)) {
-      throw new BadRequestException('Valid employeeId is required');
-    }
-    const safeRole = (['viewer', 'manager', 'portal_admin'] as const).includes(
-      role,
-    )
-      ? role
-      : 'manager';
-    await this.portalAccessAssignmentModel.updateOne(
-      { deal: dealId, employeeId: new Types.ObjectId(employeeId) },
-      {
-        $set: {
-          role: safeRole,
-          active: true,
-          grantedBy:
-            actor?._id && Types.ObjectId.isValid(String(actor._id))
-              ? new Types.ObjectId(String(actor._id))
-              : undefined,
-        },
-      },
-      { upsert: true },
-    );
-    await this.logClientPortalAccessEvent(
-      dealIdOrRecordId,
-      actor,
-      'assign_access',
-      { targetEmployeeId: employeeId, role: safeRole },
-    );
-    return { success: true };
-  }
-
-  async revokeClientPortalEmployee(
-    dealIdOrRecordId: string,
-    employeeId: string,
-    actor?: any,
-  ) {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) throw new BadRequestException('Deal not found');
-    if (!Types.ObjectId.isValid(employeeId)) {
-      throw new BadRequestException('Valid employeeId is required');
-    }
-    await this.portalAccessAssignmentModel.updateOne(
-      { deal: dealId, employeeId: new Types.ObjectId(employeeId) },
-      { $set: { active: false } },
-    );
-    await this.logClientPortalAccessEvent(
-      dealIdOrRecordId,
-      actor,
-      'revoke_access',
-      { targetEmployeeId: employeeId },
-    );
-    return { success: true };
-  }
-
-  async listClientPortalAccessLogs(
-    dealIdOrRecordId: string,
-    limit = 50,
-  ): Promise<
-    Array<{
-      _id: string;
-      employeeId: string;
-      employeeName: string;
-      action: string;
-      createdAt: string | null;
-      metadata?: Record<string, unknown>;
-    }>
-  > {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) return [];
-    const logs = await this.portalAccessLogModel
-      .find({ deal: dealId })
-      .sort({ createdAt: -1 })
-      .limit(Math.min(Math.max(limit, 1), 200))
-      .lean()
-      .exec();
-    const employeeIds = logs
-      .map((r) => String(r.employeeId))
-      .filter((id) => Types.ObjectId.isValid(id))
-      .map((id) => new Types.ObjectId(id));
-    const users = await this.hrmsUserModel
-      .find({ _id: { $in: employeeIds } })
-      .select('firstName lastName')
-      .lean()
-      .exec();
-    const userById = new Map(users.map((u: any) => [String(u._id), u]));
-    return logs.map((l: any) => {
-      const u = userById.get(String(l.employeeId));
-      return {
-        _id: String(l._id),
-        employeeId: String(l.employeeId),
-        employeeName: `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || 'Unknown',
-        action: l.action || 'unknown',
-        createdAt: l.createdAt ? new Date(l.createdAt).toISOString() : null,
-        metadata: l.metadata || {},
-      };
-    });
-  }
-
-  async logClientPortalAccessEvent(
-    dealIdOrRecordId: string,
-    actor: any,
-    action: string,
-    metadata?: Record<string, unknown>,
-  ) {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) throw new BadRequestException('Deal not found');
-    if (!actor?._id || !Types.ObjectId.isValid(String(actor._id))) {
-      throw new BadRequestException('Authenticated employee required');
-    }
-    await this.portalAccessLogModel.create({
-      deal: dealId,
-      employeeId: new Types.ObjectId(String(actor._id)),
-      action: String(action || 'unknown'),
-      metadata: metadata || {},
-    });
-    return { success: true };
-  }
-
-  async assertClientPortalAccess(
-    user: any,
-    dealIdOrRecordId: string,
-    minRole: 'viewer' | 'manager' | 'portal_admin' = 'viewer',
-  ): Promise<void> {
-    if (this.isCrmWorkspaceAdmin(user)) return;
-    if (!user?._id || !Types.ObjectId.isValid(String(user._id))) {
-      throw new BadRequestException('Authenticated employee required');
-    }
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) throw new BadRequestException('Deal not found');
-    const assignment = await this.portalAccessAssignmentModel
-      .findOne({
-        deal: dealId,
-        employeeId: new Types.ObjectId(String(user._id)),
-        active: true,
-      })
-      .select('role')
-      .lean()
-      .exec();
-    const actualRank = this.portalRoleRank(assignment?.role);
-    const neededRank = this.portalRoleRank(minRole);
-    if (actualRank < neededRank) {
-      throw new BadRequestException(
-        'You do not have access to manage this client portal',
-      );
-    }
-  }
-
-  async listClientPortalUpdates(dealIdOrRecordId: string, limit = 30) {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) return [];
-    const rows = await this.portalUpdateModel
-      .find({ deal: dealId })
-      .sort({ createdAt: -1 })
-      .limit(Math.min(Math.max(limit, 1), 200))
-      .lean()
-      .exec();
-    const creatorIds = rows
-      .map((r) => String(r.createdBy))
-      .filter((id) => Types.ObjectId.isValid(id))
-      .map((id) => new Types.ObjectId(id));
-    const users = await this.hrmsUserModel
-      .find({ _id: { $in: creatorIds } })
-      .select('firstName lastName')
-      .lean()
-      .exec();
-    const userById = new Map(users.map((u: any) => [String(u._id), u]));
-    return rows.map((r: any) => {
-      const u = userById.get(String(r.createdBy));
-      return {
-        _id: String(r._id),
-        title: r.title || '',
-        body: r.body || '',
-        cadence: r.cadence || 'general',
-        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
-        createdBy: String(r.createdBy),
-        createdByName: `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || 'Team member',
-      };
-    });
-  }
-
-  async createClientPortalUpdate(
-    dealIdOrRecordId: string,
-    body: { title?: string; body?: string; cadence?: 'daily' | 'weekly' | 'general' },
-    actor: any,
-  ) {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) throw new BadRequestException('Deal not found');
-    if (!actor?._id || !Types.ObjectId.isValid(String(actor._id))) {
-      throw new BadRequestException('Authenticated employee required');
-    }
-    const title = String(body?.title || '').trim();
-    const text = String(body?.body || '').trim();
-    if (!title || !text) {
-      throw new BadRequestException('title and body are required');
-    }
-    const cadence = (['daily', 'weekly', 'general'] as const).includes(
-      body?.cadence || 'general',
-    )
-      ? (body?.cadence as 'daily' | 'weekly' | 'general')
-      : 'general';
-    const created = await this.portalUpdateModel.create({
-      deal: dealId,
-      title,
-      body: text,
-      cadence,
-      createdBy: new Types.ObjectId(String(actor._id)),
-    });
-    await this.logClientPortalAccessEvent(
-      dealIdOrRecordId,
-      actor,
-      'portal_update_created',
-      { updateId: String(created._id), cadence },
-    );
-
-    // Send email to client if contact Person email exists
-    try {
-      const deal = await this.dealModel
-        .findById(dealId)
-        .populate('contactPerson', 'email firstName lastName')
-        .exec();
-      if (deal) {
-        const cp = (deal as any).contactPerson;
-        if (cp && cp.email && deal.portalToken) {
-          const clientEmail = String(cp.email).trim();
-          const clientName = `${cp.firstName || ''} ${cp.lastName || ''}`.trim() || 'Client';
-          const dealTitle = deal.title || 'your project';
-          let baseDomain = String(deal.portalDomain || '').trim() || 'https://mathionix.com';
-          if (baseDomain.replace(/\/+$/, '') === 'https://mathionix.tech') {
-            baseDomain = 'https://mathionix.com';
-          }
-          const portalUrl = `${baseDomain.replace(/\/+$/, '')}/portal/${deal.portalToken}`;
-
-          const html = `
-            <div style="background: #ffffff; color: #1e293b; padding: 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-                <div style="text-align: center; margin-bottom: 24px;">
-                    <span style="font-size: 28px; font-weight: bold; color: #007a94; letter-spacing: -0.5px;">2Bigha</span>
-                </div>
-                <h2 style="color: #0f172a; font-size: 20px; font-weight: 700; margin-top: 0; text-align: center;">Project Status Update: ${title}</h2>
-                <p style="color: #475569; font-size: 14px; line-height: 1.6;">Hello ${clientName},</p>
-                <p style="color: #475569; font-size: 14px; line-height: 1.6;">A new update has been posted to your portal for <strong>${dealTitle}</strong>:</p>
-                
-                <div style="background: #fafbfc; border: 1px solid #e2e8f0; padding: 20px; margin: 20px 0; border-radius: 8px; line-height: 1.6; font-size: 14px; color: #1e293b; white-space: pre-line;">
-                    ${text}
-                </div>
-
-                <div style="text-align: center; margin: 30px 0 10px 0;">
-                    <a href="${portalUrl}" style="background-color: #007a94; color: #ffffff; padding: 12px 24px; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 122, 148, 0.2);">Open Client Portal</a>
-                </div>
-            </div>
-          `;
-
-          await this.mailService.sendMail({
-            to: clientEmail,
-            subject: `[2Bigha] Project Status Update: ${title}`,
-            html,
-          });
-          console.log(`Successfully sent project update email to: ${clientEmail}`);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to send project status update email:', err);
-    }
-
-    return { success: true, updateId: String(created._id) };
-  }
-
-  async buildClientPortalDailyUpdateDraft(
-    dealIdOrRecordId: string,
-    actor: any,
-    lookbackHours = 24,
-  ): Promise<{ title: string; body: string; cadence: 'daily' }> {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) throw new BadRequestException('Deal not found');
-    await this.assertClientPortalAccess(actor, dealIdOrRecordId, 'viewer');
-
-    const deal = await this.dealModel
-      .findById(dealId)
-      .select('title portalPmProjectId')
-      .lean()
-      .exec();
-    if (!deal?.portalPmProjectId) {
-      throw new BadRequestException('No PM board linked for this portal');
-    }
-
-    const projectId = new Types.ObjectId(String(deal.portalPmProjectId));
-    const since = new Date(Date.now() - Math.max(1, Number(lookbackHours || 24)) * 60 * 60 * 1000);
-
-    const movedRows = await this.pmProgressReadService.findRecentStatusMoves(since);
-
-    const issueIds = Array.from(
-      new Set(
-        movedRows
-          .map((r: any) => String(r.issue || ''))
-          .filter((id) => Types.ObjectId.isValid(id)),
-      ),
-    ).map((id) => new Types.ObjectId(id));
-
-    if (issueIds.length === 0) {
-      const dateLabel = new Date().toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-      return {
-        title: `Daily Update - ${dateLabel}`,
-        cadence: 'daily',
-        body:
-          `No ticket movement was recorded in the last ${lookbackHours} hours.\n\n` +
-          `Project status remains stable. We will share the next update once tickets move across workflow stages.`,
-      };
-    }
-
-    const issues = await this.pmProgressReadService.findProjectIssuesByIds(
-      projectId,
-      issueIds,
-    );
-    const allowedIds = new Set(issues.map((i: any) => String(i._id)));
-    const movedForProject = movedRows.filter((r: any) => allowedIds.has(String(r.issue)));
-
-    const doneMoves = movedForProject.filter((r: any) =>
-      String(r.newValue || '').toLowerCase().includes('done'),
-    );
-    const inProgressMoves = movedForProject.filter((r: any) => {
-      const to = String(r.newValue || '').toLowerCase();
-      return to.includes('progress') || to.includes('in progress');
-    });
-
-    const latestMoves = [...movedForProject]
-      .sort(
-        (a: any, b: any) =>
-          new Date(b.changedAt || 0).getTime() - new Date(a.changedAt || 0).getTime(),
-      )
-      .slice(0, 5);
-    const issueById = new Map(issues.map((i: any) => [String(i._id), i]));
-    const moveLines = latestMoves
-      .map((row: any) => {
-        const issue = issueById.get(String(row.issue));
-        if (!issue) return null;
-        return `- ${issue.key}: ${issue.summary} (${row.oldValue || 'Unknown'} -> ${row.newValue || 'Unknown'})`;
-      })
-      .filter(Boolean);
-
-    const dateLabel = new Date().toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-    const body =
-      `Progress summary for the last ${lookbackHours} hours:\n\n` +
-      `- Tickets moved: ${movedForProject.length}\n` +
-      `- Moved to In Progress: ${inProgressMoves.length}\n` +
-      `- Moved to Done: ${doneMoves.length}\n\n` +
-      (moveLines.length
-        ? `Recent ticket movement:\n${moveLines.join('\n')}\n\n`
-        : '') +
-      `Next: team will continue progressing active tickets and share the next milestone update.`;
-
-    return {
-      title: `Daily Update - ${dateLabel}`,
-      body,
-      cadence: 'daily',
-    };
-  }
-
-  async deleteClientPortalUpdate(
-    dealIdOrRecordId: string,
-    updateId: string,
-    actor: any,
-  ) {
-    const dealId = await this.resolvePortalDealObjectId(dealIdOrRecordId);
-    if (!dealId) throw new BadRequestException('Deal not found');
-    await this.portalUpdateModel
-      .deleteOne({ _id: updateId, deal: dealId })
-      .exec();
-    await this.logClientPortalAccessEvent(
-      dealIdOrRecordId,
-      actor,
-      'portal_update_deleted',
-      { updateId },
-    );
-    return { success: true };
-  }
-
-  async updateDeal(id: string, dto: any, user?: any): Promise<Deal | null> {
-    const dealPatchKeys = new Set(
-      Object.keys(dto || {}).filter((k) => (dto as any)[k] !== undefined),
-    );
-    delete dto.recordId;
-    if (!canViewCrmRevenue(user)) {
-      delete dto.dealValue;
-      delete dto.expectedDealValue;
-      delete dto.dealValueINR;
-      delete dto.dealValueUSD;
-      delete dto.annualRevenue;
-    }
-    if (user && !this.isCrmWorkspaceAdmin(user)) {
-      delete dto.portalScopeSummary;
-      delete dto.portalDocuments;
-      delete dto.portalMilestones;
-      delete dto.portalDeadlines;
-    }
-    if (dto.stage === '' || dto.stage === null || dto.stage === undefined) {
-      delete dto.stage;
-    }
-    if (dto.pipeline === '' || dto.pipeline === null || dto.pipeline === undefined) {
-      delete dto.pipeline;
-    }
-
-    const resolvedId = await this.resolveDocumentId(this.dealModel, id);
-    if (!resolvedId) return null;
-    id = resolvedId;
-
-    // Final casting for DB safety
-    if (dto.pipeline !== undefined)
-      dto.pipeline = this.toObjectIdSafe(dto.pipeline);
-    if (dto.lead !== undefined) dto.lead = this.toObjectIdSafe(dto.lead);
-    if (dto.contactPerson !== undefined)
-      dto.contactPerson = this.toObjectIdSafe(dto.contactPerson);
-    if (dto.propertyListingId !== undefined)
-      dto.propertyListingId = this.toObjectIdSafe(dto.propertyListingId);
-
-    if (dto.portalPmProjectId !== undefined) {
-      const v = dto.portalPmProjectId;
-      if (v === null || v === '') {
-        dto.portalPmProjectId = null;
-      } else {
-        dto.portalPmProjectId = this.toObjectIdSafe(v);
-      }
-    }
-
-    if (dto.portalPassword !== undefined) {
-      const rawPassword = String(dto.portalPassword ?? '').trim();
-      dto.portalPasswordHash = rawPassword
-        ? await bcrypt.hash(rawPassword, 10)
-        : null;
-      delete dto.portalPassword;
-    }
-
-    this.normalizeAssociations(dto);
-
-    const dealAssocKeys = [
-      'associatedContacts',
-      'associatedCompanies',
-    ] as const;
-    for (const key of dealAssocKeys) {
-      if (dto[key] !== undefined) {
-        dto[key] = this.normalizeObjectIdArray(dto[key]);
-      }
-    }
-    if (dto.sharedWith !== undefined) {
-      dto.sharedWith = this.normalizeObjectIdArray(dto.sharedWith);
-    }
-
-    const oldDeal = await this.dealModel.findById(id).exec();
-    if (oldDeal && user && !this.canReadAllModuleData('deals', user)) {
-      const ownerName = this.ownerLabel(user);
-      const userId = this.userObjectId(user);
-      const isMineByOwner = String((oldDeal as any).dealOwner || '').trim() === ownerName;
-      const isMineByCreator =
-        !!userId && String((oldDeal as any).createdBy || '') === String(userId);
-      const isSharedWithMe =
-        !!userId &&
-        Array.isArray((oldDeal as any).sharedWith) &&
-        (oldDeal as any).sharedWith.some((u: any) => String(u) === String(userId));
-      if (!isMineByOwner && !isMineByCreator && !isSharedWithMe) {
-        throw new ForbiddenException('You can only edit your assigned deals.');
-      }
-    }
-    if (user) {
-      assertCrmPipelineScopedUpdate(user, {
-        writePerm: 'deals:write',
-        movePerm: 'deals:move_pipeline',
-        allowedKeys: new Set(['pipeline', 'stage', 'status', 'probability']),
-        patchKeys: dealPatchKeys,
-      });
-    }
-    if (oldDeal) {
-      const prev = oldDeal.toObject() as unknown as Record<string, unknown>;
-
-      // Proactive Healing: Ensure single-reference IDs are in the associated arrays
-      const currentAssocCo = this.objectIdListFromDocField(prev.associatedCompanies);
-      if (prev.organization && !currentAssocCo.some(id => String(id) === String(prev.organization))) {
-        currentAssocCo.push(this.toObjectIdSafe(prev.organization) as Types.ObjectId);
-      }
-      const currentAssocC = this.objectIdListFromDocField(prev.associatedContacts);
-      if (prev.contactPerson && !currentAssocC.some(id => String(id) === String(prev.contactPerson))) {
-        currentAssocC.push(this.toObjectIdSafe(prev.contactPerson) as Types.ObjectId);
-      }
-
-      const nextC =
-        dto.associatedContacts !== undefined
-          ? (dto.associatedContacts as Types.ObjectId[])
-          : currentAssocC;
-      const nextCo =
-        dto.associatedCompanies !== undefined
-          ? (dto.associatedCompanies as Types.ObjectId[])
-          : currentAssocCo;
-
-      // Persistence Fix: Ensure the healed lists are actually saved to the record
-      dto.associatedContacts = nextC;
-      dto.associatedCompanies = nextCo;
-
-      await this.syncDealAssociationMirrors(id, prev, {
-        associatedContacts: nextC,
-        associatedCompanies: nextCo,
-      });
-    }
-
-    await this.applyDealStageProbability(
-      dto,
-      oldDeal
-        ? {
-            pipeline: (oldDeal as any).pipeline,
-            stage: (oldDeal as any).stage,
-            probability: (oldDeal as any).probability,
-          }
-        : null,
-    );
-    this.normalizeDealPricingFields(dto);
-
-    const updated = await this.dealModel
-      .findByIdAndUpdate(id, dto, { returnDocument: 'after' })
-      .exec();
-
-    if (user && updated && oldDeal) {
-      const changes: string[] = [];
-      const fieldLabels: Record<string, string> = {
-        title: 'Deal Title',
-        stage: 'Stage',
-        dealValue: 'Amount',
-        expectedDealValue: 'Expected Value',
-        probability: 'Probability',
-        currency: 'Currency',
-        dealOwner: 'Owner',
-        nextStep: 'Next Step',
-        expectedClosureDate: 'Close Date',
-        pipeline: 'Pipeline',
-      };
-
-      for (const [field, label] of Object.entries(fieldLabels)) {
-        if (dto[field] !== undefined) {
-          const oldVal = (oldDeal as any)[field];
-          const newVal = dto[field];
-
-          const normalizedOld = this.strId(oldVal);
-          const normalizedNew = this.strId(newVal);
-
-          if (normalizedOld !== normalizedNew) {
-            if (['stage', 'pipeline', 'dealOwner'].includes(field)) {
-              changes.push(`${label} from '${oldVal || 'None'}' to '${newVal || 'None'}'`);
-            } else if (field === 'expectedClosureDate') {
-              changes.push(`${label} to ${new Date(newVal).toLocaleDateString()}`);
-            } else if (field === 'probability') {
-              changes.push(`${label} to ${newVal}%`);
-            } else {
-              changes.push(label);
-            }
-          }
-        }
-      }
-
-      const userName = `${user.firstName} ${user.lastName}`.trim() || 'A user';
-      const dealTitle = updated.title || 'this deal';
-
-      // Special Organization Link logs (keeping as per existing style)
-      if (dto.organization !== undefined && String(dto.organization || '') !== String(oldDeal.organization || '')) {
-        let orgName = 'None';
-        if (dto.organization) {
-          const org = await this.organizationModel.findById(dto.organization).select('name').lean().exec();
-          orgName = org?.name || 'Selected Organization';
-          await this.createActivity({
-            type: 'System',
-            title: 'Deal Linked to Company',
-            content: `${dealTitle} deal is linked to ${orgName} by ${userName}`,
-            relatedTo: updated._id,
-            relatedType: 'Deal',
-            author: user.userId || user._id,
-          });
-        }
-      }
-
-      // Special Contact Link logs
-      if (dto.contactPerson !== undefined && String(dto.contactPerson || '') !== String(oldDeal.contactPerson || '')) {
-        let cName = 'None';
-        if (dto.contactPerson) {
-          const c = await this.contactModel.findById(dto.contactPerson).select('firstName lastName').lean().exec();
-          cName = c ? `${c.firstName} ${c.lastName}` : 'Selected Contact';
-          await this.createActivity({
-            type: 'System',
-            title: 'Deal Linked to Contact',
-            content: `${dealTitle} deal is linked to ${cName} by ${userName}`,
-            relatedTo: updated._id,
-            relatedType: 'Deal',
-            author: user.userId || user._id,
-          });
-        }
-      }
-
-      if (changes.length > 0) {
-        let content = `${userName} updated `;
-        if (changes.length === 1) {
-          content += `${changes[0]} for deal ${dealTitle}`;
-        } else {
-          const last = changes.pop();
-          content += `${changes.join(', ')} and ${last} for deal ${dealTitle}`;
-        }
-
-        await this.createActivity({
-          type: 'System',
-          title: 'Deal Updated',
-          content,
-          relatedTo: updated._id,
-          relatedType: 'Deal',
-          author: user.userId || user._id,
-        });
-      }
-    }
-    if (updated) {
-      const rec = this.entityPlain(updated);
-      const prev = oldDeal ? this.entityPlain(oldDeal) : null;
-      this.workflowsService.dispatch({
-        trigger: 'deal_updated',
-        entityType: 'Deal',
-        entityId: updated._id,
-        record: rec,
-        previous: prev,
-        user,
-      });
-      if (
-        oldDeal &&
-        dto.stage !== undefined &&
-        oldDeal.stage !== updated.stage
-      ) {
-        this.workflowsService.dispatch({
-          trigger: 'deal_stage_changed',
-          entityType: 'Deal',
-          entityId: updated._id,
-          record: rec,
-          previous: prev,
-          user,
-        });
-        void this.dealEngagementAutomation.onDealStageChanged(
-          String(updated._id),
-          String(updated.stage),
-          String(oldDeal.stage),
-        );
-        this.notifySalesAgent({
-          trigger: 'deal_stage_changed',
-          recordType: 'Deal',
-          recordId: String(updated._id),
-          user,
-        });
-        await this.syncLeadFromDealSafe(updated);
-      }
-      if (oldDeal) {
-        if (
-          this.strId((oldDeal as any).pipeline) !==
-          this.strId((updated as any).pipeline)
-        ) {
-          this.workflowsService.dispatch({
-            trigger: 'deal_pipeline_changed',
-            entityType: 'Deal',
-            entityId: updated._id,
-            record: rec,
-            previous: prev,
-            user,
-          });
-        }
-        if ((oldDeal as any).dealValue !== (updated as any).dealValue) {
-          this.workflowsService.dispatch({
-            trigger: 'deal_value_changed',
-            entityType: 'Deal',
-            entityId: updated._id,
-            record: rec,
-            previous: prev,
-            user,
-          });
-        }
-        if ((oldDeal as any).dealOwner !== (updated as any).dealOwner) {
-          this.workflowsService.dispatch({
-            trigger: 'deal_owner_changed',
-            entityType: 'Deal',
-            entityId: updated._id,
-            record: rec,
-            previous: prev,
-            user,
-          });
-        }
-        if ((oldDeal as any).probability !== (updated as any).probability) {
-          this.workflowsService.dispatch({
-            trigger: 'deal_probability_changed',
-            entityType: 'Deal',
-            entityId: updated._id,
-            record: rec,
-            previous: prev,
-            user,
-          });
-        }
-      }
-    }
-    if (updated) await this.bustCrmCache('deals', String(updated._id));
-    return updated
-      ? (redactCrmRevenueForUser(
-          user,
-          updated.toObject ? updated.toObject() : updated,
-        ) as any)
-      : null;
-  }
-
   // --- Organizations ---
   async createOrganization(dto: any, user?: any): Promise<Organization> {
     const requestedOrgRecordId = dto.recordId;
@@ -4922,12 +3040,10 @@ export class CRMService {
     const prev = {
       associatedContacts: [],
       associatedLeads: [],
-      associatedDeals: [],
     };
     await this.syncOrganizationAssociationMirrors(org._id.toString(), prev, {
       associatedContacts: this.objectIdListFromDocField(org.associatedContacts),
       associatedLeads: this.objectIdListFromDocField(org.associatedLeads),
-      associatedDeals: this.objectIdListFromDocField(org.associatedDeals),
     });
 
     if (user) {
@@ -5072,7 +3188,6 @@ export class CRMService {
       .findById(resolvedId)
       .populate('associatedContacts', 'firstName lastName email jobTitle')
       .populate('associatedLeads', 'firstName lastName email organization stage')
-      .populate('associatedDeals', 'title stage dealValue probability')
       .lean()
       .exec();
     if (!org) return null;
@@ -5083,7 +3198,7 @@ export class CRMService {
       `^${this.escapeRegex(String(org.name || ''))}$`,
       'i',
     );
-    const [reverseContacts, reverseLeads, reverseDeals] = await Promise.all([
+    const [reverseContacts, reverseLeads] = await Promise.all([
       this.contactModel
         .find({
           $or: [
@@ -5104,18 +3219,6 @@ export class CRMService {
           ],
         })
         .select('firstName lastName email organization stage')
-        .limit(500)
-        .lean()
-        .exec(),
-      this.dealModel
-        .find({
-          $or: [
-            { associatedCompanies: resolvedId },
-            { organization: String(resolvedId) },
-            { organization: nameRegex },
-          ],
-        })
-        .select('title stage dealValue probability')
         .limit(500)
         .lean()
         .exec(),
@@ -5143,10 +3246,6 @@ export class CRMService {
         org.associatedLeads as any[],
         reverseLeads as any[],
       ),
-      associatedDeals: mergeById(
-        org.associatedDeals as any[],
-        reverseDeals as any[],
-      ),
     } as unknown as Organization;
   }
   async updateOrganization(
@@ -5162,7 +3261,6 @@ export class CRMService {
     const orgAssocKeys = [
       'associatedContacts',
       'associatedLeads',
-      'associatedDeals',
     ] as const;
     for (const key of orgAssocKeys) {
       if (dto[key] !== undefined) {
@@ -5182,14 +3280,9 @@ export class CRMService {
           dto.associatedLeads !== undefined
             ? (dto.associatedLeads as Types.ObjectId[])
             : this.objectIdListFromDocField(prev.associatedLeads);
-        const nextD =
-          dto.associatedDeals !== undefined
-            ? (dto.associatedDeals as Types.ObjectId[])
-            : this.objectIdListFromDocField(prev.associatedDeals);
         await this.syncOrganizationAssociationMirrors(id, prev, {
           associatedContacts: nextC,
           associatedLeads: nextL,
-          associatedDeals: nextD,
         });
       }
     }
@@ -5330,12 +3423,10 @@ export class CRMService {
 
     // Sync associations mirroring for new contact
     const prev = {
-      associatedDeals: [],
       associatedOrganizations: [],
       associatedContacts: [],
     };
     await this.syncContactAssociationMirrors(contact._id.toString(), prev, {
-      associatedDeals: this.objectIdListFromDocField(contact.associatedDeals),
       associatedOrganizations: this.objectIdListFromDocField(
         contact.associatedOrganizations,
       ),
@@ -5586,7 +3677,6 @@ export class CRMService {
       .populate('pipeline', 'name type stages')
       .populate('sourceLead', 'firstName lastName email status stage')
       .populate('associatedLeads', 'firstName lastName email status stage')
-      .populate('associatedDeals', 'title stage probability')
       .populate('associatedOrganizations', 'name website industry')
       .populate('associatedContacts', 'firstName lastName email')
       .exec();
@@ -5607,9 +3697,6 @@ export class CRMService {
         Array.isArray((doc as any).sharedWith) &&
         (doc as any).sharedWith.some((u: any) => String(u) === String(userId));
       if (!byOwner && !byCreator && !byShared) return null;
-    }
-    if (user && !this.canReadModule('deals', user)) {
-      (doc as any).associatedDeals = [];
     }
     return doc;
   }
@@ -5655,7 +3742,6 @@ export class CRMService {
 
     const assocKeys = [
       'associatedLeads',
-      'associatedDeals',
       'associatedOrganizations',
       'associatedContacts',
     ] as const;
@@ -5735,10 +3821,6 @@ export class CRMService {
         currentAssocOrgs.push(this.toObjectIdSafe(prev.organization) as Types.ObjectId);
       }
 
-      const nextDeals =
-        dto.associatedDeals !== undefined
-          ? (dto.associatedDeals as Types.ObjectId[])
-          : this.objectIdListFromDocField(prev.associatedDeals);
       const nextOrgs =
         dto.associatedOrganizations !== undefined
           ? (dto.associatedOrganizations as Types.ObjectId[])
@@ -5759,7 +3841,6 @@ export class CRMService {
           ? (dto.associatedContacts as Types.ObjectId[])
           : this.objectIdListFromDocField(prev.associatedContacts);
       await this.syncContactAssociationMirrors(id, prev, {
-        associatedDeals: nextDeals,
         associatedOrganizations: nextOrgs,
         associatedContacts: nextPeople,
       });
@@ -5867,7 +3948,7 @@ export class CRMService {
   // --- Activities ---
   /**
    * Coerce activity `relatedTo` to Mongo ObjectId: accepts 24-char hex _id or HubSpot-style
-   * `recordId` when `relatedType` identifies the module (Lead, Contact, Deal, Organization).
+   * `recordId` when `relatedType` identifies the module (Lead, Contact, Organization).
    */
   private async resolveActivityRelatedTo(
     raw: unknown,
@@ -5899,8 +3980,6 @@ export class CRMService {
     if (t === 'Lead') mongoId = await this.resolveDocumentId(this.leadModel, s);
     else if (t === 'Contact')
       mongoId = await this.resolveDocumentId(this.contactModel, s);
-    else if (t === 'Deal')
-      mongoId = await this.resolveDocumentId(this.dealModel, s);
     else if (t === 'Organization')
       mongoId = await this.resolveDocumentId(this.organizationModel, s);
     else if (t === 'Client')
@@ -5968,9 +4047,8 @@ export class CRMService {
 
       try {
         if (dto.relatedType === 'Lead') {
-          const [lead, deals, clients] = await Promise.all([
+          const [lead, clients] = await Promise.all([
             this.leadModel.findById(primaryOid).select('associatedOrganizations email firstName lastName').lean().exec(),
-            this.dealModel.find({ lead: primaryOid }).select('_id').lean().exec(),
             this.clientModel.find({ sourceLead: primaryOid }).select('_id').lean().exec(),
           ]);
           if (lead) {
@@ -5987,7 +4065,6 @@ export class CRMService {
               if (contact) involved.push({ id: contact._id as Types.ObjectId, type: 'Contact' });
             }
           }
-          deals.forEach(d => involved.push({ id: d._id as Types.ObjectId, type: 'Deal' }));
           clients.forEach(c => involved.push({ id: c._id as Types.ObjectId, type: 'Client' }));
         } else if (dto.relatedType === 'Contact') {
           const contact = await this.contactModel.findById(primaryOid).select('associatedOrganizations sourceLead associatedLeads email').lean().exec();
@@ -6017,28 +4094,15 @@ export class CRMService {
               clientsByEmail.forEach(c => involved.push({ id: c._id as Types.ObjectId, type: 'Client' }));
             }
           }
-        } else if (dto.relatedType === 'Deal') {
-          const deal = await this.dealModel.findById(primaryOid).select('lead contactPerson associatedContacts associatedCompanies').lean().exec();
-          if (deal) {
-            if (deal.lead) involved.push({ id: deal.lead, type: 'Lead' });
-            if (deal.contactPerson) involved.push({ id: deal.contactPerson, type: 'Contact' });
-            if (deal.associatedContacts?.length) {
-              deal.associatedContacts.forEach(id => involved.push({ id: id as Types.ObjectId, type: 'Contact' }));
-            }
-            if (deal.associatedCompanies?.length) {
-              deal.associatedCompanies.forEach(id => involved.push({ id: id as Types.ObjectId, type: 'Organization' }));
-            }
-          }
         } else if (dto.relatedType === 'Organization') {
           const org = await this.organizationModel.findById(primaryOid).select('name associatedContacts').lean().exec();
           if (org) {
             // Find related Leads by ID link AND by Company Name case-insensitive fallback
-            const [leadsByOid, leadsByName, contactsByOid, contactsByName, dealsByOrg, clientsByOrg] = await Promise.all([
+            const [leadsByOid, leadsByName, contactsByOid, contactsByName, clientsByOrg] = await Promise.all([
               this.leadModel.find({ associatedOrganizations: primaryOid }).select('_id').lean().exec(),
               this.leadModel.find({ organization: { $regex: new RegExp(`^${org.name}$`, 'i') } }).select('_id').lean().exec(),
               this.contactModel.find({ associatedOrganizations: primaryOid }).select('_id').lean().exec(),
               this.contactModel.find({ organization: { $regex: new RegExp(`^${org.name}$`, 'i') } }).select('_id').lean().exec(),
-              this.dealModel.find({ associatedCompanies: primaryOid }).select('_id').lean().exec(),
               this.clientModel.find({ organization: primaryOid }).select('_id').lean().exec(),
             ]);
 
@@ -6046,7 +4110,6 @@ export class CRMService {
             leadsByName.forEach(l => involved.push({ id: l._id as Types.ObjectId, type: 'Lead' }));
             contactsByOid.forEach(c => involved.push({ id: c._id as Types.ObjectId, type: 'Contact' }));
             contactsByName.forEach(c => involved.push({ id: c._id as Types.ObjectId, type: 'Contact' }));
-            dealsByOrg.forEach(d => involved.push({ id: d._id as Types.ObjectId, type: 'Deal' }));
             clientsByOrg.forEach(c => involved.push({ id: c._id as Types.ObjectId, type: 'Client' }));
           }
         } else if (dto.relatedType === 'Client') {
@@ -6160,7 +4223,7 @@ export class CRMService {
 
   /**
    * Identifies all entities related to the given primary entity for activity rollup.
-   * Ensures consistency across Leads, Contacts, Deals, Organizations, and Clients.
+   * Ensures consistency across Leads, Contacts, Organizations, and Clients.
    * Optimized with lean queries and parallel processing.
    */
   private async getRelatedEntitiesForRollup(
@@ -6189,9 +4252,8 @@ export class CRMService {
               }),
             );
           }
-          // Parallel lookups for Deals, Contacts, and Clients
-          const [deals, contacts, clients] = await Promise.all([
-            this.dealModel.find({ lead: primaryId }).select('_id').lean().exec(),
+          // Parallel lookups for Contacts and Clients
+          const [contacts, clients] = await Promise.all([
             this.contactModel
               .find({
                 $or: [{ associatedLeads: primaryId }, { email: lead.email }],
@@ -6208,9 +4270,6 @@ export class CRMService {
               .exec(),
           ]);
 
-          deals.forEach((d) =>
-            results.push({ relatedTo: d._id as Types.ObjectId, relatedType: 'Deal' }),
-          );
           contacts.forEach((c) =>
             results.push({
               relatedTo: c._id as Types.ObjectId,
@@ -6277,7 +4336,7 @@ export class CRMService {
       } else if (primaryType === 'Organization') {
         const org = await this.organizationModel
           .findById(primaryId)
-          .select('name associatedContacts associatedLeads associatedDeals')
+          .select('name associatedContacts associatedLeads')
           .lean()
           .exec();
         if (org) {
@@ -6288,10 +4347,6 @@ export class CRMService {
                 relatedType: 'Contact',
               }),
             );
-          if (org.associatedDeals?.length)
-            org.associatedDeals.forEach((id) =>
-              results.push({ relatedTo: id as Types.ObjectId, relatedType: 'Deal' }),
-            );
           if (org.associatedLeads?.length)
             org.associatedLeads.forEach((id) =>
               results.push({
@@ -6300,18 +4355,17 @@ export class CRMService {
               }),
             );
 
-          // Find Leads, Contacts, Clients, and Deals linked by ID or Name
+          // Find Leads, Contacts, and Clients linked by ID or Name
           const orgNameRegex = new RegExp(
             `^${this.escapeRegex(String(org.name || ''))}$`,
             'i',
           );
-          const [leadsByOid, leadsByName, contactsByOrg, contactsByName, clientsByOrg, dealsByOrg] = await Promise.all([
+          const [leadsByOid, leadsByName, contactsByOrg, contactsByName, clientsByOrg] = await Promise.all([
             this.leadModel.find({ associatedOrganizations: primaryId }).select('_id').lean().exec(),
             this.leadModel.find({ organization: { $regex: orgNameRegex } }).select('_id').lean().exec(),
             this.contactModel.find({ associatedOrganizations: primaryId }).select('_id').lean().exec(),
             this.contactModel.find({ organization: { $regex: orgNameRegex } }).select('_id').lean().exec(),
             this.clientModel.find({ organization: primaryId }).select('_id').lean().exec(),
-            this.dealModel.find({ associatedCompanies: primaryId }).select('_id').lean().exec(),
           ]);
 
           leadsByOid.forEach((l) => results.push({ relatedTo: l._id as Types.ObjectId, relatedType: 'Lead' }));
@@ -6319,32 +4373,6 @@ export class CRMService {
           contactsByOrg.forEach((c) => results.push({ relatedTo: c._id as Types.ObjectId, relatedType: 'Contact' }));
           contactsByName.forEach((c) => results.push({ relatedTo: c._id as Types.ObjectId, relatedType: 'Contact' }));
           clientsByOrg.forEach((cl) => results.push({ relatedTo: cl._id as Types.ObjectId, relatedType: 'Client' }));
-          dealsByOrg.forEach((d) => results.push({ relatedTo: d._id as Types.ObjectId, relatedType: 'Deal' }));
-        }
-      } else if (primaryType === 'Deal') {
-        const deal = await this.dealModel
-          .findById(primaryId)
-          .select('lead contactPerson associatedContacts associatedCompanies')
-          .lean()
-          .exec();
-        if (deal) {
-          if (deal.lead) results.push({ relatedTo: deal.lead, relatedType: 'Lead' });
-          if (deal.contactPerson)
-            results.push({ relatedTo: deal.contactPerson, relatedType: 'Contact' });
-          if (deal.associatedContacts?.length)
-            deal.associatedContacts.forEach((id) =>
-              results.push({
-                relatedTo: id as Types.ObjectId,
-                relatedType: 'Contact',
-              }),
-            );
-          if (deal.associatedCompanies?.length)
-            deal.associatedCompanies.forEach((id) =>
-              results.push({
-                relatedTo: id as Types.ObjectId,
-                relatedType: 'Organization',
-              }),
-            );
         }
       } else if (primaryType === 'Client') {
         const client = await this.clientModel
@@ -6437,7 +4465,7 @@ export class CRMService {
         .sort({ createdAt: -1 })
         .exec();
 
-      // One physical inbound email can be logged on a lead plus its related deal/contact.
+      // One physical inbound email can be logged on a lead plus its related contact.
       // Rollup intentionally returns all related records, so collapse only inbound-email
       // copies here. This also fixes historical duplicate timeline rows without deleting data.
       const seenInboundMessages = new Set<string>();
@@ -6504,7 +4532,7 @@ export class CRMService {
   async convertLead(
     leadId: string,
     dto: {
-      type: 'contact' | 'organization' | 'deal' | 'client';
+      type: 'contact' | 'organization' | 'client';
       pipelineId?: string;
       stage?: string;
     },
@@ -6634,122 +4662,6 @@ export class CRMService {
         })
         .exec();
       result = { type: 'organization', entity: org };
-    } else if (dto.type === 'deal') {
-      const pipelineId = user?.assignedDealsPipeline || dto.pipelineId;
-      let stage = dto.stage || 'Qualification';
-      let probability = 20;
-      if (pipelineId) {
-        const pipelineDoc = await this.pipelinesService.findOne(pipelineId);
-        if (pipelineDoc?.stages?.length) {
-          const defaultStageObj =
-            pipelineDoc.stages.find((s: any) => s.isDefault) ||
-            pipelineDoc.stages[0];
-          stage = defaultStageObj?.name || stage;
-          probability = resolveStageProbability(
-            pipelineDoc.stages,
-            stage,
-            Number(defaultStageObj?.probability) || 20,
-          );
-        }
-      }
-
-      // Try to link or sync contact (same lead linkage as contact conversion)
-      const email = (lead.email || '').trim();
-      let contactId: Types.ObjectId | undefined;
-      let existingContactForDeal: ContactDocument | null = null;
-      if (email && email.includes('@')) {
-        const emRegex = this.emailRegexForMatch(email);
-        existingContactForDeal = await this.contactModel
-          .findOne({ email: emRegex })
-          .exec();
-        if (existingContactForDeal) {
-          contactId = existingContactForDeal._id;
-          const cf = this.mergeCustomFieldsMaps(
-            existingContactForDeal.customFields,
-            lead.customFields,
-          );
-          const patch: Record<string, unknown> = {
-            firstName: lead.firstName,
-            lastName: lead.lastName || '',
-            email,
-            phone: lead.phone,
-            mobileNo: lead.mobileNo,
-            jobTitle: lead.jobTitle,
-            organization: lead.organization,
-          };
-          if (Object.keys(cf).length) patch.customFields = cf;
-          await this.contactModel
-            .findByIdAndUpdate(existingContactForDeal._id, patch)
-            .exec();
-        }
-      }
-      if (!contactId) {
-        try {
-          const cfNew = this.mergeCustomFieldsMaps(undefined, lead.customFields);
-          const newContact = await this.contactModel.create({
-            firstName: lead.firstName,
-            lastName: lead.lastName,
-            email: lead.email,
-            phone: lead.phone,
-            mobileNo: lead.mobileNo,
-            organization: lead.organization,
-            jobTitle: lead.jobTitle,
-            ...(Object.keys(cfNew).length ? { customFields: cfNew } : {}),
-            recordId: await this.nextRecordId(this.contactModel),
-          });
-          contactId = newContact._id;
-        } catch (err) {
-          console.error(
-            'Failed to auto-create contact during deal conversion',
-            err,
-          );
-        }
-      }
-
-      const deal = await this.dealModel.create({
-        title: `${lead.firstName} ${lead.lastName}`,
-        organization: lead.organization,
-        contactPerson: contactId,
-        dealValue: lead.annualRevenue || 0,
-        pipeline: pipelineId ? new Types.ObjectId(pipelineId) : undefined,
-        stage,
-        probability,
-        lead: new Types.ObjectId(resolvedLeadId),
-        associatedCompanies: lead.associatedOrganizations || [],
-        dealOwner: lead.leadOwner,
-        createdBy: user
-          ? new Types.ObjectId(user.userId || user._id)
-          : undefined,
-        expectedClosureDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        recordId: await this.nextRecordId(this.dealModel),
-      });
-
-      if (contactId) {
-        const leadOid = new Types.ObjectId(resolvedLeadId);
-        const linkUpdate: Record<string, unknown> = {
-          $addToSet: {
-            associatedLeads: leadOid,
-            associatedDeals: deal._id as Types.ObjectId,
-          },
-        };
-        const cur = await this.contactModel
-          .findById(contactId)
-          .select('sourceLead')
-          .lean()
-          .exec();
-        if (cur && !(cur as { sourceLead?: Types.ObjectId }).sourceLead) {
-          linkUpdate.$set = { sourceLead: leadOid };
-        }
-        await this.contactModel.findByIdAndUpdate(contactId, linkUpdate).exec();
-      }
-
-      await this.leadModel
-        .findByIdAndUpdate(resolvedLeadId, {
-          converted: true,
-          stage: 'Converted',
-        })
-        .exec();
-      result = { type: 'deal', entity: deal };
     } else if (dto.type === 'client') {
       const email = (lead.email || '').trim();
       let client: any = null;
@@ -6798,7 +4710,7 @@ export class CRMService {
 
     if (user && result) {
       const leadFullName = `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'lead';
-      // Professional Transition Log (Lead -> Deal/Client)
+      // Professional Transition Log (Lead -> Contact/Organization/Client)
       await this.createActivity({
         type: 'System',
         title: 'Lead Life-cycle Transition',
@@ -6821,324 +4733,6 @@ export class CRMService {
 
     if (!result) throw new Error('Invalid convert type');
     return result;
-  }
-
-  async convertDeal(dealId: string, user?: any) {
-    const resolvedDealId = await this.resolveDocumentId(this.dealModel, dealId);
-    if (!resolvedDealId) throw new Error('Deal not found');
-    const deal = await this.dealModel.findById(resolvedDealId).lean().exec();
-    if (!deal) throw new Error('Deal not found');
-
-    // Safe manual population for use during conversion
-    let org: any = null;
-    let contact: any = null;
-
-    if (deal.organization && Types.ObjectId.isValid(deal.organization)) {
-      org = await this.organizationModel
-        .findById(deal.organization)
-        .lean()
-        .exec();
-    }
-    if (deal.contactPerson && Types.ObjectId.isValid(deal.contactPerson)) {
-      contact = await this.contactModel
-        .findById(deal.contactPerson)
-        .lean()
-        .exec();
-    }
-
-    // Create the Client
-    const dealLeadId = (deal as { lead?: Types.ObjectId }).lead;
-    const client = await this.clientModel.create({
-      name: (deal as any).title || org?.name || 'Unnamed Client',
-      email: contact?.email || undefined,
-      phone: contact?.mobileNo || contact?.phone || '',
-      organization: org?._id,
-      status: 'active',
-      assignedTo: user
-        ? ([this.toObjectIdSafe(user.userId || user._id)].filter(
-          Boolean,
-        ) as Types.ObjectId[])
-        : [],
-      ...(dealLeadId ? { sourceLead: dealLeadId } : {}),
-    } as any);
-
-    // Update Deal Stage to 'Won' (or 'Closed Won')
-    // We'll try to find a stage named 'Won' or 'Closed Won' in the same pipeline
-    let targetStage = 'Won';
-    if (deal.pipeline) {
-      const pipe = await this.pipelinesService.findOne(String(deal.pipeline));
-      if (pipe?.stages?.length) {
-        const wonStage = pipe.stages.find((s) =>
-          s.name.toLowerCase().includes('won'),
-        );
-        if (wonStage) targetStage = wonStage.name;
-      }
-    }
-    await this.dealModel
-      .findByIdAndUpdate(resolvedDealId, {
-        stage: targetStage,
-        probability: 100,
-      })
-      .exec();
-    await this.syncLeadFromDealSafe({ ...deal, stage: targetStage });
-
-    if (user) {
-      const userName = `${user.firstName} ${user.lastName}`;
-      await this.createActivity({
-        type: 'System',
-        title: 'Deal Converted to Client',
-        content: `${userName} converted this deal "${deal.title}" to a Client profile.`,
-        relatedTo: deal._id as any,
-        relatedType: 'Deal',
-        author: user?.userId || user?._id || (deal as any).createdBy,
-      });
-
-      await this.createActivity({
-        type: 'System',
-        title: 'Client Profile Established',
-        content: `${userName} established this client profile by converting Deal: ${deal.title}.`,
-        relatedTo: client._id as any,
-        relatedType: 'Client',
-        author: user?.userId || user?._id || (deal as any).createdBy,
-      });
-    }
-
-    return { type: 'client', entity: client };
-  }
-
-  /**
-   * Reverse of lead → deal: reopen the source lead (or create one from the deal/contact)
-   * and mark the deal Closed Lost so the prospect can be worked in the lead pipeline again.
-   */
-  async convertDealToLead(
-    dealId: string,
-    dto?: { pipelineId?: string; stage?: string },
-    user?: any,
-  ) {
-    const resolvedDealId = await this.resolveDocumentId(this.dealModel, dealId);
-    if (!resolvedDealId) throw new NotFoundException('Deal not found');
-    const deal = await this.dealModel.findById(resolvedDealId).exec();
-    if (!deal) throw new NotFoundException('Deal not found');
-
-    if (user) {
-      if (user.assignedDealsPipeline) {
-        if (
-          this.strId((deal as any).pipeline) !==
-          this.strId(user.assignedDealsPipeline)
-        ) {
-          throw new ForbiddenException(
-            'Deal is not in your assigned pipeline.',
-          );
-        }
-      }
-      if (!this.canReadAllModuleData('deals', user)) {
-        const ownerName = this.ownerLabel(user);
-        const userId = this.userObjectId(user);
-        const isMineByOwner =
-          String((deal as any).dealOwner || '').trim() === ownerName;
-        const isMineByCreator =
-          !!userId && String((deal as any).createdBy || '') === String(userId);
-        const isSharedWithMe =
-          !!userId &&
-          Array.isArray((deal as any).sharedWith) &&
-          (deal as any).sharedWith.some(
-            (u: any) => String(u) === String(userId),
-          );
-        if (!isMineByOwner && !isMineByCreator && !isSharedWithMe) {
-          throw new ForbiddenException(
-            'You can only convert your assigned deals.',
-          );
-        }
-      }
-    }
-
-    let org: any = null;
-    let contact: any = null;
-    if (deal.organization && Types.ObjectId.isValid(String(deal.organization))) {
-      org = await this.organizationModel
-        .findById(deal.organization)
-        .lean()
-        .exec();
-    }
-    if (deal.contactPerson && Types.ObjectId.isValid(String(deal.contactPerson))) {
-      contact = await this.contactModel
-        .findById(deal.contactPerson)
-        .lean()
-        .exec();
-    }
-
-    const pipelineId =
-      user?.assignedLeadsPipeline || dto?.pipelineId || undefined;
-    let stage = dto?.stage || 'New';
-    let resolvedPipelineId: Types.ObjectId | undefined;
-    if (pipelineId) {
-      const pipelineDoc = await this.pipelinesService.findOne(String(pipelineId));
-      if (pipelineDoc?.stages?.length) {
-        const defaultStageObj =
-          pipelineDoc.stages.find(
-            (s: any) =>
-              s.isDefault &&
-              String(s.name || '').toLowerCase() !== 'converted',
-          ) ||
-          pipelineDoc.stages.find(
-            (s: any) => String(s.name || '').toLowerCase() !== 'converted',
-          ) ||
-          pipelineDoc.stages[0];
-        if (!dto?.stage) stage = defaultStageObj?.name || stage;
-        resolvedPipelineId = new Types.ObjectId(String(pipelineId));
-      }
-    } else {
-      const leadPipes = await this.pipelinesService.findAll('leads');
-      const defaultPipe =
-        leadPipes.find((p: any) => p.isDefault) || leadPipes[0];
-      if ((defaultPipe as any)?._id) {
-        resolvedPipelineId = new Types.ObjectId(String((defaultPipe as any)._id));
-        if ((defaultPipe as any).stages?.length && !dto?.stage) {
-          const defaultStageObj =
-            (defaultPipe as any).stages.find(
-              (s: any) =>
-                s.isDefault &&
-                String(s.name || '').toLowerCase() !== 'converted',
-            ) ||
-            (defaultPipe as any).stages.find(
-              (s: any) => String(s.name || '').toLowerCase() !== 'converted',
-            ) ||
-            (defaultPipe as any).stages[0];
-          stage = defaultStageObj?.name || stage;
-        }
-      }
-    }
-
-    const dealOid = deal._id as Types.ObjectId;
-    let lead: any = null;
-    const sourceLeadId = (deal as { lead?: Types.ObjectId }).lead;
-
-    if (sourceLeadId) {
-      lead = await this.leadModel.findById(sourceLeadId).exec();
-    }
-
-    if (lead) {
-      const update: Record<string, unknown> = {
-        $addToSet: { associatedDeals: dealOid },
-      };
-      if (lead.converted) {
-        const patch: Record<string, unknown> = {
-          converted: false,
-          stage,
-          status: stage,
-        };
-        if (resolvedPipelineId) patch.pipeline = resolvedPipelineId;
-        update.$set = patch;
-      }
-      await this.leadModel.findByIdAndUpdate(lead._id, update).exec();
-      lead = await this.leadModel.findById(lead._id).exec();
-    } else {
-      const titleParts = String(deal.title || '')
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-      const firstName =
-        (contact?.firstName || '').trim() ||
-        titleParts[0] ||
-        'Unknown';
-      const lastName =
-        (contact?.lastName || '').trim() ||
-        (contact?.firstName ? '' : titleParts.slice(1).join(' ')) ||
-        '';
-      const orgName =
-        (org?.name || '').trim() ||
-        (typeof deal.organization === 'string' &&
-        !Types.ObjectId.isValid(deal.organization)
-          ? deal.organization.trim()
-          : '') ||
-        (contact?.organization || '').trim() ||
-        undefined;
-
-      const leadDto: Record<string, unknown> = {
-        firstName,
-        lastName,
-        email: contact?.email || undefined,
-        phone: contact?.phone || undefined,
-        mobileNo: contact?.mobileNo || undefined,
-        jobTitle: contact?.jobTitle || undefined,
-        organization: orgName,
-        annualRevenue: deal.dealValue || undefined,
-        pipeline: resolvedPipelineId,
-        stage,
-        status: stage,
-        converted: false,
-        leadOwner: deal.dealOwner,
-        associatedDeals: [dealOid],
-        ...(org?._id
-          ? { associatedOrganizations: [org._id] }
-          : {}),
-        ...(contact?._id
-          ? { associatedContacts: [contact._id] }
-          : {}),
-      };
-
-      lead = await this.createLead(leadDto, user);
-      await this.dealModel
-        .findByIdAndUpdate(resolvedDealId, {
-          lead: lead._id,
-        })
-        .exec();
-      if (contact?._id) {
-        await this.contactModel
-          .findByIdAndUpdate(contact._id, {
-            $addToSet: {
-              associatedLeads: lead._id,
-              associatedDeals: dealOid,
-            },
-          })
-          .exec();
-      }
-    }
-
-    let targetStage = 'Closed Lost';
-    if (deal.pipeline) {
-      const pipe = await this.pipelinesService.findOne(String(deal.pipeline));
-      if (pipe?.stages?.length) {
-        const lostStage = pipe.stages.find((s) => {
-          const n = String(s.name || '').toLowerCase();
-          return n.includes('lost') || n === 'closed lost';
-        });
-        if (lostStage) targetStage = lostStage.name;
-      }
-    }
-    await this.dealModel
-      .findByIdAndUpdate(resolvedDealId, {
-        stage: targetStage,
-        probability: 0,
-        lead: lead._id,
-        closedDate: new Date(),
-      })
-      .exec();
-
-    await this.bustCrmCache('deals', resolvedDealId);
-    await this.bustCrmCache('leads', String(lead._id));
-
-    if (user) {
-      const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
-      await this.createActivity({
-        type: 'System',
-        title: 'Deal Converted to Lead',
-        content: `${userName} converted deal "${deal.title}" back to a lead.`,
-        relatedTo: dealOid as any,
-        relatedType: 'Deal',
-        author: user?.userId || user?._id || (deal as any).createdBy,
-      });
-      await this.createActivity({
-        type: 'System',
-        title: 'Lead Reopened from Deal',
-        content: `${userName} reopened this lead by converting Deal: ${deal.title}.`,
-        relatedTo: lead._id as any,
-        relatedType: 'Lead',
-        author: user?.userId || user?._id || (deal as any).createdBy,
-      });
-    }
-
-    return { type: 'lead', entity: lead, dealStage: targetStage };
   }
 
   /**
@@ -7244,27 +4838,6 @@ export class CRMService {
     };
   }
 
-  async removeDeal(id: string, deletedBy?: string) {
-    const oid = await this.resolveDocumentId(this.dealModel, id);
-    if (!oid) return null;
-    await this.bustCrmCache('deals', oid);
-    return this.dealModel
-      .findByIdAndUpdate(oid, softDeleteUpdate(deletedBy), { new: true })
-      .exec();
-  }
-  async bulkRemoveDeals(ids: string[], deletedBy?: string) {
-    await this.bustCrmCache('deals');
-    const oids = ids
-      .map((i) => this.toObjectIdSafe(i))
-      .filter((o): o is Types.ObjectId => !!o);
-    const result = await this.dealModel
-      .updateMany({ _id: { $in: oids } }, softDeleteUpdate(deletedBy))
-      .exec();
-    return {
-      modifiedCount: result.modifiedCount,
-      deletedCount: result.modifiedCount,
-    };
-  }
   async removeOrganization(id: string, deletedBy?: string) {
     const oid = await this.resolveDocumentId(this.organizationModel, id);
     if (!oid) return null;
@@ -7376,29 +4949,6 @@ export class CRMService {
           'status',
           'email',
           'mobileNo',
-          'createdAt',
-        ];
-        break;
-      case 'deals':
-        data = await this.dealModel
-          .find(
-            selectedObjectIds.length
-              ? { _id: { $in: selectedObjectIds } }
-              : pipelineId
-              ? { pipeline: pipelineId }
-              : {},
-          )
-          .sort({ createdAt: -1 })
-          .limit(CRM_MAX_EXPORT_ROWS)
-          .maxTimeMS(CRM_LIST_MAX_TIME_MS)
-          .lean();
-        headers = [
-          '_id',
-          'title',
-          'dealValue',
-          'stage',
-          'probability',
-          'expectedClosureDate',
           'createdAt',
         ];
         break;
@@ -7584,20 +5134,6 @@ export class CRMService {
       if (byPhone) return byPhone;
     }
     return null;
-  }
-
-  private async findExistingDealForImport(
-    mappedData: Record<string, unknown>,
-  ): Promise<DealDocument | null> {
-    const title = String(mappedData.title || '').trim();
-    if (!title) return null;
-    const filter: Record<string, unknown> = {
-      title: { $regex: new RegExp(`^${this.escapeRegex(title)}$`, 'i') },
-    };
-    if (mappedData.contactPerson && Types.ObjectId.isValid(String(mappedData.contactPerson))) {
-      filter.contactPerson = new Types.ObjectId(String(mappedData.contactPerson));
-    }
-    return this.dealModel.findOne(filter).exec();
   }
 
   private buildImportPersonMergePatch(
@@ -7935,106 +5471,6 @@ export class CRMService {
                   c._id as Types.ObjectId,
                 );
             }
-            rowOutcome = 'created';
-          }
-        } else if (type === 'deals') {
-          if (!mapping) {
-            mappedData.title =
-              row.Title || row.title || row.Name || row.name || 'Untitled Deal';
-            mappedData.dealValue = Number(
-              row.Value || row.value || row.Amount || row.amount || 0,
-            );
-            mappedData.stage = row.Stage || row.stage || 'Qualification';
-            mappedData.probability = Number(row.Probability || 20);
-            mappedData.organization =
-              row.Organization ||
-              row.organization ||
-              row.Company ||
-              row.company;
-          }
-
-          // Fix: Ensure pipeline and stage for deals visibility
-          if (!mappedData.pipeline || !mappedData.stage) {
-            const pipelines = await this.pipelinesService.findAll('deals');
-            const defaultPipeline =
-              pipelines.find((p) => (p as any).isDefault) || pipelines[0];
-            if (defaultPipeline) {
-              mappedData.pipeline = (defaultPipeline as any)._id;
-              if (!mappedData.stage) {
-                const firstStage = (defaultPipeline as any).stages?.sort(
-                  (a: any, b: any) => a.order - b.order,
-                )[0];
-                if (firstStage) mappedData.stage = firstStage.name;
-              }
-            }
-          }
-
-          const dealContactId = await this.findContactIdForDealImport(mappedData);
-          this.stripImportRoutingFields(mappedData);
-          if (dealContactId) mappedData.contactPerson = dealContactId;
-
-          const dealRequestedRid =
-            mappedData.recordId != null &&
-              String(mappedData.recordId).trim() !== ''
-              ? String(mappedData.recordId).trim()
-              : null;
-          delete mappedData.recordId;
-          const existingDeal = await this.findExistingDealForImport(mappedData);
-          if (existingDeal && duplicateStrategy === 'skip') {
-            rowOutcome = 'skipped';
-          } else if (
-            existingDeal &&
-            (duplicateStrategy === 'merge' || duplicateStrategy === 'replace')
-          ) {
-            const existingLean = existingDeal.toObject
-              ? existingDeal.toObject()
-              : (existingDeal as unknown as Record<string, unknown>);
-            const patch =
-              duplicateStrategy === 'merge'
-                ? this.buildImportPersonMergePatch(
-                    existingLean,
-                    mappedData,
-                    [
-                      'title',
-                      'dealValue',
-                      'stage',
-                      'probability',
-                      'organization',
-                      'contactPerson',
-                      'pricingType',
-                      'contractMonths',
-                      'expectedDealValue',
-                      'dealOwner',
-                      'expectedClosureDate',
-                      'closedDate',
-                      'nextStep',
-                      'currency',
-                      'exchangeRate',
-                    ],
-                  )
-                : this.buildImportPersonReplacePatch(mappedData);
-            const mergedCf =
-              duplicateStrategy === 'replace'
-                ? { ...customFields }
-                : this.mergeCustomFieldsMaps(
-                    existingDeal.customFields,
-                    customFields,
-                  );
-            await this.dealModel.updateOne(
-              { _id: existingDeal._id },
-              { $set: { ...patch, customFields: mergedCf } },
-            );
-            rowOutcome =
-              duplicateStrategy === 'merge' ? 'merged' : 'replaced';
-          } else {
-            await this.dealModel.create({
-              ...mappedData,
-              customFields,
-              recordId: await this.nextRecordId(
-                this.dealModel,
-                dealRequestedRid,
-              ),
-            });
             rowOutcome = 'created';
           }
         } else if (type === 'contacts') {
@@ -8428,7 +5864,7 @@ export class CRMService {
       // Log a single activity for the import session
       // We don't have a single entity to relate this to, but we can log it as an audit event
       // The AuditLogInterceptor already handles the audit log.
-      // For HubSpot-like feed, we might want to log it if it was for a specific organization/deal,
+      // For HubSpot-like feed, we might want to log it if it was for a specific organization,
       // but bulk imports are usually general.
     }
     return { count };
@@ -8689,96 +6125,6 @@ export class CRMService {
     }
   }
 
-  async getDealMessages(dealId: string) {
-    if (!dealId) {
-      throw new BadRequestException('Deal ID is required');
-    }
-    return this.portalChatMessageModel
-      .find({ deal: new Types.ObjectId(dealId) })
-      .sort({ createdAt: 1 })
-      .exec();
-  }
-
-  async sendDealMessage(dealId: string, adminId: string, adminName: string, text: string) {
-    const cleanText = String(text || '').trim();
-    if (!cleanText) {
-      throw new BadRequestException('Message text is required');
-    }
-    const message = new this.portalChatMessageModel({
-      deal: new Types.ObjectId(dealId),
-      senderType: 'admin',
-      senderId: adminId,
-      senderName: adminName || 'Admin',
-      text: cleanText,
-    });
-    const saved = await message.save();
-    try {
-      this.realtimeGateway.server.to(`deal-chat:${dealId}`).emit('deal-chat:message', saved);
-    } catch (err) {
-      console.error('Failed to emit deal-chat:message event', err);
-    }
-
-    try {
-      const activity = new this.activityModel({
-        type: 'Note',
-        title: 'Portal Chat (Sent by Admin)',
-        content: `💬 **Portal Chat:** ${cleanText}`,
-        relatedTo: new Types.ObjectId(dealId),
-        relatedType: 'Deal',
-        involvedEntities: [{ id: new Types.ObjectId(dealId), type: 'Deal' }],
-        metadata: {
-          source: 'client-portal',
-          senderName: adminName || 'Admin',
-        },
-      });
-      await activity.save();
-    } catch (err) {
-      console.error('Failed to save activity log for portal chat', err);
-    }
-
-    return saved;
-  }
-
-  async sendClientPortalChatMessage(dealId: string, text: string) {
-    const cleanText = String(text || '').trim();
-    if (!cleanText) {
-      throw new BadRequestException('Message text is required');
-    }
-    const message = new this.portalChatMessageModel({
-      deal: new Types.ObjectId(dealId),
-      senderType: 'client',
-      senderId: 'client',
-      senderName: 'Client',
-      text: cleanText,
-    });
-    const saved = await message.save();
-    try {
-      this.realtimeGateway.server.to(`deal-chat:${dealId}`).emit('deal-chat:message', saved);
-    } catch (err) {
-      console.error('Failed to emit deal-chat:message event', err);
-    }
-
-    try {
-      const activity = new this.activityModel({
-        type: 'Note',
-        title: 'Portal Chat (Received from Client)',
-        content: `💬 **Portal Chat:** ${cleanText}`,
-        relatedTo: new Types.ObjectId(dealId),
-        relatedType: 'Deal',
-        involvedEntities: [{ id: new Types.ObjectId(dealId), type: 'Deal' }],
-        metadata: {
-          source: 'client-portal',
-          senderName: 'Client',
-        },
-      });
-      await activity.save();
-    } catch (err) {
-      console.error('Failed to save activity log for portal chat', err);
-    }
-
-    return saved;
-  }
-
   /** CEO dashboard: pipeline breakdown + per-rep lead creation and outreach sends. */
   async getExecutiveCrmPulse(periodDays: number) {
     const days = Math.min(Math.max(Number(periodDays) || 30, 1), 365);
@@ -8786,24 +6132,12 @@ export class CRMService {
     periodStart.setUTCDate(periodStart.getUTCDate() - days);
     periodStart.setUTCHours(0, 0, 0, 0);
 
-    const [leadStages, dealStages, leadsByUser, emailsByUser, outreachByDay] =
+    const [leadStages, leadsByUser, emailsByUser, outreachByDay] =
       await Promise.all([
       this.leadModel
         .aggregate([
           { $match: { converted: { $ne: true } } },
           { $group: { _id: '$stage', count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
-        ])
-        .exec(),
-      this.dealModel
-        .aggregate([
-          {
-            $group: {
-              _id: '$stage',
-              count: { $sum: 1 },
-              value: { $sum: { $ifNull: ['$dealValue', 0] } },
-            },
-          },
           { $sort: { count: -1 } },
         ])
         .exec(),
@@ -8884,11 +6218,6 @@ export class CRMService {
       leadStatus: leadStages.map((r) => ({
         stage: String(r._id || 'Unknown'),
         count: Number(r.count || 0),
-      })),
-      dealStatus: dealStages.map((r) => ({
-        stage: String(r._id || 'Unknown'),
-        count: Number(r.count || 0),
-        value: Number(r.value || 0),
       })),
       outreachByDay: outreachByDay.map((r) => ({
         date: String(r._id || ''),

@@ -11,7 +11,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
-  Briefcase,
   Building2,
   Loader2,
   Search,
@@ -22,7 +21,6 @@ import {
   fetchCrmSearch,
   type CrmSearchResults,
 } from "@/lib/crm/search-api";
-import { canViewCrmRevenue, getStoredUser } from '@/lib/suite/auth';
 
 const INITIAL_VISIBLE = 24;
 const INCREMENT = 24;
@@ -56,7 +54,6 @@ function CrmSearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryFromUrl = searchParams.get("q")?.trim() ?? "";
-  const showDealAmounts = canViewCrmRevenue(getStoredUser());
 
   const [input, setInput] = useState(queryFromUrl);
   const [results, setResults] = useState<CrmSearchResults | null>(null);
@@ -64,7 +61,6 @@ function CrmSearchPageContent() {
   const [error, setError] = useState<string | null>(null);
 
   const [visibleLeads, setVisibleLeads] = useState(INITIAL_VISIBLE);
-  const [visibleDeals, setVisibleDeals] = useState(INITIAL_VISIBLE);
   const [visibleContacts, setVisibleContacts] = useState(INITIAL_VISIBLE);
   const [visibleOrgs, setVisibleOrgs] = useState(INITIAL_VISIBLE);
   const [visibleClients, setVisibleClients] = useState(INITIAL_VISIBLE);
@@ -109,14 +105,12 @@ function CrmSearchPageContent() {
 
   useEffect(() => {
     setVisibleLeads(INITIAL_VISIBLE);
-    setVisibleDeals(INITIAL_VISIBLE);
     setVisibleContacts(INITIAL_VISIBLE);
     setVisibleOrgs(INITIAL_VISIBLE);
     setVisibleClients(INITIAL_VISIBLE);
   }, [queryFromUrl]);
 
   const leads = results?.leads ?? [];
-  const deals = results?.deals ?? [];
   const contacts = results?.contacts ?? [];
   const organizations = results?.organizations ?? [];
   const clients = results?.clients ?? [];
@@ -124,13 +118,11 @@ function CrmSearchPageContent() {
   const totalCount = useMemo(
     () =>
       leads.length +
-      deals.length +
       contacts.length +
       organizations.length +
       clients.length,
     [
       leads.length,
-      deals.length,
       contacts.length,
       organizations.length,
       clients.length,
@@ -152,7 +144,7 @@ function CrmSearchPageContent() {
             Search CRM
           </h1>
           <p className="text-sm text-text-muted">
-            Find leads, contacts, deals, companies, and clients across your
+            Find leads, contacts, companies, and clients across your
             workspace.
           </p>
         </div>
@@ -166,7 +158,7 @@ function CrmSearchPageContent() {
             type="search"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Search by name, email, company, deal…"
+            placeholder="Search by name, email, company…"
             autoComplete="off"
             spellCheck={false}
             className="w-full rounded-full border border-border bg-white py-3.5 pl-12 pr-28 text-sm text-text-main shadow-[var(--crm-shadow-card)] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"
@@ -263,30 +255,6 @@ function CrmSearchPageContent() {
                   title={`${c.firstName || ""} ${c.lastName || ""}`.trim() || "Contact"}
                   subtitle={c.email || "No email"}
                   accent="#27ae60"
-                />
-              ))}
-            </SearchSection>
-          ) : null}
-
-          {deals.length > 0 ? (
-            <SearchSection
-              title="Deals"
-              icon={<Briefcase size={16} className="text-amber-600" />}
-              total={deals.length}
-              visible={visibleDeals}
-              onShowMore={() => setVisibleDeals((v) => v + INCREMENT)}
-            >
-              {deals.slice(0, visibleDeals).map((d) => (
-                <SearchCard
-                  key={d._id}
-                  href={`/crm/deals/${d._id}`}
-                  title={d.title || d.organization || "Deal"}
-                  subtitle={
-                    showDealAmounts
-                      ? `$${(d.dealValue ?? 0).toLocaleString()}${d.status ? ` · ${d.status}` : ""}`
-                      : d.status || ""
-                  }
-                  accent="#ff9f43"
                 />
               ))}
             </SearchSection>

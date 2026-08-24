@@ -23,7 +23,6 @@ import {
   SalesAgentSettingsSchema,
 } from './schemas/sales-agent-settings.schema';
 import { Lead, LeadSchema } from '../schemas/lead.schema';
-import { Deal, DealSchema } from '../schemas/deal.schema';
 
 @Module({
   imports: [
@@ -36,7 +35,6 @@ import { Deal, DealSchema } from '../schemas/deal.schema';
         { name: SalesAgentApproval.name, schema: SalesAgentApprovalSchema },
         { name: SalesAgentSettings.name, schema: SalesAgentSettingsSchema },
         { name: Lead.name, schema: LeadSchema },
-        { name: Deal.name, schema: DealSchema },
       ],
       'crmConnection',
     ),

@@ -14,9 +14,7 @@ function recordHref(run: SalesAgentRun) {
   const base =
     run.recordType === "Lead"
       ? "/crm/leads"
-      : run.recordType === "Deal"
-        ? "/crm/deals"
-        : "/crm/contacts";
+      : "/crm/contacts";
   return `${base}/${run.recordId}`;
 }
 

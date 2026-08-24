@@ -3,8 +3,7 @@ export type SuiteModuleId =
   | 'crm'
   | 'pm'
   | 'social'
-  | 'vault'
-  | 'client-portals';
+  | 'vault';
 
 export type PlatformTourStep = {
   /** CSS selector; omit for a centered welcome step */

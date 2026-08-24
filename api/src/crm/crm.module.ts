@@ -5,7 +5,6 @@ import { CRMUsersModule } from './crm-users/crm-users.module';
 import { CRMController } from './core/crm.controller';
 import { CRMService } from './core/crm.service';
 import { Lead, LeadSchema } from './schemas/lead.schema';
-import { Deal, DealSchema } from './schemas/deal.schema';
 import {
   Organization,
   OrganizationSchema,
@@ -58,15 +57,6 @@ import { TeamsIntegrationService } from './integrations/teams-integration.servic
 import { SlackIntegrationService } from './integrations/slack-integration.service';
 import { IntegrationsController } from './integrations/integrations.controller';
 import { IntegrationCatalogService } from './integration-catalog/integration-catalog.service';
-import { PaymentTerm, PaymentTermSchema } from './schemas/payment-term.schema';
-import { PaymentTermsController } from './services/payment-terms.controller';
-import { PaymentTermsService } from './services/payment-terms.service';
-import { PortalController } from './portal/portal.controller';
-import {
-  PortalClientNeed,
-  PortalClientNeedSchema,
-} from './schemas/portal-client-need.schema';
-import { ClientPortalNeedsService } from './portal/client-portal-needs.service';
 import { Client, ClientSchema } from './schemas/client.schema';
 import { ClientsService } from './records/clients.service';
 import { GlobalSearchService } from './core/global-search.service';
@@ -144,12 +134,6 @@ import {
 } from './schemas/lead-engagement-automation-template.schema';
 import { LeadEngagementAutomationService } from './automation/lead-engagement-automation.service';
 import { LeadEngagementAutomationController } from './automation/lead-engagement-automation.controller';
-import {
-  DealEngagementAutomationTemplate,
-  DealEngagementAutomationTemplateSchema,
-} from './schemas/deal-engagement-automation-template.schema';
-import { DealEngagementAutomationService } from './automation/deal-engagement-automation.service';
-import { DealEngagementAutomationController } from './automation/deal-engagement-automation.controller';
 import { DuplicatesService } from './admin/duplicates.service';
 import { DuplicatesController } from './admin/duplicates.controller';
 import { UsersModule } from '../users/users.module';
@@ -225,22 +209,6 @@ import { LeadFollowUpReminderCronService } from './records/lead-followup-reminde
 import { CrmCalendarSyncService } from './calendar/crm-calendar-sync.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { User, UserSchema } from '../users/schemas/user.schema';
-import {
-  ClientPortalAccessAssignment,
-  ClientPortalAccessAssignmentSchema,
-} from './schemas/client-portal-access-assignment.schema';
-import {
-  ClientPortalAccessLog,
-  ClientPortalAccessLogSchema,
-} from './schemas/client-portal-access-log.schema';
-import {
-  ClientPortalUpdate,
-  ClientPortalUpdateSchema,
-} from './schemas/client-portal-update.schema';
-import {
-  PortalChatMessage,
-  PortalChatMessageSchema,
-} from './schemas/portal-chat-message.schema';
 import { PmProgressReadService } from './pm-bridge/pm-progress-read.service';
 import {
   PM_PROGRESS_READ_PORT,
@@ -302,7 +270,6 @@ import {
     MongooseModule.forFeature(
       [
         { name: Lead.name, schema: LeadSchema },
-        { name: Deal.name, schema: DealSchema },
         { name: Organization.name, schema: OrganizationSchema },
         { name: Contact.name, schema: ContactSchema },
         { name: Activity.name, schema: ActivitySchema },
@@ -320,7 +287,6 @@ import {
         { name: Email.name, schema: EmailSchema },
         { name: Integration.name, schema: IntegrationSchema },
         { name: Client.name, schema: ClientSchema },
-        { name: PaymentTerm.name, schema: PaymentTermSchema },
         { name: Pipeline.name, schema: PipelineSchema },
         { name: UserEmailAccount.name, schema: UserEmailAccountSchema },
         { name: InboxEmail.name, schema: InboxEmailSchema },
@@ -346,14 +312,6 @@ import {
         { name: ExportQuotaConfig.name, schema: ExportQuotaConfigSchema },
         { name: ExportLog.name, schema: ExportLogSchema },
         { name: AgentTarget.name, schema: AgentTargetSchema },
-        { name: PortalClientNeed.name, schema: PortalClientNeedSchema },
-        {
-          name: ClientPortalAccessAssignment.name,
-          schema: ClientPortalAccessAssignmentSchema,
-        },
-        { name: ClientPortalAccessLog.name, schema: ClientPortalAccessLogSchema },
-        { name: ClientPortalUpdate.name, schema: ClientPortalUpdateSchema },
-        { name: PortalChatMessage.name, schema: PortalChatMessageSchema },
         {
           name: CrmOutreachAiSettings.name,
           schema: CrmOutreachAiSettingsSchema,
@@ -370,10 +328,6 @@ import {
         {
           name: LeadEngagementAutomationTemplate.name,
           schema: LeadEngagementAutomationTemplateSchema,
-        },
-        {
-          name: DealEngagementAutomationTemplate.name,
-          schema: DealEngagementAutomationTemplateSchema,
         },
         { name: CrmAssociation.name, schema: CrmAssociationSchema },
         { name: CrmObjectType.name, schema: CrmObjectTypeSchema },
@@ -403,8 +357,6 @@ import {
     IvrController,
     KommunoWebhookController,
     PipelineController,
-    PaymentTermsController,
-    PortalController,
     InboxAccountsController,
     InboxPushController,
     EmailTrackingController,
@@ -415,7 +367,6 @@ import {
     MetaLeadAdsWebhookController,
     WorkflowsController,
     LeadEngagementAutomationController,
-    DealEngagementAutomationController,
     DuplicatesController,
     ProposalsController,
     ProposalBlocksController,
@@ -435,7 +386,6 @@ import {
   ],
   providers: [
     LeadEngagementAutomationService,
-    DealEngagementAutomationService,
     WorkflowsService,
     DuplicatesService,
     ProposalsService,
@@ -470,8 +420,6 @@ import {
     SlackIntegrationService,
     IntegrationCatalogService,
     ClientsService,
-    PaymentTermsService,
-    ClientPortalNeedsService,
     InboxAccountsService,
     InboxClassificationService,
     InboxSyncCronService,

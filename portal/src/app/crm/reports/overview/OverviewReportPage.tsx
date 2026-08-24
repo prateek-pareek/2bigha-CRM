@@ -2,38 +2,42 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Briefcase,
-  Calendar,
-  Target,
   Users,
-  Activity as ActivityIcon,
+  Target,
   RefreshCw,
   Download,
   Maximize2,
-  TrendingUp,
-  DollarSign,
-  BarChart3,
-  Box,
-  FileText,
   ArrowUpRight,
   ChevronDown,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { CrmChartPanel } from "@/components/crm/ui";
 import CrmReportSummaryCharts from "@/components/crm/reports/charts/CrmReportSummaryCharts";
-import CrmDashboardAnalyticsCharts, {
-  type DashboardAnalyticsPayload,
-} from "@/components/crm/reports/charts/CrmDashboardAnalyticsCharts";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { getCrmAuthToken } from "@/lib/crm/api";
+import {
+  CRM_CHART_GRID,
+  CRM_CHART_SERIES,
+  CRM_CHART_TICK,
+  CRM_CHART_TOOLTIP,
+} from "@/lib/crm/shared/chart-theme";
 import {
   compareSubtitle,
   type PeriodMeta,
 } from "@/portals/crm/lib/reports/period-compare";
 import ReportsShell, { type ReportsShellContext } from "../_components/ReportsShell";
-
-/**
- * Live Data Mode: Strict backend API data only.
- */
-const ENABLE_TEST_DATA = false;
 
 interface DashboardStat {
   name: string;
@@ -43,40 +47,22 @@ interface DashboardStat {
   title: string;
 }
 
-function fmtMoney(n: number) {
-  if (!Number.isFinite(n) || n === 0) return "₹0";
-  if (Math.abs(n) >= 10000000) return `₹${(n / 10000000).toFixed(2)}Cr`;
-  if (Math.abs(n) >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (Math.abs(n) >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
-  return `₹${Math.round(n).toLocaleString("en-IN")}`;
-}
+type FunnelRow = { label: string; val: number; w?: string };
+type StatusRow = { name: string; value: number };
 
 const ICON_BG_COLORS = [
-  "bg-[#dc2626]", // Red
-  "bg-[#ff9f43]", // Amber
   "bg-[#2563eb]", // Blue
-  "bg-[#06b6d4]", // Cyan
-  "bg-[#8b5cf6]", // Purple
   "bg-[#10b981]", // Green
+  "bg-[#8b5cf6]", // Purple
 ];
 
-const BREAKDOWN_BAR_COLORS = [
-  "bg-[#8b5cf6]", // Purple
-  "bg-[#ef4444]", // Red
-  "bg-[#ff9f43]", // Amber
-  "bg-[#06b6d4]", // Cyan
-  "bg-[#10b981]", // Green
-  "bg-[#3b82f6]", // Blue
-];
-
-const BREAKDOWN_DOT_COLORS = [
-  "bg-[#8b5cf6]",
-  "bg-[#ef4444]",
-  "bg-[#ff9f43]",
-  "bg-[#06b6d4]",
-  "bg-[#10b981]",
-  "bg-[#3b82f6]",
-];
+function ChartEmpty({ message }: { message: string }) {
+  return (
+    <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[var(--border-color)] text-xs text-[var(--text-muted)]">
+      {message}
+    </div>
+  );
+}
 
 function OverviewBody({
   period,
@@ -84,12 +70,12 @@ function OverviewBody({
   compareMode,
   owner,
   filters,
-  canViewRevenue,
   refreshToken,
 }: ReportsShellContext & { refreshToken: number }) {
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [periodMeta, setPeriodMeta] = useState<PeriodMeta | null>(null);
-  const [dashboardAnalytics, setDashboardAnalytics] = useState<DashboardAnalyticsPayload | null>(null);
+  const [funnel, setFunnel] = useState<FunnelRow[]>([]);
+  const [leadsByStatus, setLeadsByStatus] = useState<StatusRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const filtersKey = filters.length > 0 ? JSON.stringify(filters) : "";
@@ -109,19 +95,18 @@ function OverviewBody({
       });
       const dashboard = await dashboardRes.json();
 
-      if (dashboard?.stats) setStats(dashboard.stats);
-      else setStats([]);
+      setStats(Array.isArray(dashboard?.stats) ? dashboard.stats : []);
       setPeriodMeta(dashboard?.periodMeta ?? null);
-      setDashboardAnalytics({
-        funnel: Array.isArray(dashboard?.funnel) ? dashboard.funnel : [],
-        summary: dashboard?.summary,
-        charts: dashboard?.charts ?? null,
-      });
+      setFunnel(Array.isArray(dashboard?.funnel) ? dashboard.funnel : []);
+      setLeadsByStatus(
+        Array.isArray(dashboard?.charts?.leadsByStatus) ? dashboard.charts.leadsByStatus : [],
+      );
     } catch (err) {
       console.error("Fetch overview report error:", err);
       setStats([]);
       setPeriodMeta(null);
-      setDashboardAnalytics(null);
+      setFunnel([]);
+      setLeadsByStatus([]);
     } finally {
       setLoading(false);
     }
@@ -131,40 +116,17 @@ function OverviewBody({
     void load();
   }, [load]);
 
-  // Derived real metrics from live API charts
-  const salesTrend = useMemo(() => dashboardAnalytics?.charts?.salesTrend ?? [], [dashboardAnalytics]);
-  const revenueForecast = useMemo(() => dashboardAnalytics?.charts?.revenueForecast ?? [], [dashboardAnalytics]);
-  const dealsByStage = useMemo(() => dashboardAnalytics?.charts?.dealsByStage ?? [], [dashboardAnalytics]);
   const deltaSub = compareSubtitle(compareMode, periodMeta);
-
-  const totalSalesRevenue = useMemo(
-    () => salesTrend.reduce((sum, item) => sum + (Number(item.revenue) || 0), 0),
-    [salesTrend]
+  const totalLeads = funnel.find((f) => /lead/i.test(f.label))?.val ?? 0;
+  const qualified = funnel.find((f) => /qualified/i.test(f.label))?.val ?? 0;
+  const qualifiedRate = totalLeads > 0 ? Math.round((qualified / totalLeads) * 1000) / 10 : 0;
+  const totalByStatus = useMemo(
+    () => leadsByStatus.reduce((s, r) => s + (Number(r.value) || 0), 0),
+    [leadsByStatus],
   );
-
-  const totalDealsCount = useMemo(
-    () => salesTrend.reduce((sum, item) => sum + (Number(item.leads) || 0), 0),
-    [salesTrend]
-  );
-
-  const avgDealValue = useMemo(
-    () => (totalDealsCount > 0 ? Math.round(totalSalesRevenue / totalDealsCount) : 0),
-    [totalSalesRevenue, totalDealsCount]
-  );
-
-  const totalForecastValue = useMemo(
-    () => revenueForecast.reduce((sum, item) => sum + (Number(item.value) || 0), 0),
-    [revenueForecast]
-  );
-
-  const totalStageCount = useMemo(
-    () => dealsByStage.reduce((sum, item) => sum + (Number(item.value) || 0), 0),
-    [dealsByStage]
-  );
-
-  const sortedDealsByStage = useMemo(
-    () => [...dealsByStage].sort((a, b) => b.value - a.value).slice(0, 6),
-    [dealsByStage]
+  const sortedByStatus = useMemo(
+    () => [...leadsByStatus].sort((a, b) => b.value - a.value).slice(0, 6),
+    [leadsByStatus],
   );
 
   return (
@@ -172,15 +134,8 @@ function OverviewBody({
       {/* Top Header Bar with Title & Controls */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--color-border)] pb-5">
         <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text-main)] leading-[26px]">Revenue Summary</h1>
-            {ENABLE_TEST_DATA && (
-              <span className="rounded-full bg-[#fef3c7] px-2.5 py-0.5 text-sm font-semibold text-[#d97706] border border-[#fde68a]">
-                Test Mode ON
-              </span>
-            )}
-          </div>
-          <p className="text-md font-medium text-[var(--color-text-muted)] leading-[18px]">Real-time deal values, forecasted revenue, and pipeline performance.</p>
+          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text-main)] leading-[26px]">Overview</h1>
+          <p className="text-md font-medium text-[var(--color-text-muted)] leading-[18px]">Lead velocity, conversion, and status mix.</p>
           {periodMeta?.currentLabel ? (
             <p className="text-sm text-[var(--color-text-muted)]">
               Showing <span className="font-semibold text-[var(--color-text-main)]">{periodMeta.currentLabel}</span>
@@ -220,7 +175,7 @@ function OverviewBody({
         </div>
       </div>
 
-      {/* Top Grid: Overview Statistics & Deal Metrics (Left 2 Cols) | Breakdown (Right 1 Col) */}
+      {/* Top Grid: Overview Statistics & Conversion (Left 2 Cols) | Status breakdown (Right 1 Col) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
         {/* Left Column (Span 2) */}
         <div className="space-y-6 lg:col-span-2 lg:space-y-8">
@@ -256,12 +211,6 @@ function OverviewBody({
                   const isPositive = deltaNum >= 0;
                   const deltaStr = `${isPositive ? "+" : ""}${stat.delta != null ? stat.delta : 0}${stat.deltaSuffix || "%"}`;
                   const iconBg = ICON_BG_COLORS[idx % ICON_BG_COLORS.length];
-                  const icons = [
-                    <DollarSign key="d" size={20} />,
-                    <BarChart3 key="b" size={20} />,
-                    <Box key="x" size={20} />,
-                    <Briefcase key="bc" size={20} />,
-                  ];
 
                   return (
                     <div
@@ -269,7 +218,7 @@ function OverviewBody({
                       className="flex flex-col items-center justify-center rounded-xl bg-[#f8fafc] p-4 sm:p-5 text-center border border-[var(--color-border)] hover:border-[#cbd5e1] transition-all"
                     >
                       <div className={`mb-3 flex h-11 w-11 items-center justify-center rounded-xl ${iconBg} text-white shadow-sm`}>
-                        {icons[idx] || <ActivityIcon size={20} />}
+                        <Users size={20} />
                       </div>
                       <span className="text-md font-semibold text-[var(--color-text-muted)]">{stat.title}</span>
                       <span className="my-1.5 text-4xl font-bold tracking-tight text-[var(--color-text-main)] leading-[26px]">{stat.value}</span>
@@ -289,106 +238,53 @@ function OverviewBody({
             )}
           </div>
 
-          {/* Sub Split Cards: Deal Value & Forecasted Revenue */}
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:gap-8">
-            {/* Deal Value Card */}
-            <div className="rounded-xl border border-[var(--color-border)] bg-white p-4 sm:p-6 shadow-[rgba(219,219,219,0.25)_0px_4px_4px_0px]">
-              <div className="mb-4 sm:mb-5 flex items-center justify-between">
-                <div>
-                  <h3 className="text-2xl font-bold text-[var(--color-text-main)] leading-[22px]">Deal Value</h3>
-                  <p className="text-md text-[var(--color-text-muted)]">Average deal size & revenue</p>
-                </div>
-                <button
-                  type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)] transition-all"
-                >
-                  <ArrowUpRight size={15} />
-                </button>
-              </div>
-
-              <div className="space-y-4 pt-1">
-                <div className="grid grid-cols-2 gap-3.5">
-                  <div className="space-y-1 rounded-xl bg-[#f8fafc] border border-[var(--color-border)]/80 p-3.5">
-                    <div className="flex items-center gap-1.5 text-md font-medium text-[var(--color-text-muted)]">
-                      <span className="h-2 w-2 rounded-full bg-[#8b5cf6]" />
-                      <span className="truncate">Avg Deal Size</span>
-                    </div>
-                    <p className="text-3xl font-bold tracking-tight text-[var(--color-text-main)] leading-tight">{fmtMoney(avgDealValue)}</p>
-                  </div>
-
-                  <div className="space-y-1 rounded-xl bg-[#f8fafc] border border-[var(--color-border)]/80 p-3.5">
-                    <div className="flex items-center gap-1.5 text-md font-medium text-[var(--color-text-muted)]">
-                      <span className="h-2 w-2 rounded-full bg-[#2563eb]" />
-                      <span className="truncate">Total Revenue</span>
-                    </div>
-                    <p className="text-3xl font-bold tracking-tight text-[var(--color-text-main)] leading-tight">{fmtMoney(totalSalesRevenue)}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-[#f1f5f9] pt-3 text-sm font-semibold text-[var(--color-text-muted)]">
-                  <span>Volume</span>
-                  <span className="rounded-full bg-[#f8fafc] border border-[var(--color-border)] px-2.5 py-0.5 text-sm font-semibold text-[var(--color-text-main)]">
-                    {totalDealsCount} deals in period
-                  </span>
-                </div>
-              </div>
+          {/* Lead funnel */}
+          <CrmChartPanel title="Lead funnel" subtitle="Created → qualified in period" bodyClassName="pt-2">
+            <div className="h-[240px] w-full">
+              {funnel.every((r) => !r.val) ? (
+                <ChartEmpty message="No leads in this period" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={funnel} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CRM_CHART_GRID} vertical={false} />
+                    <XAxis dataKey="label" tick={CRM_CHART_TICK} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={CRM_CHART_TICK} axisLine={false} tickLine={false} />
+                    <Tooltip {...CRM_CHART_TOOLTIP} />
+                    <Bar dataKey="val" name="Leads" radius={[4, 4, 0, 0]}>
+                      {funnel.map((_, i) => (
+                        <Cell key={i} fill={CRM_CHART_SERIES[i % CRM_CHART_SERIES.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
+          </CrmChartPanel>
 
-            {/* Forecasted Revenue Card */}
-            <div className="rounded-xl border border-[var(--color-border)] bg-white p-4 sm:p-6 shadow-[rgba(219,219,219,0.25)_0px_4px_4px_0px]">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3.5">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#06b6d4] text-white shadow-sm">
-                    <FileText size={20} />
-                  </div>
-                  <div>
-                    <span className="text-md font-semibold text-[var(--color-text-muted)]">Forecasted Revenue</span>
-                    <p className="mt-0.5 text-4xl font-bold tracking-tight text-[var(--color-text-main)] leading-[26px]">{fmtMoney(totalForecastValue)}</p>
-                  </div>
+          <div className="rounded-xl border border-[var(--color-border)] bg-white p-4 sm:p-6 shadow-[rgba(219,219,219,0.25)_0px_4px_4px_0px]">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#8b5cf6] text-white shadow-sm">
+                  <Target size={20} />
                 </div>
-                <span className="rounded-full bg-[#dcfce7] px-2.5 py-1 text-sm font-semibold text-[#15803d]">
-                  {revenueForecast.length} periods
-                </span>
+                <div>
+                  <span className="text-md font-semibold text-[var(--color-text-muted)]">Qualified rate</span>
+                  <p className="mt-0.5 text-4xl font-bold tracking-tight text-[var(--color-text-main)] leading-[26px]">{qualifiedRate}%</p>
+                </div>
               </div>
-
-              {/* Dynamic Bar Indicator Graphic */}
-              <div className="my-4 flex items-end justify-between gap-2 px-1 h-14">
-                {revenueForecast.length > 0 ? (
-                  revenueForecast.slice(0, 9).map((f, i) => {
-                    const maxVal = Math.max(...revenueForecast.map((r) => r.value || 1), 1);
-                    const hPercent = Math.max(Math.round(((f.value || 0) / maxVal) * 100), 20);
-                    return (
-                      <div
-                        key={i}
-                        style={{ height: `${hPercent}%` }}
-                        className="w-3.5 sm:w-4 rounded-md bg-[#10b981] transition-all duration-300 hover:bg-[#059669]"
-                        title={`${f.name}: ${fmtMoney(f.value)}`}
-                      />
-                    );
-                  })
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs text-[var(--color-text-muted)] font-medium">
-                    No forecast data available
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between text-md text-[var(--color-text-muted)] pt-3 border-t border-[#f1f5f9]">
-                <span className="inline-flex items-center gap-1.5 font-semibold text-[#10b981]">
-                  <TrendingUp size={14} /> Pipeline
-                </span>
-                <span>Active Forecast</span>
-              </div>
+              <span className="rounded-full bg-[#dcfce7] px-2.5 py-1 text-sm font-semibold text-[#15803d]">
+                {qualified} of {totalLeads}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Right Column: Revenue Breakdown Card (Real Data from Deals By Stage) */}
+        {/* Right Column: Leads by status */}
         <div className="rounded-xl border border-[var(--color-border)] bg-white p-4 sm:p-6 shadow-[rgba(219,219,219,0.25)_0px_4px_4px_0px]">
           <div className="mb-4 sm:mb-5 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-[var(--color-text-main)] leading-[22px]">Stage Breakdown</h2>
-              <p className="text-md text-[var(--color-text-muted)]">Deal distribution across stages</p>
+              <h2 className="text-2xl font-bold text-[var(--color-text-main)] leading-[22px]">Status Breakdown</h2>
+              <p className="text-md text-[var(--color-text-muted)]">Lead distribution across statuses</p>
             </div>
             <button
               type="button"
@@ -405,64 +301,37 @@ function OverviewBody({
                 <div key={i} className="h-7 rounded-md bg-[#f8fafc]" />
               ))}
             </div>
-          ) : sortedDealsByStage.length === 0 ? (
+          ) : sortedByStatus.length === 0 ? (
             <div className="flex h-56 items-center justify-center rounded-xl bg-[#f8fafc] border border-dashed border-[var(--color-border)] text-md font-medium text-[var(--color-text-muted)]">
-              No stage breakdown data available
+              No status breakdown data available
             </div>
           ) : (
-            <>
-              {/* Dynamic Horizontal Progress Bars */}
-              <div className="space-y-3.5 pt-1">
-                {sortedDealsByStage.slice(0, 4).map((stage, i) => {
-                  const pct = totalStageCount > 0 ? ((stage.value / totalStageCount) * 100).toFixed(1) : "0";
-                  const barColor = BREAKDOWN_BAR_COLORS[i % BREAKDOWN_BAR_COLORS.length];
-                  return (
-                    <div key={stage.name} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-md font-semibold text-[var(--color-text-muted)]">
-                        <span className="truncate max-w-[170px] text-[var(--color-text-main)] font-medium" title={stage.name}>{stage.name}</span>
-                        <span className="shrink-0 text-sm font-semibold">{stage.value} deals</span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-[#f1f5f9]">
-                        <div
-                          style={{ width: `${pct}%` }}
-                          className={`h-full rounded-full ${barColor} transition-all duration-500`}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Dynamic 2x2 Metric Grid */}
-              <div className="mt-5 grid grid-cols-2 gap-3.5 border-t border-[var(--color-border)] pt-4">
-                {sortedDealsByStage.slice(0, 4).map((stage, i) => {
-                  const pct = totalStageCount > 0 ? ((stage.value / totalStageCount) * 100).toFixed(1) : "0";
-                  const dotColor = BREAKDOWN_DOT_COLORS[i % BREAKDOWN_DOT_COLORS.length];
-                  return (
-                    <div key={stage.name} className="rounded-xl bg-[#f8fafc] border border-[var(--color-border)]/80 p-3 sm:p-3.5 min-w-0">
-                      <div className="flex items-center gap-2 text-md font-semibold text-[var(--color-text-muted)] min-w-0">
-                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotColor}`} />
-                        <span className="truncate" title={stage.name}>{stage.name}</span>
-                      </div>
-                      <div className="mt-2 flex flex-col gap-0.5">
-                        <span className="text-3xl font-bold tracking-tight text-[var(--color-text-main)] leading-none">{pct}%</span>
-                        <span className="text-sm font-medium text-[var(--color-text-muted)]">{stage.value} deals</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <div className="h-[240px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={sortedByStatus}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="48%"
+                    innerRadius={48}
+                    outerRadius={78}
+                    paddingAngle={2}
+                  >
+                    {sortedByStatus.map((_, i) => (
+                      <Cell key={i} fill={CRM_CHART_SERIES[i % CRM_CHART_SERIES.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip {...CRM_CHART_TOOLTIP} />
+                  <Legend iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+              <p className="mt-2 text-center text-xs text-[var(--color-text-muted)]">{totalByStatus} leads total</p>
+            </div>
           )}
         </div>
       </div>
-
-      {/* Main Revenue Performance Trend & Pipeline Analytics */}
-      <CrmDashboardAnalyticsCharts
-        data={dashboardAnalytics}
-        loading={loading}
-        canViewRevenue={canViewRevenue}
-      />
 
       <CrmReportSummaryCharts owner={owner} />
     </div>
@@ -478,5 +347,3 @@ export default function OverviewReportPage() {
     </ReportsShell>
   );
 }
-
-

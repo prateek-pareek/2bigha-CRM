@@ -27,7 +27,7 @@ export class EmailCommunicationController {
   constructor(private readonly emailService: EmailCommunicationService) {}
 
   @Post('send')
-  @Permissions('leads:write', 'deals:write', 'contacts:write')
+  @Permissions('leads:write', 'contacts:write')
   @UseInterceptors(
     FilesInterceptor('attachments', MAX_ATTACHMENT_COUNT, {
       storage: memoryStorage(),
@@ -52,7 +52,7 @@ export class EmailCommunicationController {
   }
 
   @Post('draft')
-  @Permissions('leads:write', 'deals:write', 'contacts:write')
+  @Permissions('leads:write', 'contacts:write')
   saveDraft(@Request() req: any, @Body() data: any) {
     return this.emailService.saveDraft({
       ...data,
@@ -61,25 +61,25 @@ export class EmailCommunicationController {
   }
 
   @Get()
-  @Permissions('leads:read', 'deals:read', 'contacts:read')
+  @Permissions('leads:read', 'contacts:read')
   findAll() {
     return this.emailService.findAll();
   }
 
   @Patch(':id')
-  @Permissions('leads:write', 'deals:write', 'contacts:write')
+  @Permissions('leads:write', 'contacts:write')
   updateEmail(@Param('id') id: string, @Body() data: any) {
     return this.emailService.updateEmail(id, data);
   }
 
   @Delete(':id')
-  @Permissions('leads:write', 'deals:write', 'contacts:write')
+  @Permissions('leads:write', 'contacts:write')
   deleteEmail(@Param('id') id: string) {
     return this.emailService.deleteEmail(id);
   }
 
   @Get('entity/:id')
-  @Permissions('leads:read', 'deals:read', 'contacts:read')
+  @Permissions('leads:read', 'contacts:read')
   findByEntity(@Param('id') id: string) {
     return this.emailService.findByEntity(id);
   }

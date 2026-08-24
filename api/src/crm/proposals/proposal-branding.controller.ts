@@ -13,7 +13,6 @@ export class ProposalBrandingController {
   @Permissions(
     'proposals:read',
     'proposals:write',
-    'deals:read',
     'leads:read',
   )
   async getMine(@Request() req: any) {
@@ -27,7 +26,7 @@ export class ProposalBrandingController {
   }
 
   @Put('me')
-  @Permissions('proposals:write', 'deals:write', 'leads:write')
+  @Permissions('proposals:write', 'leads:write')
   putMine(@Request() req: any, @Body() body: any) {
     return this.brandingService.upsertForUser(req.user.userId, {
       agency: body.agency,

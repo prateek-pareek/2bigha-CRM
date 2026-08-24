@@ -15,7 +15,7 @@ import {
   YAxis,
   LabelList,
 } from "recharts";
-import { AlertTriangle, CheckCircle2, Briefcase, Layers, Target, Users, Activity } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Layers, Target, Users, Activity } from "lucide-react";
 import type { BoardReportPayload } from "@/components/crm/reports/panels/CrmBoardInsightsPanel";
 import { CrmChartPanel } from "@/components/crm/ui";
 import {
@@ -52,28 +52,22 @@ export default function CrmDecisionCharts({ board, className }: Props) {
     return [
       { name: "Created", count: c.createdInPeriod },
       { name: "Converted", count: c.convertedInPeriod },
-      { name: "Deals", count: board?.dealsCreatedInPeriod ?? 0 },
     ];
-  }, [board?.leadConversion, board?.dealsCreatedInPeriod]);
+  }, [board?.leadConversion]);
 
   const pipelineVolume = useMemo(() => {
-    const rows: { name: string; leads: number; deals: number }[] = [];
+    const rows: { name: string; leads: number }[] = [];
     const leadMap = new Map(
       (board?.openLeadsByPipeline ?? []).map((p) => [p.pipelineName, p.total]),
     );
-    const dealMap = new Map(
-      (board?.openDealsByPipeline ?? []).map((p) => [p.pipelineName, p.total]),
-    );
-    const names = new Set([...leadMap.keys(), ...dealMap.keys()]);
-    for (const name of names) {
+    for (const name of leadMap.keys()) {
       rows.push({
         name: name.length > 16 ? `${name.slice(0, 14)}…` : name,
         leads: leadMap.get(name) ?? 0,
-        deals: dealMap.get(name) ?? 0,
       });
     }
-    return rows.sort((a, b) => b.leads + b.deals - (a.leads + a.deals)).slice(0, 8);
-  }, [board?.openLeadsByPipeline, board?.openDealsByPipeline]);
+    return rows.sort((a, b) => b.leads - a.leads).slice(0, 8);
+  }, [board?.openLeadsByPipeline]);
 
   const authorActivity = useMemo(
     () =>
@@ -86,18 +80,6 @@ export default function CrmDecisionCharts({ board, className }: Props) {
           count: r.count,
         })),
     [board?.engagementByAuthor],
-  );
-
-  const dealsByOwner = useMemo(
-    () =>
-      (board?.dealsByOwner ?? [])
-        .slice(0, 8)
-        .map((r) => ({
-          name: r.owner.length > 16 ? `${r.owner.slice(0, 14)}…` : r.owner,
-          fullName: r.owner,
-          count: r.count,
-        })),
-    [board?.dealsByOwner],
   );
 
   const relatedTypeMix = useMemo(
@@ -185,7 +167,7 @@ export default function CrmDecisionCharts({ board, className }: Props) {
 
         <CrmChartPanel
           title="Lead conversion funnel"
-          subtitle="Created → converted → deals in period"
+          subtitle="Created → converted in period"
           icon={<Users className="h-4 w-4" />}
           bodyClassName="pt-2"
         >
@@ -216,7 +198,7 @@ export default function CrmDecisionCharts({ board, className }: Props) {
 
         <CrmChartPanel
           title="Pipeline volume"
-          subtitle="Open leads and deals by pipeline"
+          subtitle="Open leads by pipeline"
           icon={<Layers className="h-4 w-4" />}
           bodyClassName="pt-2"
         >
@@ -232,44 +214,6 @@ export default function CrmDecisionCharts({ board, className }: Props) {
                   <Tooltip {...CRM_CHART_TOOLTIP} />
                   <Legend {...CRM_CHART_LEGEND} />
                   <Bar dataKey="leads" fill={CRM_CHART_INFO} name="Leads" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="deals" fill={CRM_CHART_PRIMARY} name="Deals" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </CrmChartPanel>
-
-        <CrmChartPanel
-          title="Deals by owner"
-          subtitle="Open deals owned by rep"
-          icon={<Briefcase className="h-4 w-4" />}
-          bodyClassName="pt-2"
-        >
-          <div className="h-[240px] w-full">
-            {dealsByOwner.length === 0 ? (
-              <ChartEmpty message="No deals by owner" />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dealsByOwner} layout="vertical" margin={{ left: 4, right: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CRM_CHART_GRID} horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} tick={CRM_CHART_TICK} axisLine={false} tickLine={false} />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={88}
-                    tick={CRM_CHART_TICK}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    {...CRM_CHART_TOOLTIP}
-                    labelFormatter={(_, payload) =>
-                      payload?.[0]?.payload?.fullName ? String(payload[0].payload.fullName) : ""
-                    }
-                  />
-                  <Bar dataKey="count" fill={CRM_CHART_PRIMARY} name="Deals" radius={[0, 4, 4, 0]}>
-                    <LabelList dataKey="count" position="right" fontSize={10} fill="var(--text-muted)" />
-                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}

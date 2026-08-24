@@ -208,7 +208,7 @@ export default function AiProposalSettingsPage() {
               <Link href="/crm/proposals" className="text-primary underline">
                 CRM → Proposals
               </Link>{" "}
-              to draft from leads, contacts, deals, and platform opportunities.
+              to draft from leads, contacts, and platform opportunities.
             </p>
           </div>
         </div>

@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import {
   Organization,
@@ -29,7 +28,6 @@ export type GlobalSearchOptions = {
 
 type SearchSlice = {
   leads: unknown[];
-  deals: unknown[];
   contacts: unknown[];
   organizations: unknown[];
   clients: unknown[];
@@ -40,8 +38,6 @@ export class GlobalSearchService {
   constructor(
     @InjectModel(Lead.name, 'crmConnection')
     private leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private contactModel: Model<ContactDocument>,
     @InjectModel(Organization.name, 'crmConnection')
@@ -69,7 +65,6 @@ export class GlobalSearchService {
   private emptySlice(): SearchSlice {
     return {
       leads: [],
-      deals: [],
       contacts: [],
       organizations: [],
       clients: [],
@@ -86,13 +81,11 @@ export class GlobalSearchService {
       limit > HEADER_SEARCH_LIMIT ? FULL_QUERY_MAX_TIME_MS : QUERY_MAX_TIME_MS;
     const [
       leads,
-      deals,
       contacts,
       organizations,
       clients,
     ] = await Promise.all([
       this.searchLeads(query, textQ, limit, maxTime),
-      this.searchDeals(query, textQ, limit, maxTime),
       this.searchContacts(query, textQ, limit, maxTime),
       this.searchOrganizations(query, textQ, limit, maxTime),
       this.searchClients(query, textQ, limit, maxTime),
@@ -100,7 +93,6 @@ export class GlobalSearchService {
 
     return {
       leads,
-      deals,
       contacts,
       organizations,
       clients,
@@ -109,17 +101,15 @@ export class GlobalSearchService {
 
   private async searchByObjectId(id: string): Promise<SearchSlice> {
     const oid = new Types.ObjectId(id);
-    const select = '_id firstName lastName email name title organization dealValue status opportunitySourcePlatform platformClientLabel';
-    const [lead, deal, contact, org, client] = await Promise.all([
+    const select = '_id firstName lastName email name title organization status opportunitySourcePlatform platformClientLabel';
+    const [lead, contact, org, client] = await Promise.all([
       this.leadModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
-      this.dealModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
       this.contactModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
       this.orgModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
       this.clientModel.findById(oid).select(select).lean().maxTimeMS(QUERY_MAX_TIME_MS).exec(),
     ]);
     return {
       leads: lead ? [lead] : [],
-      deals: deal ? [deal] : [],
       contacts: contact ? [contact] : [],
       organizations: org ? [org] : [],
       clients: client ? [client] : [],
@@ -190,32 +180,6 @@ export class GlobalSearchService {
         mobileNo: 1,
         phone: 1,
         organization: 1,
-        status: 1,
-      },
-      limit,
-      maxTimeMS,
-    );
-  }
-
-  private searchDeals(
-    query: string,
-    textQ: string,
-    limit: number,
-    maxTimeMS: number,
-  ) {
-    const regexFilter = buildTokenAndFilter(
-      ['title', 'organization'],
-      query,
-    );
-    return this.searchWithTextThenRegex(
-      this.dealModel as Model<unknown>,
-      textQ,
-      regexFilter,
-      {
-        _id: 1,
-        title: 1,
-        organization: 1,
-        dealValue: 1,
         status: 1,
       },
       limit,

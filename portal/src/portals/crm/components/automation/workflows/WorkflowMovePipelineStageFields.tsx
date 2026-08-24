@@ -11,7 +11,7 @@ function ndClass(nodrag: boolean, base: string) {
   return nodrag ? `${base} nodrag nopan` : base;
 }
 
-/** Move lead/deal to a pipeline and stage in one workflow action. */
+/** Move a lead to a pipeline and stage in one workflow action. */
 export function WorkflowMovePipelineStageFields({
   pipelineId,
   stage,
@@ -38,10 +38,10 @@ export function WorkflowMovePipelineStageFields({
       : "border border-[var(--border-color)] rounded-[var(--radius-md)] px-2 py-1.5 text-sm w-full",
   );
 
-  if (entityKind !== "lead" && entityKind !== "deal") {
+  if (entityKind !== "lead") {
     return (
       <p className="text-xs text-amber-800/90">
-        Pipeline/stage moves apply to lead and deal workflows only.
+        Pipeline/stage moves apply to lead workflows only.
       </p>
     );
   }

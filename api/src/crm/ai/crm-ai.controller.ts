@@ -101,7 +101,6 @@ export class CrmAiController {
   @Permissions(
     'leads:write',
     'contacts:write',
-    'deals:write',
     'proposals:write',
   )
   draftContract(
@@ -122,11 +121,10 @@ export class CrmAiController {
     const allowed = [
       'leads',
       'contacts',
-      'deals',
     ] as const;
     if (!allowed.includes(mod as (typeof allowed)[number])) {
       throw new BadRequestException(
-        'module must be "leads", "contacts", or "deals"',
+        'module must be "leads" or "contacts"',
       );
     }
     const entityId = String(body.entityId || '').trim();
@@ -278,7 +276,6 @@ export class CrmAiController {
   @Permissions(
     'leads:write',
     'contacts:write',
-    'deals:write',
     'proposals:write',
   )
   draftProposal(
@@ -299,11 +296,10 @@ export class CrmAiController {
     const allowed = [
       'leads',
       'contacts',
-      'deals',
     ] as const;
     if (!allowed.includes(mod as (typeof allowed)[number])) {
       throw new BadRequestException(
-        'module must be "leads", "contacts", or "deals"',
+        'module must be "leads" or "contacts"',
       );
     }
     const entityId = String(body.entityId || '').trim();
@@ -344,27 +340,4 @@ export class CrmAiController {
     );
   }
 
-  @Post('draft-client-portal-update')
-  @Permissions('clients:write', 'deals:write')
-  draftClientPortalUpdate(
-    @Request() req: any,
-    @Body()
-    body: {
-      dealId?: string;
-      cadence?: 'daily' | 'weekly' | 'general';
-      instructions?: string;
-      lookbackHours?: number;
-    },
-  ) {
-    const dealId = String(body?.dealId || '').trim();
-    if (!dealId) {
-      throw new BadRequestException('dealId is required');
-    }
-    return this.crmAiService.draftClientPortalUpdate(req.user, dealId, {
-      cadence: body?.cadence,
-      instructions: body?.instructions,
-      lookbackHours:
-        typeof body?.lookbackHours === 'number' ? body.lookbackHours : undefined,
-    });
-  }
 }

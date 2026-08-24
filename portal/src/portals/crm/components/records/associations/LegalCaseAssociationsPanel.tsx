@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Briefcase, User, Users, Plus, X, Loader2, Search } from "lucide-react";
+import { User, Users, Plus, X, Loader2, Search } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
 import {
   linkLegalCaseContact,
@@ -27,11 +27,7 @@ function personLabel(p: AnyRec) {
   return n || p.email || "Untitled";
 }
 
-function dealLabel(d: AnyRec) {
-  return d.title || "Deal";
-}
-
-/** Link contacts, leads, and deals to this legal case (contacts/leads via the dedicated link endpoints). */
+/** Link contacts and leads to this legal case (via the dedicated link endpoints). */
 export default function LegalCaseAssociationsPanel({
   caseId,
   legalCase,
@@ -49,7 +45,6 @@ export default function LegalCaseAssociationsPanel({
 
   const contacts = (legalCase?.associatedContacts as AnyRec[]) || [];
   const leads = (legalCase?.associatedLeads as AnyRec[]) || [];
-  const deals = (legalCase?.associatedDeals as AnyRec[]) || [];
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -78,21 +73,6 @@ export default function LegalCaseAssociationsPanel({
 
   const idsFor = (field: string) =>
     ((legalCase[field] as AnyRec[]) || []).map((x) => String(x._id || x));
-
-  const patchDeals = async (next: string[]) => {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${CRM_API_URL}/crm/legal-cases/${caseId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ associatedDeals: next }),
-    });
-    if (!res.ok) {
-      toast.error("Could not update associated deals");
-      return;
-    }
-    toast.success("Associations updated");
-    onUpdated();
-  };
 
   const addContact = async (id: string) => {
     if (idsFor("associatedContacts").includes(id)) {
@@ -158,22 +138,6 @@ export default function LegalCaseAssociationsPanel({
     }
   };
 
-  const addDeal = (id: string) => {
-    const cur = idsFor("associatedDeals");
-    if (cur.includes(id)) {
-      toast.message("Already linked");
-      return;
-    }
-    void patchDeals([...cur, id]);
-    setAddOpen(false);
-    setQ("");
-    setResults(null);
-  };
-
-  const removeDeal = (id: string) => {
-    void patchDeals(idsFor("associatedDeals").filter((x) => x !== id));
-  };
-
   const Row = ({
     href,
     title,
@@ -237,7 +201,7 @@ export default function LegalCaseAssociationsPanel({
         </button>
       </div>
       <p className="text-xs text-text-muted mb-4 leading-relaxed">
-        Link the contacts, leads, and deals connected to this legal case.
+        Link the contacts and leads connected to this legal case.
       </p>
 
       {addOpen && (
@@ -246,7 +210,7 @@ export default function LegalCaseAssociationsPanel({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
             <input
               className="w-full pl-10 pr-3 py-2.5 rounded-[var(--radius-md)] border border-border bg-card text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
-              placeholder="Search contacts, leads, or deals…"
+              placeholder="Search contacts or leads…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -290,27 +254,9 @@ export default function LegalCaseAssociationsPanel({
                   </ul>
                 </div>
               )}
-              {(results.deals?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-text-muted mb-1.5">Deals</p>
-                  <ul className="space-y-1">
-                    {results.deals!.map((d) => (
-                      <li key={d._id}>
-                        <button
-                          type="button"
-                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-card border border-transparent hover:border-border"
-                          onClick={() => addDeal(d._id)}
-                        >
-                          {dealLabel(d)}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               {!searching &&
                 q.trim().length >= 2 &&
-                !(results.leads?.length || results.contacts?.length || results.deals?.length) && (
+                !(results.leads?.length || results.contacts?.length) && (
                   <p className="text-xs text-text-muted py-2">No matches — try another name or email.</p>
                 )}
             </div>
@@ -359,28 +305,6 @@ export default function LegalCaseAssociationsPanel({
                   subtitle={c.email}
                   onRemove={() => removeContact(c._id)}
                   busy={busyId === c._id}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-text-muted">
-            <Briefcase size={12} />
-            Deals
-          </div>
-          {deals.length === 0 ? (
-            <p className="text-xs text-text-muted italic">No deals linked</p>
-          ) : (
-            <div className="space-y-2">
-              {deals.map((d) => (
-                <Row
-                  key={d._id}
-                  href={`/crm/deals/${d._id}`}
-                  title={dealLabel(d)}
-                  subtitle={d.stage}
-                  onRemove={() => removeDeal(d._id)}
                 />
               ))}
             </div>

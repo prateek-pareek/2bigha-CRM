@@ -65,7 +65,6 @@ export default function CrmServicesPage() {
     hasAccess("services:read") ||
     hasAccess("services:write") ||
     hasAccess("leads:read") ||
-    hasAccess("deals:read") ||
     hasAccess("proposals:read");
   const canManage = hasAccess("services:write");
 
@@ -466,7 +465,7 @@ export default function CrmServicesPage() {
           <AlertDialogHeader className="px-6 py-5 border-b border-[var(--surface-dim)]">
             <AlertDialogTitle className="text-[18px] font-semibold text-[var(--text-main)]">Remove this service?</AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-[var(--text-muted)] mt-0.5">
-              This only removes the catalog entry. It does not affect deals or clients.
+              This only removes the catalog entry. It does not affect clients.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="px-6 py-4 border-t border-[var(--surface-dim)] bg-[var(--background)] flex gap-2 sm:gap-2">

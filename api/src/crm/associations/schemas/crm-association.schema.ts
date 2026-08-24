@@ -25,7 +25,7 @@ export class CrmAssociation {
   @Prop({ type: Types.ObjectId, required: true })
   toId: Types.ObjectId;
 
-  /** Stable type key, e.g. contact_company, deal_contact, or custom slug. */
+  /** Stable type key, e.g. contact_company, lead_contact, or custom slug. */
   @Prop({ required: true })
   associationType: string;
 

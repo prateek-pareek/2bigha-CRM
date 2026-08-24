@@ -13,8 +13,8 @@ export class WorkflowTriggerProgress {
   @Prop({ type: Types.ObjectId, ref: 'Workflow', required: true })
   workflowId: Types.ObjectId;
 
-  @Prop({ required: true, enum: ['Lead', 'Deal', 'Contact', 'Organization'] })
-  entityType: 'Lead' | 'Deal' | 'Contact' | 'Organization';
+  @Prop({ required: true, enum: ['Lead', 'Contact', 'Organization'] })
+  entityType: 'Lead' | 'Contact' | 'Organization';
 
   @Prop({ type: Types.ObjectId, required: true })
   entityId: Types.ObjectId;

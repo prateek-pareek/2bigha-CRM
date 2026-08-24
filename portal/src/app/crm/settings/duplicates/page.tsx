@@ -366,7 +366,7 @@ export default function CrmDuplicatesSettingsPage() {
                 </div>
                 <p className="px-4 py-2 text-xs text-[var(--primary-muted)] bg-[var(--surface-dim)] border-t border-[var(--surface-dim)]">
                   Master keeps pipeline/stage; empty fields are filled from duplicates;
-                  activities, deals, email, and workflows are repointed to the master.
+                  activities, email, and workflows are repointed to the master.
                 </p>
               </div>
             );

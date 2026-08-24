@@ -63,19 +63,6 @@ export default function ClientDetailPage() {
   const [isSharing, setIsSharing] = useState(false);
   const [emailTracking, setEmailTracking] = useState<CrmEmailTrackingRow[]>([]);
   const [activeTab, setActiveTab] = useState<'Activity' | 'Details'>('Activity');
-  const [portalDeals, setPortalDeals] = useState<
-    {
-      _id: string;
-      recordId?: string;
-      title: string;
-      stage: string;
-      portalToken?: string;
-      portalScopeSummary?: string;
-      portalPmProjectId?: string | null;
-    }[]
-  >([]);
-  const [portalDealsLoading, setPortalDealsLoading] = useState(false);
-  const [portalCopiedId, setPortalCopiedId] = useState<string | null>(null);
   const [recordMetaLoaded, setRecordMetaLoaded] = useState(false);
 
   const emailLookups = useMemo(() => buildEmailTrackingLookup(emailTracking), [emailTracking]);
@@ -154,19 +141,6 @@ export default function ClientDetailPage() {
     void fetchRecordMetadata();
   }, [fetchRecordMetadata]);
 
-  useEffect(() => {
-    if (!recordId) return;
-    const token = localStorage.getItem('token');
-    setPortalDealsLoading(true);
-    fetch(`${CRM_API_URL}/crm/clients/${recordId}/portal-deals`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => setPortalDeals(Array.isArray(d) ? d : []))
-      .catch(() => setPortalDeals([]))
-      .finally(() => setPortalDealsLoading(false));
-  }, [recordId]);
-
   const fetchEmailTracking = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token || !recordId) {
@@ -199,12 +173,6 @@ export default function ClientDetailPage() {
 
   const recipientName = client.name || 'Client';
   const recipientEmail = client.email || '';
-  const hasClientOrg = Boolean(
-    client.organization &&
-      (typeof client.organization === 'string'
-        ? client.organization.length > 0
-        : typeof client.organization === 'object'),
-  );
 
   return (
     <div className={cn(crmRecordChrome.page, 'animate-in fade-in duration-300')}>
@@ -461,121 +429,6 @@ export default function ClientDetailPage() {
             />
           )}
 
-          <div className="bg-card border border-border rounded-[var(--crm-radius-ui)] p-6 shadow-sm space-y-4">
-            <h3 className="text-xs font-black text-text-muted">Client portal</h3>
-            <p className="text-xs text-text-muted font-medium leading-relaxed">
-              Portal links and scope live on each deal. Here are deals for this client’s company.
-            </p>
-            {!hasClientOrg && (
-              <p className="text-xs text-text-muted leading-relaxed">
-                Link this client to a company to see related deals and their portal links.
-              </p>
-            )}
-            {hasClientOrg && portalDealsLoading && (
-              <div className="flex items-center gap-2 text-xs text-text-muted py-2">
-                <Loader2 size={14} className="animate-spin shrink-0" />
-                Loading deals…
-              </div>
-            )}
-            {hasClientOrg && !portalDealsLoading && portalDeals.length === 0 && (
-              <p className="text-xs text-text-muted leading-relaxed">No deals found for this company yet.</p>
-            )}
-            {hasClientOrg && !portalDealsLoading && portalDeals.length > 0 && (
-              <ul className="space-y-4">
-                {portalDeals.map((d) => {
-                  const portalUrl =
-                    typeof window !== 'undefined' && d.portalToken
-                      ? `${window.location.origin}/portal/${d.portalToken}`
-                      : '';
-                  return (
-                    <li
-                      key={d._id}
-                      className="rounded-[var(--radius-md)] border border-border bg-surface-dim/40 p-4 space-y-3 text-xs"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0 space-y-1">
-                          <Link
-                            href={`/crm/deals/${d._id}`}
-                            className="text-sm font-bold text-text-main hover:text-primary transition-colors line-clamp-2"
-                          >
-                            {d.title}
-                          </Link>
-                          <p className="text-xs font-bold uppercase tracking-wide text-text-muted">{d.stage}</p>
-                        </div>
-                      </div>
-                      {d.portalScopeSummary?.trim() ? (
-                        <p className="text-xs text-text-muted line-clamp-3 whitespace-pre-wrap">{d.portalScopeSummary}</p>
-                      ) : null}
-                      <p className="text-xs text-text-muted">
-                        Delivery board: {d.portalPmProjectId ? 'Linked' : 'Not linked'}
-                      </p>
-                      {d.portalToken ? (
-                        <div className="space-y-2 pt-1 border-t border-border">
-                          <div className="p-3 bg-background rounded-[var(--radius-md)] border border-[var(--border-color)] break-all font-mono text-xs text-text-muted/80">
-                            {portalUrl}
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={isSharing}
-                              onClick={async () => {
-                                if (!d.portalToken) return;
-                                const url = `${window.location.origin}/portal/${d.portalToken}`;
-                                if (navigator.share) {
-                                  setIsSharing(true);
-                                  try {
-                                    await navigator.share({
-                                      title: `Portal: ${d.title}`,
-                                      text: `Client portal for ${d.title}`,
-                                      url,
-                                    });
-                                  } catch (err: unknown) {
-                                    const name = err && typeof err === 'object' && 'name' in err ? (err as { name?: string }).name : '';
-                                    if (name !== 'AbortError') {
-                                      await navigator.clipboard.writeText(url);
-                                      setPortalCopiedId(d._id);
-                                      setTimeout(() => setPortalCopiedId(null), 2000);
-                                    }
-                                  } finally {
-                                    setIsSharing(false);
-                                  }
-                                } else {
-                                  await navigator.clipboard.writeText(url);
-                                  setPortalCopiedId(d._id);
-                                  setTimeout(() => setPortalCopiedId(null), 2000);
-                                }
-                              }}
-                              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-text-main text-white rounded-[var(--radius-md)] text-xs font-semibold hover:bg-black transition-all disabled:opacity-50"
-                            >
-                              <Share2 size={12} />
-                              {portalCopiedId === d._id ? 'Copied!' : 'Share / copy'}
-                            </button>
-                            <a
-                              href={`/portal/${d.portalToken}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2.5 bg-card border border-[var(--border-color)] text-text-muted hover:text-primary rounded-[var(--radius-md)] transition-all inline-flex items-center justify-center"
-                              title="Open portal"
-                            >
-                              <ExternalLink size={16} />
-                            </a>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-text-muted pt-1 border-t border-border">
-                          Portal not enabled on this deal —{' '}
-                          <Link href={`/crm/deals/${d._id}`} className="text-primary font-bold hover:underline">
-                            open deal
-                          </Link>{' '}
-                          to turn it on.
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
         </div>
       </div>
 

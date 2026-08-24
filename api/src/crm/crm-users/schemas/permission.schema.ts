@@ -6,7 +6,7 @@ export type PermissionDocument = Permission & Document;
 @Schema({ timestamps: true })
 export class Permission {
   @Prop({ required: true, unique: true })
-  name: string; // e.g., 'leads:read', 'leads:write', 'deals:delete'
+  name: string; // e.g., 'leads:read', 'leads:write', 'contacts:delete'
 
   @Prop()
   description: string;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Briefcase, User, Plus, X, Loader2, Search } from "lucide-react";
+import { User, Plus, X, Loader2, Search } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -14,12 +14,7 @@ type AnyRec = {
   email?: string;
   title?: string;
   stage?: string;
-  dealValue?: number;
 };
-
-function dealLabel(d: AnyRec) {
-  return d.title || "Deal";
-}
 
 function contactLabel(c: AnyRec) {
   const n = `${c.firstName || ""} ${c.lastName || ""}`.trim();
@@ -42,7 +37,6 @@ export default function OrganizationAssociationsPanel({
 
   const contacts = (org?.associatedContacts as AnyRec[]) || [];
   const leads = (org?.associatedLeads as AnyRec[]) || [];
-  const deals = (org?.associatedDeals as AnyRec[]) || [];
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -147,7 +141,7 @@ export default function OrganizationAssociationsPanel({
         </button>
       </div>
       <p className="text-xs text-text-muted mb-4 leading-relaxed">
-        Link leads, contacts, and deals to this company. Their associated activity is included in the company timeline.
+        Link leads and contacts to this company. Their associated activity is included in the company timeline.
       </p>
 
       {addOpen && (
@@ -156,7 +150,7 @@ export default function OrganizationAssociationsPanel({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
             <input
               className="w-full pl-10 pr-3 py-2.5 rounded-[var(--radius-md)] border border-border bg-card text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
-              placeholder="Search leads, contacts, or deals…"
+              placeholder="Search leads or contacts…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -164,24 +158,6 @@ export default function OrganizationAssociationsPanel({
           </div>
           {results && q.trim().length >= 2 && (
             <div className="max-h-56 overflow-y-auto space-y-3 text-sm">
-              {(results.deals?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-text-muted mb-1.5">Deals</p>
-                  <ul className="space-y-1">
-                    {results.deals!.map((d) => (
-                      <li key={d._id}>
-                        <button
-                          type="button"
-                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-card border border-transparent hover:border-border"
-                          onClick={() => addExisting("associatedDeals", d._id)}
-                        >
-                          {dealLabel(d)}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               {(results.contacts?.length ?? 0) > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-text-muted mb-1.5">Contacts</p>
@@ -220,7 +196,7 @@ export default function OrganizationAssociationsPanel({
               )}
               {!searching &&
                 q.trim().length >= 2 &&
-                !(results.deals?.length || results.contacts?.length || results.leads?.length) && (
+                !(results.contacts?.length || results.leads?.length) && (
                   <p className="text-xs text-text-muted py-2">No matches — try another name or title.</p>
                 )}
             </div>
@@ -267,28 +243,6 @@ export default function OrganizationAssociationsPanel({
                   title={contactLabel(c)}
                   subtitle={c.email}
                   onRemove={() => remove("associatedContacts", c._id)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-text-muted">
-            <Briefcase size={12} />
-            Deals
-          </div>
-          {deals.length === 0 ? (
-            <p className="text-xs text-text-muted italic">No deals linked</p>
-          ) : (
-            <div className="space-y-2">
-              {deals.map((d) => (
-                <Row
-                  key={d._id}
-                  href={`/crm/deals/${d._id}`}
-                  title={dealLabel(d)}
-                  subtitle={d.stage}
-                  onRemove={() => remove("associatedDeals", d._id)}
                 />
               ))}
             </div>

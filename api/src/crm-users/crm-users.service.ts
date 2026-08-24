@@ -49,7 +49,6 @@ const CANONICAL_CRM_PERMISSIONS: {
   description: string;
 }[] = [
   { name: 'leads:delete', module: 'crm', description: 'Remove leads' },
-  { name: 'deals:delete', module: 'crm', description: 'Remove deals' },
   { name: 'contacts:delete', module: 'crm', description: 'Remove contacts' },
   {
     name: 'organizations:delete',
@@ -71,11 +70,6 @@ const CANONICAL_CRM_PERMISSIONS: {
     name: 'leads:move_pipeline',
     module: 'crm',
     description: 'Move leads between pipelines (board drag & bulk move)',
-  },
-  {
-    name: 'deals:move_pipeline',
-    module: 'crm',
-    description: 'Move deals between pipelines and update stage/probability',
   },
   { name: 'legal:read', module: 'crm', description: 'View legal cases' },
   {
@@ -352,7 +346,6 @@ export class CRMUsersService implements OnModuleInit {
             role: 'Sales Rep',
             roleId: role?._id,
             assignedLeadsPipeline: employee.assignedLeadsPipeline,
-            assignedDealsPipeline: employee.assignedDealsPipeline,
           },
           $setOnInsert: {
             email: employee.email,

@@ -18,7 +18,7 @@ interface ImportModalProps {
  type: CrmImportEntityType;
 }
 
-/** Extra mapping rows for HubSpot-style exports (companies ↔ contacts ↔ deals). */
+/** Extra mapping rows for HubSpot-style exports (companies ↔ contacts). */
 const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
  leads: [
   { label: 'Salutation', key: 'salutation' },
@@ -51,7 +51,7 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'Job Title', key: 'jobTitle' },
   { label: 'Organization / Company name', key: 'organization' },
   { label: 'HubSpot company ID (match imported company)', key: 'hubspotCompanyId' },
-  { label: 'HubSpot contact ID (stored for deal linking)', key: 'hubspotContactId' },
+  { label: 'HubSpot contact ID (stored for linking)', key: 'hubspotContactId' },
   { label: 'MongoDB organization ID (advanced)', key: 'organizationId' },
   { label: 'Lead Source', key: 'source' },
   { label: 'Industry', key: 'industry' },
@@ -65,25 +65,6 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   { label: 'Owner', key: 'leadOwner' },
   { label: 'Status', key: 'status' },
   { label: 'Stage', key: 'stage' },
- ],
- deals: [
-  { label: 'Deal Title', key: 'title' },
-  { label: 'Value', key: 'dealValue' },
-  { label: 'Pricing Type (fixed/monthly)', key: 'pricingType' },
-  { label: 'Contract Months', key: 'contractMonths' },
-  { label: 'Expected Deal Value', key: 'expectedDealValue' },
-  { label: 'Currency', key: 'currency' },
-  { label: 'Exchange Rate', key: 'exchangeRate' },
-  { label: 'Stage', key: 'stage' },
-  { label: 'Probability', key: 'probability' },
-  { label: 'Company / Organization name', key: 'organization' },
-  { label: 'Contact email (link to contact)', key: 'contactEmail' },
-  { label: 'HubSpot contact ID (link to contact)', key: 'hubspotContactId' },
-  { label: 'MongoDB contact ID (advanced)', key: 'contactPerson' },
-  { label: 'Deal Owner', key: 'dealOwner' },
-  { label: 'Expected Closure Date', key: 'expectedClosureDate' },
-  { label: 'Closed Date', key: 'closedDate' },
-  { label: 'Next Step', key: 'nextStep' },
  ],
  clients: [
   { label: 'Client Name', key: 'name' },
@@ -147,7 +128,6 @@ const DUPLICATE_STRATEGY_OPTIONS: {
 const IMPORT_TYPE_LABEL: Record<ImportModalProps['type'], string> = {
   leads: 'Lead',
   contacts: 'Contact',
-  deals: 'Deal',
   clients: 'Client',
   organizations: 'Company',
 };
@@ -204,14 +184,6 @@ function applyHubSpotHints(
     );
   if (!out.hubspotContactId && (type === 'contacts' || type === 'leads'))
     out.hubspotContactId = pick('Record ID', 'Contact ID', 'Contact record ID');
-  if (!out.title && type === 'deals') out.title = pick('Deal Name', 'Deal name', 'Name');
-  if (!out.dealValue && type === 'deals')
-    out.dealValue = pick('Amount', 'Deal amount', 'Value');
-  if (!out.stage && type === 'deals') out.stage = pick('Deal Stage', 'Stage');
-  if (!out.contactEmail && type === 'deals')
-    out.contactEmail = pick('Associated Contact', 'Contact Email', 'Primary Contact Email');
-  if (!out.hubspotContactId && type === 'deals')
-    out.hubspotContactId = pick('Associated Contact IDs', 'Contact ID');
   if (type === 'leads') {
     if (!out.role) out.role = pick('Role', 'User Type');
     if (!out.whatsappNumber) out.whatsappNumber = pick('WhatsApp Number', 'WhatsApp', 'Whatsapp Number');
@@ -289,35 +261,6 @@ const CONTACTS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.contacts.map(
 );
 
 /**
- * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.deals,
- * with header text matching each field's `label` exactly so re-uploading this template
- * auto-maps every column.
- */
-const DEALS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.deals.map((f) => f.label);
-const DEALS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
-  title: 'Example Realty — 3BHK Sale',
-  dealValue: '2500000',
-  pricingType: 'fixed',
-  contractMonths: '',
-  expectedDealValue: '2500000',
-  currency: 'INR',
-  exchangeRate: '1',
-  stage: 'Qualification',
-  probability: '20',
-  organization: 'Example Realty Pvt Ltd',
-  contactEmail: 'riya.kapoor@example.com',
-  hubspotContactId: '',
-  contactPerson: '',
-  dealOwner: '',
-  expectedClosureDate: '2026-09-30',
-  closedDate: '',
-  nextStep: 'Schedule site visit',
-};
-const DEALS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.deals.map(
-  (f) => DEALS_TEMPLATE_EXAMPLE_BY_KEY[f.key] ?? '',
-);
-
-/**
  * CSV column headers + one example row — one column per property in CRM_FIELDS_MAP.clients,
  * with header text matching each field's `label` exactly so re-uploading this template
  * auto-maps every column.
@@ -358,10 +301,6 @@ function downloadLeadsCsvTemplate() {
 
 function downloadContactsCsvTemplate() {
   downloadCsvTemplate(CONTACTS_TEMPLATE_HEADERS, CONTACTS_TEMPLATE_EXAMPLE, 'contacts-import-template.csv');
-}
-
-function downloadDealsCsvTemplate() {
-  downloadCsvTemplate(DEALS_TEMPLATE_HEADERS, DEALS_TEMPLATE_EXAMPLE, 'deals-import-template.csv');
 }
 
 function downloadClientsCsvTemplate() {
@@ -622,14 +561,13 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
          <p className="text-sm font-medium text-text-muted mt-2">Support .xlsx, .csv (Max 10MB)</p>
         </div>
 
-        {(type === 'leads' || type === 'contacts' || type === 'deals' || type === 'clients') && (
+        {(type === 'leads' || type === 'contacts' || type === 'clients') && (
          <div className="flex items-center justify-center">
           <button
            type="button"
            onClick={(e) => {
             e.stopPropagation();
             if (type === 'leads') downloadLeadsCsvTemplate();
-            else if (type === 'deals') downloadDealsCsvTemplate();
             else if (type === 'clients') downloadClientsCsvTemplate();
             else downloadContactsCsvTemplate();
            }}

@@ -7,8 +7,7 @@ import { redisGetOrSet } from './redis-cache.util';
 export type CrmCacheEntity =
   | 'leads'
   | 'contacts'
-  | 'organizations'
-  | 'deals';
+  | 'organizations';
 
 @Injectable()
 export class AppCacheService {
@@ -76,7 +75,7 @@ export class AppCacheService {
   }
 
   reportingBoardKey(days: number | string, ownerKey: string): string {
-    // v8: day × platform × employee intake detail for leads & deals
+    // v8: day × platform × employee intake detail for leads
     return `crm:reporting:board:v8:${days}:${ownerKey}`;
   }
 
@@ -113,7 +112,6 @@ export class AppCacheService {
     window?: string;
     sections?: string;
     scopedAuthorId?: Types.ObjectId | Types.ObjectId[] | null;
-    dealAccessFilter?: Record<string, unknown> | null;
   }): string {
     const extras = [...(params.ownerMatchExtras || [])]
       .map((s) => String(s).trim())
@@ -125,9 +123,6 @@ export class AppCacheService {
       window: params.window?.trim() || 'default',
       sections: params.sections?.trim() || '',
       authors: this.reportingAuthorScope(params.scopedAuthorId),
-      dealAccess: params.dealAccessFilter
-        ? this.digest(params.dealAccessFilter)
-        : 'all',
     });
     // v11: never-contacted attention respects workspace date window
     return `crm:reporting:workspace:v11:${hash}`;
@@ -141,15 +136,11 @@ export class AppCacheService {
     const leadsPipe = user.assignedLeadsPipeline
       ? String(user.assignedLeadsPipeline)
       : '';
-    const dealsPipe = user.assignedDealsPipeline
-      ? String(user.assignedDealsPipeline)
-      : '';
     const canClients = user.permittedTools || user.permissions ? 'p' : '';
     return this.digest({
       uid,
       role,
       leadsPipe,
-      dealsPipe,
       canClients,
     });
   }
@@ -211,11 +202,11 @@ export class AppCacheService {
    * Kanban / board full-list fetch (unpaged, pipeline-scoped, no search or advanced filters).
    */
   crmBoardListKey(
-    entity: 'leads' | 'deals',
+    entity: 'leads',
     user: any | undefined,
     params: Record<string, unknown>,
   ): string | null {
-    if (entity !== 'leads' && entity !== 'deals') return null;
+    if (entity !== 'leads') return null;
     const pipelineId = params.pipelineId;
     if (!pipelineId || typeof pipelineId !== 'string' || !pipelineId.trim()) {
       return null;
@@ -251,7 +242,7 @@ export class AppCacheService {
   ): { key: string; ttl: number } | null {
     const listKey = this.crmListKey(entity, user, params);
     if (listKey) return { key: listKey, ttl: this.crmListTtl() };
-    if (entity === 'leads' || entity === 'deals') {
+    if (entity === 'leads') {
       const boardKey = this.crmBoardListKey(entity, user, params);
       if (boardKey) return { key: boardKey, ttl: this.crmBoardTtl() };
     }
@@ -272,7 +263,7 @@ export class AppCacheService {
     await this.redis.delByPrefix(`crm:${entity}:list:v2:`);
     // Legacy prefix (pre-scale key bump) — safe no-op if empty.
     await this.redis.delByPrefix(`crm:${entity}:list:v1:`);
-    if (entity === 'leads' || entity === 'deals') {
+    if (entity === 'leads') {
       await this.redis.delByPrefix(`crm:${entity}:board:v1:`);
     }
     if (recordId) {

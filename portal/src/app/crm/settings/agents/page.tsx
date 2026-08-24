@@ -21,7 +21,6 @@ function pipelineId(p: PipelineOption): string {
 export default function SalesAgentSettingsPage() {
   const [settings, setSettings] = useState<SalesAgentSettings | null>(null);
   const [leadPipelines, setLeadPipelines] = useState<PipelineOption[]>([]);
-  const [dealPipelines, setDealPipelines] = useState<PipelineOption[]>([]);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,17 +34,15 @@ export default function SalesAgentSettingsPage() {
       const token = getCrmAuthToken();
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
       try {
-        const [status, s, leadRes, dealRes] = await Promise.all([
+        const [status, s, leadRes] = await Promise.all([
           fetchSalesAgentStatus(),
           fetchSalesAgentSettings(),
           fetch(`${CRM_API_URL}/crm/pipelines?type=leads`, { headers }),
-          fetch(`${CRM_API_URL}/crm/pipelines?type=deals`, { headers }),
         ]);
         setConfigured(status.configured);
         setSettings(s);
         setAutoApproveStagesText((s.autoApproveStageNames || []).join(", "));
         if (leadRes.ok) setLeadPipelines(await leadRes.json());
-        if (dealRes.ok) setDealPipelines(await dealRes.json());
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load settings");
       } finally {
@@ -82,27 +79,23 @@ export default function SalesAgentSettingsPage() {
     setSettings({ ...settings, [key]: !settings[key] });
   };
 
-  const togglePipeline = (kind: "lead" | "deal", id: string) => {
+  const togglePipeline = (id: string) => {
     if (!settings) return;
-    const key = kind === "lead" ? "enabledLeadPipelineIds" : "enabledDealPipelineIds";
-    const current = (settings[key] || []).map(String);
+    const current = (settings.enabledLeadPipelineIds || []).map(String);
     const next = current.includes(id)
       ? current.filter((x) => x !== id)
       : [...current, id];
-    setSettings({ ...settings, [key]: next });
+    setSettings({ ...settings, enabledLeadPipelineIds: next });
   };
 
-  const selectAllPipelines = (kind: "lead" | "deal") => {
+  const selectAllPipelines = () => {
     if (!settings) return;
-    const key = kind === "lead" ? "enabledLeadPipelineIds" : "enabledDealPipelineIds";
-    const list = kind === "lead" ? leadPipelines : dealPipelines;
-    setSettings({ ...settings, [key]: list.map(pipelineId) });
+    setSettings({ ...settings, enabledLeadPipelineIds: leadPipelines.map(pipelineId) });
   };
 
-  const clearPipelines = (kind: "lead" | "deal") => {
+  const clearPipelines = () => {
     if (!settings) return;
-    const key = kind === "lead" ? "enabledLeadPipelineIds" : "enabledDealPipelineIds";
-    setSettings({ ...settings, [key]: [] });
+    setSettings({ ...settings, enabledLeadPipelineIds: [] });
   };
 
   if (loading) {
@@ -118,7 +111,6 @@ export default function SalesAgentSettingsPage() {
   }
 
   const renderPipelineGroup = (
-    kind: "lead" | "deal",
     label: string,
     pipelines: PipelineOption[],
     selected: string[],
@@ -129,7 +121,7 @@ export default function SalesAgentSettingsPage() {
         <div className="flex gap-2 text-xs">
           <button
             type="button"
-            onClick={() => selectAllPipelines(kind)}
+            onClick={() => selectAllPipelines()}
             className="text-violet-600 hover:underline"
           >
             Select all
@@ -137,7 +129,7 @@ export default function SalesAgentSettingsPage() {
           <span className="text-[var(--text-muted)]">·</span>
           <button
             type="button"
-            onClick={() => clearPipelines(kind)}
+            onClick={() => clearPipelines()}
             className="text-[var(--text-muted)] hover:underline"
           >
             All pipelines (default)
@@ -145,11 +137,11 @@ export default function SalesAgentSettingsPage() {
         </div>
       </div>
       <p className="text-xs text-[var(--text-muted)]">
-        Leave none selected to allow agents on every {kind} pipeline. Select specific pipelines to
+        Leave none selected to allow agents on every lead pipeline. Select specific pipelines to
         limit scope.
       </p>
       {pipelines.length === 0 ? (
-        <p className="text-xs text-[var(--text-muted)]">No {kind} pipelines found.</p>
+        <p className="text-xs text-[var(--text-muted)]">No lead pipelines found.</p>
       ) : (
         <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-lg border border-[var(--border-color)] p-3">
           {pipelines.map((p) => {
@@ -163,7 +155,7 @@ export default function SalesAgentSettingsPage() {
                 <input
                   type="checkbox"
                   checked={checked}
-                  onChange={() => togglePipeline(kind, id)}
+                  onChange={() => togglePipeline(id)}
                   className="h-4 w-4"
                 />
                 <span>{p.name}</span>
@@ -262,16 +254,9 @@ export default function SalesAgentSettingsPage() {
             Pipeline scope
           </p>
           {renderPipelineGroup(
-            "lead",
             "Lead pipelines",
             leadPipelines,
             settings.enabledLeadPipelineIds || [],
-          )}
-          {renderPipelineGroup(
-            "deal",
-            "Deal pipelines",
-            dealPipelines,
-            settings.enabledDealPipelineIds || [],
           )}
         </div>
 

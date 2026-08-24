@@ -29,7 +29,6 @@ import {
   Target,
   TrendingUp,
   Users,
-  Briefcase,
 } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { getCrmAuthToken } from "@/lib/crm/api";
@@ -47,13 +46,10 @@ import {
 } from "@/lib/crm/shared/chart-theme";
 import { CRM_PANEL } from "@/lib/crm/ui";
 import { cn } from "@/lib/utils";
-import { usePermissions } from "@/hooks/usePermissions";
 
 type WorkSnapshot = {
   leadsCreated: number;
   leadsConverted: number;
-  dealsCreated: number;
-  dealsWon: number;
   activities: number;
   calls: number;
   emailsLogged: number;
@@ -93,17 +89,12 @@ export type SalesHealthPayload = {
     name: string;
     activities: number;
     leadsCreated: number;
-    dealsCreated: number;
   }>;
   pipeline: {
     openLeads: number;
-    openDeals: number;
-    grossValueINR: number;
-    weightedValueINR: number;
     staleLeads: number;
     touchCoveragePercent: number;
     overdueTasks: number;
-    atRiskDeals: number;
     emailOpenRatePercent: number;
     emailReplyRatePercent: number;
   };
@@ -129,14 +120,6 @@ const INDICATOR_STATUS: Record<string, string> = {
   risk: "bg-[var(--primary-light)] text-[var(--primary)]",
 };
 
-function fmtMoney(value: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 function fmtShortDate(date: string) {
   const d = new Date(date + "T12:00:00");
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -149,7 +132,6 @@ export default function CrmSalesHealthPanel({
   owner?: string;
   window?: string;
 }) {
-  const { canViewCrmRevenue } = usePermissions();
   const [window, setWindow] = useState(initialWindow);
   const [data, setData] = useState<SalesHealthPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -184,9 +166,9 @@ export default function CrmSalesHealthPanel({
   const comparisonChart = useMemo(() => {
     if (!data) return [];
     return [
-      { period: "Today", activities: data.comparison.today.activities, leads: data.comparison.today.leadsCreated, deals: data.comparison.today.dealsCreated },
-      { period: "This week", activities: data.comparison.this_week.activities, leads: data.comparison.this_week.leadsCreated, deals: data.comparison.this_week.dealsCreated },
-      { period: "This month", activities: data.comparison.this_month.activities, leads: data.comparison.this_month.leadsCreated, deals: data.comparison.this_month.dealsCreated },
+      { period: "Today", activities: data.comparison.today.activities, leads: data.comparison.today.leadsCreated },
+      { period: "This week", activities: data.comparison.this_week.activities, leads: data.comparison.this_week.leadsCreated },
+      { period: "This month", activities: data.comparison.this_month.activities, leads: data.comparison.this_month.leadsCreated },
     ];
   }, [data]);
 
@@ -246,7 +228,6 @@ export default function CrmSalesHealthPanel({
         fullName: r.name,
         activities: r.activities,
         leads: r.leadsCreated,
-        deals: r.dealsCreated,
       })),
     [data?.repLeaderboard],
   );
@@ -322,8 +303,7 @@ export default function CrmSalesHealthPanel({
         <div className="lg:col-span-8 grid grid-cols-2 md:grid-cols-4 gap-4">
           <CrmKpiCard icon={<Activity className="h-4 w-4 text-[#2563eb]" />} label="Activities" value={data.workDone.activities} />
           <CrmKpiCard icon={<Users className="h-4 w-4 text-[#06b6d4]" />} label="Leads created" value={data.workDone.leadsCreated} />
-          <CrmKpiCard icon={<Briefcase className="h-4 w-4 text-[#8b5cf6]" />} label="Deals created" value={data.workDone.dealsCreated} />
-          <CrmKpiCard className="border-[var(--success)]/30" icon={<Target className="h-4 w-4 text-[#10b981]" />} label="Deals won" value={data.workDone.dealsWon} />
+          <CrmKpiCard className="border-[var(--success)]/30" icon={<Target className="h-4 w-4 text-[#10b981]" />} label="Leads converted" value={data.workDone.leadsConverted} />
           <CrmKpiCard icon={<Phone className="h-4 w-4 text-[#0284c7]" />} label="Calls" value={data.workDone.calls} />
           <CrmKpiCard icon={<Mail className="h-4 w-4 text-[#d97706]" />} label="Emails logged" value={data.workDone.emailsLogged} />
           <CrmKpiCard icon={<Mail className="h-4 w-4 text-[#2563eb]" />} label="Tracked sends" value={data.workDone.trackedSends} />
@@ -365,9 +345,6 @@ export default function CrmSalesHealthPanel({
               </Bar>
               <Bar dataKey="leads" name="Leads" fill={CRM_CHART_INFO} radius={[6, 6, 0, 0]} maxBarSize={28}>
                 <LabelList dataKey="leads" position="top" style={{ fontSize: 10, fontWeight: 700, fill: "#475569" }} />
-              </Bar>
-              <Bar dataKey="deals" name="Deals" fill={CRM_CHART_SUCCESS} radius={[6, 6, 0, 0]} maxBarSize={28}>
-                <LabelList dataKey="deals" position="top" style={{ fontSize: 10, fontWeight: 700, fill: "#475569" }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -485,15 +462,8 @@ export default function CrmSalesHealthPanel({
         <CrmSectionCard title="Pipeline snapshot" bodyClassName="pt-4">
           <div className="grid grid-cols-2 gap-4">
             <PipelineStat label="Open leads" value={data.pipeline.openLeads} />
-            <PipelineStat label="Open deals" value={data.pipeline.openDeals} />
-            {canViewCrmRevenue ? (
-              <>
-                <PipelineStat label="Pipeline value" value={fmtMoney(data.pipeline.grossValueINR)} />
-                <PipelineStat label="Weighted forecast" value={fmtMoney(data.pipeline.weightedValueINR)} />
-              </>
-            ) : null}
             <PipelineStat label="Stale leads" value={data.pipeline.staleLeads} warn={data.pipeline.staleLeads > 0} />
-            <PipelineStat label="Past-due deals" value={data.pipeline.atRiskDeals} warn={data.pipeline.atRiskDeals > 0} />
+            <PipelineStat label="Overdue tasks" value={data.pipeline.overdueTasks} warn={data.pipeline.overdueTasks > 0} />
             <PipelineStat label="Email open rate" value={`${data.pipeline.emailOpenRatePercent}%`} />
             <PipelineStat label="Reply rate" value={`${data.pipeline.emailReplyRatePercent}%`} />
           </div>
@@ -517,7 +487,6 @@ export default function CrmSalesHealthPanel({
                     <Legend {...CRM_CHART_LEGEND} />
                     <Bar dataKey="activities" name="Activities" fill={CRM_CHART_PRIMARY} radius={[4, 4, 0, 0]} />
                     <Bar dataKey="leads" name="Leads" fill={CRM_CHART_INFO} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="deals" name="Deals" fill={CRM_CHART_SUCCESS} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -535,7 +504,6 @@ export default function CrmSalesHealthPanel({
                   <div className="flex shrink-0 gap-4 text-xs text-[var(--text-muted)]">
                     <span><strong className="text-[var(--text-main)]">{rep.activities}</strong> acts</span>
                     <span><strong className="text-[var(--text-main)]">{rep.leadsCreated}</strong> leads</span>
-                    <span><strong className="text-[var(--text-main)]">{rep.dealsCreated}</strong> deals</span>
                   </div>
                 </div>
               ))}

@@ -113,7 +113,6 @@ export type LeadFollowUpStats = {
 export type WorkspacePayload = {
   window?: WorkspaceWindowFilter;
   attention: import("@/components/crm/reports/panels/CrmSalesAttention").SalesAttentionPayload;
-  pipelineByStage: Array<{ stage: string; count: number; value: number }>;
   priorityTasks: Array<{
     id: string;
     title: string;
@@ -123,16 +122,6 @@ export type WorkspacePayload = {
     relatedType?: string;
     relatedTo?: string;
     authorName?: string;
-  }>;
-  dealsClosingSoon: Array<{
-    id: string;
-    title: string;
-    stage: string;
-    dealValue: number;
-    dealValueINR?: number;
-    expectedClosureDate?: string;
-    dealOwner?: string;
-    currency?: string;
   }>;
   recentActivities: Array<{
     id: string;
@@ -151,30 +140,10 @@ export type WorkspacePayload = {
     source?: "activity" | "audit";
   }>;
   todayFocus: {
-    dealsToMoveToday: number;
     overdueFollowUps: number;
     proposalsAwaitingResponse: number;
     hotLeadsNoAction: number;
   };
-  atRiskDeals: Array<{
-    id: string;
-    title: string;
-    stage: string;
-    dealValue: number;
-    dealValueINR?: number;
-    expectedClosureDate?: string;
-    reasons: string[];
-    riskScore: number;
-  }>;
-  nextStepRequired: Array<{
-    id: string;
-    title: string;
-    stage: string;
-    dealValue: number;
-    dealValueINR?: number;
-    expectedClosureDate?: string;
-    hasNextStep: boolean;
-  }>;
   leadsAddedByDay?: Array<{
     date: string;
     total: number;
@@ -185,16 +154,6 @@ export type WorkspacePayload = {
     }>;
     byStage?: Array<{ stage: string; count: number }>;
     stageEntered?: Array<{ stage: string; count: number }>;
-  }>;
-  dealsAddedByDay?: Array<{
-    date: string;
-    total: number;
-    byPipeline: Array<{
-      pipelineId: string | null;
-      pipelineName: string;
-      count: number;
-    }>;
-    byStage?: Array<{ stage: string; count: number }>;
   }>;
   leadFollowUpWeek?: LeadFollowUpStats;
   leadFollowUpByWindow?: {
@@ -250,12 +209,6 @@ export type WorkspacePayload = {
   };
 };
 
-export type DealsPipelineOption = {
-  _id: string;
-  name: string;
-  stages?: Array<{ name: string; order?: number }>;
-};
-
 export function recordHref(
   relatedType: string | undefined,
   relatedTo: string | undefined,
@@ -263,7 +216,6 @@ export function recordHref(
   if (!relatedTo) return null;
   const t = (relatedType || "").toLowerCase();
   if (t === "lead" || t === "leads") return `/crm/leads/${relatedTo}`;
-  if (t === "deal" || t === "deals") return `/crm/deals/${relatedTo}`;
   if (t === "contact" || t === "contacts") return `/crm/contacts/${relatedTo}`;
   if (t === "client" || t === "clients") return `/crm/clients/${relatedTo}`;
   if (t === "organization" || t === "organizations") {
@@ -305,7 +257,6 @@ export const WORKSPACE_ITEMS_INCREMENT = 25;
 const WORKSPACE_SECTIONS = [
   "attention",
   "tasks",
-  "deals",
   "activity",
   "leads",
   "lead_status",
@@ -314,20 +265,17 @@ const WORKSPACE_SECTIONS = [
 export type WorkspaceSection = (typeof WORKSPACE_SECTIONS)[number];
 
 export const TAB_SECTIONS: Record<string, WorkspaceSection[]> = {
-  summary: ["deals"],
-  work: ["attention", "upcoming_follow_ups", "tasks", "deals"],
-  work_queue: ["attention", "upcoming_follow_ups", "tasks", "deals"],
+  summary: [],
+  work: ["attention", "upcoming_follow_ups", "tasks"],
+  work_queue: ["attention", "upcoming_follow_ups", "tasks"],
   prospecting: ["attention", "lead_status"],
   lead_status: ["lead_status"],
   follow_ups: ["upcoming_follow_ups"],
   tasks: ["tasks"],
-  deals: ["deals"],
-  next_step: ["deals"],
   activity: ["activity"],
   calls: ["attention", "activity"],
   calendar: [],
-  revenue_summary: ["deals"],
-  growth: ["deals"],
+  growth: [],
 };
 
 function emptyAttention(): WorkspacePayload["attention"] {
@@ -345,20 +293,14 @@ function emptyAttention(): WorkspacePayload["attention"] {
 export function emptyWorkspacePayload(): WorkspacePayload {
   return {
     attention: emptyAttention(),
-    pipelineByStage: [],
     priorityTasks: [],
-    dealsClosingSoon: [],
     recentActivities: [],
     todayFocus: {
-      dealsToMoveToday: 0,
       overdueFollowUps: 0,
       proposalsAwaitingResponse: 0,
       hotLeadsNoAction: 0,
     },
-    atRiskDeals: [],
-    nextStepRequired: [],
     leadsAddedByDay: [],
-    dealsAddedByDay: [],
     leadFollowUpWeek: {
       weekStart: "",
       weekEnd: "",
@@ -413,15 +355,10 @@ export function mergeWorkspacePayload(
     ...base,
     ...patch,
     attention: patch.attention ?? base.attention,
-    pipelineByStage: patch.pipelineByStage ?? base.pipelineByStage,
     priorityTasks: patch.priorityTasks ?? base.priorityTasks,
-    dealsClosingSoon: patch.dealsClosingSoon ?? base.dealsClosingSoon,
     recentActivities: patch.recentActivities ?? base.recentActivities,
     todayFocus: patch.todayFocus ?? base.todayFocus,
-    atRiskDeals: patch.atRiskDeals ?? base.atRiskDeals,
-    nextStepRequired: patch.nextStepRequired ?? base.nextStepRequired,
     leadsAddedByDay: patch.leadsAddedByDay ?? base.leadsAddedByDay,
-    dealsAddedByDay: patch.dealsAddedByDay ?? base.dealsAddedByDay,
     leadFollowUpWeek: patch.leadFollowUpWeek ?? base.leadFollowUpWeek,
     leadFollowUpByWindow: patch.leadFollowUpByWindow ?? base.leadFollowUpByWindow,
     leadIntake: patch.leadIntake ?? base.leadIntake,
@@ -431,7 +368,7 @@ export function mergeWorkspacePayload(
 }
 
 export function summaryInitialSections(): WorkspaceSection[] {
-  return ["deals", "tasks", "activity"];
+  return ["tasks", "activity"];
 }
 
 type WorkspaceLeadRow = NonNullable<
@@ -636,12 +573,10 @@ function reportingDayBoundsIso(ymd: string): [string, string] | null {
 
 function DayLeadsExpanded({
   date,
-  kind = "leads",
   ownerLabel,
   ownerId,
 }: {
   date: string;
-  kind?: "leads" | "deals";
   ownerLabel?: string | null;
   ownerId?: string | null;
 }) {
@@ -659,10 +594,6 @@ function DayLeadsExpanded({
     const q = new URLSearchParams();
     q.set("page", "1");
     q.set("pageSize", "100");
-    if (kind === "leads") {
-      // Match CRM Leads board: converted leads belong under Deals intake.
-      // (Do not set includeConverted.)
-    }
     const filter: Array<{ property: string; operator: string; value: string }> = [
       {
         property: "createdAt",
@@ -675,42 +606,22 @@ function DayLeadsExpanded({
         Boolean,
       ) as string[];
       filter.push({
-        property: kind === "deals" ? "dealOwner" : "leadOwner",
+        property: "leadOwner",
         operator: "equals",
         value: ownerValues.join("||"),
       });
     }
     q.set("filters", JSON.stringify(filter));
 
-    const endpoint =
-      kind === "deals"
-        ? `${CRM_API_URL}/crm/deals?${q}`
-        : `${CRM_API_URL}/crm/leads?${q}`;
-
-    fetch(endpoint, {
+    fetch(`${CRM_API_URL}/crm/leads?${q}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     }).then(r => r.json()).then(data => {
       if (active) {
         const rows = Array.isArray(data)
           ? data
-          : (data?.data || data?.leads || data?.deals || data?.items || []);
+          : (data?.data || data?.leads || data?.items || []);
         setLeads(
           (rows as Array<Record<string, unknown>>).map((row) => {
-            if (kind === "deals") {
-              const id = String(row._id || row.id || "");
-              return {
-                id,
-                name: String(row.title || "").trim() || "Untitled deal",
-                email: "",
-                organization: String(row.organization || "") || undefined,
-                leadOwner: String(row.dealOwner || "") || undefined,
-                status: String(row.stage || "New").trim() || "New",
-                createdAt: row.createdAt
-                  ? new Date(String(row.createdAt)).toISOString()
-                  : new Date().toISOString(),
-                href: id ? `/crm/deals/${id}` : undefined,
-              };
-            }
             const first = String(row.firstName || "").trim();
             const last = String(row.lastName || "").trim();
             const id = String(row._id || row.id || "");
@@ -737,19 +648,19 @@ function DayLeadsExpanded({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [date, kind, ownerLabel, ownerId]);
+  }, [date, ownerLabel, ownerId]);
 
   if (loading) {
     return (
       <div className="p-3 text-xs text-[var(--text-muted)] animate-pulse border-t border-[var(--border-color)]">
-        {kind === "deals" ? "Loading deals..." : "Loading leads..."}
+        Loading leads...
       </div>
     );
   }
   if (!leads.length) {
     return (
       <div className="p-3 text-xs text-[var(--text-muted)] border-t border-[var(--border-color)]">
-        {kind === "deals" ? "No deals found for this date." : "No leads found for this date."}
+        No leads found for this date.
       </div>
     );
   }
@@ -762,71 +673,25 @@ function DayLeadsExpanded({
 
 export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
   days,
-  kind = "leads",
-  onKindChange,
   onDateClick,
   ownerLabel,
   ownerId,
   onUseLast30Days,
   windowFilter,
-  showDealsTab = true,
 }: {
-  days: NonNullable<WorkspacePayload["leadsAddedByDay"]> | NonNullable<WorkspacePayload["dealsAddedByDay"]>;
-  kind?: "leads" | "deals";
-  onKindChange?: (kind: "leads" | "deals") => void;
+  days: NonNullable<WorkspacePayload["leadsAddedByDay"]>;
   onDateClick?: (date: string) => void;
   ownerLabel?: string | null;
   ownerId?: string | null;
   onUseLast30Days?: () => void;
   windowFilter?: string;
-  showDealsTab?: boolean;
 }) {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [customDateForDay, setCustomDateForDay] = useState<Record<string, string>>({});
-  const isDeals = kind === "deals";
 
-  useEffect(() => {
-    setExpandedDay(null);
-  }, [kind]);
-
-  const title = isDeals ? "Deals added by day" : "Leads added by day";
-  const emptyMessage = isDeals
-    ? "No new deals in this period for the current workspace view."
-    : "No new leads or stage moves in this period for the current workspace view.";
-  const action = isDeals
-    ? { href: "/crm/deals", label: "Open deals" }
-    : { href: "/crm/leads", label: "Open leads" };
-
-  const kindToggle = onKindChange ? (
-    <div className="inline-flex rounded-md border border-[var(--border-color)] bg-white p-0.5 shrink-0">
-      <button
-        type="button"
-        onClick={() => onKindChange("leads")}
-        className={cn(
-          "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
-          kind === "leads"
-            ? "bg-[var(--hs-link)] text-white"
-            : "text-[var(--text-muted)] hover:text-[var(--text-main)]",
-        )}
-      >
-        Leads
-      </button>
-      {showDealsTab ? (
-        <button
-          type="button"
-          onClick={() => onKindChange("deals")}
-          className={cn(
-            "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
-            kind === "deals"
-              ? "bg-[var(--hs-link)] text-white"
-              : "text-[var(--text-muted)] hover:text-[var(--text-main)]",
-          )}
-        >
-          Deals
-        </button>
-      ) : null}
-    </div>
-  ) : null;
+  const title = "Leads added by day";
+  const emptyMessage = "No new leads or stage moves in this period for the current workspace view.";
+  const action = { href: "/crm/leads", label: "Open leads" };
 
   if (!days.length) {
     const showLast30Cta =
@@ -837,7 +702,6 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
       <HsSection
         title={title}
         icon={<Users className="h-4 w-4 text-[var(--text-main)]" />}
-        headerExtra={kindToggle}
         action={action}
       >
         <div className="space-y-3 px-1 py-2">
@@ -846,7 +710,7 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
             <div className="flex flex-wrap items-center justify-center gap-2 pb-2">
               <p className="text-xs text-[var(--text-muted)] text-center w-full">
                 Counts <span className="font-semibold">new creates</span> in the header date range
-                (Asia/Kolkata). Converted leads leave Leads and appear under Deals.
+                (Asia/Kolkata).
               </p>
               <button
                 type="button"
@@ -865,7 +729,6 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
     <HsSection
       title={title}
       action={action}
-      headerExtra={kindToggle}
       icon={<Users className="h-4 w-4 text-[var(--text-main)]" />}
     >
       <ul className="divide-y divide-[var(--surface-dim)]">
@@ -873,7 +736,7 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
           const effectiveDate = customDateForDay[day.date] || day.date;
           const byStage = day.byStage || [];
           const stageEntered =
-            !isDeals && "stageEntered" in day
+            "stageEntered" in day
               ? (day as { stageEntered?: Array<{ stage: string; count: number }> })
                   .stageEntered || []
               : [];
@@ -923,7 +786,7 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
                   <span
                     key={`${day.date}-stage-${s.stage}`}
                     className="inline-flex items-center gap-1.5 rounded-md border border-[var(--surface-dim)] bg-[var(--surface-dim)] px-2.5 py-1 text-xs font-medium text-[var(--text-main)]"
-                    title={isDeals ? "New deals in this stage" : "New leads created in this stage"}
+                    title="New leads created in this stage"
                   >
                     <span className="truncate max-w-[10rem]" title={s.stage}>
                       {s.stage}
@@ -947,13 +810,13 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
                 </span>
               ))}
             </div>
-            {!isDeals && stageEntered.length > 0 && (
+            {stageEntered.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {stageEntered.map((s) => (
                   <span
                     key={`${day.date}-entered-${s.stage}`}
                     className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200"
-                    title="Moved into this stage during the day (Dead / Disqualified, etc.). Converted leads count under Deals."
+                    title="Moved into this stage during the day (Dead / Disqualified, etc.)."
                   >
                     <span className="truncate max-w-[10rem]" title={s.stage}>
                       → {s.stage}
@@ -966,7 +829,6 @@ export const LeadsAddedByDayPanel = memo(function LeadsAddedByDayPanel({
             {expandedDay === day.date && (
               <DayLeadsExpanded
                 date={effectiveDate}
-                kind={kind}
                 ownerLabel={ownerLabel}
                 ownerId={ownerId}
               />

@@ -46,7 +46,7 @@ function crmSelectOptionsWithLegacyValue(
 interface EditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  type: 'Lead' | 'Deal' | 'Org' | 'Contact' | 'Note' | 'Task' | 'Call' | string;
+  type: 'Lead' | 'Org' | 'Contact' | 'Note' | 'Task' | 'Call' | string;
   initialData: any;
   onSuccess?: () => void;
 }
@@ -58,8 +58,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState<string>('');
   const [selectedStage, setSelectedStage] = useState<string>('');
-  const [selectedProbability, setSelectedProbability] = useState<number | ''>('');
-  const [dealPricingType, setDealPricingType] = useState<'fixed' | 'monthly'>('fixed');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [layoutTickContact, setLayoutTickContact] = useState(0);
   const [layoutTickOrg, setLayoutTickOrg] = useState(0);
@@ -73,7 +71,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   useEffect(() => {
     if (isOpen && type) {
       fetchCustomFields();
-      if (type === 'Deal') fetchPipelines('deals');
       if (type === 'Lead' || type === 'Contact') fetchPipelines('leads');
     }
   }, [isOpen, type]);
@@ -119,42 +116,21 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       initialData?.pipeline && typeof initialData.pipeline === 'object'
         ? (initialData.pipeline as any)._id
         : initialData?.pipeline;
-    if ((type === 'Deal' || type === 'Lead' || type === 'Contact') && pid) {
+    if ((type === 'Lead' || type === 'Contact') && pid) {
       setSelectedPipeline(String(pid));
-    } else if ((type === 'Deal' || type === 'Lead' || type === 'Contact') && pipelines.length > 0 && !selectedPipeline) {
+    } else if ((type === 'Lead' || type === 'Contact') && pipelines.length > 0 && !selectedPipeline) {
       const defaultP = pipelines.find((p: any) => p.isDefault) || pipelines[0];
       if (defaultP) setSelectedPipeline(String(defaultP._id));
     }
   }, [initialData, pipelines, type]);
 
   useEffect(() => {
-    if (isOpen && initialData && (type === 'Deal' || type === 'Lead' || type === 'Contact')) {
+    if (isOpen && initialData && (type === 'Lead' || type === 'Contact')) {
       setSelectedStage(initialData.stage || initialData.status || '');
-      if (type === 'Deal') {
-        const p = Number(initialData.probability);
-        setSelectedProbability(Number.isFinite(p) ? p : '');
-        setDealPricingType(
-          String(initialData.pricingType || '').toLowerCase() === 'monthly'
-            ? 'monthly'
-            : 'fixed',
-        );
-      }
     }
   }, [isOpen, initialData, type]);
 
-  // Keep deal probability aligned with the selected pipeline stage (CRM-standard).
-  useEffect(() => {
-    if (type !== 'Deal' || !selectedPipeline || !selectedStage || pipelines.length === 0) return;
-    const pipe = pipelines.find((p: any) => pipelineIdEq(p._id, selectedPipeline));
-    const stage = (pipe?.stages || []).find(
-      (s: any) => String(s.name) === String(selectedStage),
-    );
-    if (stage && typeof stage.probability === 'number') {
-      setSelectedProbability(stage.probability);
-    }
-  }, [type, selectedPipeline, selectedStage, pipelines]);
-
-  const fetchPipelines = async (pipelineType?: 'deals' | 'leads') => {
+  const fetchPipelines = async (pipelineType?: 'leads') => {
     const token = localStorage.getItem('token');
     const url = pipelineType ? `${CRM_API_URL}/crm/pipelines?type=${pipelineType}` : `${CRM_API_URL}/crm/pipelines`;
     try {
@@ -169,7 +145,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   };
 
   const fetchCustomFields = async () => {
-    const moduleMap: any = { 'Lead': 'leads', 'Deal': 'deals', 'Org': 'organizations', 'Contact': 'contacts' };
+    const moduleMap: any = { 'Lead': 'leads', 'Org': 'organizations', 'Contact': 'contacts' };
     const moduleName = moduleMap[type];
     if (!moduleName) {
       setCustomFields([]);
@@ -198,11 +174,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
     return new Set(getVisibleFieldKeysOrdered('leads', 'form', customFields.map((f) => f.key)));
   }, [type, isOpen, customFields, layoutTickLead]);
 
-  const dealFormKeys = useMemo(() => {
-    if (type !== 'Deal' || !isOpen) return new Set<string>();
-    return new Set(getVisibleFieldKeysOrdered('deals', 'form', customFields.map((f) => f.key)));
-  }, [type, isOpen, customFields]);
-
   const contactFormKeys = useMemo(() => {
     if (type !== 'Contact' || !isOpen) return new Set<string>();
     return new Set(getVisibleFieldKeysOrdered('contacts', 'form', customFields.map((f) => f.key)));
@@ -218,23 +189,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
     if (!leadFormKeys.has(k)) return false;
     if (!canViewCrmRevenue && k === 'annualRevenue') return false;
     return true;
-  };
-  const sd = (k: string) => {
-    if (type !== 'Deal') return false;
-    if (
-      !canViewCrmRevenue &&
-      (k === 'pricingType' ||
-        k === 'contractMonths' ||
-        k === 'dealValue' ||
-        k === 'expectedDealValue' ||
-        k === 'currency' ||
-        k === 'exchangeRate')
-    ) {
-      return false;
-    }
-    // Always collect pricing model on deal forms (even if older layouts omit keys).
-    if (k === 'pricingType' || k === 'contractMonths' || k === 'dealValue') return true;
-    return dealFormKeys.has(k);
   };
   const sc = (k: string) => {
     if (type !== 'Contact' || !contactFormKeys.has(k)) return false;
@@ -273,82 +227,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       ),
     [leadServiceOfferings, leadRelatedSvcId],
   );
-
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [dealContactsList, setDealContactsList] = useState<any[]>([]);
-  const [dealProperties, setDealProperties] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (!isOpen || (type !== 'Deal' && type !== 'Contact')) return;
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    void (async () => {
-      try {
-        const orgRes = await fetch(`${CRM_API_URL}/crm/organizations/list`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (orgRes.ok) setOrganizations(await orgRes.json());
-        if (type === 'Deal') {
-          const cRes = await fetch(`${CRM_API_URL}/crm/contacts/list`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (cRes.ok) setDealContactsList(await cRes.json());
-          const pRes = await fetch(
-            `${CRM_API_URL}/crm/property-listings?approvalStatus=Approved&pageSize=200`,
-            { headers: { Authorization: `Bearer ${token}` } },
-          );
-          if (pRes.ok) {
-            const pData = await pRes.json();
-            setDealProperties(Array.isArray(pData?.data) ? pData.data : []);
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-  }, [isOpen, type]);
-
-  const dealOrgIdDefault = useMemo(() => {
-    if (type !== 'Deal') return '';
-    const o = initialData?.organization;
-    if (o && typeof o === 'object' && o !== null && '_id' in o) return String((o as { _id: string })._id);
-    return o != null && o !== '' ? String(o) : '';
-  }, [type, initialData]);
-
-  const dealContactIdDefault = useMemo(() => {
-    if (type !== 'Deal') return '';
-    const c = initialData?.contactPerson;
-    if (c && typeof c === 'object' && c !== null && '_id' in c) return String((c as { _id: string })._id);
-    return c != null && c !== '' ? String(c) : '';
-  }, [type, initialData]);
-
-  const dealOrgSelectOptions = useMemo(
-    () =>
-      crmSelectOptionsWithLegacyValue(
-        [
-          { label: 'Select organization...', value: '' },
-          ...organizations.map((o: any) => ({ label: o.name, value: String(o._id) })),
-        ],
-        dealOrgIdDefault,
-      ),
-    [organizations, dealOrgIdDefault],
-  );
-
-  const dealContactSelectOptions = useMemo(
-    () =>
-      crmSelectOptionsWithLegacyValue(
-        [
-          { label: '—', value: '' },
-          ...dealContactsList.map((c: any) => ({
-            label: `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || 'Contact',
-            value: String(c._id),
-          })),
-        ],
-        dealContactIdDefault,
-      ),
-    [dealContactsList, dealContactIdDefault],
-  );
-
 
   if (!isOpen) return null;
 
@@ -401,9 +279,8 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
     }
 
     const endpoint = type === 'Lead' ? 'leads' :
-      type === 'Deal' ? 'deals' :
-        type === 'Org' ? 'organizations' :
-          type === 'Contact' ? 'contacts' : 'activities'; // Basic mapping
+      type === 'Org' ? 'organizations' :
+        type === 'Contact' ? 'contacts' : 'activities'; // Basic mapping
 
     const prevCf =
       initialData.customFields && typeof initialData.customFields.get === 'function'
@@ -432,46 +309,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       payload.customFields = customFieldsData;
     }
 
-    if (type === 'Deal') {
-      if (!payload.stage && selectedStage) {
-        payload.stage = selectedStage;
-      } else if (!payload.stage && (initialData.stage || initialData.status)) {
-        payload.stage = initialData.stage || initialData.status;
-      }
-      if (selectedPipeline) {
-        payload.pipeline = selectedPipeline;
-      } else if (!payload.pipeline && initialData.pipeline) {
-        const p = initialData.pipeline;
-        payload.pipeline = typeof p === 'object' && p && '_id' in p ? (p as any)._id : p;
-      }
-      // Stage owns win probability — do not collect it on the form.
-      const dealPipe = pipelines.find((p: any) => pipelineIdEq(p._id, payload.pipeline || selectedPipeline));
-      const stageName = payload.stage || selectedStage;
-      const stageProb = (dealPipe?.stages || []).find(
-        (s: any) => String(s.name) === String(stageName),
-      )?.probability;
-      if (typeof stageProb === 'number') {
-        payload.probability = stageProb;
-      } else if (selectedProbability !== '' && Number.isFinite(Number(selectedProbability))) {
-        payload.probability = Number(selectedProbability);
-      } else {
-        delete payload.probability;
-      }
-      payload.pricingType = dealPricingType;
-      if (dealPricingType === 'monthly') {
-        const months = Number(payload.contractMonths);
-        payload.contractMonths =
-          Number.isFinite(months) && months > 0 ? Math.min(60, Math.round(months)) : 12;
-      } else {
-        payload.contractMonths = null;
-      }
-      if (payload.organization === '' || payload.organization === 'Select organization...') {
-        payload.organization = null;
-      }
-      if (payload.contactPerson === '') {
-        payload.contactPerson = null;
-      }
-    }
 
     if (type === 'Lead') {
       if (!payload.stage && (initialData.stage || initialData.status)) {
@@ -547,9 +384,8 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   const handleDelete = async () => {
     setLoading(true);
     const endpoint = type === 'Lead' ? 'leads' :
-      type === 'Deal' ? 'deals' :
-        type === 'Org' ? 'organizations' :
-          type === 'Contact' ? 'contacts' : 'activities';
+      type === 'Org' ? 'organizations' :
+        type === 'Contact' ? 'contacts' : 'activities';
 
     try {
       const token = localStorage.getItem('token');
@@ -571,9 +407,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       setLoading(false);
     }
   };
-
-  const currentPipeline = pipelines.find((p) => pipelineIdEq(p._id, selectedPipeline));
-  const stageOptions = currentPipeline ? currentPipeline.stages.sort((a: any, b: any) => a.order - b.order).map((s: any) => s.name) : [];
 
   return (
     <div className={`${crmModalChrome.overlay} flex items-center justify-center p-4`}>
@@ -721,150 +554,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
               </div>
             )}
 
-            {type === 'Deal' && (
-              <div className="space-y-3">
-                <CrmFormSection title="Deal Details" defaultOpen>
-                  <CrmFormGrid>
-                {sd('title') && <FormItem label="Deal Title" name="title" required defaultValue={initialData.title} />}
-                {sd('propertyListingId') && (
-                  <FormItem
-                    label="Property Listing"
-                    name="propertyListingId"
-                    type="select"
-                    options={[
-                      { label: 'Select property...', value: '' },
-                      ...dealProperties.map((p: any) => ({ label: p.title, value: String(p._id) })),
-                    ]}
-                    defaultValue={
-                      initialData.propertyListingId != null
-                        ? String(
-                            (initialData.propertyListingId as any)?._id ??
-                              initialData.propertyListingId,
-                          )
-                        : ''
-                    }
-                  />
-                )}
-                {sd('pricingType') && (
-                  <FormItem
-                    label="Pricing type"
-                    name="pricingType"
-                    type="select"
-                    options={[
-                      { label: 'Fixed price project', value: 'fixed' },
-                      { label: 'Monthly payment', value: 'monthly' },
-                    ]}
-                    value={dealPricingType}
-                    onChange={(e: any) => setDealPricingType(e.target.value === 'monthly' ? 'monthly' : 'fixed')}
-                  />
-                )}
-                {sd('dealValue') && (
-                  <FormItem
-                    label={dealPricingType === 'monthly' ? 'Monthly amount' : 'Amount'}
-                    name="dealValue"
-                    type="number"
-                    required
-                    defaultValue={initialData.dealValue}
-                  />
-                )}
-                {sd('contractMonths') && dealPricingType === 'monthly' && (
-                  <FormItem
-                    label="Contract months"
-                    name="contractMonths"
-                    type="number"
-                    defaultValue={initialData.contractMonths || 12}
-                  />
-                )}
-                {sd('contractMonths') && dealPricingType !== 'monthly' && (
-                  <input type="hidden" name="contractMonths" value="" />
-                )}
-
-                 {sd('pipeline') && (
-                  <div className="space-y-1">
-                    <label className="text-[13px] font-medium text-[var(--text-main)] px-0.5">Pipeline</label>
-                    <div className="relative flex items-center">
-                      <select
-                        name="pipeline"
-                        value={selectedPipeline ? String(selectedPipeline) : ''}
-                        onChange={(e) => setSelectedPipeline(e.target.value)}
-                        className="w-full bg-surface-dim border-none rounded-[var(--radius-md)] py-2.5 pl-4 pr-10 text-sm outline-none focus:ring-2 focus:ring-[var(--primary)]/20 transition-all appearance-none cursor-pointer text-text-main"
-                      >
-                        {pipelines.map((p) => <option key={String(p._id)} value={String(p._id)}>{p.name}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3.5 h-4 w-4 text-[var(--primary-muted)] pointer-events-none" />
-                    </div>
-                  </div>
-                )}
-                {sd('stage') && (
-                  <FormItem
-                    label="Stage"
-                    name="stage"
-                    type="select"
-                    options={stageOptions}
-                    value={selectedStage}
-                    onChange={(e: any) => setSelectedStage(e.target.value)}
-                  />
-                )}
-
-                {sd('probability') && (
-                  <FormItem
-                    label="Probability (%)"
-                    name="probability"
-                    type="number"
-                    value={selectedProbability === '' ? '' : String(selectedProbability)}
-                    onChange={(e: any) => {
-                      const n = e.target.value === '' ? '' : Number(e.target.value);
-                      setSelectedProbability(n === '' || Number.isFinite(n) ? n : '');
-                    }}
-                  />
-                )}
-                {sd('organization') && (
-                  <FormItem
-                    label="Organization"
-                    name="organization"
-                    type="select"
-                    options={dealOrgSelectOptions}
-                    defaultValue={dealOrgIdDefault}
-                  />
-                )}
-                {sd('contactPerson') && (
-                  <FormItem
-                    label="Contact"
-                    name="contactPerson"
-                    type="select"
-                    options={dealContactSelectOptions}
-                    defaultValue={dealContactIdDefault}
-                  />
-                )}
-                {sd('expectedClosureDate') && <FormItem label="Expected Close Date" name="expectedClosureDate" type="date" defaultValue={initialData.expectedClosureDate?.split('T')[0]} />}
-                {sd('closedDate') && (
-                  <FormItem
-                    label="Closed Date"
-                    name="closedDate"
-                    type="date"
-                    defaultValue={initialData.closedDate ? new Date(initialData.closedDate).toISOString().split('T')[0] : ''}
-                  />
-                )}
-                {sd('nextStep') && <FormItem label="Next Step" name="nextStep" defaultValue={initialData.nextStep} />}
-                {sd('expectedDealValue') && <FormItem label="Expected Deal Value" name="expectedDealValue" type="number" defaultValue={initialData.expectedDealValue} />}
-                {sd('dealOwner') && <FormItem label="Deal Owner" name="dealOwner" defaultValue={initialData.dealOwner} />}
-                {sd('currency') && <FormItem label="Currency" name="currency" type="select" options={[{ label: 'USD — US Dollar ($)', value: 'USD' }, { label: 'INR — Indian Rupee (₹)', value: 'INR' }]} defaultValue={initialData.currency || 'USD'} />}
-                {sd('exchangeRate') && <FormItem label="Exchange Rate" name="exchangeRate" type="number" defaultValue={initialData.exchangeRate} />}
-                {customFields.filter((field) => sd(`cf:${field.key}`)).map((field) => (
-                  <FormItem
-                    key={field._id}
-                    label={field.name}
-                    name={`cf_${field.key}`}
-                    type={field.type}
-                    options={field.options}
-                    required={field.required}
-                    defaultValue={initialData.customFields?.[field.key]}
-                  />
-                ))}
-                  </CrmFormGrid>
-                </CrmFormSection>
-              </div>
-            )}
             {type === 'Org' && (
               <div className="space-y-3">
                 <div className="flex justify-end">

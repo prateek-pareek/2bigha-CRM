@@ -57,7 +57,7 @@ export class WhatsAppService {
    * Pushes a live update to every connected CRM user (the 'ALL' room every
    * client joins on connect — see RealtimeManager.tsx) so the WhatsApp chat
    * UI can update instantly instead of waiting on its poll interval. Mirrors
-   * the `deal-chat:message` / `crm:inbox:refresh` pattern used elsewhere.
+   * the `crm:inbox:refresh` pattern used elsewhere.
    */
   private emitWhatsAppEvent(waId: string, message: WhatsAppMessageDocument): void {
     try {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Building2, Briefcase, User, Users, Plus, X, Loader2, Search } from "lucide-react";
+import { Building2, User, Users, Plus, X, Loader2, Search } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -23,10 +23,6 @@ function leadLabel(l: AnyRec) {
   return n || l.email || "Lead";
 }
 
-function dealLabel(d: AnyRec) {
-  return d.title || "Deal";
-}
-
 function orgLabel(o: AnyRec) {
   return o.name || "Company";
 }
@@ -36,7 +32,7 @@ function contactLabel(c: AnyRec) {
   return n || c.email || "Contact";
 }
 
-/** Link leads, deals, companies, and contacts to a client (same pattern as contacts). */
+/** Link leads, companies, and contacts to a client (same pattern as contacts). */
 export default function ClientAssociationsPanel({
   clientId,
   client,
@@ -81,7 +77,6 @@ export default function ClientAssociationsPanel({
     });
   }, [leads, sourceLeadId]);
 
-  const deals = (client?.associatedDeals as AnyRec[]) || [];
   const orgs = (client?.associatedOrganizations as AnyRec[]) || [];
   const people = (client?.associatedContacts as AnyRec[]) || [];
 
@@ -205,7 +200,7 @@ export default function ClientAssociationsPanel({
         </button>
       </div>
       <p className="text-xs text-text-muted mb-4 leading-relaxed">
-        Link related leads, deals, companies, or contacts. Email engagement can include activity on linked records.
+        Link related leads, companies, or contacts. Email engagement can include activity on linked records.
       </p>
 
       {addOpen && (
@@ -234,24 +229,6 @@ export default function ClientAssociationsPanel({
                           onClick={() => addExisting("associatedLeads", l._id)}
                         >
                           {leadLabel(l)}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {(results.deals?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-text-muted mb-1.5">Deals</p>
-                  <ul className="space-y-1">
-                    {results.deals!.map((d) => (
-                      <li key={d._id}>
-                        <button
-                          type="button"
-                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-card border border-transparent hover:border-border"
-                          onClick={() => addExisting("associatedDeals", d._id)}
-                        >
-                          {dealLabel(d)}
                         </button>
                       </li>
                     ))}
@@ -296,7 +273,7 @@ export default function ClientAssociationsPanel({
               )}
               {!searching &&
                 q.trim().length >= 2 &&
-                !(results.leads?.length || results.deals?.length || results.organizations?.length || results.contacts?.length) && (
+                !(results.leads?.length || results.organizations?.length || results.contacts?.length) && (
                   <p className="text-xs text-text-muted py-2">No matches — try another name or email.</p>
                 )}
             </div>
@@ -328,28 +305,6 @@ export default function ClientAssociationsPanel({
                   />
                 );
               })}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-text-muted">
-            <Briefcase size={12} />
-            Deals
-          </div>
-          {deals.length === 0 ? (
-            <p className="text-xs text-text-muted italic">No deals linked</p>
-          ) : (
-            <div className="space-y-2">
-              {deals.map((d) => (
-                <Row
-                  key={d._id}
-                  href={`/crm/deals/${d._id}`}
-                  title={dealLabel(d)}
-                  subtitle={d.stage}
-                  onRemove={() => remove("associatedDeals", d._id)}
-                />
-              ))}
             </div>
           )}
         </div>

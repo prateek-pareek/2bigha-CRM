@@ -389,7 +389,7 @@ export function WorkflowFilterRow({
           className="flex-1 min-w-[100px]"
         />
       )
-    ) : row.field === "dealValue" || row.field === "probability" ? (
+    ) : row.field === "probability" ? (
       <input
         type="number"
         className={ndClass(

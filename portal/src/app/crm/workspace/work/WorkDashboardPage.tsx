@@ -19,8 +19,7 @@ export default function WorkDashboardPage() {
         <div className="mt-0 space-y-4 outline-none">
           {!hasAccess("dashboard:read") &&
           !hasAccess("workspace-work:read") &&
-          !hasAccess("leads:read") &&
-          !hasAccess("deals:read") ? (
+          !hasAccess("leads:read") ? (
             <div className={cn(HS_PANEL, "p-6")}>
               <EmptyHs message="You don’t have permission to view the work dashboard." />
             </div>

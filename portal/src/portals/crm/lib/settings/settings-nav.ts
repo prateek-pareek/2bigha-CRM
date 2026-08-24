@@ -117,7 +117,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
       },
       {
         name: "Custom objects",
-        description: "Define new object types beyond leads, contacts, and deals.",
+        description: "Define new object types beyond leads and contacts.",
         href: "/crm/settings/custom-objects",
         icon: Database,
       },
@@ -141,7 +141,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
       },
       {
         name: "Currency",
-        description: "USD → INR and other rates used for deal value conversions.",
+        description: "USD → INR and other rates used for CRM value conversions.",
         href: "/crm/settings/currency",
         icon: DollarSign,
       },
@@ -176,7 +176,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
       {
         name: "Data Migration",
         description:
-          "Import companies, contacts, leads, deals, notes/calls, and relationships from any CRM.",
+          "Import companies, contacts, leads, notes/calls, and relationships from any CRM.",
         href: "/crm/settings/migration",
         icon: Database,
       },

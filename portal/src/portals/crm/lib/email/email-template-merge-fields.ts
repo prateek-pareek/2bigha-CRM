@@ -39,47 +39,6 @@ export const EMAIL_TEMPLATE_MERGE_GROUPS: { title: string; fields: string[] }[] 
     ],
   },
   {
-    title: "Deal",
-    fields: [
-      "dealTitle",
-      "title",
-      "dealValue",
-      "dealValueFormatted",
-      "expectedDealValue",
-      "expectedDealValueFormatted",
-      "currency",
-      "probability",
-      "expectedClosureDate",
-      "nextStep",
-      "dealOwner",
-    ],
-  },
-  {
-    title: "Deal — linked lead",
-    fields: [
-      "leadFirstName",
-      "leadLastName",
-      "leadFullName",
-      "leadEmail",
-      "leadPhone",
-      "leadJobTitle",
-      "leadCompany",
-    ],
-  },
-  {
-    title: "Deal — primary contact",
-    fields: [
-      "contactSalutation",
-      "contactFirstName",
-      "contactLastName",
-      "contactFullName",
-      "contactEmail",
-      "contactPhone",
-      "contactJobTitle",
-      "contactCompany",
-    ],
-  },
-  {
     title: "Organization record",
     fields: [
       "name",

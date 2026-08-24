@@ -116,24 +116,6 @@ export function contactLinkedInSourceUrl(record: {
   return null;
 }
 
-/** Deal: use linked contact or populated lead phone fields. */
-export function dealWhatsappUrl(deal: {
-  contactPerson?: unknown;
-  lead?: unknown;
-}): string | null {
-  const cp = deal.contactPerson;
-  if (cp && typeof cp === 'object' && cp !== null) {
-    const u = contactWhatsappUrl(cp as { mobileNo?: string; phone?: string });
-    if (u) return u;
-  }
-  const ld = deal.lead;
-  if (ld && typeof ld === 'object' && ld !== null) {
-    const u = contactWhatsappUrl(ld as { mobileNo?: string; phone?: string });
-    if (u) return u;
-  }
-  return null;
-}
-
 function customFieldsAsRecord(contact: Record<string, unknown>): Record<string, string> {
   const cf = contact.customFields as Map<string, string> | Record<string, string> | undefined;
   if (!cf) return {};

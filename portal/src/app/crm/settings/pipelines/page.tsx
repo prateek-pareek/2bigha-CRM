@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { GitBranch, Plus, Trash2, CheckCircle2, Loader2, Save, ChevronLeft, Handshake, Users, Pencil, ChevronDown, GripVertical, ScrollText, FileText } from 'lucide-react';
+import { GitBranch, Plus, Trash2, CheckCircle2, Loader2, Save, ChevronLeft, Users, Pencil, ChevronDown, GripVertical, ScrollText, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { CRM_API_URL } from '@/lib/crm/config';
@@ -54,12 +54,19 @@ type PipelineOutreachAiContext = {
 interface Pipeline {
   _id: string;
   name: string;
-  type?: 'deals' | 'leads' | 'proposals' | 'contracts';
+  type?: 'leads' | 'proposals' | 'contracts';
   categoryType?: 'it_consulting' | 'freelancer';
+  /** Only meaningful when type === 'leads': Property Listing vs Property Management. */
+  leadVertical?: 'property_listing' | 'property_management';
   stages: Stage[];
   isDefault: boolean;
   outreachAiContext?: PipelineOutreachAiContext;
 }
+
+const LEAD_VERTICAL_OPTIONS = [
+  { value: 'property_listing', label: 'Property Listing' },
+  { value: 'property_management', label: 'Property Management' },
+] as const;
 
 const OUTREACH_CONTEXT_FIELDS: { key: string; label: string }[] = [
   { key: 'firstName', label: 'First name' },
@@ -156,8 +163,7 @@ function SortableStageRow({
 }
 
 export default function PipelinesManagementPage() {
-  const [activeTab, setActiveTab] = useState<'deals' | 'leads' | 'proposals' | 'contracts'>('deals');
-  const [dealsPipelines, setDealsPipelines] = useState<Pipeline[]>([]);
+  const [activeTab, setActiveTab] = useState<'leads' | 'proposals' | 'contracts'>('leads');
   const [leadsPipelines, setLeadsPipelines] = useState<Pipeline[]>([]);
   const [proposalPipelines, setProposalPipelines] = useState<Pipeline[]>([]);
   const [contractPipelines, setContractPipelines] = useState<Pipeline[]>([]);
@@ -169,14 +175,16 @@ export default function PipelinesManagementPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Pipeline | null>(null);
   const [newPipeline, setNewPipeline] = useState<{
     name: string;
-    type: 'deals' | 'leads' | 'proposals' | 'contracts';
+    type: 'leads' | 'proposals' | 'contracts';
     categoryType: 'it_consulting' | 'freelancer';
+    leadVertical?: 'property_listing' | 'property_management';
     stages: Stage[];
     outreachAiContext?: PipelineOutreachAiContext;
   }>({
     name: '',
-    type: 'deals' as 'deals' | 'leads' | 'proposals' | 'contracts',
+    type: 'leads' as 'leads' | 'proposals' | 'contracts',
     categoryType: 'it_consulting',
+    leadVertical: 'property_listing',
     outreachAiContext: { useGlobalSettings: true, missingContextAction: 'draft_anyway' },
     stages: [
       { id: 'init-1', name: 'Qualification', probability: 10, order: 1, isDefault: true },
@@ -227,25 +235,21 @@ export default function PipelinesManagementPage() {
   };
 
   const pipelines =
-    activeTab === 'deals'
-      ? dealsPipelines
-      : activeTab === 'leads'
-        ? leadsPipelines
-        : activeTab === 'proposals'
-          ? proposalPipelines
-          : contractPipelines;
+    activeTab === 'leads'
+      ? leadsPipelines
+      : activeTab === 'proposals'
+        ? proposalPipelines
+        : contractPipelines;
 
   const fetchPipelines = async () => {
     setLoading(true);
     const token = localStorage.getItem('token');
     try {
-      const [dealsRes, leadsRes, proposalsRes, contractsRes] = await Promise.all([
-        fetch(`${CRM_API_URL}/crm/pipelines?type=deals`, { headers: { 'Authorization': `Bearer ${token}` } }),
+      const [leadsRes, proposalsRes, contractsRes] = await Promise.all([
         fetch(`${CRM_API_URL}/crm/pipelines?type=leads`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${CRM_API_URL}/crm/pipelines?type=proposals`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${CRM_API_URL}/crm/pipelines?type=contracts`, { headers: { 'Authorization': `Bearer ${token}` } }),
       ]);
-      if (dealsRes.ok) setDealsPipelines(await dealsRes.json());
       if (leadsRes.ok) setLeadsPipelines(await leadsRes.json());
       if (proposalsRes.ok) setProposalPipelines(await proposalsRes.json());
       if (contractsRes.ok) setContractPipelines(await contractsRes.json());
@@ -332,6 +336,7 @@ export default function PipelinesManagementPage() {
       name: '',
       type: activeTab,
       categoryType: 'it_consulting',
+      leadVertical: activeTab === 'leads' ? 'property_listing' : undefined,
       stages:
         activeTab === 'leads'
           ? [
@@ -349,22 +354,16 @@ export default function PipelinesManagementPage() {
                   { id: 'pr5', name: 'Accepted', probability: 100, order: 5, isDefault: false },
                   { id: 'pr6', name: 'Declined', probability: 0, order: 6, isDefault: false },
                 ]
-              : activeTab === 'contracts'
-                ? [
-                    { id: 'c1', name: 'Draft', probability: 10, order: 1, isDefault: true },
-                    { id: 'c2', name: 'Internal Review', probability: 25, order: 2, isDefault: false },
-                    { id: 'c3', name: 'Sent', probability: 45, order: 3, isDefault: false },
-                    { id: 'c4', name: 'Awaiting Signature', probability: 60, order: 4, isDefault: false },
-                    { id: 'c5', name: 'Negotiation', probability: 70, order: 5, isDefault: false },
-                    { id: 'c6', name: 'Signed', probability: 100, order: 6, isDefault: false },
-                    { id: 'c7', name: 'Declined', probability: 0, order: 7, isDefault: false },
-                    { id: 'c8', name: 'Expired', probability: 0, order: 8, isDefault: false },
-                  ]
-            : [
-                { id: 'd1', name: 'Qualification', probability: 10, order: 1, isDefault: true },
-                { id: 'd2', name: 'Proposal', probability: 50, order: 2, isDefault: false },
-                { id: 'd3', name: 'Closed Won', probability: 100, order: 3, isDefault: false },
-              ],
+              : [
+                  { id: 'c1', name: 'Draft', probability: 10, order: 1, isDefault: true },
+                  { id: 'c2', name: 'Internal Review', probability: 25, order: 2, isDefault: false },
+                  { id: 'c3', name: 'Sent', probability: 45, order: 3, isDefault: false },
+                  { id: 'c4', name: 'Awaiting Signature', probability: 60, order: 4, isDefault: false },
+                  { id: 'c5', name: 'Negotiation', probability: 70, order: 5, isDefault: false },
+                  { id: 'c6', name: 'Signed', probability: 100, order: 6, isDefault: false },
+                  { id: 'c7', name: 'Declined', probability: 0, order: 7, isDefault: false },
+                  { id: 'c8', name: 'Expired', probability: 0, order: 8, isDefault: false },
+                ],
     });
     setIsModalOpen(true);
   };
@@ -375,6 +374,10 @@ export default function PipelinesManagementPage() {
       name: pipeline.name,
       type: pipeline.type || activeTab,
       categoryType: pipeline.categoryType || 'it_consulting',
+      leadVertical:
+        (pipeline.type || activeTab) === 'leads'
+          ? pipeline.leadVertical || 'property_listing'
+          : undefined,
       outreachAiContext: pipeline.outreachAiContext || {
         useGlobalSettings: true,
         missingContextAction: 'draft_anyway',
@@ -408,7 +411,7 @@ export default function PipelinesManagementPage() {
             </div>
             <div>
               <h1 className="text-sm font-semibold text-[var(--text-main)] leading-tight">Pipelines</h1>
-              <p className="text-xs text-[var(--primary-muted)]">Design custom workflows for deals, leads, proposals, and contracts.</p>
+              <p className="text-xs text-[var(--primary-muted)]">Design custom workflows for leads, proposals, and contracts.</p>
             </div>
           </div>
         </div>
@@ -424,7 +427,6 @@ export default function PipelinesManagementPage() {
       {/* Tabs */}
       <div className="flex flex-wrap border-b border-[var(--surface-dim)]">
         {([
-          { id: 'deals' as const, label: 'Deal Pipelines', icon: Handshake },
           { id: 'leads' as const, label: 'Lead Pipelines', icon: Users },
           { id: 'proposals' as const, label: 'Proposal Pipelines', icon: ScrollText },
           { id: 'contracts' as const, label: 'Contract Pipelines', icon: FileText },
@@ -457,13 +459,11 @@ export default function PipelinesManagementPage() {
           <p className="text-sm font-semibold text-[var(--text-main)]">No pipelines yet</p>
           <p className="mt-1 text-sm text-[var(--primary-muted)]">
             Create your first{' '}
-            {activeTab === 'deals'
-              ? 'deal'
-              : activeTab === 'leads'
-                ? 'lead'
-                : activeTab === 'proposals'
-                  ? 'proposal'
-                  : 'contract'}{' '}
+            {activeTab === 'leads'
+              ? 'lead'
+              : activeTab === 'proposals'
+                ? 'proposal'
+                : 'contract'}{' '}
             pipeline to get started.
           </p>
           <button
@@ -485,6 +485,11 @@ export default function PipelinesManagementPage() {
                     {pipeline.isDefault && (
                       <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-[var(--hs-link)] bg-[#e5f5f8] border border-[#b3e0ea]">
                         Default
+                      </span>
+                    )}
+                    {activeTab === 'leads' && (
+                      <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-violet-700 bg-violet-50 border border-violet-200">
+                        {pipeline.leadVertical === 'property_management' ? 'Property Management' : 'Property Listing'}
                       </span>
                     )}
                   </div>
@@ -555,7 +560,7 @@ export default function PipelinesManagementPage() {
           title={editingPipeline ? 'Edit Pipeline' : 'Create Pipeline'}
           subtitle={editingPipeline
             ? `Editing stages for "${editingPipeline.name}"`
-            : `New ${activeTab === 'deals' ? 'deal' : 'lead'} pipeline`}
+            : `New ${activeTab === 'leads' ? 'lead' : activeTab} pipeline`}
           headerTone="hubspot"
           footer={
             <div className="flex items-center gap-3">
@@ -619,6 +624,34 @@ export default function PipelinesManagementPage() {
                 AI email drafting uses this context to write as IT consulting or freelancer.
               </p>
             </div>
+
+            {(newPipeline.type === 'leads' || activeTab === 'leads') && (
+              <div>
+                <label className={LBL}>Lead vertical</label>
+                <div className="relative">
+                  <select
+                    value={newPipeline.leadVertical || 'property_listing'}
+                    onChange={(e) =>
+                      setNewPipeline({
+                        ...newPipeline,
+                        leadVertical: e.target.value as 'property_listing' | 'property_management',
+                      })
+                    }
+                    className={INP + " appearance-none pr-9"}
+                  >
+                    {LEAD_VERTICAL_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--primary-muted)] pointer-events-none" />
+                </div>
+                <p className="mt-1 text-xs text-[var(--primary-muted)]">
+                  Which lead board this pipeline shows up under — Property Listing or Property Management leads use fully separate, independently-customizable pipelines.
+                </p>
+              </div>
+            )}
 
             {(newPipeline.type === 'leads' || activeTab === 'leads') ? (
               <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-4 space-y-3">

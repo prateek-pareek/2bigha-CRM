@@ -79,19 +79,14 @@ export function ModuleJiraAppHeader({
   const visibleTools = useMemo(() => {
     return tools.filter((t) => {
       if (isAdmin) return true;
-      if (t.id === "client-portals") {
-        return hasAccess("clients:read");
-      }
       return (
         Array.isArray(permittedTools) &&
         permittedTools.some((p) => p?.toUpperCase() === "CRM")
       );
     });
-  }, [isAdmin, permittedTools, hasAccess]);
+  }, [isAdmin, permittedTools]);
 
   const activeToolId = useMemo(() => {
-    const path = typeof window !== "undefined" ? window.location.pathname : "";
-    if (path.startsWith("/client-portals")) return "client-portals";
     return "crm";
   }, [productHref]);
 

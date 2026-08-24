@@ -44,10 +44,6 @@ export class Organization {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Lead' }], default: [] })
   associatedLeads: Types.ObjectId[];
 
-  /** Deals linked to this company. */
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Deal' }], default: [] })
-  associatedDeals: Types.ObjectId[];
-
   /** HubSpot-style company / organization public id (optional on legacy rows). */
   @Prop({ trim: true, sparse: true, unique: true })
   recordId?: string;

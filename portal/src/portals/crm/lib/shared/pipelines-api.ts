@@ -9,7 +9,6 @@ export type CrmPipelineRow = { _id: string; name?: string; [key: string]: unknow
 export async function fetchCrmPipelines(
   type:
     | "leads"
-    | "deals"
     | "proposals"
     | "quotations"
     | "contracts",

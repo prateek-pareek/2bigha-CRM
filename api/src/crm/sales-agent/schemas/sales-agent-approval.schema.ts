@@ -33,7 +33,7 @@ export class SalesAgentApproval {
   @Prop()
   previewSummary?: string;
 
-  @Prop({ enum: ['Lead', 'Deal', 'Contact'] })
+  @Prop({ enum: ['Lead', 'Contact'] })
   recordType?: SalesAgentRecordType;
 
   @Prop({ type: Types.ObjectId })

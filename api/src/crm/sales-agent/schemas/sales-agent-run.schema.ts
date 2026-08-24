@@ -12,7 +12,7 @@ export type SalesAgentRunDocument = SalesAgentRun & Document;
 
 @Schema({ timestamps: true })
 export class SalesAgentRun {
-  @Prop({ required: true, enum: ['Lead', 'Deal', 'Contact'] })
+  @Prop({ required: true, enum: ['Lead', 'Contact'] })
   recordType: SalesAgentRecordType;
 
   @Prop({ type: Types.ObjectId, required: true, index: true })
@@ -44,8 +44,6 @@ export class SalesAgentRun {
       'cron',
       'lead_created',
       'lead_stage_changed',
-      'deal_created',
-      'deal_stage_changed',
       'email_reply_received',
       'website_inbound',
       'chat_inbound',

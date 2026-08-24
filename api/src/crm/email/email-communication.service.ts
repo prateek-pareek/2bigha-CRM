@@ -284,13 +284,11 @@ export class EmailCommunicationService {
         relatedType:
           data.module === 'leads'
             ? 'Lead'
-            : data.module === 'deals'
-              ? 'Deal'
-              : data.module === 'contacts'
-                ? 'Contact'
-                : data.module === 'clients'
-                  ? 'Client'
-                  : 'Organization',
+            : data.module === 'contacts'
+              ? 'Contact'
+              : data.module === 'clients'
+                ? 'Client'
+                : 'Organization',
         author: new Types.ObjectId(data.sender),
         metadata: {
           direction: 'outbound',

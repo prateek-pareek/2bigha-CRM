@@ -45,7 +45,6 @@ import { validateHumanOutreachForSend } from '../shared/crm-human-outreach.util'
 import { isPermanentRecipientFailure } from '../shared/crm-undeliverable.util';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import { Client, ClientDocument } from '../schemas/client.schema';
 import {
@@ -191,8 +190,6 @@ export class InboxAccountsService {
     private activityModel: Model<ActivityDocument>,
     @InjectModel(Lead.name, 'crmConnection')
     private leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private contactModel: Model<ContactDocument>,
     @InjectModel(Client.name, 'crmConnection')
@@ -1663,7 +1660,6 @@ export class InboxAccountsService {
 
   private relatedTypeFromModule(module: string): string {
     if (module === 'leads') return 'Lead';
-    if (module === 'deals') return 'Deal';
     if (module === 'contacts') return 'Contact';
     if (module === 'clients') return 'Client';
     return 'Organization';
@@ -1674,7 +1670,6 @@ export class InboxAccountsService {
     if (!Types.ObjectId.isValid(id)) return null;
     const m = String(module || '').toLowerCase();
     if (m === 'leads') return `/crm/leads/${id}`;
-    if (m === 'deals') return `/crm/deals/${id}`;
     if (m === 'contacts') return `/crm/contacts/${id}`;
     if (m === 'clients') return `/crm/clients/${id}`;
     if (m === 'organizations') return `/crm/organizations/${id}`;
@@ -1840,11 +1835,10 @@ export class InboxAccountsService {
     return maxLen > 0 && t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
   }
 
-  private moduleLabel(module: 'leads' | 'contacts' | 'clients' | 'deals'): string {
+  private moduleLabel(module: 'leads' | 'contacts' | 'clients'): string {
     if (module === 'leads') return 'Lead';
     if (module === 'contacts') return 'Contact';
-    if (module === 'clients') return 'Client';
-    return 'Deal';
+    return 'Client';
   }
 
   private formatReplyPreview(bodyPlain: string): string {
@@ -1876,7 +1870,7 @@ export class InboxAccountsService {
   }
 
   private async getOwnerUserIdsForTarget(target: {
-    module: 'leads' | 'contacts' | 'clients' | 'deals';
+    module: 'leads' | 'contacts' | 'clients';
     entityId: string;
   }): Promise<string[]> {
     if (!Types.ObjectId.isValid(target.entityId)) return [];
@@ -1921,14 +1915,6 @@ export class InboxAccountsService {
       for (const uid of client?.assignedTo || []) {
         if (uid) ids.add(String(uid));
       }
-    } else if (target.module === 'deals') {
-      const deal = await this.dealModel
-        .findById(new Types.ObjectId(target.entityId))
-        .select('createdBy dealOwner')
-        .lean()
-        .exec();
-      if (deal?.createdBy) ids.add(String(deal.createdBy));
-      await pushByDisplayName(deal?.dealOwner);
     }
     return [...ids].filter((id) => Types.ObjectId.isValid(id));
   }
@@ -1940,14 +1926,14 @@ export class InboxAccountsService {
    * Mailbox owner + sharers are added separately in getInboundAlertRecipientUserIds.
    */
   private async getAlertRecipientUserIdsForTarget(target: {
-    module: 'leads' | 'contacts' | 'clients' | 'deals';
+    module: 'leads' | 'contacts' | 'clients';
     entityId: string;
   }): Promise<string[]> {
     return this.getOwnerUserIdsForTarget(target);
   }
 
   private async getAlertRecipientsForTarget(target: {
-    module: 'leads' | 'contacts' | 'clients' | 'deals';
+    module: 'leads' | 'contacts' | 'clients';
     entityId: string;
   }): Promise<string[]> {
     const ownerIds = await this.getOwnerUserIdsForTarget(target);
@@ -2022,7 +2008,7 @@ export class InboxAccountsService {
 
   private async getInboundAlertRecipientUserIds(
     target: {
-      module: 'leads' | 'contacts' | 'clients' | 'deals';
+      module: 'leads' | 'contacts' | 'clients';
       entityId: string;
     },
     account: UserEmailAccountDocument,
@@ -2079,9 +2065,8 @@ export class InboxAccountsService {
     const validModule =
       mod === 'leads' ||
       mod === 'contacts' ||
-      mod === 'clients' ||
-      mod === 'deals'
-        ? (mod as 'leads' | 'contacts' | 'clients' | 'deals')
+      mod === 'clients'
+        ? (mod as 'leads' | 'contacts' | 'clients')
         : null;
 
     const accountId = String(opts.accountId || '').trim();
@@ -2126,7 +2111,7 @@ export class InboxAccountsService {
 
   private async getInboundAlertEmailRecipients(
     target: {
-      module: 'leads' | 'contacts' | 'clients' | 'deals';
+      module: 'leads' | 'contacts' | 'clients';
       entityId: string;
     },
     account: UserEmailAccountDocument,
@@ -2143,7 +2128,7 @@ export class InboxAccountsService {
       account: UserEmailAccountDocument;
       matchReason: 'in_reply_to' | 'sender_email';
       target: {
-        module: 'leads' | 'contacts' | 'clients' | 'deals';
+        module: 'leads' | 'contacts' | 'clients';
         entityId: string;
         label: string;
       };
@@ -2267,7 +2252,7 @@ export class InboxAccountsService {
 
   /**
    * When inbox sync pulls a message from a CRM-known address (or In-Reply-To matches our CRM send),
-   * append an activity on the lead/contact/client/deal timeline.
+   * append an activity on the lead/contact/client timeline.
    *
    * Provider ids can change after an IMAP UIDVALIDITY reset or mailbox migration, so use the
    * RFC Message-ID as an additional stable dedupe key when it is available.
@@ -2325,7 +2310,7 @@ export class InboxAccountsService {
       );
 
     type Target = {
-      module: 'leads' | 'contacts' | 'clients' | 'deals';
+      module: 'leads' | 'contacts' | 'clients';
       entityId: string;
       label: string;
       email: string;
@@ -2333,7 +2318,7 @@ export class InboxAccountsService {
     let targets: Target[] = [];
     if (fromReply?.entityId && fromReply.module) {
       const mod = fromReply.module as Target['module'];
-      if (['leads', 'contacts', 'clients', 'deals'].includes(mod)) {
+      if (['leads', 'contacts', 'clients'].includes(mod)) {
         targets = [
           {
             module: mod,
@@ -2350,7 +2335,7 @@ export class InboxAccountsService {
     if (!targets.length) return;
 
     // One activity per inbound message. involvedEntities + activity rollup already
-    // surfaces it on related lead/contact/deal/client timelines — logging on every
+    // surfaces it on related lead/contact/client timelines — logging on every
     // match created duplicate "Email reply received" cards on the same record.
     targets = this.pickPrimaryInboundTargets(targets);
     if (!targets.length) return;
@@ -2399,7 +2384,7 @@ export class InboxAccountsService {
     let createdAnyActivity = false;
     let alertTarget:
       | {
-        module: 'leads' | 'contacts' | 'clients' | 'deals';
+        module: 'leads' | 'contacts' | 'clients';
         entityId: string;
         label: string;
       }
@@ -2475,8 +2460,7 @@ export class InboxAccountsService {
       // (tracked thread reply or new email from the same address).
       if (
         t.module === 'leads' ||
-        t.module === 'contacts' ||
-        t.module === 'deals'
+        t.module === 'contacts'
       ) {
         void this.workflowsService
           .cancelPendingJobsOnReply(t.module, t.entityId)
@@ -2491,10 +2475,10 @@ export class InboxAccountsService {
             entityId: new Types.ObjectId(t.entityId),
             senderUserId: new Types.ObjectId(userId),
           });
-          if (t.module === 'leads' || t.module === 'deals') {
+          if (t.module === 'leads') {
             this.salesAgentTrigger.onEvent({
               trigger: 'email_reply_received',
-              recordType: t.module === 'deals' ? 'Deal' : 'Lead',
+              recordType: 'Lead',
               recordId: t.entityId,
               metadata: {
                 inboxEmailId: String(saved._id),
@@ -2510,7 +2494,7 @@ export class InboxAccountsService {
 
     if (!wasAlreadyLogged && createdAnyActivity) {
       const isReply = matchReason === 'in_reply_to';
-      // A sender can match a lead, contact and related deal. Notify the union of their
+      // A sender can match a lead and related contact. Notify the union of their
       // owners plus mailbox users once per person, retaining the first relevant record link.
       const recipientTargets = new Map<string, Target>();
       for (const target of targets) {
@@ -3119,7 +3103,7 @@ export class InboxAccountsService {
     );
 
     // Soft-disconnect: keep synced inbox/sent copies and CRM timeline links
-    // (activity.metadata.inboxEmailId). Hard-deleting messages wiped lead/deal
+    // (activity.metadata.inboxEmailId). Hard-deleting messages wiped lead
     // conversation history when users removed + reconnected a mailbox.
     const wasDefault = account.isDefault === true;
     account.isActive = false;
@@ -4559,23 +4543,22 @@ export class InboxAccountsService {
    */
   private pickPrimaryInboundTargets(
     targets: Array<{
-      module: 'leads' | 'contacts' | 'clients' | 'deals';
+      module: 'leads' | 'contacts' | 'clients';
       entityId: string;
       label: string;
       email: string;
     }>,
   ): Array<{
-    module: 'leads' | 'contacts' | 'clients' | 'deals';
+    module: 'leads' | 'contacts' | 'clients';
     entityId: string;
     label: string;
     email: string;
   }> {
     if (targets.length <= 1) return targets;
-    const order: Array<'leads' | 'contacts' | 'clients' | 'deals'> = [
+    const order: Array<'leads' | 'contacts' | 'clients'> = [
       'leads',
       'contacts',
       'clients',
-      'deals',
     ];
     for (const mod of order) {
       const hit = targets.find((t) => t.module === mod);
@@ -4586,7 +4569,7 @@ export class InboxAccountsService {
 
   async resolveRecipientEmail(email: string): Promise<
     Array<{
-      module: 'leads' | 'contacts' | 'clients' | 'deals';
+      module: 'leads' | 'contacts' | 'clients';
       entityId: string;
       label: string;
       email: string;
@@ -4598,7 +4581,7 @@ export class InboxAccountsService {
     const regex = new RegExp(`^${escaped}$`, 'i');
 
     const results: Array<{
-      module: 'leads' | 'contacts' | 'clients' | 'deals';
+      module: 'leads' | 'contacts' | 'clients';
       entityId: string;
       label: string;
       email: string;
@@ -4659,30 +4642,6 @@ export class InboxAccountsService {
       });
     }
 
-    const leadIds = leads.map((l) => l._id);
-    if (leadIds.length) {
-      const relatedDeals = await this.dealModel
-        .find({ lead: { $in: leadIds } })
-        .limit(25)
-        .lean()
-        .exec();
-      for (const d of relatedDeals) {
-        const lead = leads.find((x) => x._id.equals(d.lead));
-        results.push({
-          module: 'deals',
-          entityId: d._id.toString(),
-          label: d.title || 'Deal',
-          email: lead
-            ? this.matchedEmailOnRecord(
-              lead.email,
-              lead.additionalEmails,
-              regex,
-            )
-            : trimmed,
-        });
-      }
-    }
-
     return results;
   }
 
@@ -4707,7 +4666,6 @@ export class InboxAccountsService {
       entityId &&
       !Types.ObjectId.isValid(entityId) &&
       (mod === 'leads' ||
-        mod === 'deals' ||
         mod === 'contacts' ||
         mod === 'organizations')
     ) {
@@ -4718,13 +4676,7 @@ export class InboxAccountsService {
               .select('_id')
               .lean()
               .exec()
-          : mod === 'deals'
-            ? await this.dealModel
-                .findOne({ recordId: entityId })
-                .select('_id')
-                .lean()
-                .exec()
-            : mod === 'contacts'
+          : mod === 'contacts'
               ? await this.contactModel
                   .findOne({ recordId: entityId })
                   .select('_id')
@@ -4742,7 +4694,6 @@ export class InboxAccountsService {
       entityId &&
       Types.ObjectId.isValid(entityId) &&
       (mod === 'leads' ||
-        mod === 'deals' ||
         mod === 'contacts' ||
         mod === 'organizations')
     ) {
@@ -4773,7 +4724,7 @@ export class InboxAccountsService {
       recipients: Array<{
         email: string;
         name?: string;
-        module?: 'leads' | 'contacts' | 'organizations' | 'deals' | 'clients';
+        module?: 'leads' | 'contacts' | 'organizations' | 'clients';
         entityId?: string;
       }>;
       subject?: string;
@@ -4809,7 +4760,7 @@ export class InboxAccountsService {
       .map((r) => ({
         ...r,
         email: String(r?.email || '').trim(),
-        module: (r?.module || 'leads') as 'leads' | 'contacts' | 'organizations' | 'deals' | 'clients',
+        module: (r?.module || 'leads') as 'leads' | 'contacts' | 'organizations' | 'clients',
       }))
       .filter((r) => r.email.includes('@'));
     if (!recipients.length) {
@@ -5196,33 +5147,6 @@ export class InboxAccountsService {
     if (module === 'clients') {
       return knownForLeadContactClient('clients');
     }
-    if (module === 'deals') {
-      const deal = await this.dealModel
-        .findById(entityId)
-        .populate('lead', 'email additionalEmails')
-        .lean()
-        .exec();
-      const lead = deal?.lead as {
-        email?: string;
-        additionalEmails?: string[];
-      } | null;
-      const fromLead = this.entityKnownEmails(
-        lead?.email,
-        lead?.additionalEmails,
-      );
-      const cp = deal?.contactPerson;
-      let contactKnown = new Set<string>();
-      if (cp && Types.ObjectId.isValid(String(cp))) {
-        const c = await this.contactModel
-          .findById(cp)
-          .select('email additionalEmails')
-          .lean()
-          .exec();
-        contactKnown = this.entityKnownEmails(c?.email, c?.additionalEmails);
-      }
-      const union = new Set([...fromLead, ...contactKnown]);
-      return addresses.every((addr) => union.has(addr.trim().toLowerCase()));
-    }
     return false;
   }
 
@@ -5288,18 +5212,6 @@ export class InboxAccountsService {
       );
       return;
     }
-    if (mod === 'deals') {
-      const deal = await this.dealModel
-        .findById(opts.entityId)
-        .select('lead')
-        .lean()
-        .exec();
-      if (!deal?.lead) return;
-      await this.leadModel.updateOne(
-        { _id: deal.lead },
-        { $addToSet: { additionalEmails: { $each: uniq } } },
-      );
-    }
   }
 
   /**
@@ -5321,14 +5233,12 @@ export class InboxAccountsService {
             (lead.associatedOrganizations as Types.ObjectId[]).forEach(orgId => involved.push({ id: orgId, type: 'Organization' }));
           }
           if ((lead as any).email) {
-            const [contact, clients, deals] = await Promise.all([
+            const [contact, clients] = await Promise.all([
               this.contactModel.findOne({ email: (lead as any).email }).select('_id').lean().exec(),
               this.clientModel.find({ $or: [{ sourceLead: primaryOid }, { email: (lead as any).email }] }).select('_id').lean().exec(),
-              this.dealModel.find({ lead: primaryOid }).select('_id').lean().exec(),
             ]);
             if (contact) involved.push({ id: contact._id as Types.ObjectId, type: 'Contact' });
             clients.forEach(c => involved.push({ id: c._id as Types.ObjectId, type: 'Client' }));
-            deals.forEach(d => involved.push({ id: d._id as Types.ObjectId, type: 'Deal' }));
           }
         }
       } else if (relatedType === 'Contact') {
@@ -5348,18 +5258,6 @@ export class InboxAccountsService {
             ]);
             leadsByEmail.forEach(l => involved.push({ id: l._id as Types.ObjectId, type: 'Lead' }));
             clientsByEmail.forEach(c => involved.push({ id: c._id as Types.ObjectId, type: 'Client' }));
-          }
-        }
-      } else if (relatedType === 'Deal') {
-        const deal = await this.dealModel.findById(primaryOid).select('lead contactPerson associatedContacts associatedCompanies').lean().exec();
-        if (deal) {
-          if ((deal as any).lead) involved.push({ id: (deal as any).lead, type: 'Lead' });
-          if ((deal as any).contactPerson) involved.push({ id: (deal as any).contactPerson, type: 'Contact' });
-          if ((deal as any).associatedContacts?.length) {
-            ((deal as any).associatedContacts as Types.ObjectId[]).forEach(id => involved.push({ id, type: 'Contact' }));
-          }
-          if ((deal as any).associatedCompanies?.length) {
-            ((deal as any).associatedCompanies as Types.ObjectId[]).forEach(id => involved.push({ id, type: 'Organization' }));
           }
         }
       } else if (relatedType === 'Client') {
@@ -5480,10 +5378,9 @@ export class InboxAccountsService {
         : '';
       const relatedType: string =
         data.module === 'leads' ? 'Lead'
-          : data.module === 'deals' ? 'Deal'
-            : data.module === 'contacts' ? 'Contact'
-              : data.module === 'clients' ? 'Client'
-                : 'Organization';
+          : data.module === 'contacts' ? 'Contact'
+            : data.module === 'clients' ? 'Client'
+              : 'Organization';
       const primaryOid = new Types.ObjectId(data.entityId);
       const involvedEntities = await this.buildInvolvedEntities(
         primaryOid,
@@ -5990,7 +5887,7 @@ export class InboxAccountsService {
         return {
           success: false,
           error:
-            'Recipient must match the selected Lead, Contact, Client, or Deal contact email.',
+            'Recipient must match the selected Lead, Contact, or Client contact email.',
         };
       }
     }

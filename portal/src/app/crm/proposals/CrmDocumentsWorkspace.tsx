@@ -103,7 +103,7 @@ type ProposalRow = {
   clientEmail?: string;
   subject?: string;
   bodyHtml?: string;
-  relatedModule?: "lead" | "contact" | "deal" | "client";
+  relatedModule?: "lead" | "contact" | "client";
   relatedTo?: string;
   totalAmount?: number;
   currency?: string;
@@ -123,7 +123,7 @@ type DraftShape = {
   clientEmail: string;
   subject: string;
   bodyHtml: string;
-  relatedModule?: "lead" | "contact" | "deal" | "client";
+  relatedModule?: "lead" | "contact" | "client";
   relatedTo?: string;
 };
 
@@ -136,8 +136,7 @@ type ProposalPipeline = {
 
 type AiSourceModule =
   | "leads"
-  | "contacts"
-  | "deals";
+  | "contacts";
 
 type AiSourceOption = {
   _id: string;
@@ -146,7 +145,6 @@ type AiSourceOption = {
   email?: string;
   title?: string;
   stage?: string;
-  dealValue?: number;
   organization?: string | { name?: string };
   platformClientLabel?: string;
   opportunitySourcePlatform?: string;
@@ -316,17 +314,7 @@ export function CrmDocumentsWorkspace({
   }, []);
 
   const aiSourceLabel = useCallback(
-    (row: AiSourceOption, module: AiSourceModule = aiSourceModule) => {
-      if (module === "deals") {
-        const title = row.title?.trim() || "Deal";
-        const bits = [
-          row.stage,
-          canViewCrmRevenue(getStoredUser()) && row.dealValue != null
-            ? `₹${row.dealValue}`
-            : "",
-        ].filter(Boolean);
-        return bits.length ? `${title} (${bits.join(" · ")})` : title;
-      }
+    (row: AiSourceOption, _module: AiSourceModule = aiSourceModule) => {
       const name = `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "Unnamed";
       const org =
         typeof row.organization === "string"
@@ -341,7 +329,6 @@ export function CrmDocumentsWorkspace({
 
   const aiRelatedModule = useCallback((module: AiSourceModule) => {
     if (module === "contacts") return "contact" as const;
-    if (module === "deals") return "deal" as const;
     return "lead" as const;
   }, []);
 
@@ -907,9 +894,7 @@ export function CrmDocumentsWorkspace({
         const endpoint =
           aiSourceModule === "leads"
             ? `${CRM_API_URL}/crm/leads?${params.toString()}`
-            : aiSourceModule === "contacts"
-              ? `${CRM_API_URL}/crm/contacts?${params.toString()}`
-              : `${CRM_API_URL}/crm/deals?${params.toString()}`;
+            : `${CRM_API_URL}/crm/contacts?${params.toString()}`;
         const res = await fetch(endpoint, {
           headers: authHeaders(),
           cache: "no-store",
@@ -1040,9 +1025,9 @@ export function CrmDocumentsWorkspace({
         title={moduleTitle}
         description={
           isContracts
-            ? "Create and manage client contracts with customizable pipeline stages. List or board view — move contracts through Draft → Signed like deals and leads."
+            ? "Create and manage client contracts with customizable pipeline stages. List or board view — move contracts through Draft → Signed like leads."
             : isQuotations
-              ? "Create and send quotations with their own pipeline stages. List or board view — move quotations through Draft → Accepted like deals and leads."
+              ? "Create and send quotations with their own pipeline stages. List or board view — move quotations through Draft → Accepted like leads."
               : "Quick setup: client, brief, then one-click standard proposal or AI from CRM. Advanced template fields stay optional. PDF, Word, and Excel are generated on download or send."
         }
         icon={<ScrollText className="h-5 w-5" aria-hidden />}
@@ -1475,7 +1460,6 @@ export function CrmDocumentsWorkspace({
                           <SelectContent>
                             <SelectItem value="leads">Lead</SelectItem>
                             <SelectItem value="contacts">Contact</SelectItem>
-                            <SelectItem value="deals">Deal</SelectItem>
                           </SelectContent>
                         </Select>
                         <div className="relative">
@@ -1775,17 +1759,12 @@ export function CrmDocumentsWorkspace({
                       <SelectContent>
                         <SelectItem value="leads">Lead</SelectItem>
                         <SelectItem value="contacts">Contact</SelectItem>
-                        <SelectItem value="deals">Deal</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-[var(--text-muted)]">
-                      {aiSourceModule === "leads"
-                        ? "Search lead"
-                        : aiSourceModule === "contacts"
-                          ? "Search contact"
-                          : "Search deal"}
+                      {aiSourceModule === "leads" ? "Search lead" : "Search contact"}
                     </Label>
                     <div className="relative">
                       <Input
@@ -1796,11 +1775,7 @@ export function CrmDocumentsWorkspace({
                           if (!e.target.value.trim()) setAiSourceEntityId("");
                         }}
                         onFocus={() => setAiSourceOpen(true)}
-                        placeholder={
-                          aiSourceModule === "deals"
-                            ? "Type title or keywords…"
-                            : "Type name or email…"
-                        }
+                        placeholder="Type name or email…"
                         className="h-9 rounded-md border-[var(--border-color)]"
                       />
                       {aiSourceLoading ? (
@@ -1821,9 +1796,6 @@ export function CrmDocumentsWorkspace({
                                     setAiSourceEntityId(row._id);
                                     setAiSourceQuery(aiSourceLabel(row, aiSourceModule));
                                     setAiSourceOpen(false);
-                                    if (aiSourceModule === "deals" && row.title) {
-                                      setTplProjectTitle(row.title);
-                                    }
                                   }}
                                 >
                                   {aiSourceLabel(row, aiSourceModule)}

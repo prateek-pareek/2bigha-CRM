@@ -161,7 +161,7 @@ export default function CurrencySettingsPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Currency & Exchange Rates</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Rates are used for USD ↔ INR deal value conversions across the CRM.
+            Rates are used for USD ↔ INR revenue conversions across the CRM.
           </p>
         </div>
       </div>
@@ -358,7 +358,7 @@ export default function CurrencySettingsPage() {
       )}
 
       <p className="text-xs text-text-muted leading-relaxed px-1">
-        USD is the base currency and cannot be removed. Per-deal exchange rates (set on individual deals) always take priority over these global rates.
+        USD is the base currency and cannot be removed. These global rates apply across the CRM.
       </p>
     </div>
   );

@@ -5,7 +5,6 @@ import {
   Search,
   X,
   User,
-  Briefcase,
   Building2,
   Loader2,
   ArrowRight,
@@ -16,13 +15,11 @@ import {
   fetchCrmSearch,
   type CrmSearchResults,
 } from "@/lib/crm/search-api";
-import { canViewCrmRevenue, getStoredUser } from '@/lib/suite/auth';
 import { useGlobalSearchQuery } from "@/lib/hooks/useGlobalSearchQuery";
 
 export default function GlobalSearch() {
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const showDealAmounts = canViewCrmRevenue(getStoredUser());
 
   const fetcher = useCallback(
     (q: string, signal: AbortSignal) =>
@@ -46,7 +43,7 @@ export default function GlobalSearch() {
   const [placeholder, setPlaceholder] = useState("Search…");
   useEffect(() => {
     const update = () => {
-      setPlaceholder(window.innerWidth < 640 ? "Search…" : "Search companies, contacts, deals…");
+      setPlaceholder(window.innerWidth < 640 ? "Search…" : "Search companies, contacts, leads…");
     };
     update();
     window.addEventListener('resize', update);
@@ -145,26 +142,6 @@ export default function GlobalSearch() {
                     title={`${l.firstName || ""} ${l.lastName || ""}`.trim()}
                     sub={l.email}
                     onClick={() => navigateTo(`/crm/leads/${l._id}`)}
-                  />
-                )}
-              />
-            ) : null}
-
-            {typedResults.deals && typedResults.deals.length > 0 ? (
-              <ResultSection
-                title="Deals"
-                icon={<Briefcase size={14} />}
-                items={typedResults.deals}
-                render={(d) => (
-                  <ResultItem
-                    key={d._id}
-                    title={d.title || d.organization || "Deal"}
-                    sub={
-                      showDealAmounts
-                        ? `$${(d.dealValue ?? 0).toLocaleString()} • ${d.status || ""}`
-                        : String(d.status || "")
-                    }
-                    onClick={() => navigateTo(`/crm/deals/${d._id}`)}
                   />
                 )}
               />

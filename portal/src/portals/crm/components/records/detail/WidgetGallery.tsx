@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, TrendingUp, BarChart3, PieChart, Activity, Users, DollarSign, LayoutGrid } from 'lucide-react';
+import { X, TrendingUp, PieChart, Activity, Users, DollarSign, LayoutGrid } from 'lucide-react';
 import { CrmJiraPortal } from '@/components/crm/shell/CrmJiraPortal';
 import { crmModalChrome } from '@/lib/crm/chrome';
 import { cn } from '@/lib/utils';
@@ -14,8 +14,7 @@ interface WidgetGalleryProps {
 
 const DASHBOARD_WIDGETS = [
  { id: 'sales-trend', type: 'chart', component: 'SalesTrend', title: 'Sales Performance', icon: <TrendingUp size={18} strokeWidth={1.75} />, description: 'Visualizes revenue and lead growth over time.' },
- { id: 'deals-stage', type: 'chart', component: 'DealsByStage', title: 'Pipeline Stages', icon: <BarChart3 size={18} strokeWidth={1.75} />, description: 'Current value of deals across different pipeline stages.' },
- { id: 'revenue-forecast', type: 'chart', component: 'ForecastedRevenue', title: 'Revenue Forecast', icon: <DollarSign size={18} strokeWidth={1.75} />, description: 'Projected revenue based on active deals.' },
+ { id: 'revenue-forecast', type: 'chart', component: 'ForecastedRevenue', title: 'Revenue Forecast', icon: <DollarSign size={18} strokeWidth={1.75} />, description: 'Projected revenue based on active opportunities.' },
  { id: 'recent-activities', type: 'list', component: 'RecentActivities', title: 'Recent Activities', icon: <Activity size={18} strokeWidth={1.75} />, description: 'A live feed of recent interactions and tasks.' },
 ];
 
@@ -23,7 +22,6 @@ const REPORT_WIDGETS = [
  { id: 'leads-status', type: 'chart', component: 'LeadsByStatus', title: 'Leads by Status', icon: <PieChart size={18} strokeWidth={1.75} />, description: 'Breakdown of leads by their current lifecycle stage.' },
  { id: 'activity-mix', type: 'chart', component: 'ActivityMix', title: 'Activity Mix', icon: <Activity size={18} strokeWidth={1.75} />, description: 'Distribution of notes, tasks, and calls.' },
  { id: 'top-agents', type: 'table', component: 'TopPerformers', title: 'Top Performers', icon: <Users size={18} strokeWidth={1.75} />, description: 'Leaderboard of sales representative performance.' },
- { id: 'deal-distribution', type: 'chart', component: 'DealDistribution', title: 'Deal Distribution', icon: <BarChart3 size={18} strokeWidth={1.75} />, description: 'Total value split by deal category.' },
 ];
 
 export default function WidgetGallery({ isOpen, onClose, onAdd, context = 'dashboard' }: WidgetGalleryProps) {

@@ -22,7 +22,7 @@ export class CrmProposal {
   })
   status: string;
 
-  /** Customizable pipeline (same pattern as leads/deals). */
+  /** Customizable pipeline (same pattern as leads). */
   @Prop({ type: Types.ObjectId, ref: 'Pipeline', index: true })
   pipeline?: Types.ObjectId;
 

@@ -64,9 +64,6 @@ export class User {
   @Prop({ type: [String], default: [] })
   salesWorkspaceAccessibleEmployees: string[];
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Deal' }], default: [] })
-  accessibleClientPortals: Types.ObjectId[];
-
   /**
    * Manager/Team Lead this user reports to (RBAC/workspace-isolation layer).
    * "My team" = this user + everyone whose reportsTo === this user's id.

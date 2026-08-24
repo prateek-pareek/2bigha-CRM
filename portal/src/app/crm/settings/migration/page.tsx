@@ -56,7 +56,6 @@ const ENTITY_LABELS: Record<string, string> = {
   organizations: "Companies / Organizations",
   contacts: "Contacts",
   leads: "Leads",
-  deals: "Deals / Opportunities",
   notes: "Notes",
   calls: "Calls",
   meetings: "Meetings",
@@ -99,8 +98,7 @@ export default function CrmMigrationSettingsPage() {
   const canWrite =
     hasAccess("leads:write") ||
     hasAccess("contacts:write") ||
-    hasAccess("organizations:write") ||
-    hasAccess("deals:write");
+    hasAccess("organizations:write");
 
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [platform, setPlatform] = useState("custom");
@@ -327,7 +325,7 @@ export default function CrmMigrationSettingsPage() {
     return (
       <div className="mx-auto max-w-3xl p-8">
         <p className="text-slate-600">
-          You need write access to leads, contacts, organizations, or deals to
+          You need write access to leads, contacts, or organizations to
           run migrations.
         </p>
       </div>
@@ -349,7 +347,7 @@ export default function CrmMigrationSettingsPage() {
             Data migration
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Bring companies, contacts, leads, deals, notes, calls, meetings, and
+            Bring companies, contacts, leads, notes, calls, meetings, and
             relationship edges from HubSpot, Salesforce, Zoho, Pipedrive, or any
             custom CRM — preserving source IDs and links as they were. Every
             write is snapshotted so a bad import can be reverted.
@@ -490,7 +488,7 @@ export default function CrmMigrationSettingsPage() {
           </h2>
           <p className="mt-1 text-xs text-slate-500">
             Map source columns to 2Bigha fields. Source IDs keep company ↔
-            contact ↔ deal ↔ note links intact.
+            contact ↔ note links intact.
           </p>
           <div className="mt-4 space-y-2">
             {(targetFields.length
@@ -662,7 +660,7 @@ export default function CrmMigrationSettingsPage() {
           Crore-scale / custom CRM API
         </h2>
         <p className="mt-1 text-xs text-slate-600">
-          Import order: companies → contacts → leads → deals → notes/calls →
+          Import order: companies → contacts → leads → notes/calls →
           associations. Every source field is kept under{" "}
           <code className="rounded bg-slate-200 px-1">_sourcePayload</code>.
           Use an associations file (fromType/fromId/toType/toId) to recreate

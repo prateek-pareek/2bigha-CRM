@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types, type PipelineStage } from 'mongoose';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
 import { Client, ClientDocument } from '../schemas/client.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
@@ -21,10 +20,6 @@ import {
 import { User, UserDocument } from '../../users/schemas/user.schema';
 import { AuditLog, AuditLogDocument } from '../schemas/audit-log.schema';
 import {
-  CrmGlobalSettings,
-  CrmGlobalSettingsDocument,
-} from '../schemas/crm-global-settings.schema';
-import {
   WorkflowDelayedJob,
   WorkflowDelayedJobDocument,
 } from '../schemas/workflow-delayed-job.schema';
@@ -42,15 +37,6 @@ import {
   moduleToRelatedType,
   summarizeAuditChanges,
 } from '../admin/audit-log.util';
-import {
-  buildPipelineStageProbabilityMaps,
-  resolveDealProbabilityFromStages,
-} from '../shared/deal-stage-probability.util';
-import {
-  dealContractMonths,
-  dealContractValue,
-  normalizeDealPricingType,
-} from '../shared/deal-pricing.util';
 
 const STALE_LEAD_DAYS = 7;
 
@@ -99,7 +85,6 @@ type WorkspaceWindow = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'las
 const WORKSPACE_SECTIONS = new Set([
   'attention',
   'tasks',
-  'deals',
   'activity',
   'leads',
   'lead_status',
@@ -531,8 +516,6 @@ export class ReportingService {
   constructor(
     @InjectModel(Lead.name, 'crmConnection')
     private leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Activity.name, 'crmConnection')
     private activityModel: Model<ActivityDocument>,
     @InjectModel(Client.name, 'crmConnection')
@@ -548,8 +531,6 @@ export class ReportingService {
     @InjectModel(User.name) private hrmsUserModel: Model<UserDocument>,
     @InjectModel(AuditLog.name, 'crmConnection')
     private auditLogModel: Model<AuditLogDocument>,
-    @InjectModel(CrmGlobalSettings.name, 'crmConnection')
-    private globalSettingsModel: Model<CrmGlobalSettingsDocument>,
     @InjectModel(WorkflowDelayedJob.name, 'crmConnection')
     private delayedJobModel: Model<WorkflowDelayedJobDocument>,
     @InjectModel(InboxEmail.name, 'crmConnection')
@@ -562,17 +543,6 @@ export class ReportingService {
     private agentTargetModel: Model<AgentTargetDocument>,
     private readonly appCache: AppCacheService,
   ) {}
-
-  private async getExchangeRate(): Promise<number> {
-    const doc = await this.globalSettingsModel.findOne({ key: 'default' }).lean().exec();
-    return (doc as any)?.usdToInr ?? 83;
-  }
-
-  private toINR(dealValue: number, currency: string, exchangeRate: number): number {
-    const cur = (currency || 'USD').toUpperCase();
-    if (cur === 'INR') return Math.round(dealValue);
-    return Math.round(dealValue * exchangeRate);
-  }
 
   /** Activity.author stores HRMS User ids; owner filter from UI is often "First Last". */
   async resolveHrmsAuthorId(
@@ -675,7 +645,7 @@ export class ReportingService {
     return out;
   }
 
-  /** HRMS email for workspace owner matching (leadOwner/dealOwner often store email). */
+  /** HRMS email for workspace owner matching (leadOwner often stores email). */
   async getHrmsUserEmail(userId: Types.ObjectId): Promise<string | null> {
     const u = await this.hrmsUserModel
       .findById(userId)
@@ -687,21 +657,7 @@ export class ReportingService {
     return e || null;
   }
 
-  /**
-   * Open-pipeline deal match for sales workspace.
-   * Visibility is enforced by `dealAccessFilter` from crm.service (same rules as GET /crm/deals).
-   */
-  private buildSalesWorkspaceDealMatch(
-    dealOpenStages: { stage: { $nin: string[] } },
-    dealAccessFilter?: Record<string, unknown> | null,
-  ): Record<string, unknown> {
-    if (!dealAccessFilter || Object.keys(dealAccessFilter).length === 0) {
-      return { ...dealOpenStages };
-    }
-    return { $and: [dealOpenStages, dealAccessFilter] };
-  }
-
-  /** Merge display name + extras (e.g. email) for leadOwner / dealOwner DB matching. */
+  /** Merge display name + extras (e.g. email) for leadOwner DB matching. */
   private mergeOwnerMatchStrings(
     primary: string | undefined | null,
     extras?: string[],
@@ -713,7 +669,7 @@ export class ReportingService {
     return [...new Set(all)];
   }
 
-  /** Owner string match for leadOwner / dealOwner fields on CRM records. */
+  /** Owner string match for leadOwner field on CRM records. */
   private stringOwnerFilter(
     field: string,
     owners?: string[] | null,
@@ -723,7 +679,7 @@ export class ReportingService {
     return { [field]: { $in: owners } };
   }
 
-  /** "First Last" as stored on leadOwner / dealOwner for workspace filters. */
+  /** "First Last" as stored on leadOwner for workspace filters. */
   async getHrmsDisplayOwnerLabel(
     userId: Types.ObjectId,
   ): Promise<string | null> {
@@ -939,7 +895,7 @@ export class ReportingService {
   }
 
   /**
-   * All leadOwner / dealOwner label strings for a report owner filter
+   * All leadOwner label strings for a report owner filter
    * (display name + emails across duplicate HRMS accounts).
    */
   private async resolveOwnerFieldLabels(owner?: string): Promise<string[]> {
@@ -957,10 +913,10 @@ export class ReportingService {
     return this.mergeOwnerMatchStrings(owner, extras);
   }
 
-  /** Match CRM ownership fields (leadOwner / dealOwner) to name + email aliases. */
+  /** Match CRM ownership fields (leadOwner) to name + email aliases. */
   private async ownerFieldFilter(
     owner: string | undefined,
-    field: 'leadOwner' | 'dealOwner',
+    field: 'leadOwner',
   ): Promise<Record<string, unknown>> {
     if (!owner || owner === 'All' || owner === 'All authorized') return {};
     const labels = await this.resolveOwnerFieldLabels(owner);
@@ -1119,9 +1075,8 @@ export class ReportingService {
       compareToYmd,
     } = this.parseDateRange(days, compare);
     const now = new Date();
-    const [leadOwnerFilter, dealOwnerFilter, authorIdsForDash] = await Promise.all([
+    const [leadOwnerFilter, authorIdsForDash] = await Promise.all([
       this.ownerFieldFilter(owner, 'leadOwner'),
-      this.ownerFieldFilter(owner, 'dealOwner'),
       this.resolveHrmsAuthorIds(owner),
     ]);
     const authorMatchForDash = this.authorIdQueryValue(
@@ -1140,205 +1095,20 @@ export class ReportingService {
           if (authorMatchForDash != null) f[ownerField] = authorMatchForDash;
         } else if (ownerField === 'leadOwner') {
           Object.assign(f, leadOwnerFilter);
-        } else if (ownerField === 'dealOwner') {
-          Object.assign(f, dealOwnerFilter);
         } else {
           f[ownerField] = owner;
-        }
-      }
-
-      // The Overview report's property filter only exposes Deals-module fields
-      // (see CRMFilterBar module="deals" in ReportsShell), so only apply it to
-      // deal-domain queries. Applying it to the Lead/count queries too would match
-      // against fields Leads don't have (stage values, dealValue, …) and silently
-      // zero out lead-derived numbers whenever any filter is active.
-      if (ownerField === 'dealOwner' && customFilters && customFilters.length > 0) {
-        const ands = [];
-        for (const crit of customFilters.slice(0, 20)) {
-          if (!crit.property || !crit.operator) continue;
-          const prop = String(crit.property);
-          if (
-            !prop ||
-            prop.startsWith('$') ||
-            prop.includes('\0') ||
-            prop.length > 120
-          ) {
-            continue;
-          }
-          let cond: any = {};
-          const val = crit.value;
-          switch (crit.operator) {
-            case 'equals': cond[prop] = val; break;
-            case 'not_equals': cond[prop] = { $ne: val }; break;
-            case 'contains': cond[prop] = { $regex: String(val).slice(0, 200).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }; break;
-            case 'does_not_contain': cond[prop] = { $not: { $regex: String(val).slice(0, 200).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } }; break;
-            case 'is_empty': cond[prop] = { $in: [null, ''] }; break;
-            case 'is_not_empty': cond[prop] = { $nin: [null, ''] }; break;
-            case 'greater_than': cond[prop] = { $gt: Number(val) }; break;
-            case 'less_than': cond[prop] = { $lt: Number(val) }; break;
-            case 'is_any_of': cond[prop] = { $in: Array.isArray(val) ? val.slice(0, 100) : String(val).split(',').map(s => s.trim()).slice(0, 100) }; break;
-            case 'is_none_of': cond[prop] = { $nin: Array.isArray(val) ? val.slice(0, 100) : String(val).split(',').map(s => s.trim()).slice(0, 100) }; break;
-            case 'is_checked': cond[prop] = true; break;
-            case 'is_not_checked': cond[prop] = { $ne: true }; break;
-          }
-          if (Object.keys(cond).length > 0) ands.push(cond);
-        }
-        if (ands.length > 0) {
-          f.$and = f.$and ? [...f.$and, ...ands] : ands;
         }
       }
       return f;
     };
 
-    const dealSelect = 'dealValue probability stage createdAt closedDate';
-    const [
-      currentDeals,
-      previousDeals,
-      currentLeads,
-      previousLeads,
-      allClosedDeals,
-      currentLeadStats,
-      previousLeadStats,
-    ] = await Promise.all([
-      this.dealModel
-        .find(buildFilter(currentFilter, 'dealOwner'))
-        .select(dealSelect)
-        .lean()
-        .exec(),
-      this.dealModel
-        .find(buildFilter(previousFilter, 'dealOwner'))
-        .select(dealSelect)
-        .lean()
-        .exec(),
-      this.leadModel.countDocuments(buildFilter(currentFilter, 'leadOwner')),
-      this.leadModel.countDocuments(buildFilter(previousFilter, 'leadOwner')),
-      this.dealModel
-        .find(
-          buildFilter(
-            {
-              ...currentFilter,
-              stage: { $regex: /won|lost|rejected|withdrawn/i },
-            },
-            'dealOwner',
-          ),
-        )
-        .select(dealSelect)
-        .lean()
-        .exec(),
-      this.getLeadConversion(owner, currentStart),
-      this.getLeadConversion(owner, previousStart, currentStart),
-    ]);
-
-    // 1. Gross & Weighted Pipeline
-    const currentGrossRevenue = currentDeals.reduce(
-      (sum, d) => sum + (d.dealValue || 0),
-      0,
-    );
-    const currentWeightedRevenue = currentDeals.reduce(
-      (sum, d) => sum + (d.dealValue || 0) * ((d.probability || 0) / 100),
-      0,
-    );
-    const previousGrossRevenue = previousDeals.reduce(
-      (sum, d) => sum + (d.dealValue || 0),
-      0,
-    );
-
-    // 2. Win Ratio (Professional CRM logic: Won / Total Closed)
-    const wonDeals = allClosedDeals.filter((d) =>
-      this.isClosedWonStage(d.stage),
-    );
-    const lostDeals = allClosedDeals.filter((d) =>
-      this.isClosedLostStage(d.stage),
-    );
-    const winRatio =
-      allClosedDeals.length > 0
-        ? (wonDeals.length / allClosedDeals.length) * 100
-        : 0;
-
-    // Previous win ratio for delta (comparison period closed deals)
-    const prevClosedDealsList = await this.dealModel
-      .find(
-        buildFilter(
-          {
-            ...previousFilter,
-            stage: { $regex: /won|lost|rejected|withdrawn/i },
-          },
-          'dealOwner',
-        ),
-      )
-      .select(dealSelect)
-      .lean()
-      .exec();
-    const prevClosedDeals = prevClosedDealsList.length;
-    const prevWonDealsList = prevClosedDealsList.filter((d) =>
-      this.isClosedWonStage(d.stage),
-    );
-    const prevLostDealsList = prevClosedDealsList.filter((d) =>
-      this.isClosedLostStage(d.stage),
-    );
-    const prevWonDeals = prevWonDealsList.length;
-    const prevWinRatio =
-      prevClosedDeals > 0 ? (prevWonDeals / prevClosedDeals) * 100 : 0;
-
-    // MTD / YTD closed-won revenue (calendar periods, not the selected window)
-    const tz = this.reportingCalendarTz();
-    const todayYmd = this.formatYmdInTz(now, tz);
-    const [yStr, mStr] = todayYmd.split('-');
-    const mtdStart = this.startOfYmdInTz(`${yStr}-${mStr}-01`, tz);
-    const ytdStart = this.startOfYmdInTz(`${yStr}-01-01`, tz);
-    const prevMtdEnd = new Date(mtdStart.getTime() - 1);
-    const prevMonthDate = new Date(Date.UTC(Number(yStr), Number(mStr) - 2, 1));
-    const prevMtdStart = this.startOfYmdInTz(
-      this.formatYmdInTz(prevMonthDate, tz),
-      tz,
-    );
-    const prevYtdStart = this.startOfYmdInTz(`${Number(yStr) - 1}-01-01`, tz);
-    const prevYtdEnd = this.endOfYmdInTz(`${Number(yStr) - 1}-12-31`, tz);
-
-    const sumClosedWonValue = async (start: Date, end: Date) => {
-      const rows = await this.dealModel
-        .find(
-          buildFilter(
-            {
-              $or: [
-                { closedDate: { $gte: start, $lte: end } },
-                {
-                  closedDate: null,
-                  updatedAt: { $gte: start, $lte: end },
-                },
-              ],
-            },
-            'dealOwner',
-          ),
-        )
-        .select('dealValue stage closedDate updatedAt')
-        .lean()
-        .exec();
-      return rows
-        .filter((d) => this.isClosedWonStage(d.stage))
-        .reduce((s, d) => s + (Number(d.dealValue) || 0), 0);
-    };
-
-    const [mtdRevenue, ytdRevenue, prevMtdRevenue, prevYtdRevenue] =
+    const [currentLeads, previousLeads, currentLeadStats, previousLeadStats] =
       await Promise.all([
-        sumClosedWonValue(mtdStart, now),
-        sumClosedWonValue(ytdStart, now),
-        sumClosedWonValue(prevMtdStart, prevMtdEnd),
-        sumClosedWonValue(prevYtdStart, prevYtdEnd),
+        this.leadModel.countDocuments(buildFilter(currentFilter, 'leadOwner')),
+        this.leadModel.countDocuments(buildFilter(previousFilter, 'leadOwner')),
+        this.getLeadConversion(owner, currentStart),
+        this.getLeadConversion(owner, previousStart, currentStart),
       ]);
-
-    // 3. Average Sales Cycle (Days from creation to Won)
-    const salesCycleDays =
-      wonDeals.length > 0
-        ? wonDeals.reduce((sum, d) => {
-            const created = new Date(d.createdAt);
-            const closed = d.closedDate ? new Date(d.closedDate) : new Date();
-            return (
-              sum +
-              (closed.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
-            );
-          }, 0) / wonDeals.length
-        : 0;
 
     const calculateMomentum = async (
       currentTotal: number,
@@ -1378,20 +1148,13 @@ export class ReportingService {
       return Math.round(((h1Count - h2Count) / h2Count) * 100);
     };
 
-    // 4. Momentum & Leads
+    // Momentum & Leads
     const lvr = await calculateMomentum(
       currentLeads,
       previousLeads,
       this.leadModel,
       currentFilter,
       'leadOwner',
-    );
-    const revenueMomentum = await calculateMomentum(
-      currentGrossRevenue,
-      previousGrossRevenue,
-      this.dealModel,
-      currentFilter,
-      'dealOwner',
     );
 
     // Funnel calculation from real data
@@ -1404,24 +1167,7 @@ export class ReportingService {
         ),
         w: 'w-4/5',
       },
-      {
-        label: 'Negotiations',
-        val: currentDeals.filter((d) =>
-          ['Negotiation', 'Proposal'].includes(d.stage),
-        ).length,
-        w: 'w-2/3',
-      },
-      { label: 'Won', val: wonDeals.length, w: 'w-1/2' },
     ];
-
-    const efficiency =
-      currentLeads > 0 ? (wonDeals.length / currentLeads) * 100 : 0;
-
-    // Helper for basic percentage delta
-    const calculateDelta = (curr: number, prev: number) => {
-      if (prev === 0) return curr > 0 ? 100 : 0;
-      return Math.round(((curr - prev) / prev) * 100);
-    };
 
     return {
       periodMeta: {
@@ -1442,76 +1188,9 @@ export class ReportingService {
           deltaSuffix: '%',
           title: 'Lead Velocity',
         },
-        {
-          name: 'total_revenue',
-          value: `$${currentWeightedRevenue.toLocaleString()}`,
-          delta: revenueMomentum,
-          deltaSuffix: '%',
-          title: 'Gross Pipeline',
-        },
-        {
-          name: 'win_ratio',
-          value: `${winRatio.toFixed(1)}%`,
-          delta: calculateDelta(winRatio, prevWinRatio),
-          deltaSuffix: '%',
-          title: 'Win Ratio',
-        },
-        {
-          name: 'sales_cycle',
-          value: `${Math.round(salesCycleDays)} Days`,
-          delta: 0,
-          deltaSuffix: '',
-          title: 'Active Cycle',
-        },
       ],
       funnel: funnelStages,
-      summary: {
-        efficiency: efficiency.toFixed(1) + '%',
-      },
-      outcomes: {
-        won: wonDeals.length,
-        lost: lostDeals.length,
-        wonValue: wonDeals.reduce((s, d) => s + (Number(d.dealValue) || 0), 0),
-        lostValue: lostDeals.reduce((s, d) => s + (Number(d.dealValue) || 0), 0),
-        wonDelta: calculateDelta(wonDeals.length, prevWonDeals),
-        lostDelta: calculateDelta(
-          lostDeals.length,
-          prevLostDealsList.length,
-        ),
-        vsLastMonth:
-          prevWonDeals + prevLostDealsList.length > 0
-            ? calculateDelta(
-                wonDeals.length + lostDeals.length,
-                prevWonDeals + prevLostDealsList.length,
-              )
-            : wonDeals.length > 0
-              ? 100
-              : 0,
-      },
-      revenuePeriods: {
-        mtd: mtdRevenue,
-        ytd: ytdRevenue,
-        mtdDelta: calculateDelta(mtdRevenue, prevMtdRevenue),
-        ytdDelta: calculateDelta(ytdRevenue, prevYtdRevenue),
-        weightedPipeline: currentWeightedRevenue,
-        grossPipeline: currentGrossRevenue,
-        avgDealSize:
-          currentDeals.length > 0
-            ? currentGrossRevenue / currentDeals.length
-            : 0,
-        avgDealSizeDelta: calculateDelta(
-          currentDeals.length > 0
-            ? currentGrossRevenue / currentDeals.length
-            : 0,
-          previousDeals.length > 0
-            ? previousGrossRevenue / previousDeals.length
-            : 0,
-        ),
-      },
       charts: {
-        salesTrend: await this.getSalesTrend(safeDays, owner),
-        revenueForecast: await this.getRevenueForecast(owner),
-        dealsByStage: await this.getDealsByStage(owner),
         activityTrends: await this.getActivityTrends(owner),
         leadsByStatus: await this.getLeadsByStatus(owner),
       },
@@ -1532,593 +1211,6 @@ export class ReportingService {
       },
     ]);
     return data.map((d) => ({ name: d._id || 'New', value: d.value }));
-  }
-
-  private async getSalesTrend(days: number, owner?: string) {
-    const tz = this.reportingCalendarTz();
-    const todayYmd = this.formatYmdInTz(new Date(), tz);
-    const fromYmd = this.addDaysToYmd(todayYmd, -(days || 30));
-    const start = this.startOfYmdInTz(fromYmd, tz);
-    const ownerFilter = await this.ownerFieldFilter(owner, 'dealOwner');
-    const filter: Record<string, unknown> = {
-      createdAt: { $gte: start },
-      ...ownerFilter,
-    };
-
-    const data = await this.dealModel.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: {
-            $dateToString: {
-              format: '%Y-%m-%d',
-              date: '$createdAt',
-              timezone: tz,
-            },
-          },
-          revenue: { $sum: '$dealValue' },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
-
-    return data.map((d) => ({
-      name: d._id,
-      revenue: d.revenue,
-      leads: d.count,
-    }));
-  }
-
-  private async getRevenueForecast(owner?: string) {
-    const filter: Record<string, unknown> = {
-      stage: { $nin: ['Closed Won', 'Closed Lost'] },
-    };
-    if (owner && owner !== 'All') filter.dealOwner = owner;
-
-    const deals = await this.dealModel
-      .find(filter)
-      .select('dealValue probability expectedClosureDate stage pipeline')
-      .lean()
-      .exec();
-
-    const pipelineIds = [
-      ...new Set(
-        deals
-          .map((d) =>
-            (d as { pipeline?: Types.ObjectId }).pipeline
-              ? String((d as { pipeline: Types.ObjectId }).pipeline)
-              : '',
-          )
-          .filter(Boolean),
-      ),
-    ];
-    const pipelines = pipelineIds.length
-      ? await this.pipelineModel
-          .find({ _id: { $in: pipelineIds.map((id) => new Types.ObjectId(id)) } })
-          .select('stages')
-          .lean()
-          .exec()
-      : await this.pipelineModel
-          .find({ type: 'deals' })
-          .select('stages')
-          .lean()
-          .exec();
-    const stageMaps = buildPipelineStageProbabilityMaps(pipelines as any[]);
-
-    const monthTotals = new Map<number, number>();
-    for (const raw of deals) {
-      const close = (raw as { expectedClosureDate?: Date }).expectedClosureDate;
-      if (!close) continue;
-      const month = new Date(close).getUTCMonth() + 1;
-      const probability = resolveDealProbabilityFromStages(
-        {
-          pipeline: (raw as { pipeline?: Types.ObjectId }).pipeline,
-          stage: (raw as { stage?: string }).stage,
-          probability: (raw as { probability?: number }).probability,
-        },
-        stageMaps,
-      );
-      const weighted =
-        (Number((raw as { dealValue?: number }).dealValue) || 0) *
-        (probability / 100);
-      monthTotals.set(month, (monthTotals.get(month) || 0) + weighted);
-    }
-
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return [...monthTotals.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .slice(0, 6)
-      .map(([month, value]) => ({
-        name: months[month - 1] || 'Unknown',
-        value: Math.round(value),
-      }));
-  }
-
-  async getRevenueForecastReport(options: {
-    owner?: string;
-    pipelineId?: string;
-    months?: number;
-  }) {
-    const monthCount = Math.min(Math.max(Number(options.months) || 6, 3), 12);
-    const ownerKey =
-      options.owner && options.owner !== 'All' ? String(options.owner) : 'all';
-    const pipelineKey =
-      options.pipelineId && options.pipelineId !== 'all'
-        ? String(options.pipelineId)
-        : 'all';
-    const cacheKey = `crm:reporting:revenue-forecast:v6:${ownerKey}:${pipelineKey}:${monthCount}`;
-    return this.appCache.getOrSet(
-      cacheKey,
-      this.appCache.crmReportingTtl(),
-      () => this.computeRevenueForecastReport(options, monthCount),
-    );
-  }
-
-  private businessMonthParts(date: Date = new Date()): {
-    year: number;
-    month: number;
-  } {
-    const s = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(date);
-    return { year: Number(s.slice(0, 4)), month: Number(s.slice(5, 7)) };
-  }
-
-  private monthKey(date: Date): string {
-    const { year, month } = this.businessMonthParts(date);
-    return `${year}-${String(month).padStart(2, '0')}`;
-  }
-
-  private monthLabel(key: string): string {
-    const [y, m] = key.split('-').map(Number);
-    if (!y || !m) return key;
-    return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', {
-      month: 'short',
-      year: 'numeric',
-      timeZone: 'UTC',
-    });
-  }
-
-  private buildForecastMonthKeys(monthCount: number): string[] {
-    const { year, month } = this.businessMonthParts();
-    const keys: string[] = [];
-    for (let i = 0; i < monthCount; i++) {
-      const d = new Date(Date.UTC(year, month - 1 + i, 1));
-      keys.push(
-        `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`,
-      );
-    }
-    return keys;
-  }
-
-  /** Past months (including current) for Closed Won generated revenue. */
-  private buildGeneratedMonthKeys(monthCount: number): string[] {
-    const { year, month } = this.businessMonthParts();
-    const keys: string[] = [];
-    for (let i = monthCount - 1; i >= 0; i--) {
-      const d = new Date(Date.UTC(year, month - 1 - i, 1));
-      keys.push(
-        `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`,
-      );
-    }
-    return keys;
-  }
-
-  private isClosedWonStage(stage?: string): boolean {
-    const s = String(stage || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[_-]+/g, ' ');
-    return (
-      s === 'closed won' ||
-      s === 'won' ||
-      s === 'hired / won' ||
-      s.includes('closed won')
-    );
-  }
-
-  private isClosedLostStage(stage?: string): boolean {
-    const s = String(stage || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[_-]+/g, ' ');
-    return (
-      s === 'closed lost' ||
-      s === 'lost' ||
-      s === 'rejected' ||
-      s === 'withdrawn' ||
-      s.includes('closed lost')
-    );
-  }
-
-  private dealCloseDate(raw: {
-    closedDate?: Date;
-    expectedClosureDate?: Date;
-    updatedAt?: Date;
-  }): Date | null {
-    const d = raw.closedDate || raw.expectedClosureDate || raw.updatedAt;
-    if (!d) return null;
-    const parsed = new Date(d);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  /** Workspace passes user ObjectIds; dealOwner stores "First Last" / email. */
-  private async resolveDealOwnerFilter(
-    owner?: string,
-  ): Promise<Record<string, unknown>> {
-    if (!owner || owner === 'All' || owner === 'All authorized') return {};
-    const authorId = await this.resolveHrmsAuthorId(owner);
-    const isOid = Types.ObjectId.isValid(owner) && owner.length === 24;
-    const labels = this.mergeOwnerMatchStrings(
-      isOid ? null : owner,
-      [
-        authorId
-          ? ((await this.getHrmsDisplayOwnerLabel(authorId)) ?? undefined)
-          : undefined,
-        authorId
-          ? ((await this.getHrmsUserEmail(authorId)) ?? undefined)
-          : undefined,
-      ].filter(Boolean) as string[],
-    ).filter((l) => !(Types.ObjectId.isValid(l) && l.length === 24));
-    if (!labels.length) {
-      // Last resort: leave unfiltered rather than matching a raw ObjectId that never hits.
-      return {};
-    }
-    return this.stringOwnerFilter('dealOwner', labels);
-  }
-
-  private async computeRevenueForecastReport(
-    options: { owner?: string; pipelineId?: string },
-    monthCount: number,
-  ) {
-    const exchangeRate = await this.getExchangeRate();
-    const ownerFilter = await this.resolveDealOwnerFilter(options.owner);
-    const baseFilter: Record<string, unknown> = { ...ownerFilter };
-    if (
-      options.pipelineId &&
-      options.pipelineId !== 'all' &&
-      Types.ObjectId.isValid(options.pipelineId)
-    ) {
-      baseFilter.pipeline = new Types.ObjectId(options.pipelineId);
-    }
-
-    // Load all non-lost deals, then classify open vs won in memory (stage names vary).
-    const deals = await this.dealModel
-      .find({
-        ...baseFilter,
-        stage: { $nin: ['Closed Lost', 'Lost'] },
-      })
-      .select(
-        'title organization stage dealValue currency probability expectedClosureDate closedDate updatedAt dealOwner pipeline pricingType contractMonths',
-      )
-      .lean()
-      .exec();
-
-    const openDeals = deals.filter(
-      (d) =>
-        !this.isClosedWonStage((d as { stage?: string }).stage) &&
-        !this.isClosedLostStage((d as { stage?: string }).stage),
-    );
-    const wonDeals = deals.filter((d) =>
-      this.isClosedWonStage((d as { stage?: string }).stage),
-    );
-
-    // Always load deal pipelines so stage probabilities resolve even for sparse pipeline refs.
-    const pipelines = await this.pipelineModel
-      .find({ type: 'deals' })
-      .select('stages')
-      .lean()
-      .exec();
-    const stageMaps = buildPipelineStageProbabilityMaps(pipelines as any[]);
-
-    const forecastKeys = this.buildForecastMonthKeys(monthCount);
-    const generatedKeys = this.buildGeneratedMonthKeys(monthCount);
-    const monthKeys = [...new Set([...generatedKeys, ...forecastKeys])].sort();
-    const forecastSet = new Set(forecastKeys);
-    const generatedSet = new Set(generatedKeys);
-    const currentMonthKey = forecastKeys[0] || this.monthKey(new Date());
-
-    type ForecastDeal = {
-      _id: string;
-      title: string;
-      organization?: string;
-      stage: string;
-      dealValue: number;
-      dealValueINR: number;
-      contractValueINR: number;
-      pricingType: 'fixed' | 'monthly';
-      contractMonths: number;
-      probability: number;
-      weightedINR: number;
-      expectedClosureDate: string | null;
-      closedDate?: string | null;
-      dealOwner: string;
-      pipeline?: string;
-    };
-
-    const buckets = new Map<
-      string,
-      {
-        gross: number;
-        weighted: number;
-        generated: number;
-        deals: ForecastDeal[];
-        generatedDeals: ForecastDeal[];
-      }
-    >();
-    for (const key of monthKeys) {
-      buckets.set(key, {
-        gross: 0,
-        weighted: 0,
-        generated: 0,
-        deals: [],
-        generatedDeals: [],
-      });
-    }
-    const unscheduled: ForecastDeal[] = [];
-
-    let grossTotal = 0;
-    let weightedTotal = 0;
-    let generatedTotal = 0;
-    let generatedDealCount = 0;
-    let generatedThisMonth = 0;
-    let monthlyMrrWeighted = 0;
-
-    for (const raw of openDeals) {
-      const pricingType = normalizeDealPricingType(
-        (raw as { pricingType?: string }).pricingType,
-      );
-      const months = dealContractMonths({
-        pricingType,
-        contractMonths: (raw as { contractMonths?: number }).contractMonths,
-      });
-      const dealValue = Number((raw as { dealValue?: number }).dealValue) || 0;
-      const probability = resolveDealProbabilityFromStages(
-        {
-          pipeline: (raw as { pipeline?: Types.ObjectId }).pipeline,
-          stage: (raw as { stage?: string }).stage,
-          probability: (raw as { probability?: number }).probability,
-        },
-        stageMaps,
-      );
-      const currency = String((raw as { currency?: string }).currency || 'USD');
-      const monthlyINR = this.toINR(dealValue, currency, exchangeRate);
-      const contractValueINR = this.toINR(
-        dealContractValue({
-          dealValue,
-          pricingType,
-          contractMonths: months,
-        }),
-        currency,
-        exchangeRate,
-      );
-      const weightedINR = Math.round(contractValueINR * (probability / 100));
-      grossTotal += contractValueINR;
-      weightedTotal += weightedINR;
-      if (pricingType === 'monthly') {
-        monthlyMrrWeighted += Math.round(monthlyINR * (probability / 100));
-      }
-
-      const expectedClosureDate = (raw as { expectedClosureDate?: Date })
-        .expectedClosureDate
-        ? new Date(
-            (raw as { expectedClosureDate: Date }).expectedClosureDate,
-          ).toISOString()
-        : null;
-
-      const row: ForecastDeal = {
-        _id: String((raw as { _id: Types.ObjectId })._id),
-        title: String((raw as { title?: string }).title || 'Untitled'),
-        organization: (raw as { organization?: string }).organization,
-        stage: String((raw as { stage?: string }).stage || ''),
-        dealValue,
-        dealValueINR: monthlyINR,
-        contractValueINR,
-        pricingType,
-        contractMonths: months,
-        probability,
-        weightedINR,
-        expectedClosureDate,
-        dealOwner: String((raw as { dealOwner?: string }).dealOwner || ''),
-        pipeline: (raw as { pipeline?: Types.ObjectId }).pipeline
-          ? String((raw as { pipeline: Types.ObjectId }).pipeline)
-          : undefined,
-      };
-
-      const close = (raw as { expectedClosureDate?: Date }).expectedClosureDate;
-      if (!close) {
-        unscheduled.push(row);
-        continue;
-      }
-      let startKey = this.monthKey(new Date(close));
-      // Overdue open deals still count from the current month (CRM standard).
-      if (!forecastSet.has(startKey)) {
-        if (startKey < currentMonthKey && forecastSet.has(currentMonthKey)) {
-          startKey = currentMonthKey;
-        } else if (startKey > [...forecastSet].slice(-1)[0]) {
-          unscheduled.push(row);
-          continue;
-        } else if (!forecastSet.has(startKey)) {
-          unscheduled.push(row);
-          continue;
-        }
-      }
-
-      if (pricingType === 'monthly') {
-        // Spread monthly amount across engagement months that fall in the forecast window.
-        const [sy, sm] = startKey.split('-').map(Number);
-        let placed = false;
-        for (let i = 0; i < months; i++) {
-          const d = new Date(Date.UTC(sy, sm - 1 + i, 1));
-          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-          if (!forecastSet.has(key)) continue;
-          const bucket = buckets.get(key)!;
-          bucket.gross += monthlyINR;
-          bucket.weighted += Math.round(monthlyINR * (probability / 100));
-          if (!placed) {
-            bucket.deals.push(row);
-            placed = true;
-          }
-        }
-        if (!placed) unscheduled.push(row);
-      } else {
-        const bucket = buckets.get(startKey)!;
-        bucket.gross += contractValueINR;
-        bucket.weighted += weightedINR;
-        bucket.deals.push(row);
-      }
-    }
-
-    for (const raw of wonDeals) {
-      const pricingType = normalizeDealPricingType(
-        (raw as { pricingType?: string }).pricingType,
-      );
-      const months = dealContractMonths({
-        pricingType,
-        contractMonths: (raw as { contractMonths?: number }).contractMonths,
-      });
-      const dealValue = Number((raw as { dealValue?: number }).dealValue) || 0;
-      const currency = String((raw as { currency?: string }).currency || 'USD');
-      const monthlyINR = this.toINR(dealValue, currency, exchangeRate);
-      const contractValueINR = this.toINR(
-        dealContractValue({
-          dealValue,
-          pricingType,
-          contractMonths: months,
-        }),
-        currency,
-        exchangeRate,
-      );
-      const close = this.dealCloseDate(
-        raw as {
-          closedDate?: Date;
-          expectedClosureDate?: Date;
-          updatedAt?: Date;
-        },
-      );
-      const row: ForecastDeal = {
-        _id: String((raw as { _id: Types.ObjectId })._id),
-        title: String((raw as { title?: string }).title || 'Untitled'),
-        organization: (raw as { organization?: string }).organization,
-        stage: String((raw as { stage?: string }).stage || 'Closed Won'),
-        dealValue,
-        dealValueINR: monthlyINR,
-        contractValueINR,
-        pricingType,
-        contractMonths: months,
-        probability: 100,
-        weightedINR: contractValueINR,
-        expectedClosureDate: (raw as { expectedClosureDate?: Date })
-          .expectedClosureDate
-          ? new Date(
-              (raw as { expectedClosureDate: Date }).expectedClosureDate,
-            ).toISOString()
-          : null,
-        closedDate: close ? close.toISOString() : null,
-        dealOwner: String((raw as { dealOwner?: string }).dealOwner || ''),
-        pipeline: (raw as { pipeline?: Types.ObjectId }).pipeline
-          ? String((raw as { pipeline: Types.ObjectId }).pipeline)
-          : undefined,
-      };
-
-      if (!close) continue;
-      const key = this.monthKey(close);
-      if (!generatedSet.has(key)) continue;
-
-      // Generated revenue uses contract value (monthly × months for retainers).
-      generatedTotal += contractValueINR;
-      generatedDealCount += 1;
-      if (key === currentMonthKey) generatedThisMonth += contractValueINR;
-
-      const bucket = buckets.get(key);
-      if (!bucket) continue;
-      bucket.generated += contractValueINR;
-      bucket.generatedDeals.push(row);
-    }
-
-    const monthsOut = monthKeys.map((key) => {
-      const bucket = buckets.get(key)!;
-      bucket.deals.sort((a, b) => b.weightedINR - a.weightedINR);
-      bucket.generatedDeals.sort((a, b) => b.contractValueINR - a.contractValueINR);
-      return {
-        key,
-        label: this.monthLabel(key),
-        gross: Math.round(bucket.gross),
-        weighted: Math.round(bucket.weighted),
-        generated: Math.round(bucket.generated),
-        dealCount: bucket.deals.length,
-        generatedDealCount: bucket.generatedDeals.length,
-        deals: bucket.deals,
-        generatedDeals: bucket.generatedDeals,
-        isPast: generatedSet.has(key) && !forecastSet.has(key),
-        isCurrent: key === currentMonthKey,
-        isForecast: forecastSet.has(key),
-      };
-    });
-
-    unscheduled.sort((a, b) => b.weightedINR - a.weightedINR);
-    const unscheduledGross = unscheduled.reduce((s, d) => s + d.contractValueINR, 0);
-    const unscheduledWeighted = unscheduled.reduce((s, d) => s + d.weightedINR, 0);
-
-    return {
-      currency: 'INR',
-      exchangeRate,
-      summary: {
-        grossTotal: Math.round(grossTotal),
-        weightedTotal: Math.round(weightedTotal),
-        dealCount: openDeals.length,
-        unscheduledCount: unscheduled.length,
-        unscheduledGross: Math.round(unscheduledGross),
-        unscheduledWeighted: Math.round(unscheduledWeighted),
-        generatedTotal: Math.round(generatedTotal),
-        generatedDealCount,
-        generatedThisMonth: Math.round(generatedThisMonth),
-        generatedLookbackMonths: monthCount,
-        monthlyMrrWeighted: Math.round(monthlyMrrWeighted),
-      },
-      months: monthsOut,
-      unscheduled,
-    };
-  }
-
-  public async getDealsByStage(owner?: string, pipeline?: string) {
-    const filter: Record<string, unknown> = {
-      ...(await this.ownerFieldFilter(owner, 'dealOwner')),
-    };
-    if (pipeline && pipeline !== 'all') filter.pipeline = new Types.ObjectId(pipeline);
-
-    const data = await this.dealModel.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: '$stage',
-          value: { $sum: 1 },
-          amount: { $sum: { $ifNull: ['$dealValue', 0] } },
-        },
-      },
-    ]);
-    return data.map((d) => ({
-      name: d._id || 'Unknown',
-      value: d.value,
-      amount: d.amount || 0,
-    }));
   }
 
   public async getLeadConversion(
@@ -2173,16 +1265,13 @@ export class ReportingService {
     ]);
   }
 
-  async getDealStats(owner?: string, pipeline?: string): Promise<any> {
-    return this.getDealsByStage(owner, pipeline);
-  }
   async getActivityTrendsLegacy(): Promise<any> {
     return this.getActivityTrends();
   }
 
   /**
    * Leads board + email effectiveness: leads over time / by owner, conversion snapshot,
-   * pipeline into deals & clients, and tracked-email opens by day / recipient / template / sending address.
+   * pipeline into clients, and tracked-email opens by day / recipient / template / sending address.
    */
   private async getFollowUpHealth(
     openLeadFilter: Record<string, unknown>,
@@ -2238,21 +1327,13 @@ export class ReportingService {
     periodDays: number;
     leadsCreatedByDay: Array<{ date: string; count: number }>;
     leadsByOwner: Array<{ owner: string; count: number }>;
-    dealsByOwner: Array<{ owner: string; count: number }>;
     leadConversion: {
       createdInPeriod: number;
       convertedInPeriod: number;
       conversionRate: number;
     };
-    dealsCreatedInPeriod: number;
     clientsCreatedInPeriod: number;
     openLeadsByPipeline: Array<{
-      pipelineId: string | null;
-      pipelineName: string;
-      total: number;
-      stages: Array<{ stage: string; count: number }>;
-    }>;
-    openDealsByPipeline: Array<{
       pipelineId: string | null;
       pipelineName: string;
       total: number;
@@ -2293,7 +1374,6 @@ export class ReportingService {
       converted: number;
       conversionRate: number;
       replies: number;
-      deals: number;
       replyRate: number;
     }>;
     emailEngagementNote: string;
@@ -2336,14 +1416,7 @@ export class ReportingService {
       staleDays: number;
     };
     engagementNote: string;
-    dealsCreatedByDay: Array<{ date: string; count: number }>;
     leadsDailyDetail: Array<{
-      date: string;
-      platform: string;
-      owner: string;
-      count: number;
-    }>;
-    dealsDailyDetail: Array<{
       date: string;
       platform: string;
       owner: string;
@@ -2365,21 +1438,13 @@ export class ReportingService {
     periodDays: number;
     leadsCreatedByDay: Array<{ date: string; count: number }>;
     leadsByOwner: Array<{ owner: string; count: number }>;
-    dealsByOwner: Array<{ owner: string; count: number }>;
     leadConversion: {
       createdInPeriod: number;
       convertedInPeriod: number;
       conversionRate: number;
     };
-    dealsCreatedInPeriod: number;
     clientsCreatedInPeriod: number;
     openLeadsByPipeline: Array<{
-      pipelineId: string | null;
-      pipelineName: string;
-      total: number;
-      stages: Array<{ stage: string; count: number }>;
-    }>;
-    openDealsByPipeline: Array<{
       pipelineId: string | null;
       pipelineName: string;
       total: number;
@@ -2420,7 +1485,6 @@ export class ReportingService {
       converted: number;
       conversionRate: number;
       replies: number;
-      deals: number;
       replyRate: number;
     }>;
     emailEngagementNote: string;
@@ -2463,22 +1527,11 @@ export class ReportingService {
       staleDays: number;
     };
     engagementNote: string;
-    /** Deals created per calendar day in the selected period. */
-    dealsCreatedByDay: Array<{ date: string; count: number }>;
     /**
      * Lead intake detail: day × acquisition platform × employee.
      * Platforms use Lead Source / opportunitySourcePlatform (LinkedIn, Website, …).
      */
     leadsDailyDetail: Array<{
-      date: string;
-      platform: string;
-      owner: string;
-      count: number;
-    }>;
-    /**
-     * Deal intake detail: day × originating lead platform × deal owner.
-     */
-    dealsDailyDetail: Array<{
       date: string;
       platform: string;
       owner: string;
@@ -2494,11 +1547,6 @@ export class ReportingService {
     const leadMatch: Record<string, unknown> = {
       createdAt: { $gte: start, $lt: end },
       ...this.stringOwnerFilter('leadOwner', ownerLabels.length ? ownerLabels : null),
-    };
-
-    const dealMatch: Record<string, unknown> = {
-      createdAt: { $gte: start, $lt: end },
-      ...this.stringOwnerFilter('dealOwner', ownerLabels.length ? ownerLabels : null),
     };
 
     const activityHuman: Record<string, unknown> = {
@@ -2526,10 +1574,8 @@ export class ReportingService {
     const [
       leadsCreatedByDay,
       leadsByOwner,
-      dealsByOwner,
       createdInPeriod,
       convertedInPeriod,
-      dealsCreatedInPeriod,
       clientsCreatedInPeriod,
       emailOpensByDayAgg,
       emailSendsByDayAgg,
@@ -2574,21 +1620,8 @@ export class ReportingService {
         { $limit: 200 },
         { $project: { _id: 0, owner: '$_id', count: 1 } },
       ]),
-      this.dealModel.aggregate([
-        { $match: dealMatch },
-        {
-          $group: {
-            _id: { $ifNull: ['$dealOwner', 'Unassigned'] },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { count: -1 } },
-        { $limit: 200 },
-        { $project: { _id: 0, owner: '$_id', count: 1 } },
-      ]),
       this.leadModel.countDocuments(leadMatch),
       this.leadModel.countDocuments({ ...leadMatch, converted: true }),
-      this.dealModel.countDocuments(dealMatch),
       this.clientModel.countDocuments({
         createdAt: { $gte: start, $lt: end },
       }),
@@ -2893,15 +1926,9 @@ export class ReportingService {
         ? Math.round((convertedInPeriod / createdInPeriod) * 1000) / 10
         : 0;
 
-    const openDealFilter: Record<string, unknown> = {
-      stage: { $nin: ['Closed Won', 'Closed Lost'] },
-      ...this.stringOwnerFilter('dealOwner', ownerLabels.length ? ownerLabels : null),
-    };
-
-    const [openLeadsByPipelineStageAgg, openDealsByPipelineStageAgg, emailSummaryAgg] =
+    const [openLeadsByPipelineStageAgg, emailSummaryAgg] =
       await Promise.all([
         this.aggregateRecordsByPipelineStage(this.leadModel, openLeadFilter),
-        this.aggregateRecordsByPipelineStage(this.dealModel, openDealFilter),
         this.emailTrackingModel.aggregate([
           { $match: emailTrackMatch },
           {
@@ -2933,9 +1960,6 @@ export class ReportingService {
 
     const openLeadsByPipeline = this.reshapePipelineStageAgg(
       openLeadsByPipelineStageAgg,
-    );
-    const openDealsByPipeline = this.reshapePipelineStageAgg(
-      openDealsByPipelineStageAgg,
     );
 
     const emailSummaryRow = (
@@ -2978,10 +2002,9 @@ export class ReportingService {
       totalClicks: Number(emailSummaryRow?.totalClicks) || 0,
     };
 
-    // Owner scope for channel / follow-up analytics (must match board lead/deal filters).
+    // Owner scope for channel / follow-up analytics (must match board lead filters).
     const ownerScope = {
       leadOwners: ownerLabels.length ? ownerLabels : null,
-      dealOwners: ownerLabels.length ? ownerLabels : null,
       authorId: authorIds.length ? authorIds : null,
     };
 
@@ -3003,7 +2026,6 @@ export class ReportingService {
       converted: number;
       conversionRate: number;
       replies: number;
-      deals: number;
       replyRate: number;
     }> = [];
     try {
@@ -3038,21 +2060,12 @@ export class ReportingService {
       channelPerformance = [];
     }
 
-    const [collapsedLeadsByOwner, collapsedDealsByOwner] = await Promise.all([
-      this.collapseOwnerCountRows(
-        leadsByOwner as Array<{ owner: string; count: number }>,
-      ),
-      this.collapseOwnerCountRows(
-        dealsByOwner as Array<{ owner: string; count: number }>,
-      ),
-    ]);
+    const collapsedLeadsByOwner = await this.collapseOwnerCountRows(
+      leadsByOwner as Array<{ owner: string; count: number }>,
+    );
 
     const channelExpr = this.leadChannelExpression();
-    const [
-      leadsDailyDetailRaw,
-      dealsCreatedByDayRaw,
-      dealsDailyDetailRaw,
-    ] = await Promise.all([
+    const [leadsDailyDetailRaw] = await Promise.all([
       this.leadModel.aggregate([
         { $match: leadMatch },
         {
@@ -3094,105 +2107,16 @@ export class ReportingService {
           },
         },
       ]),
-      this.dealModel.aggregate([
-        { $match: dealMatch },
-        {
-          $group: {
-            _id: {
-              $dateToString: {
-                format: '%Y-%m-%d',
-                date: '$createdAt',
-                timezone: this.reportingCalendarTz(),
-              },
-            },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { _id: 1 } },
-        { $project: { _id: 0, date: '$_id', count: 1 } },
-      ]),
-      this.dealModel.aggregate([
-        { $match: dealMatch },
-        {
-          $lookup: {
-            from: 'leads',
-            localField: 'lead',
-            foreignField: '_id',
-            as: 'leadDoc',
-          },
-        },
-        {
-          $unwind: {
-            path: '$leadDoc',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $addFields: {
-            opportunitySourcePlatform: '$leadDoc.opportunitySourcePlatform',
-            source: '$leadDoc.source',
-            sourceMetadata: '$leadDoc.sourceMetadata',
-          },
-        },
-        {
-          $group: {
-            _id: {
-              date: {
-                $dateToString: {
-                  format: '%Y-%m-%d',
-                  date: '$createdAt',
-                  timezone: this.reportingCalendarTz(),
-                },
-              },
-              platform: channelExpr,
-              owner: { $ifNull: ['$dealOwner', 'Unassigned'] },
-            },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { '_id.date': -1, count: -1 } },
-        { $limit: 2500 },
-        {
-          $project: {
-            _id: 0,
-            date: '$_id.date',
-            platform: {
-              $cond: [
-                {
-                  $or: [
-                    { $eq: ['$_id.platform', null] },
-                    { $eq: ['$_id.platform', ''] },
-                  ],
-                },
-                'Unknown',
-                '$_id.platform',
-              ],
-            },
-            owner: '$_id.owner',
-            count: 1,
-          },
-        },
-      ]),
     ]);
 
-    const [leadsDailyDetail, dealsDailyDetail] = await Promise.all([
-      this.collapseDailyDetailRows(
-        leadsDailyDetailRaw as Array<{
-          date: string;
-          platform: string;
-          owner: string;
-          count: number;
-        }>,
-      ),
-      this.collapseDailyDetailRows(
-        dealsDailyDetailRaw as Array<{
-          date: string;
-          platform: string;
-          owner: string;
-          count: number;
-        }>,
-      ),
-    ]);
+    const leadsDailyDetail = await this.collapseDailyDetailRows(
+      leadsDailyDetailRaw as Array<{
+        date: string;
+        platform: string;
+        owner: string;
+        count: number;
+      }>,
+    );
 
     return {
       periodDays: safeDays,
@@ -3204,16 +2128,13 @@ export class ReportingService {
         this.reportingCalendarTz(),
       ),
       leadsByOwner: collapsedLeadsByOwner,
-      dealsByOwner: collapsedDealsByOwner,
       leadConversion: {
         createdInPeriod,
         convertedInPeriod,
         conversionRate,
       },
-      dealsCreatedInPeriod,
       clientsCreatedInPeriod,
       openLeadsByPipeline,
-      openDealsByPipeline,
       emailEngagementSummary,
       emailOpensByDay: emailOpensByDayAgg,
       emailSendsByDay: fillMissingDays(
@@ -3227,7 +2148,7 @@ export class ReportingService {
       followUpReplyAnalytics,
       channelPerformance,
       emailEngagementNote:
-        'Tracked sends only. “Sends by day” uses send time. “Opens by day” uses the last open timestamp per send (not every repeat open). “Replies by day” counts inbound thread replies (In-Reply-To matched to a CRM send). Follow-up reply chart uses outbound send # on the same CRM record when the reply matched a tracking token. Channel performance uses Lead Source / opportunity platform (deals via originating lead; replies via linked CRM record). Sending addresses include every mailbox that sent tracked mail in the period (from address or linked inbox account).',
+        'Tracked sends only. “Sends by day” uses send time. “Opens by day” uses the last open timestamp per send (not every repeat open). “Replies by day” counts inbound thread replies (In-Reply-To matched to a CRM send). Follow-up reply chart uses outbound send # on the same CRM record when the reply matched a tracking token. Channel performance uses Lead Source / opportunity platform; replies via linked CRM record. Sending addresses include every mailbox that sent tracked mail in the period (from address or linked inbox account).',
       emailByRecipient,
       emailByTemplate,
       emailByFromAddress,
@@ -3240,15 +2161,7 @@ export class ReportingService {
       followUpHealth,
       engagementNote:
         'Human touches exclude System activities. Open leads: not converted. “Touched recently” = at least one non-system activity on that lead in the last 7 days. Email counts are tracked sends in the selected period (sender filter when a team member is selected).',
-      dealsCreatedByDay: fillMissingDays(
-        dealsCreatedByDayRaw,
-        start,
-        end,
-        'count',
-        this.reportingCalendarTz(),
-      ),
       leadsDailyDetail,
-      dealsDailyDetail,
     };
   }
 
@@ -4033,7 +2946,6 @@ export class ReportingService {
     end: Date,
     ownerScope: {
       leadOwners?: string[] | null;
-      dealOwners?: string[] | null;
       authorId?: Types.ObjectId | Types.ObjectId[] | string | null;
     },
   ): Promise<
@@ -4043,7 +2955,6 @@ export class ReportingService {
       converted: number;
       conversionRate: number;
       replies: number;
-      deals: number;
       replyRate: number;
     }>
   > {
@@ -4051,16 +2962,12 @@ export class ReportingService {
       createdAt: { $gte: start, $lte: end },
       ...this.stringOwnerFilter('leadOwner', ownerScope.leadOwners),
     };
-    const dealMatch: Record<string, unknown> = {
-      createdAt: { $gte: start, $lte: end },
-      ...this.stringOwnerFilter('dealOwner', ownerScope.dealOwners),
-    };
     const channelExpr = this.leadChannelExpression();
     const replyAuthorMatch = this.authorIdQueryValue(
       ownerScope.authorId as Types.ObjectId | Types.ObjectId[] | null | undefined,
     );
 
-    const [leadsByChannel, dealsByChannel, replies] = await Promise.all([
+    const [leadsByChannel, replies] = await Promise.all([
       this.leadModel.aggregate([
         { $match: leadMatch },
         {
@@ -4073,36 +2980,6 @@ export class ReportingService {
           },
         },
         { $sort: { leads: -1 } },
-      ]),
-      this.dealModel.aggregate([
-        { $match: dealMatch },
-        {
-          $lookup: {
-            from: 'leads',
-            localField: 'lead',
-            foreignField: '_id',
-            as: 'leadDoc',
-          },
-        },
-        {
-          $unwind: {
-            path: '$leadDoc',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $addFields: {
-            opportunitySourcePlatform: '$leadDoc.opportunitySourcePlatform',
-            source: '$leadDoc.source',
-            sourceMetadata: '$leadDoc.sourceMetadata',
-          },
-        },
-        {
-          $group: {
-            _id: channelExpr,
-            deals: { $sum: 1 },
-          },
-        },
       ]),
       this.activityModel
         .find({
@@ -4124,7 +3001,6 @@ export class ReportingService {
         leads: number;
         converted: number;
         replies: number;
-        deals: number;
       }
     >();
 
@@ -4132,7 +3008,7 @@ export class ReportingService {
       const key = channel || 'Unknown';
       let row = byChannel.get(key);
       if (!row) {
-        row = { channel: key, leads: 0, converted: 0, replies: 0, deals: 0 };
+        row = { channel: key, leads: 0, converted: 0, replies: 0 };
         byChannel.set(key, row);
       }
       return row;
@@ -4144,25 +3020,19 @@ export class ReportingService {
       target.leads = Number(row.leads) || 0;
       target.converted = Number(row.converted) || 0;
     }
-    for (const row of dealsByChannel as any[]) {
-      const ch = String(row._id || 'Unknown');
-      ensure(ch).deals = Number(row.deals) || 0;
-    }
 
-    // Attribute replies to channel via linked Lead / Contact / Deal → Lead
+    // Attribute replies to channel via linked Lead / Contact → Lead
     const leadIds: Types.ObjectId[] = [];
     const contactIds: Types.ObjectId[] = [];
-    const dealIds: Types.ObjectId[] = [];
     for (const reply of replies as any[]) {
       if (!reply.relatedTo) continue;
       const id = new Types.ObjectId(String(reply.relatedTo));
       const t = String(reply.relatedType || '');
       if (t === 'Lead') leadIds.push(id);
       else if (t === 'Contact') contactIds.push(id);
-      else if (t === 'Deal') dealIds.push(id);
     }
 
-    const [leads, contacts, deals] = await Promise.all([
+    const [leads, contacts] = await Promise.all([
       leadIds.length
         ? this.leadModel
             .find({ _id: { $in: leadIds } })
@@ -4177,13 +3047,6 @@ export class ReportingService {
             .lean()
             .exec()
         : Promise.resolve([]),
-      dealIds.length
-        ? this.dealModel
-            .find({ _id: { $in: dealIds } })
-            .select('lead')
-            .lean()
-            .exec()
-        : Promise.resolve([]),
     ]);
 
     const leadById = new Map(
@@ -4193,15 +3056,11 @@ export class ReportingService {
       (contacts as any[]).map((c) => [String(c._id), c]),
     );
 
-    const dealLeadIds = (deals as any[])
-      .map((d) => (d.lead ? String(d.lead) : ''))
-      .filter(Boolean)
-      .map((id) => new Types.ObjectId(id));
     const contactSourceLeadIds = (contacts as any[])
       .map((c) => (c.sourceLead ? String(c.sourceLead) : ''))
       .filter(Boolean)
       .map((id) => new Types.ObjectId(id));
-    const extraLeadIds = [...dealLeadIds, ...contactSourceLeadIds].filter(
+    const extraLeadIds = contactSourceLeadIds.filter(
       (id) => !leadById.has(String(id)),
     );
     if (extraLeadIds.length) {
@@ -4214,10 +3073,6 @@ export class ReportingService {
         leadById.set(String(l._id), l);
       }
     }
-
-    const dealById = new Map(
-      (deals as any[]).map((d) => [String(d._id), d]),
-    );
 
     for (const reply of replies as any[]) {
       if (!reply.relatedTo) {
@@ -4239,10 +3094,6 @@ export class ReportingService {
         } else if (contact) {
           channel = this.normalizeAcquisitionChannel(contact);
         }
-      } else if (t === 'Deal') {
-        const deal = dealById.get(id);
-        const lead = deal?.lead ? leadById.get(String(deal.lead)) : null;
-        channel = lead ? this.normalizeAcquisitionChannel(lead) : 'Unknown';
       }
       ensure(channel).replies += 1;
     }
@@ -4257,16 +3108,12 @@ export class ReportingService {
             ? Math.round((row.converted / row.leads) * 1000) / 10
             : 0,
         replies: row.replies,
-        deals: row.deals,
         replyRate:
           row.leads > 0
             ? Math.round((row.replies / row.leads) * 1000) / 10
             : 0,
       }))
-      .sort(
-        (a, b) =>
-          b.replies + b.deals + b.leads - (a.replies + a.deals + a.leads),
-      )
+      .sort((a, b) => b.replies + b.leads - (a.replies + a.leads))
       .slice(0, 12);
   }
 
@@ -4590,7 +3437,7 @@ export class ReportingService {
 
   private ownerRecordFilter(
     owner: string | undefined,
-    field: 'leadOwner' | 'dealOwner',
+    field: 'leadOwner',
   ): Record<string, unknown> {
     // Sync exact-match kept for call sites that cannot await; prefer ownerFieldFilter.
     if (!owner || owner === 'All' || owner === 'All authorized') return {};
@@ -4602,28 +3449,10 @@ export class ReportingService {
     owner?: string,
     authorId?: Types.ObjectId | Types.ObjectId[] | null,
   ) {
-    const [leadOwnerFilter, dealOwnerFilter] = await Promise.all([
-      this.ownerFieldFilter(owner, 'leadOwner'),
-      this.ownerFieldFilter(owner, 'dealOwner'),
-    ]);
+    const leadOwnerFilter = await this.ownerFieldFilter(owner, 'leadOwner');
     const leadMatch = {
       createdAt: { $gte: range.start, $lte: range.end },
       ...leadOwnerFilter,
-    };
-    const dealMatch = {
-      createdAt: { $gte: range.start, $lte: range.end },
-      ...dealOwnerFilter,
-    };
-    const wonMatch = {
-      stage: 'Closed Won',
-      $or: [
-        { closedDate: { $gte: range.start, $lte: range.end } },
-        {
-          closedDate: { $exists: false },
-          updatedAt: { $gte: range.start, $lte: range.end },
-        },
-      ],
-      ...dealOwnerFilter,
     };
     const activityMatch: Record<string, unknown> = {
       createdAt: { $gte: range.start, $lte: range.end },
@@ -4647,8 +3476,6 @@ export class ReportingService {
     const [
       leadsCreated,
       leadsConverted,
-      dealsCreated,
-      dealsWon,
       activities,
       calls,
       emailsLogged,
@@ -4661,8 +3488,6 @@ export class ReportingService {
     ] = await Promise.all([
       this.leadModel.countDocuments(leadMatch),
       this.leadModel.countDocuments({ ...leadMatch, converted: true }),
-      this.dealModel.countDocuments(dealMatch),
-      this.dealModel.countDocuments(wonMatch),
       this.activityModel.countDocuments(activityMatch),
       this.activityModel.countDocuments({ ...activityMatch, type: 'Call' }),
       this.activityModel.countDocuments({ ...activityMatch, type: 'Email' }),
@@ -4686,8 +3511,6 @@ export class ReportingService {
     return {
       leadsCreated,
       leadsConverted,
-      dealsCreated,
-      dealsWon,
       activities,
       calls,
       emailsLogged,
@@ -4767,7 +3590,6 @@ export class ReportingService {
           ? {
               leadsTarget: target.leadsTarget || 0,
               callsTarget: target.callsTarget || 0,
-              dealsTarget: target.dealsTarget || 0,
               propertiesTarget: target.propertiesTarget || 0,
             }
           : null,
@@ -4785,7 +3607,7 @@ export class ReportingService {
 
   async upsertAgentTarget(
     agentId: string,
-    patch: { leadsTarget?: number; callsTarget?: number; dealsTarget?: number; propertiesTarget?: number },
+    patch: { leadsTarget?: number; callsTarget?: number; propertiesTarget?: number },
   ) {
     return this.agentTargetModel
       .findOneAndUpdate(
@@ -4814,7 +3636,6 @@ export class ReportingService {
     const range = this.resolveWorkspaceWindow(window);
     const authorIds = await this.resolveHrmsAuthorIds(owner);
     const authorId = authorIds.length ? authorIds : null;
-    const exchangeRate = await this.getExchangeRate();
 
     const workDone = await this.computeWindowWorkSnapshot(
       range,
@@ -4840,17 +3661,10 @@ export class ReportingService {
       ),
     ]);
 
-    const [leadOwnerFilter, dealOwnerFilter] = await Promise.all([
-      this.ownerFieldFilter(owner, 'leadOwner'),
-      this.ownerFieldFilter(owner, 'dealOwner'),
-    ]);
+    const leadOwnerFilter = await this.ownerFieldFilter(owner, 'leadOwner');
     const openLeadFilter: Record<string, unknown> = {
       converted: { $ne: true },
       ...leadOwnerFilter,
-    };
-    const openDealFilter: Record<string, unknown> = {
-      stage: { $nin: ['Closed Won', 'Closed Lost'] },
-      ...dealOwnerFilter,
     };
     const touchCutoff = new Date();
     touchCutoff.setDate(touchCutoff.getDate() - STALE_LEAD_DAYS);
@@ -4864,20 +3678,13 @@ export class ReportingService {
 
     const [
       followUpHealth,
-      openDeals,
       activityByDay,
       activityByType,
       repActivity,
       repLeads,
-      repDeals,
       overdueTasks,
     ] = await Promise.all([
       this.getFollowUpHealth(openLeadFilter, touchCutoff),
-      this.dealModel
-        .find(openDealFilter)
-        .select('dealValue currency probability stage expectedClosureDate pipeline')
-        .lean()
-        .exec(),
       this.activityModel.aggregate([
         { $match: activityHuman },
         {
@@ -4936,23 +3743,6 @@ export class ReportingService {
             { $sort: { count: -1 } },
             { $limit: 12 },
           ]),
-      owner && owner !== 'All'
-        ? Promise.resolve([])
-        : this.dealModel.aggregate([
-            {
-              $match: {
-                createdAt: { $gte: range.start, $lte: range.end },
-              },
-            },
-            {
-              $group: {
-                _id: { $ifNull: ['$dealOwner', 'Unassigned'] },
-                count: { $sum: 1 },
-              },
-            },
-            { $sort: { count: -1 } },
-            { $limit: 12 },
-          ]),
       this.activityModel.countDocuments({
         type: 'Task',
         ...(salesAuthorMatch != null ? { author: salesAuthorMatch } : {}),
@@ -4960,58 +3750,6 @@ export class ReportingService {
         'metadata.status': { $ne: 'completed' },
       }),
     ]);
-
-    let pipelineGross = 0;
-    let pipelineWeighted = 0;
-    let atRiskDeals = 0;
-    const now = new Date();
-    const healthPipelineIds = [
-      ...new Set(
-        (openDeals as Array<{ pipeline?: Types.ObjectId }>)
-          .map((d) => (d.pipeline ? String(d.pipeline) : ''))
-          .filter(Boolean),
-      ),
-    ];
-    const healthPipelines =
-      healthPipelineIds.length > 0
-        ? await this.pipelineModel
-            .find({
-              _id: {
-                $in: healthPipelineIds.map((id) => new Types.ObjectId(id)),
-              },
-            })
-            .select('stages')
-            .lean()
-            .exec()
-        : await this.pipelineModel
-            .find({ type: 'deals' })
-            .select('stages')
-            .lean()
-            .exec();
-    const healthStageMaps = buildPipelineStageProbabilityMaps(
-      healthPipelines as any[],
-    );
-    for (const d of openDeals as Array<{
-      dealValue?: number;
-      currency?: string;
-      probability?: number;
-      expectedClosureDate?: Date;
-      stage?: string;
-      pipeline?: Types.ObjectId;
-    }>) {
-      const val = this.toINR(
-        Number(d.dealValue) || 0,
-        String(d.currency || 'USD'),
-        exchangeRate,
-      );
-      pipelineGross += val;
-      const probability = resolveDealProbabilityFromStages(d, healthStageMaps);
-      pipelineWeighted += val * (probability / 100);
-      const close = d.expectedClosureDate
-        ? new Date(d.expectedClosureDate)
-        : null;
-      if (close && close < now && d.stage !== 'Closed Won') atRiskDeals += 1;
-    }
 
     const openRate =
       workDone.trackedSends > 0
@@ -5044,20 +3782,12 @@ export class ReportingService {
         count: number;
       }>,
     );
-    const [collapsedRepLeads, collapsedRepDeals] = await Promise.all([
-      this.collapseOwnerCountRows(
-        (repLeads as Array<{ _id: string; count: number }>).map((r) => ({
-          owner: r._id || 'Unassigned',
-          count: r.count,
-        })),
-      ),
-      this.collapseOwnerCountRows(
-        (repDeals as Array<{ _id: string; count: number }>).map((r) => ({
-          owner: r._id || 'Unassigned',
-          count: r.count,
-        })),
-      ),
-    ]);
+    const collapsedRepLeads = await this.collapseOwnerCountRows(
+      (repLeads as Array<{ _id: string; count: number }>).map((r) => ({
+        owner: r._id || 'Unassigned',
+        count: r.count,
+      })),
+    );
 
     const leaderboardMap = new Map<
       string,
@@ -5065,7 +3795,6 @@ export class ReportingService {
         name: string;
         activities: number;
         leadsCreated: number;
-        dealsCreated: number;
       }
     >();
     for (const row of collapsedRepActivity) {
@@ -5073,7 +3802,6 @@ export class ReportingService {
         name: row.name,
         activities: 0,
         leadsCreated: 0,
-        dealsCreated: 0,
       };
       cur.activities += row.count;
       leaderboardMap.set(row.name, cur);
@@ -5083,26 +3811,15 @@ export class ReportingService {
         name: row.owner,
         activities: 0,
         leadsCreated: 0,
-        dealsCreated: 0,
       };
       cur.leadsCreated += row.count;
-      leaderboardMap.set(row.owner, cur);
-    }
-    for (const row of collapsedRepDeals) {
-      const cur = leaderboardMap.get(row.owner) || {
-        name: row.owner,
-        activities: 0,
-        leadsCreated: 0,
-        dealsCreated: 0,
-      };
-      cur.dealsCreated += row.count;
       leaderboardMap.set(row.owner, cur);
     }
     const repLeaderboard = [...leaderboardMap.values()]
       .sort(
         (a, b) =>
-          b.activities + b.leadsCreated * 2 + b.dealsCreated * 3 -
-          (a.activities + a.leadsCreated * 2 + a.dealsCreated * 3),
+          b.activities + b.leadsCreated * 2 -
+          (a.activities + a.leadsCreated * 2),
       )
       .slice(0, 10);
 
@@ -5153,13 +3870,6 @@ export class ReportingService {
               overdueTasks === 0 ? 'good' : overdueTasks <= 3 ? 'watch' : 'risk',
             hint: 'Tasks past due date',
           },
-          {
-            key: 'at_risk_deals',
-            label: 'Past-due close deals',
-            value: atRiskDeals,
-            status: atRiskDeals === 0 ? 'good' : atRiskDeals <= 2 ? 'watch' : 'risk',
-            hint: 'Open deals past expected close',
-          },
         ],
       },
       workDone,
@@ -5175,13 +3885,9 @@ export class ReportingService {
       repLeaderboard,
       pipeline: {
         openLeads: followUpHealth.openLeads,
-        openDeals: openDeals.length,
-        grossValueINR: Math.round(pipelineGross),
-        weightedValueINR: Math.round(pipelineWeighted),
         staleLeads: followUpHealth.staleLeads,
         touchCoveragePercent: followUpHealth.touchCoveragePercent,
         overdueTasks,
-        atRiskDeals,
         emailOpenRatePercent: openRate,
         emailReplyRatePercent: replyRate,
       },
@@ -5676,7 +4382,6 @@ export class ReportingService {
     }
 
     const leadIds: Types.ObjectId[] = [];
-    const dealIds: Types.ObjectId[] = [];
     const contactIds: Types.ObjectId[] = [];
     const clientIds: Types.ObjectId[] = [];
     const orgIds: Types.ObjectId[] = [];
@@ -5686,24 +4391,16 @@ export class ReportingService {
       const rid = r.relatedTo as Types.ObjectId | undefined;
       if (!rid) continue;
       if (rt === 'lead') leadIds.push(rid);
-      else if (rt === 'deal') dealIds.push(rid);
       else if (rt === 'contact') contactIds.push(rid);
       else if (rt === 'client') clientIds.push(rid);
       else if (rt === 'organization') orgIds.push(rid);
     }
 
-    const [leads, deals, contacts, clients, orgs] = await Promise.all([
+    const [leads, contacts, clients, orgs] = await Promise.all([
       leadIds.length
         ? this.leadModel
             .find({ _id: { $in: leadIds } })
             .select('firstName lastName email leadOwner')
-            .lean()
-            .exec()
-        : [],
-      dealIds.length
-        ? this.dealModel
-            .find({ _id: { $in: dealIds } })
-            .select('title dealOwner')
             .lean()
             .exec()
         : [],
@@ -5731,7 +4428,6 @@ export class ReportingService {
     ]);
 
     const leadMap = new Map(leads.map((x) => [String(x._id), x]));
-    const dealMap = new Map(deals.map((x) => [String(x._id), x]));
     const contactMap = new Map(contacts.map((x) => [String(x._id), x]));
     const clientMap = new Map(clients.map((x) => [String(x._id), x]));
     const orgMap = new Map(orgs.map((x) => [String(x._id), x]));
@@ -5796,14 +4492,6 @@ export class ReportingService {
             String(L.email || '').trim() ||
             'Lead';
           recordOwner = String(L.leadOwner || '').trim();
-        }
-      } else if (rt === 'deal' && rid) {
-        const D = dealMap.get(rid) as
-          | { title?: string; dealOwner?: string }
-          | undefined;
-        if (D) {
-          recordLabel = String(D.title || '').trim() || 'Deal';
-          recordOwner = String(D.dealOwner || '').trim();
         }
       } else if (rt === 'contact' && rid) {
         const C = contactMap.get(rid) as
@@ -6586,15 +5274,13 @@ export class ReportingService {
       const module =
         relatedType === 'lead'
           ? 'leads'
-          : relatedType === 'deal'
-            ? 'deals'
-            : relatedType === 'contact'
-              ? 'contacts'
-              : relatedType === 'client'
-                ? 'clients'
-                : relatedType === 'organization'
-                  ? 'organizations'
-                  : undefined;
+          : relatedType === 'contact'
+            ? 'contacts'
+            : relatedType === 'client'
+              ? 'clients'
+              : relatedType === 'organization'
+                ? 'organizations'
+                : undefined;
       return {
         id: String(row._id),
         fromEmail: String(row.metadata?.fromEmail || ''),
@@ -6687,10 +5373,9 @@ export class ReportingService {
 
   /**
    * Sales workspace: attention queue, priority tasks, open pipeline by stage,
-   * deals with expected close dates, and a cross-record activity stream.
-   * @param owner Lead/deal owner string filter, or "All" for org-wide pipeline.
+   * and a cross-record activity stream.
+   * @param owner Lead owner string filter, or "All" for org-wide pipeline.
    * @param scopedAuthorId When set, scopes tasks and activity to that rep.
-   * @param dealAccessFilter Same visibility as GET /crm/deals (null = all deals).
    */
   private parseWorkspaceSections(
     sectionsParam?: string,
@@ -6717,10 +5402,8 @@ export class ReportingService {
     ownerMatchExtras?: string[],
     window?: string,
     sections?: string,
-    dealAccessFilter?: Record<string, unknown> | null,
   ): Promise<{
     attention: Awaited<ReturnType<ReportingService['getSalesAttention']>>;
-    pipelineByStage: Array<{ stage: string; count: number; value: number }>;
     priorityTasks: Array<{
       id: string;
       title: string;
@@ -6730,15 +5413,6 @@ export class ReportingService {
       relatedType?: string;
       relatedTo?: string;
       authorName?: string;
-    }>;
-    dealsClosingSoon: Array<{
-      id: string;
-      title: string;
-      stage: string;
-      dealValue: number;
-      expectedClosureDate?: string;
-      dealOwner?: string;
-      currency?: string;
     }>;
     recentActivities: Array<{
       id: string;
@@ -6751,28 +5425,9 @@ export class ReportingService {
       authorName?: string;
     }>;
     todayFocus: {
-      dealsToMoveToday: number;
       overdueFollowUps: number;
-      proposalsAwaitingResponse: number;
       hotLeadsNoAction: number;
     };
-    atRiskDeals: Array<{
-      id: string;
-      title: string;
-      stage: string;
-      dealValue: number;
-      expectedClosureDate?: string;
-      reasons: string[];
-      riskScore: number;
-    }>;
-    nextStepRequired: Array<{
-      id: string;
-      title: string;
-      stage: string;
-      dealValue: number;
-      expectedClosureDate?: string;
-      hasNextStep: boolean;
-    }>;
     leadsAddedByDay: Array<{
       date: string;
       total: number;
@@ -6784,16 +5439,6 @@ export class ReportingService {
       byStage: Array<{ stage: string; count: number }>;
       stageEntered: Array<{ stage: string; count: number }>;
     }>;
-    dealsAddedByDay: Array<{
-      date: string;
-      total: number;
-      byPipeline: Array<{
-        pipelineId: string | null;
-        pipelineName: string;
-        count: number;
-      }>;
-      byStage: Array<{ stage: string; count: number }>;
-    }>;
     window: WorkspaceWindow;
   }> {
     const cacheKey = this.appCache.reportingWorkspaceKey({
@@ -6802,7 +5447,6 @@ export class ReportingService {
       window,
       sections,
       scopedAuthorId,
-      dealAccessFilter,
     });
     try {
       return await this.appCache.getOrSet(
@@ -6815,7 +5459,6 @@ export class ReportingService {
             ownerMatchExtras,
             window,
             sections,
-            dealAccessFilter,
           ),
       );
     } catch (err: unknown) {
@@ -6849,20 +5492,13 @@ export class ReportingService {
       }
       return {
         attention,
-        pipelineByStage: [],
         priorityTasks: [],
-        dealsClosingSoon: [],
         recentActivities: [],
         todayFocus: {
-          dealsToMoveToday: 0,
           overdueFollowUps: 0,
-          proposalsAwaitingResponse: 0,
           hotLeadsNoAction: 0,
         },
-        atRiskDeals: [],
-        nextStepRequired: [],
         leadsAddedByDay: [],
-        dealsAddedByDay: [],
         window: this.resolveWorkspaceWindow(window).key,
       };
     }
@@ -6874,10 +5510,8 @@ export class ReportingService {
     ownerMatchExtras?: string[],
     window?: string,
     sectionsParam?: string,
-    dealAccessFilter?: Record<string, unknown> | null,
   ): Promise<{
     attention: Awaited<ReturnType<ReportingService['getSalesAttention']>>;
-    pipelineByStage: Array<{ stage: string; count: number; value: number }>;
     priorityTasks: Array<{
       id: string;
       title: string;
@@ -6887,15 +5521,6 @@ export class ReportingService {
       relatedType?: string;
       relatedTo?: string;
       authorName?: string;
-    }>;
-    dealsClosingSoon: Array<{
-      id: string;
-      title: string;
-      stage: string;
-      dealValue: number;
-      expectedClosureDate?: string;
-      dealOwner?: string;
-      currency?: string;
     }>;
     recentActivities: Array<{
       id: string;
@@ -6908,28 +5533,9 @@ export class ReportingService {
       authorName?: string;
     }>;
     todayFocus: {
-      dealsToMoveToday: number;
       overdueFollowUps: number;
-      proposalsAwaitingResponse: number;
       hotLeadsNoAction: number;
     };
-    atRiskDeals: Array<{
-      id: string;
-      title: string;
-      stage: string;
-      dealValue: number;
-      expectedClosureDate?: string;
-      reasons: string[];
-      riskScore: number;
-    }>;
-    nextStepRequired: Array<{
-      id: string;
-      title: string;
-      stage: string;
-      dealValue: number;
-      expectedClosureDate?: string;
-      hasNextStep: boolean;
-    }>;
     leadsAddedByDay: Array<{
       date: string;
       total: number;
@@ -6940,16 +5546,6 @@ export class ReportingService {
       }>;
       byStage: Array<{ stage: string; count: number }>;
       stageEntered: Array<{ stage: string; count: number }>;
-    }>;
-    dealsAddedByDay: Array<{
-      date: string;
-      total: number;
-      byPipeline: Array<{
-        pipelineId: string | null;
-        pipelineName: string;
-        count: number;
-      }>;
-      byStage: Array<{ stage: string; count: number }>;
     }>;
     upcomingFollowUps?: {
       items: Array<{
@@ -6973,7 +5569,6 @@ export class ReportingService {
     const sectionFilter = this.parseWorkspaceSections(sectionsParam);
     const wantAttention = this.wantsWorkspaceSection(sectionFilter, 'attention');
     const wantTasks = this.wantsWorkspaceSection(sectionFilter, 'tasks');
-    const wantDeals = this.wantsWorkspaceSection(sectionFilter, 'deals');
     const wantActivity = this.wantsWorkspaceSection(sectionFilter, 'activity');
     const wantLeads = this.wantsWorkspaceSection(sectionFilter, 'leads');
     const wantLeadStatus = this.wantsWorkspaceSection(
@@ -6987,20 +5582,8 @@ export class ReportingService {
 
     const windowRange = this.resolveWorkspaceWindow(window);
     const leadIntakeWindow = this.resolveReportingCalendarWindow(window);
-    const exchangeRate = wantDeals
-      ? await this.getExchangeRate()
-      : 1;
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
-    const horizon = new Date(startOfToday);
-    horizon.setDate(horizon.getDate() + 45);
-
-    const dealOpenStages = {
-      stage: { $nin: ['Closed Won', 'Closed Lost'] },
-    };
-    const dealMatch = wantDeals
-      ? this.buildSalesWorkspaceDealMatch(dealOpenStages, dealAccessFilter)
-      : dealOpenStages;
 
     const taskQuery: Record<string, unknown> = {
       type: 'Task',
@@ -7038,12 +5621,9 @@ export class ReportingService {
     const [
       attention,
       taskDocs,
-      closingDeals,
-      openDealsForStage,
       recentRaw,
       auditRaw,
       leadsAddedByDay,
-      dealsAddedByDay,
       leadFollowUpAndIntake,
       upcomingFollowUps,
     ] = await Promise.all([
@@ -7060,32 +5640,6 @@ export class ReportingService {
             .find(taskQuery)
             .sort({ updatedAt: -1 })
             .limit(80)
-            .lean()
-            .exec()
-        : Promise.resolve([]),
-      wantDeals
-        ? this.dealModel
-            .find({
-              ...dealMatch,
-              expectedClosureDate: {
-                $gte: new Date(startOfToday.getTime() - 7 * 86400000),
-                $lte: horizon,
-              },
-            })
-            .sort({ expectedClosureDate: 1 })
-            .limit(15)
-            .select(
-              'title stage dealValue dealValueINR currency expectedClosureDate dealOwner',
-            )
-            .lean()
-            .exec()
-        : Promise.resolve([]),
-      wantDeals
-        ? this.dealModel
-            .find(dealMatch)
-            .select(
-              'title stage dealValue dealValueINR currency expectedClosureDate dealOwner nextStep updatedAt',
-            )
             .lean()
             .exec()
         : Promise.resolve([]),
@@ -7127,7 +5681,6 @@ export class ReportingService {
                   'metrics',
                   'logs',
                   'leads',
-                  'deals',
                   'contacts',
                   'organizations',
                   'clients',
@@ -7151,15 +5704,6 @@ export class ReportingService {
             leadIntakeWindow.end,
           )
         : Promise.resolve([]),
-      wantLeads || wantDeals
-        ? this.getDealsAddedByDayForSalesWorkspace(
-            owner,
-            ownerMatchExtras,
-            scopedAuthorId,
-            leadIntakeWindow.start,
-            leadIntakeWindow.end,
-          )
-        : Promise.resolve([]),
       wantLeadStatus
         ? this.getLeadFollowUpAndIntakeForSalesWorkspace(
             owner,
@@ -7175,18 +5719,6 @@ export class ReportingService {
           )
         : Promise.resolve(null),
     ]);
-
-    const stageMap = new Map<string, { count: number; value: number }>();
-    for (const d of openDealsForStage) {
-      const st = (d as { stage?: string }).stage || 'Unknown';
-      const cur = stageMap.get(st) || { count: 0, value: 0 };
-      cur.count += 1;
-      cur.value += this.toINR(Number((d as { dealValue?: number }).dealValue) || 0, String((d as { currency?: string }).currency || 'USD'), exchangeRate);
-      stageMap.set(st, cur);
-    }
-    const pipelineByStage = Array.from(stageMap.entries())
-      .map(([stage, v]) => ({ stage, ...v }))
-      .sort((a, b) => b.value - a.value);
 
     const taskRows = taskDocs as unknown as Array<Record<string, unknown>>;
     const recentRows = recentRaw as unknown as Array<Record<string, unknown>>;
@@ -7279,171 +5811,8 @@ export class ReportingService {
       authorNameFor,
     );
 
-    const dealsClosingSoon = (
-      closingDeals as unknown as Array<Record<string, unknown>>
-    ).map((d) => ({
-      id: String(d._id),
-      title: (d.title as string) || 'Deal',
-      stage: (d.stage as string) || '',
-      dealValue: Number(d.dealValue) || 0,
-      dealValueINR: this.toINR(Number(d.dealValue) || 0, String(d.currency || 'USD'), exchangeRate),
-      expectedClosureDate: d.expectedClosureDate
-        ? new Date(d.expectedClosureDate as Date).toISOString()
-        : undefined,
-      dealOwner: d.dealOwner as string | undefined,
-      currency: d.currency as string | undefined,
-    }));
-
-    const openDealIds = (openDealsForStage as Array<{ _id: Types.ObjectId }>).map(
-      (d) => d._id,
-    );
-    const dealTaskRows =
-      openDealIds.length > 0
-        ? await this.activityModel
-            .find({
-              type: 'Task',
-              relatedType: 'Deal',
-              relatedTo: { $in: openDealIds },
-              status: { $nin: ['Done', 'Completed', 'done', 'completed'] },
-            })
-            .select('relatedTo metadata')
-            .lean()
-            .exec()
-        : [];
-    const dealActivityAgg =
-      openDealIds.length > 0
-        ? await this.activityModel.aggregate([
-            {
-              $match: {
-                relatedType: 'Deal',
-                relatedTo: { $in: openDealIds },
-                type: { $nin: ['System'] },
-              },
-            },
-            {
-              $group: {
-                _id: '$relatedTo',
-                lastAt: { $max: '$createdAt' },
-              },
-            },
-          ])
-        : [];
-    const lastActivityByDeal = new Map(
-      (dealActivityAgg as Array<{ _id: Types.ObjectId; lastAt?: Date }>).map(
-        (r) => [String(r._id), r.lastAt],
-      ),
-    );
-    const overdueTaskByDeal = new Set<string>();
-    for (const t of dealTaskRows as Array<{
-      relatedTo?: Types.ObjectId;
-      metadata?: { dueDate?: string; dueAt?: string };
-    }>) {
-      if (!t.relatedTo) continue;
-      const due = parseDue(t.metadata);
-      if (due && due < startOfToday) {
-        overdueTaskByDeal.add(String(t.relatedTo));
-      }
-    }
-
-    const atRiskDeals = (
-      openDealsForStage as unknown as Array<Record<string, unknown>>
-    )
-      .map((d) => {
-        const id = String(d._id);
-        const reasons: string[] = [];
-        let riskScore = 0;
-        const stage = String(d.stage || '');
-        const nextStep = String(d.nextStep || '').trim();
-        const expectedClose = d.expectedClosureDate
-          ? new Date(d.expectedClosureDate as Date)
-          : null;
-        const lastActivity = lastActivityByDeal.get(id);
-
-        if (!nextStep) {
-          reasons.push('No next step');
-          riskScore += 35;
-        }
-        if (
-          lastActivity &&
-          new Date().getTime() - new Date(lastActivity).getTime() >
-            7 * 24 * 60 * 60 * 1000
-        ) {
-          reasons.push('No activity in 7+ days');
-          riskScore += 30;
-        }
-        if (!lastActivity) {
-          reasons.push('No logged deal activity');
-          riskScore += 25;
-        }
-        if (overdueTaskByDeal.has(id)) {
-          reasons.push('Overdue follow-up task');
-          riskScore += 20;
-        }
-        if (
-          expectedClose &&
-          expectedClose < horizon &&
-          expectedClose >= startOfToday &&
-          !nextStep
-        ) {
-          reasons.push('Close date near but no plan');
-          riskScore += 20;
-        }
-        if (stage.toLowerCase().includes('proposal') && !lastActivity) {
-          reasons.push('Proposal stage without engagement');
-          riskScore += 15;
-        }
-        return {
-          id,
-          title: String(d.title || 'Deal'),
-          stage,
-          dealValue: Number(d.dealValue) || 0,
-          dealValueINR: this.toINR(Number(d.dealValue) || 0, String(d.currency || 'USD'), exchangeRate),
-          expectedClosureDate: expectedClose
-            ? expectedClose.toISOString()
-            : undefined,
-          reasons,
-          riskScore: Math.min(100, riskScore),
-        };
-      })
-      .filter((d) => d.reasons.length > 0)
-      .sort((a, b) => b.riskScore - a.riskScore || b.dealValue - a.dealValue)
-      .slice(0, 12);
-
-    const nextStepRequired = (
-      openDealsForStage as unknown as Array<Record<string, unknown>>
-    )
-      .filter((d) => !String(d.nextStep || '').trim())
-      .map((d) => ({
-        id: String(d._id),
-        title: String(d.title || 'Deal'),
-        stage: String(d.stage || ''),
-        dealValue: Number(d.dealValue) || 0,
-        dealValueINR: this.toINR(Number(d.dealValue) || 0, String(d.currency || 'USD'), exchangeRate),
-        expectedClosureDate: d.expectedClosureDate
-          ? new Date(d.expectedClosureDate as Date).toISOString()
-          : undefined,
-        hasNextStep: false,
-      }))
-      .sort((a, b) => b.dealValue - a.dealValue)
-      .slice(0, 12);
-
-    const proposalsAwaitingResponse = (
-      openDealsForStage as unknown as Array<Record<string, unknown>>
-    ).filter((d) => {
-      const stage = String(d.stage || '').toLowerCase();
-      if (!stage.includes('proposal')) return false;
-      const last = lastActivityByDeal.get(String(d._id));
-      if (!last) return true;
-      return (
-        new Date().getTime() - new Date(last).getTime() >
-        5 * 24 * 60 * 60 * 1000
-      );
-    }).length;
-
     const todayFocus = {
-      dealsToMoveToday: atRiskDeals.length,
       overdueFollowUps: priorityTasks.filter((t) => t.overdue).length,
-      proposalsAwaitingResponse,
       hotLeadsNoAction: attention?.openedTrackedEmails?.length ?? 0,
     };
 
@@ -7454,21 +5823,12 @@ export class ReportingService {
     if (wantTasks) {
       payload.priorityTasks = priorityTasks;
     }
-    if (wantDeals) {
-      payload.pipelineByStage = pipelineByStage;
-      payload.dealsClosingSoon = dealsClosingSoon;
-      payload.atRiskDeals = atRiskDeals;
-      payload.nextStepRequired = nextStepRequired;
-      payload.todayFocus = todayFocus;
-    }
+    payload.todayFocus = todayFocus;
     if (wantActivity) {
       payload.recentActivities = recentActivities;
     }
     if (wantLeads) {
       payload.leadsAddedByDay = leadsAddedByDay;
-    }
-    if (wantLeads || wantDeals) {
-      payload.dealsAddedByDay = dealsAddedByDay;
     }
     if (wantLeadStatus && leadFollowUpAndIntake) {
       payload.leadFollowUpWeek = leadFollowUpAndIntake.leadFollowUpWeek;
@@ -7487,10 +5847,10 @@ export class ReportingService {
 
   /**
    * Case-insensitive owner string match with flexible whitespace.
-   * Matches display name, email, or legacy ObjectId hex stored in leadOwner/dealOwner.
+   * Matches display name, email, or legacy ObjectId hex stored in leadOwner.
    */
   private ownerFieldNameMatch(
-    field: 'leadOwner' | 'dealOwner' | 'ownerLabel',
+    field: 'leadOwner' | 'ownerLabel',
     owners: string[],
   ): Record<string, unknown> | null {
     const cleaned = [
@@ -7853,7 +6213,7 @@ export class ReportingService {
 
     const match: Record<string, unknown> = {
       isDeleted: { $ne: true },
-      // Match CRM Leads board: converted leads become deals and leave this count.
+      // Match CRM Leads board: converted leads leave this count.
       converted: { $ne: true },
       createdAt: { $gte: start, $lte: end },
       ...createdVisibility,
@@ -7864,7 +6224,7 @@ export class ReportingService {
       count: number;
     };
     // Match CRM Leads module: only boards with type "leads" (LinkedIn / Twitter /
-    // Lead Qualification, etc.). Exclude lead docs stuck on deals pipelines.
+    // Lead Qualification, etc.). Excludes any legacy non-lead pipeline types.
     const [raw, stageEnteredByDay] = await Promise.all([
       this.leadModel
         .aggregate([
@@ -8129,7 +6489,7 @@ export class ReportingService {
     const stageFromContent = (title: string, content: string): string | null => {
       const t = String(title || '');
       const c = String(content || '');
-      // Converted leaves the Leads board and is counted under Deals intake instead.
+      // Converted leaves the Leads board.
       if (
         /life-cycle transition/i.test(t) ||
         /converted/i.test(t) ||
@@ -8168,261 +6528,6 @@ export class ReportingService {
       smap.set(stage, (smap.get(stage) || 0) + 1);
     }
     return dayMap;
-  }
-
-  private async buildDealCreatedVisibilityForWorkspace(
-    owner: string,
-    ownerMatchExtras: string[] | undefined,
-    scopedAuthorId: Types.ObjectId | Types.ObjectId[] | null,
-  ): Promise<Record<string, unknown>> {
-    let ownerKey = owner?.trim();
-    if (
-      ownerKey &&
-      ownerKey !== 'All' &&
-      ownerKey !== 'All authorized' &&
-      Types.ObjectId.isValid(ownerKey) &&
-      ownerKey.length === 24
-    ) {
-      const label = await this.getHrmsDisplayOwnerLabel(
-        new Types.ObjectId(ownerKey),
-      );
-      if (label) ownerKey = label;
-    }
-
-    if (
-      !scopedAuthorId &&
-      (!ownerKey || ownerKey === 'All' || ownerKey === 'All authorized')
-    ) {
-      return {};
-    }
-
-    const primaryForMerge =
-      ownerKey && ownerKey !== 'All' && ownerKey !== 'All authorized'
-        ? ownerKey
-        : undefined;
-    const owners = this.mergeOwnerMatchStrings(
-      primaryForMerge,
-      ownerMatchExtras,
-    ).filter((o) => o !== 'All authorized');
-    const authorId =
-      scopedAuthorId || (await this.resolveHrmsAuthorId(owner?.trim()));
-
-    const orClauses: Record<string, unknown>[] = [];
-    const nameClause = this.ownerFieldNameMatch('dealOwner', owners);
-    if (nameClause) {
-      if (Array.isArray((nameClause as { $or?: unknown }).$or)) {
-        orClauses.push(
-          ...((nameClause as { $or: Record<string, unknown>[] }).$or),
-        );
-      } else {
-        orClauses.push(nameClause);
-      }
-    }
-    if (authorId) {
-      const ids = Array.isArray(authorId) ? authorId : [authorId];
-      const authIn = ids.length === 1 ? ids[0] : { $in: ids };
-      orClauses.push({ createdBy: authIn });
-      orClauses.push({ sharedWith: authIn });
-      for (const id of ids) {
-        orClauses.push({ dealOwner: String(id) });
-      }
-    }
-
-    if (orClauses.length === 0) return {};
-    if (orClauses.length === 1) return orClauses[0];
-    return { $or: orClauses };
-  }
-
-  /** Deals created in the window on type=deals pipelines only (never mixed with leads). */
-  private async getDealsAddedByDayForSalesWorkspace(
-    owner: string,
-    ownerMatchExtras: string[] | undefined,
-    scopedAuthorId: Types.ObjectId | Types.ObjectId[] | null,
-    start: Date,
-    end: Date,
-  ): Promise<
-    Array<{
-      date: string;
-      total: number;
-      byPipeline: Array<{
-        pipelineId: string | null;
-        pipelineName: string;
-        count: number;
-      }>;
-      byStage: Array<{ stage: string; count: number }>;
-    }>
-  > {
-    const createdVisibility = await this.buildDealCreatedVisibilityForWorkspace(
-      owner,
-      ownerMatchExtras,
-      scopedAuthorId,
-    );
-    const tz = this.reportingCalendarTz();
-
-    const match: Record<string, unknown> = {
-      isDeleted: { $ne: true },
-      createdAt: { $gte: start, $lte: end },
-      ...createdVisibility,
-    };
-
-    type AggRow = {
-      _id: { d: string; pid: string | null; pn: string; stage: string };
-      count: number;
-    };
-
-    const raw = (await this.dealModel
-      .aggregate([
-        { $match: match },
-        {
-          $lookup: {
-            from: 'pipelines',
-            localField: 'pipeline',
-            foreignField: '_id',
-            as: 'pipeDoc',
-          },
-        },
-        {
-          $addFields: {
-            pipelineType: {
-              $ifNull: [{ $arrayElemAt: ['$pipeDoc.type', 0] }, 'deals'],
-            },
-          },
-        },
-        {
-          // CRM Deals boards: type deals or legacy missing type (defaults to deals).
-          $match: {
-            $or: [
-              { pipelineType: 'deals' },
-              { pipelineType: null },
-              { pipeline: null },
-              { pipeline: { $exists: false } },
-            ],
-          },
-        },
-        // Never count lead boards as deals.
-        {
-          $match: {
-            pipelineType: { $ne: 'leads' },
-          },
-        },
-        {
-          $addFields: {
-            dayKey: {
-              $dateToString: {
-                format: '%Y-%m-%d',
-                date: '$createdAt',
-                timezone: tz,
-              },
-            },
-            pipelineIdStr: {
-              $cond: [
-                { $ifNull: ['$pipeline', false] },
-                { $toString: '$pipeline' },
-                null,
-              ],
-            },
-            pipelineName: {
-              $ifNull: [{ $arrayElemAt: ['$pipeDoc.name', 0] }, 'No pipeline'],
-            },
-            stageName: {
-              $let: {
-                vars: {
-                  st: {
-                    $trim: {
-                      input: {
-                        $convert: {
-                          input: { $ifNull: ['$stage', ''] },
-                          to: 'string',
-                          onError: '',
-                          onNull: '',
-                        },
-                      },
-                    },
-                  },
-                },
-                in: {
-                  $cond: [
-                    { $gt: [{ $strLenCP: '$$st' }, 0] },
-                    '$$st',
-                    'Unknown',
-                  ],
-                },
-              },
-            },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              d: '$dayKey',
-              pid: '$pipelineIdStr',
-              pn: '$pipelineName',
-              stage: '$stageName',
-            },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { '_id.d': 1, '_id.pn': 1 } },
-      ])
-      .exec()) as AggRow[];
-
-    const dayMap = new Map<
-      string,
-      {
-        pipelines: Map<
-          string,
-          { pipelineId: string | null; pipelineName: string; count: number }
-        >;
-        stages: Map<string, number>;
-      }
-    >();
-
-    for (const row of raw) {
-      const day = row._id?.d;
-      if (!day) continue;
-      const pid = row._id.pid;
-      const pname = String(row._id.pn || 'No pipeline').trim() || 'No pipeline';
-      const stage = String(row._id.stage || 'Unknown').trim() || 'Unknown';
-      const c = Number(row.count) || 0;
-      if (!dayMap.has(day)) {
-        dayMap.set(day, { pipelines: new Map(), stages: new Map() });
-      }
-      const bucket = dayMap.get(day)!;
-      const pkey = pid == null ? `__none__:${pname}` : String(pid);
-      const prev = bucket.pipelines.get(pkey);
-      if (prev) prev.count += c;
-      else
-        bucket.pipelines.set(pkey, {
-          pipelineId: pid,
-          pipelineName: pname,
-          count: c,
-        });
-      bucket.stages.set(stage, (bucket.stages.get(stage) || 0) + c);
-    }
-
-    const out: Array<{
-      date: string;
-      total: number;
-      byPipeline: Array<{
-        pipelineId: string | null;
-        pipelineName: string;
-        count: number;
-      }>;
-      byStage: Array<{ stage: string; count: number }>;
-    }> = [];
-
-    for (const d of [...dayMap.keys()].sort()) {
-      const bucket = dayMap.get(d)!;
-      const byPipeline = [...bucket.pipelines.values()].sort(
-        (a, b) => b.count - a.count,
-      );
-      const byStage = [...bucket.stages.entries()]
-        .map(([stage, count]) => ({ stage, count }))
-        .sort((a, b) => b.count - a.count);
-      const total = byPipeline.reduce((s, x) => s + x.count, 0);
-      out.push({ date: d, total, byPipeline, byStage });
-    }
-    return out;
   }
 
   private async getLeadFollowUpAndIntakeForSalesWorkspace(
@@ -8722,14 +6827,13 @@ export class ReportingService {
     const filter =
       leadOwners.length === 1 ? leadOwners[0] : { $in: leadOwners };
     const authIn = Array.isArray(authorId) ? { $in: authorId } : authorId;
-    const [lids, dids, cids, clids] = await Promise.all([
+    const [lids, cids, clids] = await Promise.all([
       this.leadModel.distinct('_id', { leadOwner: filter }),
-      this.dealModel.distinct('_id', { dealOwner: filter }),
       this.contactModel.distinct('_id', { leadOwner: filter }),
       authorId ? this.clientModel.distinct('_id', { assignedTo: authIn }) : [],
     ]);
 
-    const all = [...lids, ...dids, ...cids, ...clids];
+    const all = [...lids, ...cids, ...clids];
     return all
       .filter((id) => id != null && Types.ObjectId.isValid(id))
       .map((id) => new Types.ObjectId(id));
@@ -8852,15 +6956,6 @@ export class ReportingService {
           String(d.email || '') ||
           'Contact',
         'Contact',
-      );
-    }
-    const dealIds = [...(byType.get('deal') || [])];
-    if (dealIds.length) {
-      await load(
-        this.dealModel as Model<{ _id: Types.ObjectId }>,
-        dealIds,
-        (d) => String(d.title || d.organization || 'Deal'),
-        'Deal',
       );
     }
     const clientIds = [...(byType.get('client') || [])];

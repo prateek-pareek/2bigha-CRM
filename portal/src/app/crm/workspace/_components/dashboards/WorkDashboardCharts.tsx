@@ -26,13 +26,12 @@ import {
 } from "@/lib/crm/shared/chart-theme";
 import { EmptyDash } from "./dashboardShared";
 import {
-  DealKpiTile,
-  InteractiveCategoryBarChart,
+  KpiTile,
   InteractiveChartShell,
-} from "./DealsDashboardCharts";
+} from "./DashboardInteractiveShell";
 import { useChartKeyboardZoom } from "./useChartKeyboardZoom";
 
-export { DealKpiTile as WorkKpiTile, InteractiveCategoryBarChart };
+export { KpiTile as WorkKpiTile };
 
 const ANIM = { isAnimationActive: true, animationDuration: 750, animationEasing: "ease-out" as const };
 
@@ -702,89 +701,6 @@ export function WorkloadMixAreaChart({
           </ResponsiveContainer>
         </div>
       )}
-    </InteractiveChartShell>
-  );
-}
-
-/** Deals Overview style summary — segmented bar + status counts. */
-export function WorkDealsOverviewCard({
-  title = "Deals overview",
-  closingSoon,
-  atRisk,
-  nextStepMissing,
-  totalPipeline,
-  actions,
-}: {
-  title?: string;
-  closingSoon: number;
-  atRisk: number;
-  nextStepMissing: number;
-  totalPipeline: number;
-  actions?: ReactNode;
-}) {
-  const healthy = Math.max(0, totalPipeline - closingSoon - atRisk - nextStepMissing);
-  const segments = [
-    { name: "Healthy", value: healthy, color: CRM_CHART_SUCCESS },
-    { name: "Closing soon", value: closingSoon, color: CRM_CHART_SECONDARY },
-    { name: "At risk", value: atRisk, color: "#7c3aed" },
-    { name: "Missing next step", value: nextStepMissing, color: CRM_CHART_PRIMARY },
-  ];
-  const total = segments.reduce((s, r) => s + r.value, 0) || 1;
-
-  return (
-    <InteractiveChartShell
-      title={title}
-      subtitle="Live pipeline health for this owner & window"
-      actions={actions}
-      heightClassName="h-auto min-h-[200px]"
-      zoomHint="Segment widths reflect share of open pipeline deals"
-    >
-      <div className="space-y-4">
-        <div className="flex h-3 w-full overflow-hidden rounded-full bg-[var(--surface-dim)]">
-          {segments.map((s) =>
-            s.value > 0 ? (
-              <span
-                key={s.name}
-                className="h-full transition-[width] duration-700 ease-out"
-                style={{
-                  width: `${(s.value / total) * 100}%`,
-                  background: s.color,
-                }}
-                title={`${s.name}: ${s.value}`}
-              />
-            ) : null,
-          )}
-        </div>
-        <div>
-          <p className="text-3xl font-bold tabular-nums tracking-tight text-[var(--text-main)]">
-            {totalPipeline.toLocaleString("en-IN")}
-          </p>
-          <p className="mt-0.5 text-xs font-medium text-[var(--text-muted)]">
-            Open pipeline deals in view
-          </p>
-        </div>
-        <ul className="space-y-2.5">
-          {segments.map((s) => (
-            <li
-              key={s.name}
-              className="flex items-center justify-between gap-3 text-sm"
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: s.color }}
-                />
-                <span className="text-xs font-medium text-[var(--text-main)]">
-                  {s.name}
-                </span>
-              </span>
-              <span className="text-xs font-bold tabular-nums text-[var(--text-main)]">
-                {s.value.toLocaleString("en-IN")} deals
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
     </InteractiveChartShell>
   );
 }

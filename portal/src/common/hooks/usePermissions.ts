@@ -283,13 +283,6 @@ export function usePermissions() {
       ) {
         return "/crm/leads";
       }
-      if (
-        perms.includes("deals") ||
-        perms.includes("deals:read") ||
-        perms.includes("crm:deals")
-      ) {
-        return "/crm/deals";
-      }
       return "/crm/workspace";
     },
     [isLoaded, isAdmin, permissions],

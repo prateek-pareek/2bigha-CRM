@@ -54,16 +54,13 @@ export class Client {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }] })
   assignedTo: Types.ObjectId[];
 
-  /** Original CRM lead when this client was created from a lead or deal that had a lead. */
+  /** Original CRM lead when this client was created from a lead that had a lead. */
   @Prop({ type: Types.ObjectId, ref: 'Lead' })
   sourceLead?: Types.ObjectId;
 
   /** HubSpot-style links to other CRM records (merged email engagement uses these). */
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Lead' }], default: [] })
   associatedLeads: Types.ObjectId[];
-
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Deal' }], default: [] })
-  associatedDeals: Types.ObjectId[];
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Organization' }], default: [] })
   associatedOrganizations: Types.ObjectId[];

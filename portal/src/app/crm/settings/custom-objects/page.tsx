@@ -95,7 +95,7 @@ export default function CustomObjectsSettingsPage() {
         </h1>
         <p className="text-sm text-[var(--primary-muted)] mt-1 max-w-2xl">
           Define new CRM object types (vendors, projects, contracts metadata, etc.) without
-          replacing leads, contacts, companies, or deals. Properties use the same custom-fields
+          replacing leads, contacts, companies, or clients. Properties use the same custom-fields
           catalog with <code className="text-xs">module = object key</code>.
         </p>
       </div>

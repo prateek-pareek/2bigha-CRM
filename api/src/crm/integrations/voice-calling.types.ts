@@ -90,7 +90,7 @@ export const DEFAULT_VOICE_CALLING_CONFIG: VoiceCallingConfig = {
 export type InitiateVoiceCallDto = {
   toNumber: string;
   relatedTo?: string;
-  relatedType?: 'Lead' | 'Contact' | 'Deal' | 'Organization' | 'Client';
+  relatedType?: 'Lead' | 'Contact' | 'Organization' | 'Client';
   leadName?: string;
   /** Optional override; defaults to activeProvider */
   provider?: VoiceProviderId;

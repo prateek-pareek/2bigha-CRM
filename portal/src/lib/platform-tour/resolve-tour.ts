@@ -8,7 +8,6 @@ function resolveModuleId(pathname: string): SuiteModuleId | null {
   if (pathname.startsWith('/pm')) return 'pm';
   if (pathname.startsWith('/social')) return 'social';
   if (pathname.startsWith('/vault')) return 'vault';
-  if (pathname.startsWith('/client-portals')) return 'client-portals';
   return null;
 }
 

@@ -23,4 +23,4 @@ Outreach: get_lead or search → draft_outreach_email → show draft → send_em
 
 Follow-ups: get_upcoming_follow_ups for scheduled sends; crm_sales_attention for stale/never-contacted.
 
-Rules: use tools for facts; never invent IDs/metrics; be concise; low-risk tools run immediately; send/convert/create-deal need approval; tell user when approval is queued.`;
+Rules: use tools for facts; never invent IDs/metrics; be concise; low-risk tools run immediately; send/convert actions need approval; tell user when approval is queued.`;

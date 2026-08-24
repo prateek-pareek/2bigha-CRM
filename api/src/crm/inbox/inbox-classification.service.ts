@@ -6,7 +6,6 @@ import { InboxEmail } from '../schemas/inbox-email.schema';
 import { InboxRule, InboxRuleDocument } from '../schemas/inbox-rules.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Client, ClientDocument } from '../schemas/client.schema';
 
 @Injectable()
@@ -27,8 +26,6 @@ export class InboxClassificationService {
     private activityModel: Model<ActivityDocument>,
     @InjectModel(Lead.name, 'crmConnection')
     private leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Client.name, 'crmConnection')
     private clientModel: Model<ClientDocument>,
   ) {}
@@ -102,13 +99,12 @@ export class InboxClassificationService {
     let score = 0;
 
     // Business Signals
-    const [isContact, isLead, isClient, isDeal] = await Promise.all([
+    const [isContact, isLead, isClient] = await Promise.all([
       this.contactModel.exists({ email: fromEmail }),
       this.leadModel.exists({ email: fromEmail }),
       this.clientModel.exists({ email: fromEmail }),
-      this.dealModel.exists({ 'meta.email': fromEmail }), // Some deals store email in meta
     ]);
-    const isKnownContact = !!(isContact || isLead || isClient || isDeal);
+    const isKnownContact = !!(isContact || isLead || isClient);
     
     if (isKnownContact) {
       score += 40;

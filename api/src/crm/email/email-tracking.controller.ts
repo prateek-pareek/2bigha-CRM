@@ -26,13 +26,12 @@ const TRACKING_PIXEL = Buffer.from(
 export class EmailTrackingController {
   constructor(private readonly trackingService: EmailTrackingService) {}
 
-  /** Merged open/click history for a contact (includes linked lead/deal/company/contact sends). */
+  /** Merged open/click history for a contact (includes linked lead/company/contact sends). */
   @Get('contact/:contactId')
   @UseGuards(RbacGuard)
   @Permissions(
     'leads:read',
     'contacts:read',
-    'deals:read',
     'organizations:read',
   )
   getAggregatedContactTracking(@Param('contactId') contactId: string) {
@@ -44,7 +43,6 @@ export class EmailTrackingController {
   @Permissions(
     'leads:read',
     'contacts:read',
-    'deals:read',
     'clients:read',
     'organizations:read',
   )
@@ -63,7 +61,6 @@ export class EmailTrackingController {
   @Permissions(
     'leads:read',
     'contacts:read',
-    'deals:read',
     'clients:read',
     'organizations:read',
   )

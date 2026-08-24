@@ -15,7 +15,6 @@ export type CrmMigrationEntityType =
   | 'organizations'
   | 'contacts'
   | 'leads'
-  | 'deals'
   | 'notes'
   | 'calls'
   | 'meetings'
@@ -28,8 +27,7 @@ export type CrmMigrationEntityType =
 export type CrmAssociationObjectType =
   | 'organizations'
   | 'contacts'
-  | 'leads'
-  | 'deals';
+  | 'leads';
 
 export type CrmMigrationDuplicateStrategy =
   | 'merge'
@@ -55,9 +53,8 @@ export type CanonicalOrganization = {
   annualRevenue?: number | string;
   address?: string;
   ownerLabel?: string;
-  /** Extra company source ids also linked as contacts/deals later. */
+  /** Extra company source ids also linked as contacts later. */
   relatedContactExternalIds?: string[];
-  relatedDealExternalIds?: string[];
   customFields?: Record<string, unknown>;
   /** Full original row preserved as-is under customFields._sourcePayload */
   sourcePayload?: Record<string, unknown>;
@@ -79,7 +76,6 @@ export type CanonicalPerson = {
   organizationExternalIds?: string[];
   /** Peer contacts linked in source. */
   relatedContactExternalIds?: string[];
-  relatedDealExternalIds?: string[];
   relatedLeadExternalIds?: string[];
   website?: string;
   linkedinUrl?: string;
@@ -91,29 +87,6 @@ export type CanonicalPerson = {
   ownerLabel?: string;
   annualRevenue?: number | string;
   noOfEmployees?: string;
-  customFields?: Record<string, unknown>;
-  sourcePayload?: Record<string, unknown>;
-};
-
-export type CanonicalDeal = {
-  externalId?: string;
-  title: string;
-  dealValue?: number | string;
-  stage?: string;
-  probability?: number | string;
-  organizationName?: string;
-  organizationExternalId?: string;
-  organizationExternalIds?: string[];
-  contactEmail?: string;
-  contactExternalId?: string;
-  /** All contacts linked on the deal in source. */
-  contactExternalIds?: string[];
-  leadExternalId?: string;
-  ownerLabel?: string;
-  expectedClosureDate?: string;
-  closedDate?: string;
-  currency?: string;
-  nextStep?: string;
   customFields?: Record<string, unknown>;
   sourcePayload?: Record<string, unknown>;
 };
@@ -173,7 +146,6 @@ export type CanonicalNote = CanonicalActivity;
 export type CanonicalRecord =
   | CanonicalOrganization
   | CanonicalPerson
-  | CanonicalDeal
   | CanonicalActivity
   | CanonicalAssociation;
 
@@ -199,7 +171,6 @@ export const MIGRATION_ENTITY_ORDER: CrmMigrationEntityType[] = [
   'organizations',
   'contacts',
   'leads',
-  'deals',
   'notes',
   'calls',
   'meetings',
@@ -247,5 +218,4 @@ export const ASSOCIATION_OBJECT_TYPES: CrmAssociationObjectType[] = [
   'organizations',
   'contacts',
   'leads',
-  'deals',
 ];

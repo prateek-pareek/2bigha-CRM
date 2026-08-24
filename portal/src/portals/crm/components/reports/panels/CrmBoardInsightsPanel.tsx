@@ -31,16 +31,12 @@ export type BoardReportPayload = {
   periodDays: number;
   leadsCreatedByDay: Array<{ date: string; count: number }>;
   leadsByOwner: Array<{ owner: string; count: number }>;
-  dealsByOwner: Array<{ owner: string; count: number }>;
   leadConversion: {
     createdInPeriod: number;
     convertedInPeriod: number;
     conversionRate: number;
   };
-  dealsCreatedInPeriod: number;
   clientsCreatedInPeriod: number;
-  /** Deals created per calendar day. */
-  dealsCreatedByDay?: Array<{ date: string; count: number }>;
   /** Day × platform × employee lead intake rows. */
   leadsDailyDetail?: Array<{
     date: string;
@@ -48,20 +44,7 @@ export type BoardReportPayload = {
     owner: string;
     count: number;
   }>;
-  /** Day × originating-lead platform × deal owner intake rows. */
-  dealsDailyDetail?: Array<{
-    date: string;
-    platform: string;
-    owner: string;
-    count: number;
-  }>;
   openLeadsByPipeline?: Array<{
-    pipelineId: string | null;
-    pipelineName: string;
-    total: number;
-    stages: Array<{ stage: string; count: number }>;
-  }>;
-  openDealsByPipeline?: Array<{
     pipelineId: string | null;
     pipelineName: string;
     total: number;
@@ -102,7 +85,6 @@ export type BoardReportPayload = {
     converted: number;
     conversionRate: number;
     replies: number;
-    deals: number;
     replyRate: number;
   }>;
   emailEngagementNote: string;
@@ -292,16 +274,13 @@ export default function CrmBoardInsightsPanel({
     for (const row of data?.openLeadsByPipeline ?? []) {
       map.set(row.pipelineId || "__none__", row.pipelineName);
     }
-    for (const row of data?.openDealsByPipeline ?? []) {
-      map.set(row.pipelineId || "__none__", row.pipelineName);
-    }
     return [
       { key: "all", label: "All pipelines" },
       ...[...map.entries()]
         .sort((a, b) => a[1].localeCompare(b[1]))
         .map(([key, label]) => ({ key, label })),
     ];
-  }, [data?.openLeadsByPipeline, data?.openDealsByPipeline]);
+  }, [data?.openLeadsByPipeline]);
 
   const selectedLeadStages = useMemo(() => {
     const rows = data?.openLeadsByPipeline ?? [];
@@ -319,23 +298,6 @@ export default function CrmBoardInsightsPanel({
     const match = rows.find((p) => (p.pipelineId || "__none__") === pipelineKey);
     return match?.stages ?? [];
   }, [data?.openLeadsByPipeline, pipelineKey]);
-
-  const selectedDealStages = useMemo(() => {
-    const rows = data?.openDealsByPipeline ?? [];
-    if (pipelineKey === "all") {
-      const stageMap = new Map<string, number>();
-      for (const p of rows) {
-        for (const s of p.stages) {
-          stageMap.set(s.stage, (stageMap.get(s.stage) || 0) + s.count);
-        }
-      }
-      return [...stageMap.entries()]
-        .map(([stage, count]) => ({ stage, count }))
-        .sort((a, b) => b.count - a.count);
-    }
-    const match = rows.find((p) => (p.pipelineId || "__none__") === pipelineKey);
-    return match?.stages ?? [];
-  }, [data?.openDealsByPipeline, pipelineKey]);
 
   const emailPie = useMemo(() => {
     const s = data?.emailEngagementSummary;
@@ -439,7 +401,7 @@ export default function CrmBoardInsightsPanel({
             <>
               <p className="text-xs text-text-muted leading-relaxed">{data.emailEngagementNote}</p>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <StatPill
                   label="Leads created"
                   value={data.leadConversion.createdInPeriod}
@@ -449,11 +411,6 @@ export default function CrmBoardInsightsPanel({
                   label="Converted"
                   value={`${data.leadConversion.convertedInPeriod} (${data.leadConversion.conversionRate}%)`}
                   icon={<TrendingUp size={14} />}
-                />
-                <StatPill
-                  label="New deals"
-                  value={data.dealsCreatedInPeriod}
-                  icon={<BarChart3 size={14} />}
                 />
                 <StatPill
                   label="New clients"
@@ -469,7 +426,7 @@ export default function CrmBoardInsightsPanel({
                       Pipeline stage breakdown
                     </h3>
                     <p className="mt-1 text-xs text-text-muted">
-                      Open leads and deals by stage — filter by pipeline to see funnel shape.
+                      Open leads by stage — filter by pipeline to see funnel shape.
                     </p>
                   </div>
                   <CrmDropdown
@@ -479,20 +436,13 @@ export default function CrmBoardInsightsPanel({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6">
                   <PipelineStageChart
                     title="Open leads by stage"
                     subtitle={pipelineKey === "all" ? "All pipelines combined" : pipelineOptions.find((p) => p.key === pipelineKey)?.label}
                     rows={selectedLeadStages}
                     colors={STAGE_COLORS}
                     emptyMessage="No open leads in this view"
-                  />
-                  <PipelineStageChart
-                    title="Open deals by stage"
-                    subtitle={pipelineKey === "all" ? "All pipelines combined" : pipelineOptions.find((p) => p.key === pipelineKey)?.label}
-                    rows={selectedDealStages}
-                    colors={STAGE_COLORS}
-                    emptyMessage="No open deals in this view"
                   />
                 </div>
               </div>
@@ -802,7 +752,7 @@ export default function CrmBoardInsightsPanel({
 
                 <div className="rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-[rgba(219,219,219,0.25)_0px_4px_4px_0px]">
                   <h3 className="text-sm font-bold text-[#1e293b] mb-3">
-                    Channel performance (leads / replies / deals)
+                    Channel performance (leads / replies)
                   </h3>
                   <div className="h-[260px] w-full">
                     {(data.channelPerformance ?? []).length === 0 ? (
@@ -836,7 +786,6 @@ export default function CrmBoardInsightsPanel({
                           <Legend wrapperStyle={{ fontSize: 11 }} />
                           <Bar dataKey="leads" fill="#3b82f6" name="Leads" radius={[4, 4, 0, 0]} />
                           <Bar dataKey="replies" fill={CRM_CHART_SECONDARY} name="Replies" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="deals" fill="#10b981" name="Deals" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
@@ -849,7 +798,6 @@ export default function CrmBoardInsightsPanel({
                             <th className="px-3 py-2 font-bold">Channel</th>
                             <th className="px-3 py-2 font-bold">Leads</th>
                             <th className="px-3 py-2 font-bold">Replies</th>
-                            <th className="px-3 py-2 font-bold">Deals</th>
                             <th className="px-3 py-2 font-bold">Conv %</th>
                             <th className="px-3 py-2 font-bold">Reply %</th>
                           </tr>
@@ -860,7 +808,6 @@ export default function CrmBoardInsightsPanel({
                               <td className="px-3 py-2 font-semibold text-text-main">{row.channel}</td>
                               <td className="px-3 py-2 tabular-nums">{row.leads}</td>
                               <td className="px-3 py-2 tabular-nums">{row.replies}</td>
-                              <td className="px-3 py-2 tabular-nums">{row.deals}</td>
                               <td className="px-3 py-2 tabular-nums">{row.conversionRate}%</td>
                               <td className="px-3 py-2 tabular-nums">{row.replyRate}%</td>
                             </tr>

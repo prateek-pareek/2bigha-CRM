@@ -21,8 +21,6 @@ export default function LeadsDashboardPage() {
         windowFilter,
         compare,
         setWindowFilter,
-        intakeKind,
-        setIntakeKind,
         isSummaryLeadsLoading,
         hasAccess,
         selectedOwnerLabel,
@@ -68,18 +66,11 @@ export default function LeadsDashboardPage() {
                   </div>
                 ) : (
                   <LeadsAddedByDayPanel
-                    kind={intakeKind}
-                    onKindChange={setIntakeKind}
-                    showDealsTab={hasAccess("deals:read")}
                     ownerLabel={selectedOwnerLabel}
                     ownerId={owner === "All" ? null : owner}
                     onUseLast30Days={() => setWindowFilter("last_30_days")}
                     windowFilter={windowFilter}
-                    days={
-                      intakeKind === "deals"
-                        ? ws?.dealsAddedByDay || []
-                        : ws?.leadsAddedByDay || []
-                    }
+                    days={ws?.leadsAddedByDay || []}
                     onDateClick={(date) => setWindowFilter(`${date},${date}`)}
                   />
                 )

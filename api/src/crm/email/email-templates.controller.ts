@@ -40,7 +40,7 @@ export class EmailTemplatesController {
   ) {}
 
   @Get()
-  @Permissions('settings:write', 'leads:read', 'deals:read', 'contacts:read') // Admins manage, others can use
+  @Permissions('settings:write', 'leads:read', 'contacts:read') // Admins manage, others can use
   findAll(@Query() query: any) {
     return this.emailTemplatesService.findAll(query);
   }
@@ -49,7 +49,6 @@ export class EmailTemplatesController {
   @Get('merge-data')
   @Permissions(
     'leads:read',
-    'deals:read',
     'contacts:read',
     'organizations:read',
     'clients:read',
@@ -73,7 +72,7 @@ export class EmailTemplatesController {
   }
 
   @Get(':id')
-  @Permissions('leads:read', 'deals:read', 'contacts:read')
+  @Permissions('leads:read', 'contacts:read')
   findOne(@Param('id') id: string) {
     return this.emailTemplatesService.findOne(id);
   }

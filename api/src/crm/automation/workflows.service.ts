@@ -20,7 +20,6 @@ import { EmailTemplateMergeService } from '../email/email-template-merge.service
 import { InboxAccountsService } from '../inbox/inbox-accounts.service';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import {
   Organization,
@@ -71,7 +70,6 @@ import {
 } from '../schemas/crm-global-settings.schema';
 import { EmailTrackingService } from '../email/email-tracking.service';
 import { LeadEngagementAutomationService } from './lead-engagement-automation.service';
-import { DealEngagementAutomationService } from './deal-engagement-automation.service';
 import { CrmSegmentsService } from '../segments/crm-segments.service';
 import { CrmAiService } from '../ai/crm-ai.service';
 import {
@@ -359,8 +357,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     private splitCounterModel: Model<WorkflowSplitCounterDocument>,
     @InjectModel(Lead.name, 'crmConnection')
     private leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private contactModel: Model<ContactDocument>,
     @InjectModel(Organization.name, 'crmConnection')
@@ -386,7 +382,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     private readonly globalSettingsModel: Model<CrmGlobalSettingsDocument>,
     @Inject(forwardRef(() => LeadEngagementAutomationService))
     private readonly leadEngagementAutomation: LeadEngagementAutomationService,
-    private readonly dealEngagementAutomation: DealEngagementAutomationService,
     @Inject(forwardRef(() => CrmSegmentsService))
     private readonly segmentsService: CrmSegmentsService,
   ) {}
@@ -1043,9 +1038,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
             ? 'leads'
             : entityType === 'Contact'
               ? 'contacts'
-              : entityType === 'Deal'
-                ? 'deals'
-                : 'leads',
+              : 'leads',
           entityId,
           'Recipient replied',
         );
@@ -2246,8 +2239,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     }
     if (entityType === 'Lead') {
       void this.leadEngagementAutomation.onLeadEmailReply(entityId);
-    } else if (entityType === 'Deal') {
-      void this.dealEngagementAutomation.onDealEmailReply(entityId);
     }
     return n;
   }
@@ -2376,7 +2367,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
   ): WorkflowEntityType | null {
     const m = (module || '').toLowerCase();
     if (m === 'leads') return 'Lead';
-    if (m === 'deals') return 'Deal';
     if (m === 'contacts') return 'Contact';
     if (m === 'organizations') return 'Organization';
     return null;
@@ -2388,8 +2378,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     switch (entityType) {
       case 'Lead':
         return 'lead_tracked_email_opened';
-      case 'Deal':
-        return 'deal_tracked_email_opened';
       case 'Contact':
         return 'contact_tracked_email_opened';
       case 'Organization':
@@ -2405,8 +2393,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     switch (entityType) {
       case 'Lead':
         return 'lead_tracked_email_replied';
-      case 'Deal':
-        return 'deal_tracked_email_replied';
       case 'Contact':
         return 'contact_tracked_email_replied';
       case 'Organization':
@@ -4515,10 +4501,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       const d = await this.leadModel.findById(entityId).lean().exec();
       return d as Record<string, unknown> | null;
     }
-    if (entityType === 'Deal') {
-      const d = await this.dealModel.findById(entityId).lean().exec();
-      return d as Record<string, unknown> | null;
-    }
     if (entityType === 'Contact') {
       const d = await this.contactModel.findById(entityId).lean().exec();
       return d as Record<string, unknown> | null;
@@ -4583,12 +4565,10 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
 
   private entityTypeToTrackingModule(
     t: WorkflowEntityType,
-  ): 'leads' | 'deals' | 'contacts' | 'organizations' | null {
+  ): 'leads' | 'contacts' | 'organizations' | null {
     switch (t) {
       case 'Lead':
         return 'leads';
-      case 'Deal':
-        return 'deals';
       case 'Contact':
         return 'contacts';
       case 'Organization':
@@ -5377,9 +5357,8 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
 
   private entityTypeToModule(
     entityType: WorkflowEntityType,
-  ): 'leads' | 'deals' | 'contacts' | 'organizations' {
+  ): 'leads' | 'contacts' | 'organizations' {
     if (entityType === 'Lead') return 'leads';
-    if (entityType === 'Deal') return 'deals';
     if (entityType === 'Contact') return 'contacts';
     return 'organizations';
   }
@@ -5404,21 +5383,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
   ): Promise<string | null> {
     const direct = record.email != null ? String(record.email).trim() : '';
     if (direct) return direct;
-    if (entityType === 'Deal') {
-      const d = await this.dealModel
-        .findById(entityId)
-        .populate('lead', 'email')
-        .populate('contactPerson', 'email')
-        .lean()
-        .exec();
-      if (!d) return null;
-      const cp = d.contactPerson as { email?: string } | null;
-      if (cp?.email && String(cp.email).trim()) return String(cp.email).trim();
-      const lead = d.lead as { email?: string } | null;
-      if (lead?.email && String(lead.email).trim())
-        return String(lead.email).trim();
-      return null;
-    }
     return null;
   }
 
@@ -5432,30 +5396,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     }
     if (entityType === 'Contact') {
       return { module: 'contacts', entityId: String(entityId) };
-    }
-    if (entityType === 'Deal') {
-      const d = await this.dealModel
-        .findById(entityId)
-        .select('contactPerson associatedContacts lead')
-        .lean()
-        .exec();
-      if (!d) return null;
-      const contactPerson = d.contactPerson ? String(d.contactPerson) : '';
-      if (contactPerson && Types.ObjectId.isValid(contactPerson)) {
-        return { module: 'contacts', entityId: contactPerson };
-      }
-      const assoc = Array.isArray(d.associatedContacts)
-        ? d.associatedContacts.map((x) => String(x))
-        : [];
-      const firstAssoc = assoc.find((x) => Types.ObjectId.isValid(x));
-      if (firstAssoc) {
-        return { module: 'contacts', entityId: firstAssoc };
-      }
-      const leadId = d.lead ? String(d.lead) : '';
-      if (leadId && Types.ObjectId.isValid(leadId)) {
-        return { module: 'leads', entityId: leadId };
-      }
-      return null;
     }
     const assocRaw = record.associatedContacts;
     const assocIds = Array.isArray(assocRaw) ? assocRaw.map((x) => String(x)) : [];
@@ -5507,13 +5447,10 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         return `Set ${label} → ${String(action.value ?? '')}`;
       }
       case 'assign_owner': {
-        const patch: Record<string, unknown> =
-          entityType === 'Deal'
-            ? { dealOwner: action.ownerName }
-            : { leadOwner: action.ownerName };
         if (entityType === 'Contact' || entityType === 'Organization') {
           return 'Assign owner skipped (use Set property for contacts/orgs)';
         }
+        const patch: Record<string, unknown> = { leadOwner: action.ownerName };
         await this.patchEntity(entityType, entityId, patch);
         return `Owner → ${action.ownerName}`;
       }
@@ -5600,11 +5537,9 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         const path =
           entityType === 'Lead'
             ? 'leads'
-            : entityType === 'Deal'
-              ? 'deals'
-              : entityType === 'Contact'
-                ? 'contacts'
-                : 'organizations';
+            : entityType === 'Contact'
+              ? 'contacts'
+              : 'organizations';
         const link = action.link || `${frontendUrl}/crm/${path}/${entityId}`;
         const msg = String(action.message ?? '');
         const r = await this.teamsBotService.sendProactiveDM(
@@ -5679,9 +5614,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
           event.record,
         );
         if (!to) {
-          throw new Error(
-            'No recipient email (set email on record, or link deal to contact/lead with email)',
-          );
+          throw new Error('No recipient email (set email on record)');
         }
         let subject = '';
         let body = '';
@@ -5897,17 +5830,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       'lead_tracked_email_opened',
       'lead_tracked_email_replied',
     ];
-    const deal: WorkflowTrigger[] = [
-      'deal_created',
-      'deal_updated',
-      'deal_stage_changed',
-      'deal_pipeline_changed',
-      'deal_value_changed',
-      'deal_owner_changed',
-      'deal_probability_changed',
-      'deal_tracked_email_opened',
-      'deal_tracked_email_replied',
-    ];
     const contact: WorkflowTrigger[] = [
       'contact_created',
       'contact_updated',
@@ -5923,7 +5845,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       'organization_tracked_email_replied',
     ];
     if (entityType === 'Lead') return lead.includes(trigger);
-    if (entityType === 'Deal') return deal.includes(trigger);
     if (entityType === 'Contact') return contact.includes(trigger);
     if (entityType === 'Organization') return org.includes(trigger);
     return false;
@@ -6467,12 +6388,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         throw new Error('Set property: invalid pipeline id');
       }
       value = new Types.ObjectId(id);
-    } else if (field === 'dealValue' || field === 'probability') {
-      const n = Number(rawValue);
-      if (!Number.isFinite(n)) {
-        throw new Error(`Set property: ${field} must be a number`);
-      }
-      value = n;
     } else if (field === 'annualRevenue' || field === 'noOfEmployees') {
       const n = Number(rawValue);
       value = Number.isFinite(n) ? n : rawValue;
@@ -6496,12 +6411,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     if (entityType === 'Lead') {
       await this.leadModel
-        .findByIdAndUpdate(entityId, { $set: patch }, { new: true })
-        .exec();
-      return;
-    }
-    if (entityType === 'Deal') {
-      await this.dealModel
         .findByIdAndUpdate(entityId, { $set: patch }, { new: true })
         .exec();
       return;
@@ -6602,59 +6511,6 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       }
       return;
     }
-
-    if (entityType === 'Deal') {
-      void this.dispatch({
-        trigger: 'deal_updated',
-        entityType: 'Deal',
-        entityId,
-        record,
-        previous: prev,
-        user,
-      });
-      if (patch.stage !== undefined) {
-        const oldStage = (prev as Record<string, unknown> | null)?.stage;
-        const newStage = (record as Record<string, unknown>).stage;
-        if (this.strId(oldStage) !== this.strId(newStage)) {
-          void this.dispatch({
-            trigger: 'deal_stage_changed',
-            entityType: 'Deal',
-            entityId,
-            record,
-            previous: prev,
-            user,
-          });
-        }
-      }
-      if (patch.pipeline !== undefined) {
-        const oldPipe = (prev as Record<string, unknown> | null)?.pipeline;
-        const newPipe = (record as Record<string, unknown>).pipeline;
-        if (this.strId(oldPipe) !== this.strId(newPipe)) {
-          void this.dispatch({
-            trigger: 'deal_pipeline_changed',
-            entityType: 'Deal',
-            entityId,
-            record,
-            previous: prev,
-            user,
-          });
-        }
-      }
-      if (patch.dealOwner !== undefined) {
-        const oldOwner = (prev as Record<string, unknown> | null)?.dealOwner;
-        const newOwner = (record as Record<string, unknown>).dealOwner;
-        if (String(oldOwner ?? '') !== String(newOwner ?? '')) {
-          void this.dispatch({
-            trigger: 'deal_owner_changed',
-            entityType: 'Deal',
-            entityId,
-            record,
-            previous: prev,
-            user,
-          });
-        }
-      }
-    }
   }
 
   private async logExecution(p: {
@@ -6695,7 +6551,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Mirror workflow run outcomes onto CRM record timeline so reps can inspect what happened
-   * directly inside Lead/Deal/Contact/Organization detail pages.
+   * directly inside Lead/Contact/Organization detail pages.
    */
   /**
    * Log scheduled follow-up / workflow delay steps on the record timeline (workspace + detail).

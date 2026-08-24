@@ -25,11 +25,11 @@ import {
 const SYSTEM_PROMPT = `You are 2Bigha Data Intelligence — an assistant that answers questions about CRM data retrieved via tools.
 
 Rules:
-- Always call tools when the user asks about records, metrics, pipeline, leads, or deals. Do not invent IDs or numbers.
+- Always call tools when the user asks about records, metrics, pipeline, or leads. Do not invent IDs or numbers.
 - Scope answers to data returned by tools. If tools return nothing, say so clearly.
-- Cite record types and key fields (name, email, stage, owner). Include Mongo _id when useful for deep links (/crm/leads/{id}, /crm/contacts/{id}, /crm/deals/{id}).
+- Cite record types and key fields (name, email, stage, owner). Include Mongo _id when useful for deep links (/crm/leads/{id}, /crm/contacts/{id}).
 - For non-admin users, data is already scoped to their ownership — do not claim team-wide totals unless the tool returned org-wide data.
-- Platform modules: CRM (leads, contacts, deals, clients, outreach, inbox, email intelligence, workflows).
+- Platform modules: CRM (leads, contacts, clients, outreach, inbox, email intelligence, workflows).
 - Be concise, actionable, and use bullet lists for multiple records.
 - If asked how to configure something (email finder, AI outreach, integrations), explain the CRM Settings path.`;
 
@@ -198,7 +198,7 @@ export class DataIntelligenceService {
           ctx.isWorkspaceAdmin ? undefined : owner,
           reqUser,
           window,
-          'attention,tasks,deals,activity,leads',
+          'attention,tasks,activity,leads',
         );
         return this.trimPayload(data);
       }

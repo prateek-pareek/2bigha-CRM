@@ -26,7 +26,6 @@ export class PipelineController {
   @Get('pipelines')
   @Permissions(
     'leads:read',
-    'deals:read',
     'proposals:read',
     'legal:read',
     'settings:read',
@@ -34,14 +33,16 @@ export class PipelineController {
   findAllPipelines(
     @Query('type')
     type?:
-      | 'deals'
       | 'leads'
       | 'proposals'
       | 'quotations'
       | 'contracts'
       | 'legal',
+    /** Only applies when type='leads': scope to the Property Listing or Property Management vertical. */
+    @Query('leadVertical')
+    leadVertical?: 'property_listing' | 'property_management',
   ) {
-    return this.pipelinesService.findAll(type);
+    return this.pipelinesService.findAll(type, leadVertical);
   }
 
   @Post('pipelines')
@@ -60,12 +61,6 @@ export class PipelineController {
   @Permissions('settings:write')
   deletePipeline(@Param('id') id: string) {
     return this.pipelinesService.delete(id);
-  }
-
-  @Get('reports/deals')
-  @Permissions('deals:read', 'settings:read')
-  getDealStats(@Query('pipeline') pipeline?: string, @Query('owner') owner?: string) {
-    return this.reportingService.getDealStats(owner, pipeline);
   }
 
   @Get('reports/leads')

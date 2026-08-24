@@ -62,7 +62,7 @@ import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging
 import LeadCreatePanel from '@/components/crm/records/create/LeadCreatePanel';
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
-import { buildCrmListSearchParams, mergeDateRangeFilter, mergeLeadCategoryFilter, CRM_BOARD_PAGE_SIZE, unwrapCrmListPayload } from '@/lib/crm/list-query';
+import { buildCrmListSearchParams, mergeDateRangeFilter, mergeLeadCategoryFilter, mergeLeadVerticalFilter, CRM_BOARD_PAGE_SIZE, unwrapCrmListPayload } from '@/lib/crm/list-query';
 import type { CrmEmailEngagementStats } from '@/lib/crm/crmEmailEngagementStats';
 import { fetchEmailEngagementBatch } from '@/lib/crm/fetchEmailEngagementBatch';
 import {
@@ -172,6 +172,7 @@ const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'stage', label: 'Stage' },
   { key: 'callStatus', label: 'Call Status' },
   { key: 'leadCategory', label: 'Lead Type' },
+  { key: 'leadVertical', label: 'Lead Vertical' },
   { key: 'group', label: 'Group' },
   { key: 'priority', label: 'Priority' },
   { key: 'leadOwner', label: 'Lead Owner' },
@@ -222,6 +223,7 @@ function saveColumns(cols: Column[]) {
 }
 
 const VIEW_MODE_KEY = 'crm_leads_view_mode_v1';
+const VERTICAL_STORAGE_KEY = 'crm_leads_active_vertical_v1';
 const INITIAL_STAGE_CARD_LIMIT = 100;
 const STAGE_CARD_INCREMENT = 100;
 /** Board bucket for leads whose stage/status does not match any pipeline column. */
@@ -285,6 +287,19 @@ export default function LeadsPage() {
   /** Lead-type tab bar (All Leads / Reference / Investor / Lead / Buyer lead, etc.) — '' = All Leads. */
   const [leadCategoryTabs, setLeadCategoryTabs] = useState<Array<{ _id: string; label: string }>>([]);
   const [activeLeadCategory, setActiveLeadCategory] = useState('');
+  /** Property Listing / Property Management vertical toggle — '' = show both. */
+  const [activeLeadVertical, setActiveLeadVertical] = useState<
+    '' | 'property_listing' | 'property_management'
+  >(() => {
+    if (typeof window === 'undefined') return '';
+    const saved = localStorage.getItem(VERTICAL_STORAGE_KEY);
+    return saved === 'property_listing' || saved === 'property_management' ? saved : '';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(VERTICAL_STORAGE_KEY, activeLeadVertical);
+    }
+  }, [activeLeadVertical]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [serverTotal, setServerTotal] = useState(0);
@@ -468,8 +483,12 @@ export default function LeadsPage() {
 
   // For large datasets, keep list mode server-paged unless heavy client-only filters are active.
   const apiFilters = useMemo(
-    () => mergeLeadCategoryFilter(mergeDateRangeFilter(filters, dateRange), activeLeadCategory),
-    [filters, dateRange, activeLeadCategory],
+    () =>
+      mergeLeadVerticalFilter(
+        mergeLeadCategoryFilter(mergeDateRangeFilter(filters, dateRange), activeLeadCategory),
+        activeLeadVertical,
+      ),
+    [filters, dateRange, activeLeadCategory, activeLeadVertical],
   );
 
   const needsClientFullList = viewMode !== 'list';
@@ -1240,6 +1259,28 @@ export default function LeadsPage() {
     [selectedPipeline],
   );
 
+  /** Pipeline picker scoped to the active Property Listing / Property Management tab ('' = show all). */
+  const pipelinesForActiveVertical = useMemo(() => {
+    if (!activeLeadVertical) return pipelines;
+    return pipelines.filter((p: any) =>
+      activeLeadVertical === 'property_management'
+        ? p.leadVertical === 'property_management'
+        : p.leadVertical === 'property_listing' || !p.leadVertical,
+    );
+  }, [pipelines, activeLeadVertical]);
+
+  // When the vertical tab changes, make sure the selected pipeline still belongs to it —
+  // otherwise the board would show, e.g., a Property Management pipeline's stages while
+  // the "Property Listing" tab is active.
+  useEffect(() => {
+    if (!activeLeadVertical || !pipelinesForActiveVertical.length) return;
+    if (pipelinesForActiveVertical.some((p: any) => String(p._id) === String(selectedPipelineId))) return;
+    const next = pipelinesForActiveVertical.find((p: any) => p.isDefault) || pipelinesForActiveVertical[0];
+    setSelectedPipelineId(next._id);
+    void fetchLeadsList(next._id || null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLeadVertical, pipelinesForActiveVertical]);
+
   const pipelineNameById = useMemo(() => {
     const byId = new Map<string, string>();
     for (const p of pipelines) {
@@ -1521,6 +1562,11 @@ export default function LeadsPage() {
       case 'stage': return <CrmListStatusBadge label={lead.stage || lead.status || '—'} />;
       case 'callStatus': return <CrmListStatusBadge label={lead.callStatus || 'Not Called'} />;
       case 'leadCategory': return <span className="text-sm text-[#707070]">{lead.leadCategory || '—'}</span>;
+      case 'leadVertical': return (
+        <span className="text-sm text-[#707070]">
+          {(lead as any).leadVertical === 'property_management' ? 'Property Management' : 'Property Listing'}
+        </span>
+      );
       case 'group': return <CrmSoftBadge label={lead.group || ''} tone={groupBadgeTone(lead.group)} />;
       case 'createdByName': return <span className="text-sm text-[#707070]">{lead.createdByName || lead.leadOwner || '—'}</span>;
       case 'createdAt': return <span className="text-sm text-[#707070]">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>;
@@ -1776,7 +1822,7 @@ export default function LeadsPage() {
                       aria-label="Pipeline"
                       className={cn(CRM_TOOLBAR_SELECT, 'min-w-[160px] max-w-[220px] pl-8 pr-7')}
                     >
-                      {pipelines.map((p) => (
+                      {pipelinesForActiveVertical.map((p) => (
                         <option key={p._id} value={p._id}>
                           {p.name}
                         </option>
@@ -1927,6 +1973,42 @@ export default function LeadsPage() {
             }
           />
 
+          <div
+            className="flex items-center gap-1 overflow-x-auto px-4 pt-2.5 shrink-0"
+            role="tablist"
+            aria-label="Lead vertical"
+          >
+            {(
+              [
+                { value: '', label: 'All Leads' },
+                { value: 'property_listing', label: 'Property Listing' },
+                { value: 'property_management', label: 'Property Management' },
+              ] as const
+            ).map((tab) => {
+              const isActive = activeLeadVertical === tab.value;
+              return (
+                <button
+                  key={tab.value || '__all_verticals__'}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => {
+                    setActiveLeadVertical(tab.value);
+                    setPage(1);
+                  }}
+                  className={cn(
+                    'shrink-0 rounded-[var(--radius-md)] px-3 py-1.5 text-sm font-semibold transition-colors',
+                    isActive
+                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                      : 'text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
           {leadCategoryTabs.length > 0 && (
             <div
               className="flex items-center gap-1 overflow-x-auto px-4 pt-2.5 pb-1 shrink-0"
@@ -1981,12 +2063,7 @@ export default function LeadsPage() {
                     stageLeadIds.length > 0 && stageLeadIds.every((id) => selectedIds.has(id));
                   const remainingCount = stageLeads.length - visibleStageLeads.length;
                   const stageValueTotal = stageLeads.reduce((sum, lead) => {
-                    const raw =
-                      Number((lead as any).expectedDealValue) ||
-                      Number((lead as any).dealValueINR) ||
-                      Number((lead as any).dealValue) ||
-                      Number((lead as any).amount) ||
-                      0;
+                    const raw = Number((lead as any).amount) || 0;
                     return sum + (Number.isFinite(raw) ? raw : 0);
                   }, 0);
                   return (
@@ -2034,7 +2111,7 @@ export default function LeadsPage() {
                         {visibleStageLeads.map((lead) => {
                           const getFieldValue = (field: string): string =>
                             resolveCrmCardFieldValue('leads', lead as unknown as Record<string, unknown>, field);
-                          const valueField = cardFields.find((f) => /value|amount|revenue|deal/i.test(f));
+                          const valueField = cardFields.find((f) => /value|amount|revenue/i.test(f));
                           const value = valueField ? getFieldValue(valueField) : '';
                           const leadName =
                             `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Untitled';
@@ -2365,10 +2442,11 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      <LeadCreatePanel 
-        isOpen={isLeadPanelOpen} 
+      <LeadCreatePanel
+        isOpen={isLeadPanelOpen}
         onClose={() => setIsLeadPanelOpen(false)}
         initialPipelineId={selectedPipelineId}
+        initialLeadVertical={activeLeadVertical || 'property_listing'}
         onSuccess={() => {
             setIsLeadPanelOpen(false);
             fetchData();

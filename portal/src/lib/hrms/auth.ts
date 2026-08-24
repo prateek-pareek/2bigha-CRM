@@ -321,7 +321,7 @@ export const canViewPayrollSensitive = (user: User | null): boolean => {
 };
 
 /**
- * CRM deal amounts, annual revenue, and pipeline/revenue analytics.
+ * CRM annual revenue and pipeline/revenue analytics.
  * Restricted to the platform super-admin (ceo@mathionix.com) only.
  */
 export const canViewCrmRevenue = (user: User | null | undefined): boolean => {

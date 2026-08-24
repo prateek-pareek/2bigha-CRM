@@ -202,7 +202,7 @@ export default function AiContractSettingsPage() {
               <Link href="/crm/proposals" className="text-primary underline">
                 CRM → Proposals
               </Link>{" "}
-              (contract kind) to draft from leads, contacts, deals, and platform opportunities.
+              (contract kind) to draft from leads, contacts, and platform opportunities.
             </p>
           </div>
         </div>

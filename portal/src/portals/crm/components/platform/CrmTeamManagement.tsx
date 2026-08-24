@@ -22,7 +22,7 @@ const CRM_ACTION_LABEL: Record<(typeof CRM_GRANULAR_MODULE_ACTIONS)[number], str
     edit: "Edit",
     delete: "Delete",
 };
-const CRM_DATA_SCOPE_MODULES = new Set(["clients", "leads", "deals", "contacts"]);
+const CRM_DATA_SCOPE_MODULES = new Set(["clients", "leads", "contacts"]);
 
 interface StaffUser {
     _id: string;
@@ -265,7 +265,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                 ...newMember,
                 permittedTools: ["CRM"],
                 permissions: [],
-                crmPermissions: ["dashboard:read", "leads:read", "deals:read", "contacts:read"],
+                crmPermissions: ["dashboard:read", "leads:read", "contacts:read"],
             });
             setShowAddMember(false);
             setNewMember({
@@ -297,7 +297,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
         } else if (preset === 'manager') {
             newRole = 'Manager';
             newCrmPermissions = [];
-            ['leads', 'clients', 'deals', 'contacts', 'activities', 'inbox', 'dashboard'].forEach((m) => {
+            ['leads', 'clients', 'contacts', 'activities', 'inbox', 'dashboard'].forEach((m) => {
                 ['read', 'write', 'edit'].forEach((a) => newCrmPermissions.push(`${m}:${a}`));
                 if (m === 'inbox') newCrmPermissions.push('inbox:connect');
             });
@@ -1032,7 +1032,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                                 If this is off, users see only assigned/owned data for the selected CRM modules.
                                             </p>
                                         </div>
-                                        {(["clients", "leads", "deals", "contacts"] as const).map((modId) => {
+                                        {(["clients", "leads", "contacts"] as const).map((modId) => {
                                             const key = `${modId}:read:all`;
                                             const crmPerms = editingUser.crmPermissions || [];
                                             const enabled = crmPerms.includes(key);
@@ -1172,7 +1172,7 @@ function TeamMemberHistoryTab({ userId }: { userId: string }) {
     );
 }
 
-/** Team Members → Performance tab: per-agent calls/leads/deals snapshot, reusing ReportingService's window-comparison pattern. */
+/** Team Members → Performance tab: per-agent calls/leads snapshot, reusing ReportingService's window-comparison pattern. */
 function TeamMemberPerformanceTab({ userId }: { userId: string }) {
     const [summary, setSummary] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -1222,7 +1222,6 @@ function TeamMemberPerformanceTab({ userId }: { userId: string }) {
                             <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Calls</dt><dd className="font-semibold">{snap.calls ?? 0}</dd></div>
                             <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Leads created</dt><dd className="font-semibold">{snap.leadsCreated ?? 0}</dd></div>
                             <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Leads converted</dt><dd className="font-semibold">{snap.leadsConverted ?? 0}</dd></div>
-                            <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Deals won</dt><dd className="font-semibold">{snap.dealsWon ?? 0}</dd></div>
                             <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Meetings</dt><dd className="font-semibold">{snap.meetings ?? 0}</dd></div>
                         </dl>
                     </div>

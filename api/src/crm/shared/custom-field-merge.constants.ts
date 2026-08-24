@@ -45,14 +45,6 @@ export const CUSTOM_FIELD_MERGEABLE_CORE: Record<string, Set<string>> = {
     'address',
     'gender',
   ]),
-  deals: new Set([
-    'title',
-    'stage',
-    'organization',
-    'dealOwner',
-    'nextStep',
-    'currency',
-  ]),
   organizations: new Set([
     'name',
     'website',

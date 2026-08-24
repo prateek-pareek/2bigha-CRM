@@ -7,7 +7,6 @@ const MODULE_NAMES: Record<SuiteModuleId, string> = {
   pm: 'Projects',
   social: 'Social desk',
   vault: 'Vault',
-  'client-portals': 'Client Portals',
 };
 
 const MODULE_STEPS: Record<SuiteModuleId, PlatformTourStep[]> = {
@@ -32,14 +31,14 @@ const MODULE_STEPS: Record<SuiteModuleId, PlatformTourStep[]> = {
       element: '[data-tour="main-content"]',
       title: 'CRM sales workspace',
       description:
-        'CRM helps you manage inbound leads, outbound outreach, deals, and client relationships. The Sales workspace is your home base for pipeline activity.',
+        'CRM helps you manage inbound leads, outbound outreach, and client relationships. The Sales workspace is your home base for pipeline activity.',
       side: 'top',
     },
     {
       element: '[data-tour="sidebar-nav"]',
       title: 'CRM workflow',
       description:
-        'Inbound — leads, website chats, and deals. Outbound — outreach, playbooks, and proposals. Data — companies and contacts. Activities — notes, tasks, and call logs.',
+        'Inbound — leads, website chats, and outreach replies. Outbound — outreach, playbooks, and proposals. Data — companies and contacts. Activities — notes, tasks, and call logs.',
       side: 'right',
     },
   ],
@@ -81,15 +80,6 @@ const MODULE_STEPS: Record<SuiteModuleId, PlatformTourStep[]> = {
       title: 'Team Vault',
       description:
         'Store and share team passwords securely. Access is permission-based—only credentials you are allowed to see appear here.',
-      side: 'top',
-    },
-  ],
-  'client-portals': [
-    {
-      element: '[data-tour="main-content"]',
-      title: 'Client Portals',
-      description:
-        'Create and manage branded portals for clients—share project updates, files, invoices, and messages without giving full suite access.',
       side: 'top',
     },
   ],

@@ -12,7 +12,6 @@ import {
   Organization,
   OrganizationDocument,
 } from '../schemas/organization.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
 import { PipelinesService } from '../core/pipelines.service';
 import {
@@ -48,7 +47,6 @@ import {
 import {
   CanonicalActivity,
   CanonicalAssociation,
-  CanonicalDeal,
   CanonicalOrganization,
   CanonicalPerson,
   CrmAssociationObjectType,
@@ -76,7 +74,6 @@ const RELATED_TYPE_LABEL: Record<CrmAssociationObjectType, string> = {
   organizations: 'Organization',
   contacts: 'Contact',
   leads: 'Lead',
-  deals: 'Deal',
 };
 
 function leanPrevious(doc: unknown): Record<string, unknown> | null {
@@ -106,8 +103,6 @@ export class CrmMigrationService {
     private readonly contactModel: Model<ContactDocument>,
     @InjectModel(Organization.name, 'crmConnection')
     private readonly organizationModel: Model<OrganizationDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private readonly dealModel: Model<DealDocument>,
     @InjectModel(Activity.name, 'crmConnection')
     private readonly activityModel: Model<ActivityDocument>,
     private readonly pipelinesService: PipelinesService,
@@ -558,8 +553,6 @@ export class CrmMigrationService {
         return this.upsertPerson('contacts', platform, record, strategy, jobId);
       case 'leads':
         return this.upsertPerson('leads', platform, record, strategy, jobId);
-      case 'deals':
-        return this.upsertDeal(platform, record, strategy, jobId);
       case 'associations':
         return this.upsertAssociation(platform, record, strategy, jobId);
       default:
@@ -702,18 +695,6 @@ export class CrmMigrationService {
         ],
       };
     }
-    if (entity === 'deals') {
-      return {
-        $or: [
-          { recordId: id },
-          { 'customFields.hubspot_deal_id': id },
-          { 'customFields.salesforce_opportunity_id': id },
-          { [`customFields.${platform}_deal_id`]: id },
-          { 'customFields._sourcePayload.id': id },
-          { 'customFields._sourcePayload.Id': id },
-        ],
-      };
-    }
     if (isActivityEntityType(entity as CrmMigrationEntityType) || entity === 'notes') {
       return {
         $or: [
@@ -771,11 +752,6 @@ export class CrmMigrationService {
       'contacts',
       rec.relatedContactExternalIds,
     );
-    const relatedDeals = await this.resolveManyIds(
-      platform,
-      'deals',
-      rec.relatedDealExternalIds,
-    );
 
     const domainForMarker =
       normalizeDomainKey(rec.website) ||
@@ -807,10 +783,6 @@ export class CrmMigrationService {
       associatedContacts: this.mergeObjectIdLists(
         existing?.associatedContacts,
         relatedContacts,
-      ),
-      associatedDeals: this.mergeObjectIdLists(
-        existing?.associatedDeals,
-        relatedDeals,
       ),
     };
     Object.keys(payload).forEach((k) => {
@@ -858,8 +830,7 @@ export class CrmMigrationService {
           for (const [k, v] of Object.entries(payload)) {
             if (
               k === 'customFields' ||
-              k === 'associatedContacts' ||
-              k === 'associatedDeals'
+              k === 'associatedContacts'
             ) {
               continue;
             }
@@ -1067,11 +1038,6 @@ export class CrmMigrationService {
       'contacts',
       rec.relatedContactExternalIds,
     );
-    const relatedDeals = await this.resolveManyIds(
-      platform,
-      'deals',
-      rec.relatedDealExternalIds,
-    );
     const relatedLeads = await this.resolveManyIds(
       platform,
       'leads',
@@ -1138,10 +1104,6 @@ export class CrmMigrationService {
       associatedContacts: this.mergeObjectIdLists(
         existing?.associatedContacts,
         relatedContacts,
-      ),
-      associatedDeals: this.mergeObjectIdLists(
-        existing?.associatedDeals,
-        relatedDeals,
       ),
       associatedLeads: this.mergeObjectIdLists(
         existing?.associatedLeads,
@@ -1268,221 +1230,6 @@ export class CrmMigrationService {
           .exec();
       }
     }
-    return 'created';
-  }
-
-  private async upsertDeal(
-    platform: CrmMigrationPlatform,
-    rec: CanonicalDeal,
-    strategy: CrmMigrationDuplicateStrategy,
-    jobId?: Types.ObjectId,
-  ): Promise<'created' | 'merged' | 'skipped'> {
-    const extFilter = this.externalIdFilter(platform, 'deals', rec.externalId);
-    let existing: any = null;
-    if (extFilter) existing = await this.dealModel.findOne(extFilter).exec();
-
-    // Resolve contacts/orgs first so title match can be scoped (avoid false merges).
-    const orgIds = await this.resolveManyIds(
-      platform,
-      'organizations',
-      [
-        ...(rec.organizationExternalId ? [rec.organizationExternalId] : []),
-        ...(rec.organizationExternalIds || []),
-      ],
-    );
-    if (!orgIds.length && rec.organizationName) {
-      const one = await this.resolveOrganizationId(
-        platform,
-        rec.organizationName,
-        undefined,
-      );
-      if (one) orgIds.push(one);
-    }
-
-    const contactIds = await this.resolveManyIds(
-      platform,
-      'contacts',
-      [
-        ...(rec.contactExternalId ? [rec.contactExternalId] : []),
-        ...(rec.contactExternalIds || []),
-      ],
-    );
-    if (!contactIds.length && rec.contactEmail) {
-      const email = normalizeEmail(rec.contactEmail);
-      if (email) {
-        const c = await this.contactModel
-          .findOne({
-            $or: [{ email }, { additionalEmails: email }],
-          })
-          .select('_id')
-          .lean()
-          .exec();
-        if (c?._id) contactIds.push(c._id as Types.ObjectId);
-      }
-    }
-
-    if (!existing && rec.title?.trim()) {
-      const titleRe = new RegExp(
-        `^${rec.title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
-        'i',
-      );
-      if (contactIds[0]) {
-        existing = await this.dealModel
-          .findOne({
-            title: titleRe,
-            $or: [
-              { contactPerson: contactIds[0] },
-              { associatedContacts: contactIds[0] },
-            ],
-          })
-          .exec();
-      } else if (orgIds[0]) {
-        existing = await this.dealModel
-          .findOne({
-            title: titleRe,
-            $or: [
-              { associatedCompanies: orgIds[0] },
-              { organization: orgIds[0] },
-            ],
-          } as any)
-          .exec();
-      } else if (!rec.externalId) {
-        // Bare title only when there is no external id (safer identity).
-        existing = await this.dealModel.findOne({ title: titleRe } as any).exec();
-      }
-    }
-
-    const leadId = await this.resolveMappedId(
-      platform,
-      'leads',
-      rec.leadExternalId,
-    );
-
-    const pipelines = await this.pipelinesService.findAll('deals');
-    const defaultPipeline =
-      pipelines.find((p) => (p as any).isDefault) || pipelines[0];
-
-    const payload: Record<string, unknown> = {
-      title: rec.title,
-      dealValue: rec.dealValue,
-      stage: rec.stage,
-      probability: rec.probability,
-      organization: rec.organizationName,
-      dealOwner: rec.ownerLabel,
-      currency: rec.currency,
-      nextStep: rec.nextStep,
-      expectedClosureDate: rec.expectedClosureDate
-        ? new Date(rec.expectedClosureDate)
-        : undefined,
-      closedDate: rec.closedDate ? new Date(rec.closedDate) : undefined,
-      customFields: this.mergeCustomFields(
-        existing?.customFields,
-        rec.customFields,
-        rec.sourcePayload,
-      ),
-      associatedCompanies: this.mergeObjectIdLists(
-        existing?.associatedCompanies,
-        orgIds,
-      ),
-      associatedContacts: this.mergeObjectIdLists(
-        existing?.associatedContacts,
-        contactIds,
-      ),
-    };
-    if (contactIds[0]) payload.contactPerson = contactIds[0];
-    if (leadId) payload.lead = leadId;
-    if (!payload.pipeline && defaultPipeline) {
-      payload.pipeline = (defaultPipeline as any)._id;
-      const firstStage = (defaultPipeline as any).stages?.sort(
-        (a: any, b: any) => a.order - b.order,
-      )?.[0];
-      if (firstStage && !payload.stage) payload.stage = firstStage.name;
-    }
-    Object.keys(payload).forEach((k) => {
-      if (payload[k] === undefined) delete payload[k];
-    });
-
-    const afterSave = async (
-      dealId: Types.ObjectId,
-      recordId?: string,
-      outcome: 'created' | 'merged' = 'merged',
-      previous: Record<string, unknown> | null = null,
-    ) => {
-      await this.rememberTouch(jobId, 'deals', dealId, outcome, previous);
-      await this.rememberId(
-        platform,
-        'deals',
-        rec.externalId,
-        dealId,
-        rec.title,
-        recordId,
-      );
-      for (const oid of orgIds) {
-        await this.rememberExistingDocTouch(jobId, 'organizations', oid);
-        await this.organizationModel
-          .updateOne({ _id: oid }, { $addToSet: { associatedDeals: dealId } })
-          .exec();
-      }
-      for (const cid of contactIds) {
-        await this.rememberExistingDocTouch(jobId, 'contacts', cid);
-        await this.contactModel
-          .updateOne({ _id: cid }, { $addToSet: { associatedDeals: dealId } })
-          .exec();
-      }
-    };
-
-    if (existing) {
-      if (strategy === 'skip') {
-        await this.rememberId(
-          platform,
-          'deals',
-          rec.externalId,
-          existing._id,
-          rec.title,
-          existing.recordId,
-        );
-        return 'skipped';
-      }
-      if (strategy !== 'create') {
-        if (strategy === 'merge') {
-          for (const [k, v] of Object.entries(payload)) {
-            if (
-              String(k).startsWith('associated') ||
-              k === 'customFields' ||
-              k === 'contactPerson'
-            ) {
-              continue;
-            }
-            if (
-              existing[k] != null &&
-              String(existing[k]).trim() !== '' &&
-              v != null
-            ) {
-              delete payload[k];
-            }
-          }
-        }
-        const prev = leanPrevious(existing);
-        await this.dealModel
-          .updateOne({ _id: existing._id }, { $set: payload })
-          .exec();
-        await afterSave(existing._id, existing.recordId, 'merged', prev);
-        return 'merged';
-      }
-    }
-
-    const doc = new this.dealModel(payload);
-    const rid = await assignUniqueRecordId(
-      this.dealModel,
-      rec.externalId || null,
-    );
-    if (rid.ok) doc.recordId = rid.recordId;
-    else {
-      const gen = await assignUniqueRecordId(this.dealModel, null);
-      if (gen.ok) doc.recordId = gen.recordId;
-    }
-    await doc.save();
-    await afterSave(doc._id as Types.ObjectId, doc.recordId, 'created', null);
     return 'created';
   }
 
@@ -1691,8 +1438,6 @@ export class CrmMigrationService {
     if (fromType === 'contacts') {
       if (toType === 'organizations') {
         addToSet.associatedOrganizations = toId;
-      } else if (toType === 'deals') {
-        addToSet.associatedDeals = toId;
       } else if (toType === 'contacts') {
         addToSet.associatedContacts = toId;
       } else if (toType === 'leads') {
@@ -1700,20 +1445,10 @@ export class CrmMigrationService {
       }
     } else if (fromType === 'leads') {
       if (toType === 'organizations') addToSet.associatedOrganizations = toId;
-      else if (toType === 'deals') addToSet.associatedDeals = toId;
       else if (toType === 'contacts') addToSet.associatedContacts = toId;
       else if (toType === 'leads') addToSet.associatedLeads = toId;
     } else if (fromType === 'organizations') {
       if (toType === 'contacts') addToSet.associatedContacts = toId;
-      else if (toType === 'deals') addToSet.associatedDeals = toId;
-    } else if (fromType === 'deals') {
-      if (toType === 'organizations') addToSet.associatedCompanies = toId;
-      else if (toType === 'contacts') {
-        addToSet.associatedContacts = toId;
-        if (isPrimary) setOps.contactPerson = toId;
-      } else if (toType === 'leads') {
-        if (isPrimary) setOps.lead = toId;
-      }
     }
 
     // Store association provenance on the from-record customFields
@@ -1738,20 +1473,17 @@ export class CrmMigrationService {
         return this.contactModel;
       case 'leads':
         return this.leadModel;
-      case 'deals':
-        return this.dealModel;
       default:
         return this.activityModel;
     }
   }
 
   private async bustCaches(entity: CrmMigrationEntityType) {
-    const map: Record<string, 'leads' | 'contacts' | 'organizations' | 'deals'> =
+    const map: Record<string, 'leads' | 'contacts' | 'organizations'> =
       {
         organizations: 'organizations',
         contacts: 'contacts',
         leads: 'leads',
-        deals: 'deals',
       };
     const key = map[entity];
     if (key) await this.appCache.invalidateCrm(key);
@@ -1828,7 +1560,6 @@ export class CrmMigrationService {
       'organizations',
       'contacts',
       'leads',
-      'deals',
       'notes',
       'calls',
       'meetings',
@@ -1842,11 +1573,10 @@ export class CrmMigrationService {
     }
     if (e === 'companies' || e === 'accounts') return 'organizations';
     if (e === 'persons' || e === 'people') return 'contacts';
-    if (e === 'opportunities') return 'deals';
     if (e === 'engagements') return 'activities';
     if (e === 'relationships' || e === 'links') return 'associations';
     throw new BadRequestException(
-      'entityType must be organizations | contacts | leads | deals | notes | calls | meetings | emails | tasks | activities | associations',
+      'entityType must be organizations | contacts | leads | notes | calls | meetings | emails | tasks | activities | associations',
     );
   }
 

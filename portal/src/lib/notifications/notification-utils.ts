@@ -52,7 +52,6 @@ export function isCrmNotification(notification: AppNotification): boolean {
   if (
     [
       "leads",
-      "deals",
       "contacts",
       "clients",
       "organizations",
@@ -67,7 +66,6 @@ export function isCrmNotification(notification: AppNotification): boolean {
   if (
     [
       "lead",
-      "deal",
       "contact",
       "client",
       "organization",
@@ -150,7 +148,6 @@ function resolveCrmEntityPath(metadata: Record<string, unknown>): string | null 
     metadata.recordId,
     metadata.relatedTo,
     metadata.leadId,
-    metadata.dealId,
     metadata.contactId,
     metadata.clientId,
     metadata.organizationId,
@@ -169,9 +166,6 @@ function resolveCrmEntityPath(metadata: Record<string, unknown>): string | null 
   }
   if (module === "leads" || relatedType === "lead") {
     return `/crm/leads/${entityId}`;
-  }
-  if (module === "deals" || relatedType === "deal") {
-    return `/crm/deals/${entityId}`;
   }
   if (module === "contacts" || relatedType === "contact") {
     return `/crm/contacts/${entityId}`;

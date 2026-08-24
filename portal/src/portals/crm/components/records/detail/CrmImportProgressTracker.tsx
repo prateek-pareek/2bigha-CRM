@@ -13,7 +13,6 @@ import {
 const TYPE_LABEL: Record<CrmImportEntityType, string> = {
   leads: 'leads',
   contacts: 'contacts',
-  deals: 'deals',
   clients: 'clients',
   organizations: 'companies',
 };

@@ -16,10 +16,10 @@ import { cn } from "@/lib/utils";
 
 export type CrmActivityRelatedType =
   | "Lead"
-  | "Deal"
   | "Contact"
   | "Client"
-  | "Organization";
+  | "Organization"
+  | "Property";
 
 const BASE_TYPES = ["Activity", "Note", "Call", "Task", "Meeting", "Email"] as const;
 

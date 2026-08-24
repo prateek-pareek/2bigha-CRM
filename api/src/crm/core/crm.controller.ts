@@ -23,7 +23,6 @@ import { parseCrmFiltersQuery } from '../shared/crm-list-filters';
 import { parseCrmEmailEngagementQuery } from '../email/crm-email-engagement-filter.service';
 import { CRMService } from './crm.service';
 import { CrmEmailEngagementBatchService } from '../email/crm-email-engagement-batch.service';
-import { ClientPortalNeedsService } from '../portal/client-portal-needs.service';
 import { CrmCalendarSyncService } from '../calendar/crm-calendar-sync.service';
 import { InboxOAuthService } from '../inbox/inbox-oauth.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -36,14 +35,13 @@ import { canViewCrmRevenue, redactCrmRevenueForUser } from '../shared/crm-admin-
 export class CRMController {
   constructor(
     private readonly crmService: CRMService,
-    private readonly clientPortalNeedsService: ClientPortalNeedsService,
     private readonly crmCalendarSyncService: CrmCalendarSyncService,
     private readonly inboxOAuthService: InboxOAuthService,
     private readonly crmEmailEngagementBatchService: CrmEmailEngagementBatchService,
   ) {}
 
   @Get('distinct-values')
-  @Permissions('leads:read', 'contacts:read', 'organizations:read', 'deals:read', 'clients:read')
+  @Permissions('leads:read', 'contacts:read', 'organizations:read', 'clients:read')
   async getDistinctValues(
     @Query('module') module: string,
     @Query('field') field: string,
@@ -95,6 +93,7 @@ export class CRMController {
     @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
     @Query('leadType') leadType?: string,
+    @Query('leadVertical') leadVertical?: string,
     @Query('filters') filters?: string,
     @Query('lastActivity') lastActivity?: string,
     @Query('emailOpenMode') emailOpenMode?: string,
@@ -117,12 +116,17 @@ export class CRMController {
     });
     const lt: 'standard' | 'platform' | undefined =
       leadType === 'platform' || leadType === 'standard' ? leadType : undefined;
+    const lv: 'property_listing' | 'property_management' | undefined =
+      leadVertical === 'property_listing' || leadVertical === 'property_management'
+        ? leadVertical
+        : undefined;
     return this.crmService.findAllLeads(req.user, pipeline, {
       page: parsed.page,
       pageSize: parsed.pageSize,
       search: parsed.search,
       mine: mine === '1' || mine === 'true',
       leadType: lt,
+      leadVertical: lv,
       filters: parsedFilters,
       emailEngagement,
       includeConverted:
@@ -153,56 +157,6 @@ export class CRMController {
   @Permissions('leads:write', 'leads:move_pipeline')
   async patchLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateLead(id, dto, req.user);
-  }
-
-  // Deals
-  @Get('deals')
-  @Permissions('deals:read')
-  findAllDeals(
-    @Request() req: any,
-    @Query('pipeline') pipeline?: string,
-    /** When viewing the default deal pipeline, include deals with no pipeline set (matches board UI). */
-    @Query('unassigned') unassigned?: string,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('search') search?: string,
-    @Query('filters') filters?: string,
-  ) {
-    const parsed = resolveListPagination(
-      { page, pageSize, search },
-      { maxPageSize: CRM_MAX_BOARD_PAGE_SIZE },
-    );
-    const parsedFilters = parseCrmFiltersQuery(filters);
-    return this.crmService.findAllDeals(
-      req.user,
-      pipeline,
-      unassigned === '1' || unassigned === 'true',
-      { ...parsed, filters: parsedFilters },
-    );
-  }
-
-  @Get('deals/:id')
-  @Permissions('deals:read')
-  findOneDeal(@Param('id') id: string, @Request() req: any) {
-    return this.crmService.findOneDeal(id, req.user);
-  }
-
-  @Post('deals')
-  @Permissions('deals:write')
-  async createDeal(@Body() dto: any, @Request() req: any) {
-    return this.crmService.createDeal(dto, req.user);
-  }
-
-  @Put('deals/:id')
-  @Permissions('deals:write', 'deals:move_pipeline')
-  async updateDeal(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
-    return this.crmService.updateDeal(id, dto, req.user);
-  }
-
-  @Patch('deals/:id')
-  @Permissions('deals:write', 'deals:move_pipeline')
-  async patchDeal(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
-    return this.crmService.updateDeal(id, dto, req.user);
   }
 
   // Organizations
@@ -484,27 +438,6 @@ export class CRMController {
     );
   }
 
-  @Get('reports/revenue-forecast')
-  @Permissions('dashboard:read', 'deals:read')
-  getRevenueForecastReport(
-    @Request() req: any,
-    @Query('owner') owner?: string,
-    @Query('pipeline') pipeline?: string,
-    @Query('months') months?: string,
-  ) {
-    if (!canViewCrmRevenue(req.user)) {
-      throw new ForbiddenException(
-        'Revenue forecast is restricted to the platform super administrator.',
-      );
-    }
-    const n = months ? parseInt(months, 10) : 6;
-    return this.crmService.getRevenueForecastReport(
-      owner,
-      pipeline,
-      Number.isFinite(n) ? n : 6,
-    );
-  }
-
   /** Leads pipeline + email tracking analytics (board / reports UI). */
   @Get('reports/board')
   @Permissions('dashboard:read', 'leads:read')
@@ -539,7 +472,7 @@ export class CRMController {
 
   /** Agent Performance baseline report — calls/activities/leads per human agent, target-vs-actual. */
   @Get('reports/agents')
-  @Permissions('dashboard:read', 'leads:read', 'deals:read')
+  @Permissions('dashboard:read', 'leads:read')
   async getAgentPerformanceLeaderboard(@Query('window') window?: string) {
     return this.crmService.getAgentPerformanceLeaderboard(window || 'this_month');
   }
@@ -554,14 +487,14 @@ export class CRMController {
   @Permissions('settings:admin')
   async upsertAgentTarget(
     @Param('agentId') agentId: string,
-    @Body() body: { leadsTarget?: number; callsTarget?: number; dealsTarget?: number; propertiesTarget?: number },
+    @Body() body: { leadsTarget?: number; callsTarget?: number; propertiesTarget?: number },
   ) {
     return this.crmService.upsertAgentTarget(agentId, body || {});
   }
 
   /** Sales department health: work done, activity trends, rep leaderboard, pipeline snapshot. */
   @Get('reports/sales-health')
-  @Permissions('dashboard:read', 'leads:read', 'deals:read')
+  @Permissions('dashboard:read', 'leads:read')
   async getSalesDepartmentHealth(
     @Request() req: any,
     @Query('window') window?: string,
@@ -591,7 +524,7 @@ export class CRMController {
     return this.crmService.getSalesAttention(owner);
   }
 
-  /** Rep workspace: attention, tasks, pipeline snapshot, closing deals, activity feed. */
+  /** Rep workspace: attention, tasks, pipeline snapshot, activity feed. */
   @Get('workspace')
   @Permissions('dashboard:read')
   getSalesWorkspace(
@@ -702,129 +635,13 @@ export class CRMController {
     @Param('id') id: string,
     @Body()
     dto: {
-      type: 'contact' | 'organization' | 'deal' | 'client';
+      type: 'contact' | 'organization' | 'client';
       pipelineId?: string;
       stage?: string;
     },
     @Request() req: any,
   ) {
     return this.crmService.convertLead(id, dto, req.user);
-  }
-
-  @Post('deals/:id/convert')
-  @Permissions('deals:write')
-  convertDeal(@Param('id') id: string, @Request() req: any) {
-    return this.crmService.convertDeal(id, req.user);
-  }
-
-  @Post('deals/:id/convert-to-lead')
-  @Permissions('deals:write')
-  convertDealToLead(
-    @Param('id') id: string,
-    @Body()
-    dto: {
-      pipelineId?: string;
-      stage?: string;
-    },
-    @Request() req: any,
-  ) {
-    return this.crmService.convertDealToLead(id, dto, req.user);
-  }
-
-  @Delete('deals/:id')
-  @Permissions('deals:delete')
-  removeDeal(@Param('id') id: string, @Request() req: any) {
-    return this.crmService.removeDeal(id, req.user?.userId);
-  }
-
-  @Post('deals/bulk-delete')
-  @Permissions('admin:manage')
-  bulkRemoveDeals(@Body('ids') ids: string[], @Request() req: any) {
-    return this.crmService.bulkRemoveDeals(ids, req.user?.userId);
-  }
-
-  @Get('deals/:id/portal-messages')
-  @Permissions('deals:read')
-  async getDealPortalMessages(@Param('id') id: string, @Request() req: any) {
-    await this.crmService.assertClientPortalAccess(req.user, id, 'viewer');
-    return this.crmService.getDealMessages(id);
-  }
-
-  @Post('deals/:id/portal-messages')
-  @Permissions('deals:write')
-  async sendDealPortalMessage(
-    @Param('id') id: string,
-    @Body() body: { text?: string },
-    @Request() req: any,
-  ) {
-    await this.crmService.assertClientPortalAccess(req.user, id, 'manager');
-    const adminId = String(req.user.userId || req.user.id || 'admin');
-    const adminName = String(req.user.displayName || req.user.name || 'Admin');
-    return this.crmService.sendDealMessage(id, adminId, adminName, body?.text || '');
-  }
-
-  @Get('deals/:id/portal-needs')
-  @Permissions('deals:read')
-  async listDealPortalNeeds(@Param('id') id: string, @Request() req: any) {
-    await this.crmService.assertClientPortalAccess(req.user, id, 'viewer');
-    return this.clientPortalNeedsService.findByDealId(id);
-  }
-
-  @Post('deals/:id/portal-needs')
-  @Permissions('deals:write')
-  async createDealPortalNeed(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      category: string;
-      title: string;
-      description?: string;
-      dueDate?: string;
-      status?: string;
-      sortOrder?: number;
-    },
-    @Request() req: any,
-  ) {
-    await this.crmService.assertClientPortalAccess(req.user, id, 'manager');
-    await this.crmService.logClientPortalAccessEvent(id, req.user, 'portal_need_created', {
-      category: body?.category || '',
-      title: body?.title || '',
-    });
-    return this.clientPortalNeedsService.create(id, body);
-  }
-
-  @Patch('portal-needs/:needId')
-  @Permissions('deals:write')
-  async updatePortalNeed(
-    @Param('needId') needId: string,
-    @Body()
-    body: Partial<{
-      category: string;
-      title: string;
-      description: string;
-      dueDate: string | null;
-      status: string;
-      sortOrder: number;
-    }>,
-    @Request() req: any,
-  ) {
-    const need = await this.clientPortalNeedsService.findByNeedId(needId);
-    await this.crmService.assertClientPortalAccess(req.user, String(need.deal), 'manager');
-    await this.crmService.logClientPortalAccessEvent(String(need.deal), req.user, 'portal_need_updated', {
-      needId,
-    });
-    return this.clientPortalNeedsService.update(needId, body);
-  }
-
-  @Delete('portal-needs/:needId')
-  @Permissions('deals:write')
-  async removePortalNeed(@Param('needId') needId: string, @Request() req: any) {
-    const need = await this.clientPortalNeedsService.findByNeedId(needId);
-    await this.crmService.assertClientPortalAccess(req.user, String(need.deal), 'manager');
-    await this.crmService.logClientPortalAccessEvent(String(need.deal), req.user, 'portal_need_deleted', {
-      needId,
-    });
-    return this.clientPortalNeedsService.remove(needId);
   }
 
   @Delete('organizations/:id')

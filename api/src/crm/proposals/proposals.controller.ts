@@ -27,7 +27,7 @@ export class ProposalsController {
   ) {}
 
   @Get()
-  @Permissions('proposals:read', 'proposals:write', 'deals:read', 'leads:read')
+  @Permissions('proposals:read', 'proposals:write', 'leads:read')
   list(
     @Query('kind') kind?: string,
     @Query('status') status?: string,
@@ -45,7 +45,7 @@ export class ProposalsController {
   }
 
   @Get(':id/export/pdf')
-  @Permissions('proposals:read', 'proposals:write', 'deals:read', 'leads:read')
+  @Permissions('proposals:read', 'proposals:write', 'leads:read')
   async exportPdf(@Param('id') id: string, @Res() res: Response) {
     const { buffer, filename } = await this.proposalExportService.pdfBuffer(id);
     const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_') || 'document.pdf';
@@ -58,7 +58,7 @@ export class ProposalsController {
   }
 
   @Get(':id/export/docx')
-  @Permissions('proposals:read', 'proposals:write', 'deals:read', 'leads:read')
+  @Permissions('proposals:read', 'proposals:write', 'leads:read')
   async exportDocx(@Param('id') id: string, @Res() res: Response) {
     const { buffer, filename } = await this.proposalExportService.docxBuffer(id);
     const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_') || 'document.docx';
@@ -74,7 +74,7 @@ export class ProposalsController {
   }
 
   @Get(':id/export/xlsx')
-  @Permissions('proposals:read', 'proposals:write', 'deals:read', 'leads:read')
+  @Permissions('proposals:read', 'proposals:write', 'leads:read')
   async exportXlsx(@Param('id') id: string, @Res() res: Response) {
     const { buffer, filename } = await this.proposalExportService.xlsxBuffer(id);
     const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_') || 'document.xlsx';
@@ -90,25 +90,25 @@ export class ProposalsController {
   }
 
   @Get(':id')
-  @Permissions('proposals:read', 'proposals:write', 'deals:read', 'leads:read')
+  @Permissions('proposals:read', 'proposals:write', 'leads:read')
   getOne(@Param('id') id: string) {
     return this.proposalsService.findOne(id);
   }
 
   @Post()
-  @Permissions('proposals:write', 'deals:write', 'leads:write')
+  @Permissions('proposals:write', 'leads:write')
   create(@Request() req: any, @Body() body: any) {
     return this.proposalsService.create(body, req.user.userId);
   }
 
   @Patch(':id')
-  @Permissions('proposals:write', 'deals:write', 'leads:write')
+  @Permissions('proposals:write', 'leads:write')
   update(@Param('id') id: string, @Body() body: any) {
     return this.proposalsService.update(id, body);
   }
 
   @Delete(':id')
-  @Permissions('proposals:write', 'deals:write', 'leads:write')
+  @Permissions('proposals:write', 'leads:write')
   remove(@Param('id') id: string) {
     return this.proposalsService.remove(id);
   }

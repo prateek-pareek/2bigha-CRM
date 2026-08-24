@@ -12,7 +12,7 @@ export class AuditLog {
   action: string; // 'create', 'update', 'delete', 'login', etc.
 
   @Prop({ required: true })
-  module: string; // 'leads', 'deals', 'contacts', etc.
+  module: string; // 'leads', 'contacts', etc.
 
   @Prop({ type: Types.ObjectId, required: false })
   entityId: Types.ObjectId;

@@ -8,7 +8,6 @@ import { Model, Types } from 'mongoose';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Email, EmailDocument } from '../schemas/email.schema';
 import {
   EmailTracking,
@@ -82,8 +81,6 @@ export class DuplicatesService {
     private readonly contactModel: Model<ContactDocument>,
     @InjectModel(Activity.name, 'crmConnection')
     private readonly activityModel: Model<ActivityDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private readonly dealModel: Model<DealDocument>,
     @InjectModel(Email.name, 'crmConnection')
     private readonly emailModel: Model<EmailDocument>,
     @InjectModel(EmailTracking.name, 'crmConnection')
@@ -498,10 +495,6 @@ export class DuplicatesService {
       (master.associatedOrganizations as unknown[]) || [],
       [],
     );
-    let dealIds = unionObjectIdStrings(
-      (master.associatedDeals as unknown[]) || [],
-      [],
-    );
     let leadIds = unionObjectIdStrings(
       (master.associatedLeads as unknown[]) || [],
       [],
@@ -516,10 +509,6 @@ export class DuplicatesService {
         orgIds,
         (dup.associatedOrganizations as unknown[]) || [],
       );
-      dealIds = unionObjectIdStrings(
-        dealIds,
-        (dup.associatedDeals as unknown[]) || [],
-      );
       leadIds = unionObjectIdStrings(
         leadIds,
         (dup.associatedLeads as unknown[]) || [],
@@ -533,9 +522,6 @@ export class DuplicatesService {
     Object.assign(custom, (master.customFields as Record<string, unknown>) || {});
 
     patch.associatedOrganizations = orgIds
-      .filter((id) => Types.ObjectId.isValid(id))
-      .map((id) => new Types.ObjectId(id));
-    patch.associatedDeals = dealIds
       .filter((id) => Types.ObjectId.isValid(id))
       .map((id) => new Types.ObjectId(id));
     patch.associatedLeads = leadIds
@@ -600,8 +586,6 @@ export class DuplicatesService {
       { $set: { relatedTo: masterOid } },
     );
 
-    await this.dealModel.updateMany({ lead: dupOid }, { $set: { lead: masterOid } });
-
     await this.emailModel.updateMany(
       { entityId: dupOid, module: { $in: ['leads', 'lead'] } },
       { $set: { entityId: masterOid } },
@@ -660,17 +644,6 @@ export class DuplicatesService {
     await this.activityModel.updateMany(
       { relatedTo: dupOid, relatedType: 'Contact' },
       { $set: { relatedTo: masterOid } },
-    );
-
-    await this.dealModel.updateMany(
-      { contactPerson: dupOid },
-      { $set: { contactPerson: masterOid } },
-    );
-    await this.rewirePersonAssocArrays(
-      this.dealModel,
-      'associatedContacts',
-      dupOid,
-      masterOid,
     );
 
     await this.emailModel.updateMany(

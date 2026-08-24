@@ -65,7 +65,7 @@ import {
 import {
   AnimatedMetric,
   InteractiveChartShell,
-} from "./DealsDashboardCharts";
+} from "./DashboardInteractiveShell";
 
 /* ─── Shared helpers ─────────────────────────────────────────────────────── */
 
@@ -409,7 +409,7 @@ export function RevenueProgressChart({
                   payload={props.payload}
                   label={props.label as string}
                   valueFormatter={(v) =>
-                    canViewRevenue ? fmtMoney(v) : `${v} deals`
+                    canViewRevenue ? fmtMoney(v) : String(v)
                   }
                 />
               )}
@@ -709,7 +709,7 @@ export function GrowthComparisonLineChart({
             <Line
               type="monotone"
               dataKey="leads"
-              name="Deals"
+              name="Leads"
               stroke={CRM_CHART_PRIMARY}
               strokeWidth={2}
               dot={false}
@@ -1084,7 +1084,7 @@ export function GrowthOverviewTable({
     <section className={cn(CRM_PANEL, "overflow-hidden")}>
       <DashCardHeader
         title="Growth Overview"
-        subtitle="Deal & customer performance derived from live CRM records"
+        subtitle="Customer performance derived from live CRM records"
         actions={
           <button
             type="button"

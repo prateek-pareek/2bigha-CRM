@@ -1,6 +1,6 @@
 /**
  * CRM filter configuration - static + dynamic properties per module
- * Used for HubSpot-style filtering on Leads, Contacts, Organizations, Deals
+ * Used for HubSpot-style filtering on Leads, Contacts, Organizations, Clients
  */
 
 import {
@@ -93,9 +93,7 @@ const DATE_KEYS = new Set([
 
 const NUMBER_KEYS = new Set([
   'annualRevenue',
-  'dealValue',
   'probability',
-  'expectedDealValue',
   'exchangeRate',
   'contractMonths',
   'contractValue',
@@ -177,7 +175,6 @@ export function getStaticProperties(
     case 'leads':
     case 'contacts':
     case 'organizations':
-    case 'deals':
     case 'clients':
     case 'legal':
       props = fieldDefsToFilterProperties(module);
@@ -196,8 +193,6 @@ export function getStaticProperties(
   }
   if (canView) return props;
   const moneyKeys = new Set([
-    'dealValue',
-    'expectedDealValue',
     'annualRevenue',
     'currency',
     'exchangeRate',
@@ -276,7 +271,7 @@ export function applyFilters<T extends Record<string, any>>(
       return item.to || item.recipient || '';
     }
     let v = item[key];
-    if (key === 'stage') v = item.status ?? item.stage; // deals use status, leads use stage
+    if (key === 'stage') v = item.status ?? item.stage; // some record types use status, leads use stage
     if (key === 'organization' && v && typeof v === 'object' && 'name' in v) v = (v as any).name;
     if (key === 'relatedService') {
       const rs = item.relatedService as { name?: string; _id?: string } | string | undefined;

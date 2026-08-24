@@ -114,7 +114,7 @@ interface EmailAccount {
 }
 
 export interface CrmRecipientMatch {
-  module: "leads" | "contacts" | "clients" | "deals";
+  module: "leads" | "contacts" | "clients";
   entityId: string;
   label: string;
   email: string;
@@ -145,7 +145,6 @@ function mapComposerModuleToRelatedType(moduleRaw: string): string | null {
   const x = (moduleRaw || "").trim().toLowerCase();
   if (x === "leads" || x === "lead") return "Lead";
   if (x === "contacts" || x === "contact") return "Contact";
-  if (x === "deals" || x === "deal") return "Deal";
   if (x === "clients" || x === "client") return "Client";
   if (x === "organizations" || x === "organization") return "Organization";
   return null;
@@ -1093,7 +1092,7 @@ export default function GlobalEmailComposer() {
     replyThreadMailbox?.accountId,
   ]);
 
-  /** Prefer the From mailbox last used for this lead/contact/deal (or recipient). */
+  /** Prefer the From mailbox last used for this lead/contact (or recipient). */
   useEffect(() => {
     if (!isOpen || replyToInboxEmailId || userPickedFromRef.current) return;
     if (!suggestedMailbox) return;
@@ -1267,7 +1266,6 @@ export default function GlobalEmailComposer() {
         if (
           eid &&
           (mod === "leads" ||
-            mod === "deals" ||
             mod === "contacts" ||
             mod === "organizations")
         ) {
@@ -2979,11 +2977,9 @@ export default function GlobalEmailComposer() {
                                 {[
                                   m.module === "leads"
                                     ? "Lead"
-                                    : m.module === "deals"
-                                      ? "Deal"
-                                      : m.module === "contacts"
-                                        ? "Contact"
-                                        : "Client",
+                                    : m.module === "contacts"
+                                      ? "Contact"
+                                      : "Client",
                                   m.label,
                                   m.email,
                                 ].join(" · ")}
@@ -3682,17 +3678,13 @@ export default function GlobalEmailComposer() {
                   can build a subject and body from the linked lead or contact
                   (including LinkedIn post context when captured). Otherwise email
                   works as usual with templates and snippets. Templates fill from
-                  the linked CRM record (deal, lead, contact, …)—for example{" "}
+                  the linked CRM record (lead, contact, …)—for example{" "}
                   <code className="rounded bg-white px-1 py-0.5 font-mono text-xs text-[var(--text-main)] ring-1 ring-[var(--border-color)]">
                     {"{{firstName}}"}
                   </code>
                   ,{" "}
                   <code className="rounded bg-white px-1 py-0.5 font-mono text-xs text-[var(--text-main)] ring-1 ring-[var(--border-color)]">
                     {"{{companyName}}"}
-                  </code>
-                  ,{" "}
-                  <code className="rounded bg-white px-1 py-0.5 font-mono text-xs text-[var(--text-main)] ring-1 ring-[var(--border-color)]">
-                    {"{{dealTitle}}"}
                   </code>
                   . Optional fallback:{" "}
                   <code className="rounded bg-white px-1 py-0.5 font-mono text-xs text-[var(--text-main)] ring-1 ring-[var(--border-color)]">

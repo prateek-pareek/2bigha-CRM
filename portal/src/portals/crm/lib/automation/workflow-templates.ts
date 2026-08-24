@@ -291,30 +291,6 @@ export const WORKFLOW_CANVAS_TEMPLATES: WorkflowTemplatePreset[] = [
     },
   },
   {
-    id: "deal_opened_ae_alert",
-    name: "Deal email opened — AE task",
-    description:
-      "When a tracked deal email is opened, create a task for the AE. Trigger: Deal — tracked email opened.",
-    trigger: "deal_tracked_email_opened",
-    graph: {
-      nodes: [
-        {
-          id: "deal-task",
-          type: "wf_action",
-          action: {
-            type: "create_task",
-            title: "Prospect opened deal email",
-            body: "Review engagement and plan next step on the deal.",
-            dueInDays: 1,
-          },
-        },
-      ],
-      edges: [
-        { id: "d0", source: "__start__", target: "deal-task", branch: "default" },
-      ],
-    },
-  },
-  {
     id: "cadence_deliverability_3",
     name: "3-step cadence (deliverability)",
     description:

@@ -50,10 +50,10 @@ export async function queryDataIntelligence(
 }
 
 export const SUGGESTED_DATA_QUESTIONS = [
-  'How many leads and deals do we have in the last 30 days?',
+  'How many leads do we have in the last 30 days?',
   'Which leads have never been contacted?',
   'Search for leads at Acme Corp',
   'What needs my attention in the sales workspace today?',
-  'Find open deals in negotiation stage',
+  'Find open leads in negotiation stage',
   'Search PM issues about authentication',
 ];

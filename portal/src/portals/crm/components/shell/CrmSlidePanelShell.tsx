@@ -26,7 +26,7 @@ type CrmSlidePanelShellProps = {
 };
 
 /**
- * Shared right-rail offcanvas used by lead / contact / deal create panels.
+ * Shared right-rail offcanvas used by lead / contact create panels.
  * Layout follows CRMS Admin Kit (Dreams) — wide enough for 2-column forms.
  */
 export default function CrmSlidePanelShell({

@@ -619,7 +619,6 @@ export default function IntegrationsPage() {
                       }
                       options={[
                         { value: 'leads', label: 'Leads' },
-                        { value: 'deals', label: 'Deals' },
                         { value: 'contacts', label: 'Contacts' },
                         { value: 'all', label: 'Global (All Modules)' },
                       ]}
@@ -741,7 +740,6 @@ export default function IntegrationsPage() {
                       options={[
                         { value: 'crm', label: 'CRM reminders' },
                         { value: 'leads', label: 'Leads' },
-                        { value: 'deals', label: 'Deals' },
                         { value: 'contacts', label: 'Contacts' },
                         { value: 'all', label: 'Global (All Modules)' },
                       ]}

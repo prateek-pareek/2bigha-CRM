@@ -12,7 +12,6 @@ export default function OverviewDashboardPage() {
         ws,
         loading,
         error,
-        metrics,
         owner,
         windowFilter,
         compare,
@@ -43,9 +42,6 @@ export default function OverviewDashboardPage() {
               compare={compare}
               compareMode={compareMode}
               canViewRevenue={canViewRevenueForecast}
-              pipelineByStage={ws.pipelineByStage || []}
-              openDeals={metrics.openDeals}
-              pipelineValue={metrics.pipelineValue}
             />
           )}
         </div>
