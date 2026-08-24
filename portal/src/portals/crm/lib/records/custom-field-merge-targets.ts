@@ -47,7 +47,6 @@ const MERGEABLE_CORE_KEYS: Partial<Record<CrmModuleKey, string[]>> = {
     'address',
     'gender',
   ],
-  deals: ['title', 'stage', 'organization', 'dealOwner', 'nextStep', 'currency'],
   organizations: ['name', 'website', 'territory', 'industry', 'noOfEmployees', 'phone', 'email', 'address'],
   clients: ['name', 'email', 'phone', 'status'],
 };

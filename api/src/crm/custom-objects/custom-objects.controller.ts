@@ -25,7 +25,6 @@ export class CustomObjectTypesController {
     'settings:read',
     'leads:read',
     'contacts:read',
-    'deals:read',
     'organizations:read',
     'clients:read',
   )
@@ -40,7 +39,6 @@ export class CustomObjectTypesController {
     'settings:read',
     'leads:read',
     'contacts:read',
-    'deals:read',
     'organizations:read',
     'clients:read',
   )
@@ -83,7 +81,6 @@ export class CustomObjectRecordsController {
     'settings:read',
     'leads:read',
     'contacts:read',
-    'deals:read',
     'organizations:read',
     'clients:read',
   )
@@ -107,7 +104,6 @@ export class CustomObjectRecordsController {
     'settings:read',
     'leads:read',
     'contacts:read',
-    'deals:read',
     'organizations:read',
     'clients:read',
   )
@@ -119,7 +115,7 @@ export class CustomObjectRecordsController {
   }
 
   @Post(':objectTypeKey/records')
-  @Permissions('settings:write', 'leads:write', 'contacts:write', 'deals:write')
+  @Permissions('settings:write', 'leads:write', 'contacts:write')
   create(
     @Request() req: any,
     @Param('objectTypeKey') objectTypeKey: string,
@@ -132,7 +128,7 @@ export class CustomObjectRecordsController {
   }
 
   @Put(':objectTypeKey/records/:id')
-  @Permissions('settings:write', 'leads:write', 'contacts:write', 'deals:write')
+  @Permissions('settings:write', 'leads:write', 'contacts:write')
   update(
     @Param('objectTypeKey') objectTypeKey: string,
     @Param('id') id: string,
@@ -142,7 +138,7 @@ export class CustomObjectRecordsController {
   }
 
   @Delete(':objectTypeKey/records/:id')
-  @Permissions('settings:write', 'leads:write', 'contacts:write', 'deals:write')
+  @Permissions('settings:write', 'leads:write', 'contacts:write')
   remove(
     @Request() req: any,
     @Param('objectTypeKey') objectTypeKey: string,

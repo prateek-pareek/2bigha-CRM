@@ -30,10 +30,10 @@ export class Activity {
   content: string;
 
   @Prop({ type: Types.ObjectId })
-  relatedTo: Types.ObjectId; // ID of Lead, Deal, Contact, or Organization
+  relatedTo: Types.ObjectId; // ID of Lead, Contact, or Organization
 
   @Prop()
-  relatedType: string; // 'Lead', 'Deal', 'Contact', 'Organization'
+  relatedType: string; // 'Lead', 'Contact', 'Organization'
 
   @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   author: Types.ObjectId;
@@ -59,7 +59,7 @@ export class Activity {
     type: [
       {
         id: { type: Types.ObjectId, index: true },
-        type: { type: String }, // 'Lead', 'Contact', 'Organization', 'Deal', 'Client'
+        type: { type: String }, // 'Lead', 'Contact', 'Organization', 'Client'
       },
     ],
     default: [],
@@ -81,7 +81,7 @@ applyCrmSoftDeletePlugin(ActivitySchema);
 ActivitySchema.index({ isDeleted: 1, deletedAt: -1 });
 // Composite index for ultra-fast timeline queries
 ActivitySchema.index({ 'involvedEntities.id': 1, createdAt: -1 });
-// Compound index to speed up $lookup aggregations from CRM workspace (find last touch of a lead/deal)
+// Compound index to speed up $lookup aggregations from CRM workspace (find last touch of a lead)
 ActivitySchema.index({ relatedTo: 1, relatedType: 1, createdAt: -1 });
 // Non-unique because one inbound message may intentionally be linked to multiple CRM entities.
 // These indexes make sync-time and timeline deduplication fast without a risky data migration.

@@ -195,19 +195,19 @@ export class InboxAccountsController {
   }
 
   @Get('resolve-recipient')
-  @Permissions('leads:read', 'deals:read', 'contacts:read', 'dashboard:read')
+  @Permissions('leads:read', 'contacts:read', 'dashboard:read')
   resolveRecipient(@Query('email') email: string) {
     return this.inboxAccountsService.resolveRecipientEmail(email || '');
   }
 
   @Get('compose-recipient-search')
-  @Permissions('leads:read', 'deals:read', 'contacts:read', 'dashboard:read')
+  @Permissions('leads:read', 'contacts:read', 'dashboard:read')
   composeRecipientSearch(@Query('q') q: string) {
     return this.inboxAccountsService.searchComposeRecipients(q || '');
   }
 
   @Post('check-recipient-suppression')
-  @Permissions('inbox:read', 'leads:read', 'deals:read', 'contacts:read')
+  @Permissions('inbox:read', 'leads:read', 'contacts:read')
   checkRecipientSuppression(@Body() body: { emails?: string[] }) {
     return this.inboxAccountsService.checkRecipientSuppression(
       Array.isArray(body?.emails) ? body.emails : [],
@@ -215,7 +215,7 @@ export class InboxAccountsController {
   }
 
   @Get('suggested-send-from')
-  @Permissions('inbox:read', 'leads:read', 'deals:read', 'contacts:read')
+  @Permissions('inbox:read', 'leads:read', 'contacts:read')
   suggestedSendFrom(
     @Request() req: any,
     @Query('email') email: string,
@@ -243,7 +243,7 @@ export class InboxAccountsController {
   }
 
   @Post('send')
-  @Permissions('inbox:read', 'leads:write', 'deals:write', 'contacts:write')
+  @Permissions('inbox:read', 'leads:write', 'contacts:write')
   @UseInterceptors(
     FilesInterceptor('attachments', MAX_SEND_ATTACHMENT_COUNT, {
       storage: memoryStorage(),
@@ -316,7 +316,7 @@ export class InboxAccountsController {
   }
 
   @Post('send-bulk-smart')
-  @Permissions('inbox:read', 'leads:write', 'deals:write', 'contacts:write')
+  @Permissions('inbox:read', 'leads:write', 'contacts:write')
   sendBulkSmart(
     @Request() req: any,
     @Body()
@@ -324,7 +324,7 @@ export class InboxAccountsController {
       recipients: Array<{
         email: string;
         name?: string;
-        module?: 'leads' | 'contacts' | 'organizations' | 'deals' | 'clients';
+        module?: 'leads' | 'contacts' | 'organizations' | 'clients';
         entityId?: string;
       }>;
       subject?: string;
@@ -471,13 +471,13 @@ export class InboxAccountsController {
   }
 
   @Get(':id/send-limit-status')
-  @Permissions('inbox:read', 'leads:read', 'deals:read', 'contacts:read')
+  @Permissions('inbox:read', 'leads:read', 'contacts:read')
   getSendLimitStatus(@Request() req: any, @Param('id') id: string) {
     return this.inboxAccountsService.getSendLimitStatus(req.user.userId, id, req.user.email);
   }
 
   @Get('emails')
-  @Permissions('leads:read', 'deals:read', 'contacts:read', 'dashboard:read')
+  @Permissions('leads:read', 'contacts:read', 'dashboard:read')
   getInboxEmails(
     @Request() req: any,
     @Query('accountId') accountId?: string,
@@ -514,7 +514,6 @@ export class InboxAccountsController {
   @Get('emails/:emailId')
   @Permissions(
     'leads:read',
-    'deals:read',
     'contacts:read',
     'organizations:read',
     'dashboard:read',
@@ -622,7 +621,7 @@ export class InboxAccountsController {
    * No file data is stored on the server — the bytes stream from the provider to the browser.
    */
   @Get('emails/:emailId/attachments/:attachmentId')
-  @Permissions('dashboard:read', 'leads:read', 'deals:read', 'contacts:read')
+  @Permissions('dashboard:read', 'leads:read', 'contacts:read')
   async downloadAttachment(
     @Request() req: any,
     @Param('emailId') emailId: string,

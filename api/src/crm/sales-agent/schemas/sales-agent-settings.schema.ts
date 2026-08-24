@@ -29,9 +29,6 @@ export class SalesAgentSettings {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Pipeline' }], default: [] })
   enabledLeadPipelineIds: Types.ObjectId[];
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Pipeline' }], default: [] })
-  enabledDealPipelineIds: Types.ObjectId[];
-
   @Prop({ default: true })
   triggerOnLeadCreated: boolean;
 
@@ -60,7 +57,7 @@ export class SalesAgentSettings {
   @Prop({ default: true })
   resumeAfterApproval: boolean;
 
-  /** Stage names agents may move leads/deals to without approval. */
+  /** Stage names agents may move leads to without approval. */
   @Prop({ type: [String], default: [] })
   autoApproveStageNames: string[];
 

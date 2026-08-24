@@ -4,7 +4,7 @@ export const DATA_INTELLIGENCE_TOOLS: AnthropicToolDef[] = [
   {
     name: 'crm_search',
     description:
-      'Search CRM records by keyword: leads, deals, contacts, companies (organizations), clients, and platform opportunities. Use for “find X”, “who is Y”, record lookup.',
+      'Search CRM records by keyword: leads, contacts, companies (organizations), clients, and platform opportunities. Use for “find X”, “who is Y”, record lookup.',
     input_schema: {
       type: 'object',
       properties: {
@@ -19,7 +19,7 @@ export const DATA_INTELLIGENCE_TOOLS: AnthropicToolDef[] = [
   {
     name: 'crm_dashboard',
     description:
-      'CRM pipeline dashboard metrics: deal counts, lead counts, revenue, conversion trends for a time window.',
+      'CRM pipeline dashboard metrics: lead counts, conversion trends for a time window.',
     input_schema: {
       type: 'object',
       properties: {
@@ -42,7 +42,7 @@ export const DATA_INTELLIGENCE_TOOLS: AnthropicToolDef[] = [
   {
     name: 'crm_workspace',
     description:
-      'Rep workspace snapshot: attention items, tasks, pipeline deals, recent activity for the current user (or team if admin).',
+      'Rep workspace snapshot: attention items, tasks, recent activity for the current user (or team if admin).',
     input_schema: {
       type: 'object',
       properties: {
@@ -88,13 +88,6 @@ export function summarizeSearchSlice(data: Record<string, unknown>): unknown {
       'leadOwner',
       'status',
       'stage',
-    ]),
-    deals: pick(data.deals as unknown[], [
-      'name',
-      'stage',
-      'amount',
-      'dealOwner',
-      'organization',
     ]),
     contacts: pick(data.contacts as unknown[], [
       'firstName',

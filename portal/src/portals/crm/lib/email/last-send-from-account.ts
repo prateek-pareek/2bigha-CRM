@@ -1,6 +1,6 @@
 const LAST_SEND_FROM_ACCOUNT_KEY = "crm:last-send-from-account-id";
 
-/** Last From mailbox chosen in the CRM email composer (lead/contact/deal/inbox). */
+/** Last From mailbox chosen in the CRM email composer (lead/contact/inbox). */
 export function getLastSendFromAccountId(): string {
   if (typeof window === "undefined") return "";
   try {

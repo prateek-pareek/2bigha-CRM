@@ -3,7 +3,6 @@ export type BulkEmailModule =
   | "leads"
   | "contacts"
   | "organizations"
-  | "deals"
   | "clients";
 
 export type BulkEmailRecipient = {

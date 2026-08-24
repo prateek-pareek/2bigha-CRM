@@ -26,7 +26,7 @@ export default function LazyGlobalSearch({
   }, [engaged]);
 
   const engage = () => setEngaged(true);
-  const label = placeholder || "Search companies, contacts, deals…";
+  const label = placeholder || "Search companies, contacts, leads…";
 
   if (engaged) {
     return (

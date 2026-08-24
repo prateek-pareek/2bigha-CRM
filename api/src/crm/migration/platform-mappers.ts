@@ -1,7 +1,6 @@
 import {
   CanonicalActivity,
   CanonicalAssociation,
-  CanonicalDeal,
   CanonicalOrganization,
   CanonicalPerson,
   CanonicalRecord,
@@ -61,7 +60,6 @@ function normalizeObjectType(
   if (!raw) return undefined;
   const s = raw.toLowerCase();
   if (/compan|org|account/.test(s)) return 'organizations';
-  if (/deal|opportunit/.test(s)) return 'deals';
   if (/lead/.test(s)) return 'leads';
   if (/contact|person|people/.test(s)) return 'contacts';
   if (ASSOCIATION_OBJECT_TYPES.includes(raw as CrmAssociationObjectType)) {
@@ -172,15 +170,6 @@ export function mapOrganization(
         'Associated Contact IDs',
         'Contact IDs',
         'Associated Contacts',
-      ),
-    ),
-    relatedDealExternalIds: splitIds(
-      pick(
-        row,
-        'relatedDealExternalIds',
-        'Associated Deal IDs',
-        'Deal IDs',
-        'Opportunity IDs',
       ),
     ),
   };
@@ -307,15 +296,6 @@ export function mapPerson(
         'Related Contact IDs',
       ),
     ),
-    relatedDealExternalIds: splitIds(
-      pick(
-        row,
-        'relatedDealExternalIds',
-        'Associated Deal IDs',
-        'Deal IDs',
-        'Opportunity IDs',
-      ),
-    ),
     relatedLeadExternalIds: splitIds(
       pick(row, 'relatedLeadExternalIds', 'Associated Lead IDs', 'Lead IDs'),
     ),
@@ -359,156 +339,6 @@ export function mapPerson(
   }
 
   return person;
-}
-
-export function mapDeal(
-  row: Row,
-  platform: CrmMigrationPlatform,
-): CanonicalDeal | null {
-  const title =
-    pick(
-      row,
-      'title',
-      'Deal Name',
-      'Deal name',
-      'Opportunity Name',
-      'Name',
-      'name',
-      'Subject',
-    ) || '';
-  if (!title) return null;
-
-  const externalId = pick(
-    row,
-    'externalId',
-    'recordId',
-    'Deal ID',
-    'Opportunity ID',
-    'OpportunityId',
-    'Id',
-    'id',
-    'Record ID',
-  );
-
-  const primaryOrg = pick(
-    row,
-    'organizationExternalId',
-    'hubspotCompanyId',
-    'Associated Company ID',
-    'AccountId',
-    'Account ID',
-    'Company ID',
-  );
-  const orgIds = [
-    ...new Set([
-      ...(primaryOrg ? [primaryOrg] : []),
-      ...splitIds(
-        pick(
-          row,
-          'organizationExternalIds',
-          'Associated Company IDs',
-          'Company IDs',
-        ),
-      ),
-    ]),
-  ];
-  const primaryContact = pick(
-    row,
-    'contactExternalId',
-    'hubspotContactId',
-    'Associated Contact ID',
-    'ContactId',
-    'Contact ID',
-    'Primary Contact ID',
-  );
-  const contactIds = [
-    ...new Set([
-      ...(primaryContact ? [primaryContact] : []),
-      ...splitIds(
-        pick(
-          row,
-          'contactExternalIds',
-          'Associated Contact IDs',
-          'Contact IDs',
-        ),
-      ),
-    ]),
-  ];
-
-  const deal: CanonicalDeal = {
-    externalId,
-    title,
-    dealValue: num(
-      pick(
-        row,
-        'dealValue',
-        'Amount',
-        'Deal Amount',
-        'Value',
-        'Opportunity Amount',
-      ),
-    ),
-    stage: pick(
-      row,
-      'stage',
-      'Stage',
-      'Deal Stage',
-      'Pipeline Stage',
-      'Status',
-    ),
-    probability: num(pick(row, 'probability', 'Probability', 'Win Probability')),
-    organizationName: pick(
-      row,
-      'organization',
-      'organizationName',
-      'Company',
-      'Company Name',
-      'Account Name',
-      'Associated Company',
-    ),
-    organizationExternalId: primaryOrg || orgIds[0],
-    organizationExternalIds: orgIds,
-    contactEmail: pick(
-      row,
-      'contactEmail',
-      'Contact Email',
-      'Associated Contact Email',
-      'Email',
-    ),
-    contactExternalId: primaryContact || contactIds[0],
-    contactExternalIds: contactIds,
-    leadExternalId: pick(row, 'leadExternalId', 'Lead ID', 'LeadId'),
-    ownerLabel: pick(
-      row,
-      'ownerLabel',
-      'dealOwner',
-      'Owner',
-      'Deal owner',
-      'Opportunity Owner',
-    ),
-    expectedClosureDate: pick(
-      row,
-      'expectedClosureDate',
-      'Close Date',
-      'Closing Date',
-      'Expected Close Date',
-    ),
-    closedDate: pick(row, 'closedDate', 'Closed Date', 'Actual Close Date'),
-    currency: pick(row, 'currency', 'Currency', 'Deal Currency'),
-    nextStep: pick(row, 'nextStep', 'Next Step', 'Next Steps'),
-  };
-
-  if (externalId) {
-    const key =
-      platform === 'hubspot'
-        ? 'hubspot_deal_id'
-        : platform === 'salesforce'
-          ? 'salesforce_opportunity_id'
-          : `${platform}_deal_id`;
-    deal.customFields = { [key]: externalId };
-  }
-
-  return deal;
 }
 
 export function mapActivity(
@@ -569,11 +399,9 @@ export function mapActivity(
     'Record ID (associated)',
     'Contact ID',
     'Company ID',
-    'Deal ID',
     'Lead ID',
     'Associated Contact ID',
     'Associated Company ID',
-    'Associated Deal ID',
   );
 
   const relatedLinks: CanonicalActivity['relatedLinks'] = [];
@@ -586,11 +414,9 @@ export function mapActivity(
   for (const [field, type] of [
     ['relatedContactExternalIds', 'contacts'],
     ['relatedOrganizationExternalIds', 'organizations'],
-    ['relatedDealExternalIds', 'deals'],
     ['relatedLeadExternalIds', 'leads'],
     ['Associated Contact IDs', 'contacts'],
     ['Associated Company IDs', 'organizations'],
-    ['Associated Deal IDs', 'deals'],
   ] as const) {
     for (const id of splitIds(pick(row, field))) {
       if (!relatedLinks.some((l) => l.externalId === id)) {
@@ -626,7 +452,6 @@ export function mapActivity(
       'Associated Name',
       'Contact Name',
       'Company Name',
-      'Deal Name',
     ),
     relatedLinks,
     authorLabel: pick(row, 'authorLabel', 'Created By', 'Owner', 'Author'),
@@ -756,9 +581,6 @@ export function mapRowToCanonical(
     case 'leads':
       canonical = mapPerson(mapped, platform, 'leads');
       break;
-    case 'deals':
-      canonical = mapDeal(mapped, platform);
-      break;
     case 'associations':
       canonical = mapAssociation(mapped, platform);
       break;
@@ -787,7 +609,6 @@ export function targetFieldsForEntity(
         key: 'relatedOrganizationExternalIds',
         label: 'Related company IDs (list)',
       },
-      { key: 'relatedDealExternalIds', label: 'Related deal IDs (list)' },
       { key: 'relatedEmail', label: 'Related contact email' },
       { key: 'durationSeconds', label: 'Duration (seconds)' },
       { key: 'direction', label: 'Call direction' },
@@ -811,7 +632,6 @@ export function targetFieldsForEntity(
         { key: 'industry', label: 'Industry' },
         { key: 'territory', label: 'Territory / Country' },
         { key: 'relatedContactExternalIds', label: 'Related contact IDs' },
-        { key: 'relatedDealExternalIds', label: 'Related deal IDs' },
         { key: 'ownerLabel', label: 'Owner' },
       ];
     case 'contacts':
@@ -829,7 +649,6 @@ export function targetFieldsForEntity(
           label: 'All source company IDs (list)',
         },
         { key: 'relatedContactExternalIds', label: 'Related contact IDs' },
-        { key: 'relatedDealExternalIds', label: 'Related deal IDs' },
         { key: 'externalId', label: 'Source contact/lead ID' },
         { key: 'linkedinUrl', label: 'LinkedIn URL' },
         { key: 'source', label: 'Lead source' },
@@ -852,31 +671,10 @@ export function targetFieldsForEntity(
           label: 'All source company IDs (list)',
         },
         { key: 'relatedContactExternalIds', label: 'Related contact IDs' },
-        { key: 'relatedDealExternalIds', label: 'Related deal IDs' },
         { key: 'externalId', label: 'Source contact/lead ID' },
         { key: 'status', label: 'Status' },
         { key: 'stage', label: 'Stage' },
         { key: 'ownerLabel', label: 'Owner' },
-      ];
-    case 'deals':
-      return [
-        { key: 'title', label: 'Deal title' },
-        { key: 'externalId', label: 'Source deal ID' },
-        { key: 'dealValue', label: 'Value' },
-        { key: 'stage', label: 'Stage' },
-        { key: 'organization', label: 'Company name' },
-        { key: 'organizationExternalId', label: 'Primary source company ID' },
-        {
-          key: 'organizationExternalIds',
-          label: 'All source company IDs (list)',
-        },
-        { key: 'contactEmail', label: 'Primary contact email' },
-        { key: 'contactExternalId', label: 'Primary source contact ID' },
-        { key: 'contactExternalIds', label: 'All source contact IDs (list)' },
-        { key: 'leadExternalId', label: 'Source lead ID' },
-        { key: 'ownerLabel', label: 'Owner' },
-        { key: 'expectedClosureDate', label: 'Close date' },
-        { key: 'currency', label: 'Currency' },
       ];
     case 'associations':
       return [
@@ -938,7 +736,7 @@ export function suggestMapping(
       'id',
       'contactid',
       'leadid',
-      'dealid',
+      'objectid',
       'opportunityid',
       'accountid',
       'companyid',
@@ -954,31 +752,14 @@ export function suggestMapping(
     territory: ['territory', 'country', 'billingcountry'],
     source: ['source', 'leadsource', 'originalsource'],
     status: ['status', 'leadstatus', 'lifecyclestage', 'taskstatus', 'callstatus'],
-    stage: ['stage', 'dealstage', 'pipelinestage'],
+    stage: ['stage', 'pipelinestage'],
     ownerLabel: [
       'owner',
       'ownername',
       'contactowner',
-      'dealowner',
       'companyowner',
     ],
-    title: ['title', 'dealname', 'opportunityname', 'name', 'subject', 'calltitle'],
-    dealValue: ['dealvalue', 'amount', 'value', 'opportunityamount'],
-    probability: ['probability', 'winprobability'],
-    contactEmail: ['contactemail', 'associatedcontactemail', 'email'],
-    contactExternalId: [
-      'associatedcontactid',
-      'contactid',
-      'hubspotcontactid',
-      'primarycontactid',
-    ],
-    contactExternalIds: [
-      'contactexternalids',
-      'associatedcontactids',
-      'contactids',
-    ],
-    expectedClosureDate: ['closedate', 'closingdate', 'expectedclosedate'],
-    currency: ['currency', 'dealcurrency'],
+    title: ['title', 'name', 'subject', 'calltitle'],
     content: [
       'content',
       'body',
@@ -1002,7 +783,6 @@ export function suggestMapping(
       'associatedrecordid',
       'contactid',
       'companyid',
-      'dealid',
     ],
     relatedEmail: ['relatedemail', 'contactemail', 'email'],
     relatedName: ['relatedname', 'associatedname', 'contactname'],
@@ -1049,12 +829,6 @@ export function suggestMapping(
       'associatedcontactids',
       'contactids',
     ],
-    relatedDealExternalIds: [
-      'relateddealexternalids',
-      'associateddealids',
-      'dealids',
-      'opportunityids',
-    ],
     relatedOrganizationExternalIds: [
       'relatedorganizationexternalids',
       'associatedcompanyids',
@@ -1084,36 +858,36 @@ export const PLATFORM_META: Record<
   hubspot: {
     label: 'HubSpot',
     description:
-      'Import companies, contacts, deals, notes/calls/emails, plus association exports so links match HubSpot.',
+      'Import companies, contacts, notes/calls/emails, plus association exports so links match HubSpot.',
     recommendedOrder:
-      'Companies → Contacts → Leads → Deals → Notes/Calls/Emails → Associations',
+      'Companies → Contacts → Leads → Notes/Calls/Emails → Associations',
   },
   salesforce: {
     label: 'Salesforce',
     description:
-      'Import Accounts, Contacts, Leads, Opportunities, Tasks/Events, and relationship edges.',
+      'Import Accounts, Contacts, Leads, Tasks/Events, and relationship edges.',
     recommendedOrder:
-      'Accounts → Contacts → Leads → Opportunities → Activities → Associations',
+      'Accounts → Contacts → Leads → Activities → Associations',
   },
   zoho: {
     label: 'Zoho CRM',
     description:
-      'Import Accounts, Contacts, Leads, Deals, Notes/Calls, and related lists.',
+      'Import Accounts, Contacts, Leads, Notes/Calls, and related lists.',
     recommendedOrder:
-      'Accounts → Contacts → Leads → Deals → Notes/Calls → Associations',
+      'Accounts → Contacts → Leads → Notes/Calls → Associations',
   },
   pipedrive: {
     label: 'Pipedrive',
     description:
-      'Import Organizations, Persons, Deals, Activities, and participant links.',
+      'Import Organizations, Persons, Activities, and participant links.',
     recommendedOrder:
-      'Organizations → Persons → Deals → Activities → Associations',
+      'Organizations → Persons → Activities → Associations',
   },
   custom: {
     label: 'Custom / Other CRM',
     description:
       'Map any CRM/database export. Preserve every source field as-is and recreate relationships via source IDs or an associations file.',
     recommendedOrder:
-      'Organizations → Contacts → Leads → Deals → Notes/Calls/Meetings/Emails → Associations',
+      'Organizations → Contacts → Leads → Notes/Calls/Meetings/Emails → Associations',
   },
 };

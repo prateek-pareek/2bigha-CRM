@@ -112,9 +112,6 @@ export class Contact {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Lead' }], default: [] })
   associatedLeads: Types.ObjectId[];
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Deal' }], default: [] })
-  associatedDeals: Types.ObjectId[];
-
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Organization' }], default: [] })
   associatedOrganizations: Types.ObjectId[];
 

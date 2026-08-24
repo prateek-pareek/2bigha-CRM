@@ -39,8 +39,6 @@ function crmEntityHref(entityType: string, entityId: string): string | null {
   switch (entityType) {
     case "Lead":
       return `/crm/leads/${id}`;
-    case "Deal":
-      return `/crm/deals/${id}`;
     case "Contact":
       return `/crm/contacts/${id}`;
     case "Organization":

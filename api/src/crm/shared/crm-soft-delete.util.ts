@@ -80,7 +80,6 @@ export function applyCrmSoftDeletePlugin(schema: MongooseSchema): void {
 /** Canonical trash entity types (API + UI). */
 export const CRM_TRASH_ENTITY_TYPES = [
   'leads',
-  'deals',
   'contacts',
   'clients',
   'organizations',
@@ -96,8 +95,6 @@ export const CRM_TRASH_ENTITY_TYPES = [
   'custom-fields',
   'saved-views',
   'service-offerings',
-  'payment-terms',
-  'portal-needs',
   'engagement-templates',
 ] as const;
 
@@ -105,7 +102,6 @@ export type CrmTrashEntityType = (typeof CRM_TRASH_ENTITY_TYPES)[number];
 
 export const CRM_TRASH_ENTITY_LABELS: Record<CrmTrashEntityType, string> = {
   leads: 'Leads',
-  deals: 'Deals',
   contacts: 'Contacts',
   clients: 'Clients',
   organizations: 'Organizations',
@@ -121,8 +117,6 @@ export const CRM_TRASH_ENTITY_LABELS: Record<CrmTrashEntityType, string> = {
   'custom-fields': 'Custom fields',
   'saved-views': 'Saved views',
   'service-offerings': 'Service offerings',
-  'payment-terms': 'Payment terms',
-  'portal-needs': 'Portal needs',
   'engagement-templates': 'Engagement templates',
 };
 
@@ -144,8 +138,6 @@ export function trashItemTitle(
         str('email') ||
         'Untitled'
       );
-    case 'deals':
-      return str('name') || str('dealName') || 'Untitled deal';
     case 'clients':
     case 'organizations':
       return str('name') || str('email') || 'Untitled';
@@ -160,13 +152,10 @@ export function trashItemTitle(
     case 'segments':
     case 'saved-views':
     case 'service-offerings':
-    case 'payment-terms':
     case 'custom-fields':
     case 'proposal-blocks':
     case 'engagement-templates':
       return str('name') || str('title') || str('label') || 'Untitled';
-    case 'portal-needs':
-      return str('title') || str('summary') || 'Portal need';
     default:
       return 'Untitled';
   }

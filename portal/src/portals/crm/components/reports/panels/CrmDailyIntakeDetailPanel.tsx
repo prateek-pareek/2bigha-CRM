@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Briefcase, CalendarDays, Filter, Users } from "lucide-react";
+import { CalendarDays, Filter, Users } from "lucide-react";
 import type { BoardReportPayload } from "@/components/crm/reports/panels/CrmBoardInsightsPanel";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
@@ -53,8 +53,6 @@ function lastNDates(dates: string[], n: number): Set<string> {
 type Props = {
   days?: string;
   owner?: string;
-  /** When true, show deals intake; otherwise leads. */
-  entity?: "leads" | "deals";
   /** Optional preloaded board payload (skips fetch when present). */
   board?: BoardReportPayload | null;
   className?: string;
@@ -63,7 +61,6 @@ type Props = {
 export default function CrmDailyIntakeDetailPanel({
   days = "30",
   owner = "All",
-  entity = "leads",
   board: boardProp = null,
   className,
 }: Props) {
@@ -111,11 +108,8 @@ export default function CrmDailyIntakeDetailPanel({
 
   const rawRows: DailyIntakeRow[] = useMemo(() => {
     if (!board) return [];
-    if (entity === "deals") {
-      return Array.isArray(board.dealsDailyDetail) ? board.dealsDailyDetail : [];
-    }
     return Array.isArray(board.leadsDailyDetail) ? board.leadsDailyDetail : [];
-  }, [board, entity]);
+  }, [board]);
 
   const platforms = useMemo(
     () => uniqueSorted(rawRows.map((r) => r.platform || "Unknown")),
@@ -213,8 +207,8 @@ export default function CrmDailyIntakeDetailPanel({
       .sort((a, b) => b.count - a.count);
   }, [filteredRows]);
 
-  const entityLabel = entity === "deals" ? "Deals" : "Leads";
-  const entitySingular = entity === "deals" ? "deal" : "lead";
+  const entityLabel = "Leads";
+  const entitySingular = "lead";
 
   if (loading) {
     return (
@@ -303,7 +297,7 @@ export default function CrmDailyIntakeDetailPanel({
         <CrmKpiCard
           label={`${entityLabel} in view`}
           value={totalCount}
-          icon={entity === "deals" ? <Briefcase size={18} /> : <Users size={18} />}
+          icon={<Users size={18} />}
           sub={
             dayWindow === "all"
               ? "Selected period"

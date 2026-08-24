@@ -27,7 +27,7 @@ export class EmailCampaignRecipient {
   name?: string;
 
   @Prop({
-    enum: ['leads', 'contacts', 'organizations', 'deals', 'clients'],
+    enum: ['leads', 'contacts', 'organizations', 'clients'],
   })
   module?: string;
 

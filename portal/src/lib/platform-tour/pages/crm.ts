@@ -8,7 +8,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Sales workspace',
         description:
-          'Your daily CRM home—pipeline health, tasks due today, and shortcuts into leads and deals. Start here each morning to prioritise work.',
+          'Your daily CRM home—pipeline health, tasks due today, and shortcuts into leads. Start here each morning to prioritise work.',
         side: 'top',
       },
     ],
@@ -32,7 +32,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Unified inbox',
         description:
-          'Read and reply to email threads linked to leads, deals, and contacts. Assign conversations and log activity without leaving CRM.',
+          'Read and reply to email threads linked to leads and contacts. Assign conversations and log activity without leaving CRM.',
         side: 'top',
       },
     ],
@@ -44,7 +44,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'CRM notifications',
         description:
-          'Mentions, deal stage changes, task reminders, and assignment alerts for sales activity—all in one feed.',
+          'Mentions, lead stage changes, task reminders, and assignment alerts for sales activity—all in one feed.',
         side: 'top',
       },
     ],
@@ -56,7 +56,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Virtual office',
         description:
-          'See who is online, start quick huddles, and collaborate with the team in real time.',
+          'See who is online and jump into meeting links with the team in real time.',
         side: 'top',
       },
     ],
@@ -80,7 +80,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Leads',
         description:
-          'Inbound prospects land here. Filter by stage, owner, or source; bulk-assign; and convert qualified leads into deals or clients.',
+          'Inbound prospects land here. Filter by stage, owner, or source; bulk-assign; and convert qualified leads into clients.',
         side: 'top',
       },
     ],
@@ -92,7 +92,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Client record',
         description:
-          'Active customer profile—projects, contacts, deals history, and client portal access. Use this as the single source for account management.',
+          'Active customer profile—projects, contacts, and history. Use this as the single source for account management.',
         side: 'top',
       },
     ],
@@ -104,31 +104,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Clients',
         description:
-          'Manage active customer accounts. Open a client to see related deals, contacts, and portal settings.',
-        side: 'top',
-      },
-    ],
-  },
-  {
-    prefix: '/crm/deals/',
-    steps: [
-      {
-        element: '[data-tour="main-content"]',
-        title: 'Deal record',
-        description:
-          'Full deal context—amount, stage, associated company and contacts, activity feed, and proposal links. Move stages as the opportunity progresses.',
-        side: 'top',
-      },
-    ],
-  },
-  {
-    prefix: '/crm/deals',
-    steps: [
-      {
-        element: '[data-tour="main-content"]',
-        title: 'Deals pipeline',
-        description:
-          'Kanban or list view of open opportunities. Drag deals across stages, filter by pipeline, and forecast revenue from expected close dates.',
+          'Manage active customer accounts. Open a client to see related contacts and activity.',
         side: 'top',
       },
     ],
@@ -164,7 +140,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Proposals & CVs',
         description:
-          'Generate and manage client proposals and team CVs. Link documents to deals and reuse templates.',
+          'Generate and manage client proposals and team CVs. Link documents to leads and reuse templates.',
         side: 'top',
       },
     ],
@@ -176,7 +152,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Services catalogue',
         description:
-          'Define what your company sells—service lines, packages, and pricing used when building proposals and deals.',
+          'Define what your company sells—service lines, packages, and pricing used when building proposals.',
         side: 'top',
       },
     ],
@@ -188,7 +164,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Company record',
         description:
-          'Account-level view—linked contacts, deals, and activity. Edit firmographics and customise the record layout.',
+          'Account-level view—linked contacts and activity. Edit firmographics and customise the record layout.',
         side: 'top',
       },
     ],
@@ -248,7 +224,7 @@ export const CRM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Tasks',
         description:
-          'CRM task board—Backlog, To Do, In Progress, and Done. Create follow-ups tied to leads, deals, or contacts.',
+          'CRM task board—Backlog, To Do, In Progress, and Done. Create follow-ups tied to leads or contacts.',
         side: 'top',
       },
     ],

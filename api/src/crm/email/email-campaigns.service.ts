@@ -399,7 +399,6 @@ export class EmailCampaignsService {
             | 'leads'
             | 'contacts'
             | 'organizations'
-            | 'deals'
             | 'clients',
           entityId: r.entityId ? String(r.entityId) : undefined,
         }));

@@ -14,7 +14,7 @@ import {
 import { CRM_API_URL } from '@/lib/crm/config';
 import { canViewCrmRevenue, getStoredUser } from '@/lib/suite/auth';
 
-export type CrmCardEntityId = 'leads' | 'deals' | 'contacts' | 'clients';
+export type CrmCardEntityId = 'leads' | 'contacts' | 'clients';
 
 export type CrmCardFieldDef = {
   key: string;
@@ -37,11 +37,6 @@ export const CRM_CARD_ENTITY_META: Record<
     name: 'Leads',
     customFieldsModule: 'leads',
     mockData: { primary: 'Lead Contact', secondary: 'Example Corporation', icon: 'LC' },
-  },
-  deals: {
-    name: 'Deals',
-    customFieldsModule: 'deals',
-    mockData: { primary: 'Enterprise Expansion', secondary: 'Sample Company', icon: '$' },
   },
   contacts: {
     name: 'Contacts',
@@ -71,8 +66,6 @@ const FIELD_ICONS: Record<string, LucideIcon> = {
   closeDate: Calendar,
   expectedClosureDate: Calendar,
   amount: DollarSign,
-  dealValue: DollarSign,
-  dealValueINR: DollarSign,
   stage: Tag,
   status: Tag,
   source: Globe,
@@ -107,20 +100,6 @@ export const CRM_CARD_BUILTIN_FIELDS: Record<CrmCardEntityId, CrmCardFieldDef[]>
     { key: 'createdAt', label: 'Created Date', icon: Calendar },
     { key: 'lastEmailActivityAt', label: 'Last Email Activity', icon: Calendar },
   ],
-  deals: [
-    { key: 'dealValue', label: 'Amount', icon: DollarSign },
-    { key: 'status', label: 'Stage', icon: Tag },
-    { key: 'probability', label: 'Probability', icon: Info },
-    { key: 'expectedClosureDate', label: 'Close Date', icon: Calendar },
-    { key: 'organization', label: 'Organization', icon: Building2 },
-    { key: 'priority', label: 'Priority', icon: Tag },
-    { key: 'createdAt', label: 'Created', icon: Calendar },
-    // Legacy keys saved from older Card Designer builds
-    { key: 'amount', label: 'Amount (legacy)', icon: DollarSign },
-    { key: 'stage', label: 'Stage (legacy)', icon: Tag },
-    { key: 'closeDate', label: 'Close Date (legacy)', icon: Calendar },
-    { key: 'account', label: 'Organization (legacy)', icon: Building2 },
-  ],
   contacts: [
     { key: 'email', label: 'Email', icon: Mail },
     { key: 'phone', label: 'Phone', icon: Phone },
@@ -144,7 +123,6 @@ export const CRM_CARD_BUILTIN_FIELDS: Record<CrmCardEntityId, CrmCardFieldDef[]>
 
 export const CRM_CARD_DEFAULT_FIELDS: Record<CrmCardEntityId, string[]> = {
   leads: ['email', 'organization', 'status'],
-  deals: ['dealValue', 'status', 'expectedClosureDate'],
   contacts: ['email', 'organization'],
   clients: ['industry', 'website'],
 };
@@ -213,19 +191,13 @@ function formatCustomFieldValue(value: unknown): string {
   return String(value);
 }
 
-/** Resolve a footer field value for kanban cards (leads & deals). */
+/** Resolve a footer field value for kanban cards. */
 export function resolveCrmCardFieldValue(
   entityId: CrmCardEntityId,
   record: Record<string, unknown>,
   fieldKey: string,
 ): string {
-  if (
-    fieldKey === 'amount' ||
-    fieldKey === 'dealValue' ||
-    fieldKey === 'dealValueINR' ||
-    fieldKey === 'annualRevenue' ||
-    fieldKey === 'expectedDealValue'
-  ) {
+  if (fieldKey === 'amount' || fieldKey === 'annualRevenue') {
     if (!canViewCrmRevenue(getStoredUser())) return '';
   }
 
@@ -255,36 +227,6 @@ export function resolveCrmCardFieldValue(
     }
     if (fieldKey === 'createdAt') return formatDate(record.createdAt as string);
     if (fieldKey === 'lastEmailActivityAt') return formatDate(record.lastEmailActivityAt as string);
-  }
-
-  if (entityId === 'deals') {
-    if (fieldKey === 'amount' || fieldKey === 'dealValue' || fieldKey === 'dealValueINR') {
-      const val =
-        Number(record.dealValueINR) ||
-        Number(record.dealValue) ||
-        (fieldKey === 'amount' ? Number(record.amount) : 0) ||
-        0;
-      return val ? `₹${val.toLocaleString('en-IN')}` : '';
-    }
-    if (fieldKey === 'stage' || fieldKey === 'status') {
-      return String(record.status || record.stage || '');
-    }
-    if (fieldKey === 'probability') {
-      const p = record.probability;
-      return p != null && p !== '' ? `${p}%` : '';
-    }
-    if (fieldKey === 'closeDate' || fieldKey === 'expectedClosureDate') {
-      const raw = (record.expectedClosureDate || record.closeDate) as string | undefined;
-      return raw ? formatDate(raw) : '';
-    }
-    if (fieldKey === 'account' || fieldKey === 'organization') {
-      const org = record.organization;
-      if (typeof org === 'string') return org;
-      if (org && typeof org === 'object' && 'name' in org) return String((org as { name?: string }).name || '');
-      return '';
-    }
-    if (fieldKey === 'priority') return String(record.priority || '');
-    if (fieldKey === 'createdAt') return formatDate(record.createdAt as string);
   }
 
   return '';

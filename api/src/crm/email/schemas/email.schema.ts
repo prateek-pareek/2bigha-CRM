@@ -21,7 +21,7 @@ export class Email {
   body: string;
 
   @Prop({ type: String, required: true })
-  module: string; // 'leads', 'deals', 'contacts'
+  module: string; // 'leads', 'contacts'
 
   @Prop({ type: Types.ObjectId, required: true })
   entityId: Types.ObjectId;

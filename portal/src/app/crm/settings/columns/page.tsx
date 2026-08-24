@@ -7,7 +7,6 @@ import { CRM_API_URL } from '@/lib/crm/config';
 
 const MODULES = [
  { id: 'leads', name: 'Leads', columns: ['Status', 'Source', 'Industry', 'Owner', 'Annual Revenue', 'Email', 'Phone'] },
- { id: 'deals', name: 'Deals', columns: ['Amount', 'Probability', 'Pipeline', 'Stage', 'Owner', 'Expected Closure'] },
  { id: 'organizations', name: 'Organizations', columns: ['Industry', 'Location', 'Team Size', 'Revenue', 'Owner'] },
  { id: 'contacts', name: 'Contacts', columns: ['Job Title', 'Organization', 'Email', 'Phone', 'Source'] }
 ];

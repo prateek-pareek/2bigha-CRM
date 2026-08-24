@@ -16,7 +16,6 @@ import {
   Organization,
   OrganizationDocument,
 } from '../records/schemas/organization.schema';
-import { Deal, DealDocument } from '../records/schemas/deal.schema';
 import { Client, ClientDocument } from '../records/schemas/client.schema';
 import {
   CrmObjectRecord,
@@ -61,8 +60,6 @@ export class AssociationsService {
     private contactModel: Model<ContactDocument>,
     @InjectModel(Organization.name, 'crmConnection')
     private organizationModel: Model<OrganizationDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Client.name, 'crmConnection')
     private clientModel: Model<ClientDocument>,
     @InjectModel(CrmObjectRecord.name, 'crmConnection')
@@ -400,7 +397,7 @@ export class AssociationsService {
   }> {
     const allModules = opts?.modules?.length
       ? opts.modules
-      : ['contacts', 'leads', 'deals', 'organizations', 'clients'];
+      : ['contacts', 'leads', 'organizations', 'clients'];
     const batchSize = Math.min(
       Math.max(opts?.batchSize ?? 500, 50),
       2000,
@@ -558,11 +555,6 @@ export class AssociationsService {
               associationType: 'contact_company',
             },
             {
-              field: 'associatedDeals',
-              toType: 'deals',
-              associationType: 'contact_deal',
-            },
-            {
               field: 'associatedContacts',
               toType: 'contacts',
               associationType: 'contact_contact',
@@ -584,30 +576,9 @@ export class AssociationsService {
               associationType: 'lead_contact',
             },
             {
-              field: 'associatedDeals',
-              toType: 'deals',
-              associationType: 'lead_deal',
-            },
-            {
               field: 'associatedLeads',
               toType: 'leads',
               associationType: 'lead_lead',
-            },
-          ],
-        };
-      case 'deals':
-        return {
-          model: this.dealModel,
-          fields: [
-            {
-              field: 'associatedContacts',
-              toType: 'contacts',
-              associationType: 'contact_deal',
-            },
-            {
-              field: 'associatedCompanies',
-              toType: 'organizations',
-              associationType: 'deal_company',
             },
           ],
         };
@@ -625,11 +596,6 @@ export class AssociationsService {
               toType: 'leads',
               associationType: 'lead_company',
             },
-            {
-              field: 'associatedDeals',
-              toType: 'deals',
-              associationType: 'deal_company',
-            },
           ],
         };
       case 'clients':
@@ -645,11 +611,6 @@ export class AssociationsService {
               field: 'associatedContacts',
               toType: 'contacts',
               associationType: 'client_contact',
-            },
-            {
-              field: 'associatedDeals',
-              toType: 'deals',
-              associationType: 'client_deal',
             },
             {
               field: 'associatedLeads',
@@ -732,8 +693,6 @@ export class AssociationsService {
         return this.contactModel;
       case 'organizations':
         return this.organizationModel;
-      case 'deals':
-        return this.dealModel;
       case 'clients':
         return this.clientModel;
       default:

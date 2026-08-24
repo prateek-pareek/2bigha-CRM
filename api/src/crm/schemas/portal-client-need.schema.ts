@@ -1,2 +1,0 @@
-/** @deprecated Re-export — import from `portal/schemas/` instead. */
-export * from '../portal/schemas/portal-client-need.schema';

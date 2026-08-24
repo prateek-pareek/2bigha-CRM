@@ -34,12 +34,6 @@ export const CRM_WORKSPACE_ACCESS_ITEMS: CrmDashboardAccessItem[] = [
     requiredPermission: "workspace-summary:read",
   },
   {
-    slug: "deals",
-    label: "Deals Dashboard",
-    href: "/crm/workspace/deals",
-    requiredPermission: "workspace-deals:read",
-  },
-  {
     slug: "prospecting",
     label: "Leads Dashboard",
     href: "/crm/workspace/prospecting",
@@ -99,7 +93,7 @@ export const CRM_REPORT_ACCESS_ITEMS: CrmDashboardAccessItem[] = [
   },
   {
     slug: "forecast",
-    label: "Deal Reports",
+    label: "Pipeline Insights",
     href: "/crm/reports/forecast",
     requiredPermission: "reports-forecast:read",
   },
@@ -108,13 +102,6 @@ export const CRM_REPORT_ACCESS_ITEMS: CrmDashboardAccessItem[] = [
     label: "Sales Health",
     href: "/crm/reports/forecast/health",
     requiredPermission: "reports-health:read",
-  },
-  {
-    slug: "revenue",
-    label: "Forecast",
-    href: "/crm/reports/forecast/revenue",
-    requiredPermission: "reports-revenue:read",
-    revenueOnly: true,
   },
 ];
 

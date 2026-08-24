@@ -5,7 +5,7 @@
 
 export type CrmFieldContext = 'form' | 'record';
 
-export type CrmModuleKey = 'leads' | 'deals' | 'contacts' | 'organizations' | 'clients' | 'legal';
+export type CrmModuleKey = 'leads' | 'contacts' | 'organizations' | 'clients' | 'legal';
 
 export interface CrmFieldDef {
   key: string;
@@ -38,29 +38,6 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   /** Add Lead "Group" (Seller/Buyer) — options managed in Settings. */
   { key: 'group', label: 'Group' },
   { key: 'notes', label: 'Notes' },
-  { key: 'createdAt', label: 'Created', recordOnly: true },
-];
-
-/** Core deal fields aligned with deal.schema + EditModal */
-export const DEAL_FIELD_DEFS: CrmFieldDef[] = [
-  { key: 'title', label: 'Deal Title', pinned: true },
-  { key: 'propertyListingId', label: 'Property Listing', pinned: true },
-  { key: 'pricingType', label: 'Pricing type', pinned: true },
-  { key: 'dealValue', label: 'Amount', pinned: true },
-  { key: 'contractMonths', label: 'Contract months' },
-  { key: 'pipeline', label: 'Pipeline', pinned: true },
-  { key: 'stage', label: 'Stage', pinned: true, recordOnly: true },
-  /** Derived from pipeline stage — not collected on create/edit forms. */
-  { key: 'probability', label: 'Probability (%)', recordOnly: true },
-  { key: 'organization', label: 'Organization', recordOnly: true },
-  { key: 'contactPerson', label: 'Contact Person', recordOnly: true },
-  { key: 'expectedClosureDate', label: 'Expected Close Date' },
-  { key: 'closedDate', label: 'Closed Date' },
-  { key: 'nextStep', label: 'Next Step' },
-  { key: 'expectedDealValue', label: 'Expected Deal Value' },
-  { key: 'dealOwner', label: 'Deal Owner' },
-  { key: 'currency', label: 'Currency' },
-  { key: 'exchangeRate', label: 'Exchange Rate' },
   { key: 'createdAt', label: 'Created', recordOnly: true },
 ];
 
@@ -142,9 +119,6 @@ export function getFieldDefsForModule(module: CrmModuleKey): CrmFieldDef[] {
   switch (module) {
     case 'leads':
       defs = LEAD_FIELD_DEFS;
-      break;
-    case 'deals':
-      defs = DEAL_FIELD_DEFS;
       break;
     case 'contacts':
       defs = CONTACT_FIELD_DEFS;

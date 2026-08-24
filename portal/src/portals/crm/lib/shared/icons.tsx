@@ -83,7 +83,6 @@ export const CrmNavIcon = {
   Applications: createCrmTiIcon("brand-airtable"),
   Contacts: createCrmTiIcon("user-up"),
   Companies: createCrmTiIcon("building-community"),
-  Deals: createCrmTiIcon("medal"),
   Legal: createCrmTiIcon("gavel"),
   Leads: createCrmTiIcon("chart-arcs"),
   Pipeline: createCrmTiIcon("timeline-event-exclamation"),

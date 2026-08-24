@@ -32,7 +32,7 @@ export default function SalesCopilotPage() {
       <SalesCopilotChat className="flex-1 min-h-0" />
 
       <p className="mt-3 shrink-0 text-center text-[11px] text-[var(--text-muted)]">
-        Sends, deal creation, and lead conversion require your approval. Lead creation and follow-up scheduling run immediately.
+        Sends and lead conversion require your approval. Lead creation and follow-up scheduling run immediately.
       </p>
     </div>
   );

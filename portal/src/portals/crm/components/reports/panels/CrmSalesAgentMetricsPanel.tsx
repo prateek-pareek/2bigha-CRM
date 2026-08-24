@@ -16,9 +16,7 @@ function recordHref(recordType: string, recordId: string) {
   const base =
     recordType === "Lead"
       ? "/crm/leads"
-      : recordType === "Deal"
-        ? "/crm/deals"
-        : "/crm/contacts";
+      : "/crm/contacts";
   return `${base}/${recordId}`;
 }
 

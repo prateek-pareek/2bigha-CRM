@@ -44,9 +44,9 @@ export class WorkflowsController {
     @Query('entityId') entityId?: string,
   ) {
     const et = String(entityType || '').trim();
-    if (!['Lead', 'Contact', 'Deal', 'Organization'].includes(et)) {
+    if (!['Lead', 'Contact', 'Organization'].includes(et)) {
       throw new BadRequestException(
-        'entityType must be Lead, Contact, Deal, or Organization',
+        'entityType must be Lead, Contact, or Organization',
       );
     }
     const eid = String(entityId || '').trim();
@@ -54,7 +54,7 @@ export class WorkflowsController {
       throw new BadRequestException('entityId is required');
     }
     return this.workflowsService.listPendingJobsForEntity(
-      et as 'Lead' | 'Contact' | 'Deal' | 'Organization',
+      et as 'Lead' | 'Contact' | 'Organization',
       eid,
     );
   }
@@ -322,11 +322,10 @@ export class WorkflowsController {
   async findOne(@Param('id') id: string) {
     const reserved = new Set([
       'lead-engagement-templates',
-      'deal-engagement-templates',
     ]);
     if (reserved.has(id)) {
       throw new BadRequestException(
-        'Use /crm/lead-engagement-templates or /crm/deal-engagement-templates',
+        'Use /crm/lead-engagement-templates',
       );
     }
     const w = await this.workflowsService.findOne(id);
@@ -354,9 +353,9 @@ export class WorkflowsController {
     },
   ) {
     const et = String(body.entityType || '').trim();
-    if (!['Lead', 'Contact', 'Deal', 'Organization'].includes(et)) {
+    if (!['Lead', 'Contact', 'Organization'].includes(et)) {
       throw new BadRequestException(
-        'entityType must be Lead, Contact, Deal, or Organization',
+        'entityType must be Lead, Contact, or Organization',
       );
     }
     const entityId = String(body.entityId || '').trim();
@@ -367,7 +366,7 @@ export class WorkflowsController {
     return this.workflowsService.enrollInWorkflow(
       id,
       {
-        entityType: et as 'Lead' | 'Contact' | 'Deal' | 'Organization',
+        entityType: et as 'Lead' | 'Contact' | 'Organization',
         entityId,
         force: body.force === true,
       },

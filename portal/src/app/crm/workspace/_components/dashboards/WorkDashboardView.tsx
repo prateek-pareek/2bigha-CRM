@@ -5,14 +5,12 @@ import {
   CRM_CHART_INFO,
   CRM_CHART_PRIMARY,
   CRM_CHART_SECONDARY,
-  CRM_CHART_SUCCESS,
   CRM_CHART_WARNING,
 } from "@/lib/crm/shared/chart-theme";
 import { type WorkspacePayload } from "../workspace-ui";
 import { DashSkeleton } from "./dashboardShared";
 import {
   WorkAnalyticsComboChart,
-  WorkDealsOverviewCard,
   WorkKpiTile,
   WorkloadMixAreaChart,
   WorkPipelineStatChart,
@@ -132,9 +130,6 @@ export default function WorkDashboardView({
   const followUpPending = ws.upcomingFollowUps?.totalPending ?? 0;
   const followUpOverdue =
     ws.upcomingFollowUps?.overdueCount ?? todayFocus?.overdueFollowUps ?? 0;
-  const nextStepMissing = ws.nextStepRequired?.length ?? 0;
-  const atRisk = ws.atRiskDeals?.length ?? 0;
-  const closingSoon = ws.dealsClosingSoon?.length ?? 0;
 
   const queueDonutRows = useMemo(
     () => [
@@ -151,10 +146,6 @@ export default function WorkDashboardView({
 
   const todayFocusRows = useMemo(
     () => [
-      {
-        name: "Deals to move",
-        value: Number(todayFocus?.dealsToMoveToday) || 0,
-      },
       {
         name: "Overdue follow-ups",
         value: Number(todayFocus?.overdueFollowUps) || followUpOverdue,
@@ -186,23 +177,13 @@ export default function WorkDashboardView({
       { name: "Work queue", value: queueCounts.total },
       { name: "Follow-ups", value: followUpPending },
       { name: "Tasks", value: taskCounts.total },
-      { name: "Next step", value: nextStepMissing },
-      { name: "At risk", value: atRisk },
-      { name: "Closing soon", value: closingSoon },
     ],
-    [
-      queueCounts.total,
-      followUpPending,
-      taskCounts.total,
-      nextStepMissing,
-      atRisk,
-      closingSoon,
-    ],
+    [queueCounts.total, followUpPending, taskCounts.total],
   );
 
   /** Hybrid analytics series — activity bars vs soft pressure area. */
   const analyticsRows = useMemo(() => {
-    const byDay = ws.dealsAddedByDay;
+    const byDay = ws.leadsAddedByDay;
     if (byDay && byDay.length >= 3) {
       return byDay.slice(-14).map((d, i, arr) => {
         const total = Number(d.total) || 0;
@@ -219,16 +200,7 @@ export default function WorkDashboardView({
       primary: r.value,
       secondary: Math.round(r.value * 0.55),
     }));
-  }, [ws.dealsAddedByDay, workloadMixRows]);
-
-  const pipelineDealCount = useMemo(
-    () =>
-      (ws.pipelineByStage || []).reduce(
-        (s, r) => s + (Number(r.count) || 0),
-        0,
-      ),
-    [ws.pipelineByStage],
-  );
+  }, [ws.leadsAddedByDay, workloadMixRows]);
 
   if (isTabLoading && !attention) {
     return <DashSkeleton rows={5} />;
@@ -286,12 +258,6 @@ export default function WorkDashboardView({
           sub={`${followUpPending} pending sends`}
           accent={CRM_CHART_INFO}
         />
-        <WorkKpiTile
-          label="Missing next step"
-          value={nextStepMissing}
-          sub="Open deals needing action"
-          accent={CRM_CHART_SUCCESS}
-        />
       </div>
 
       {/* Row: Workload analytics (hybrid) + Queue sources (donut) */}
@@ -315,8 +281,8 @@ export default function WorkDashboardView({
         </div>
       </div>
 
-      {/* Row: Today's focus + Task urgency + Deals overview */}
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      {/* Row: Today's focus + Task urgency */}
+      <div className="grid gap-4 lg:grid-cols-2">
         <WorkPipelineStatChart
           title="Today’s focus"
           subtitle="Live CRM priorities for this owner & window"
@@ -327,17 +293,11 @@ export default function WorkDashboardView({
           subtitle="Priority tasks by due status"
           rows={taskStatusRows}
         />
-        <WorkDealsOverviewCard
-          closingSoon={closingSoon}
-          atRisk={atRisk}
-          nextStepMissing={nextStepMissing}
-          totalPipeline={pipelineDealCount || closingSoon + atRisk + nextStepMissing}
-        />
       </div>
 
       <WorkloadMixAreaChart
         title="Workload overview"
-        subtitle="Queue, follow-ups, tasks, deals, and risk — focus chart then + / − to zoom"
+        subtitle="Queue, follow-ups, and tasks — focus chart then + / − to zoom"
         rows={workloadMixRows}
       />
     </div>

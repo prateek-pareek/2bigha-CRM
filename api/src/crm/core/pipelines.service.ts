@@ -7,7 +7,6 @@ import { DEFAULT_CONTRACT_PIPELINE_STAGES } from '../proposals/contract-pipeline
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 
 export type CrmPipelineType =
-  | 'deals'
   | 'leads'
   | 'proposals'
   | 'quotations'
@@ -37,12 +36,24 @@ export class PipelinesService implements OnModuleInit {
     return new this.pipelineModel(data).save();
   }
 
-  async findAll(type?: CrmPipelineType): Promise<Pipeline[]> {
+  async findAll(
+    type?: CrmPipelineType,
+    leadVertical?: 'property_listing' | 'property_management',
+  ): Promise<Pipeline[]> {
     const filter: Record<string, unknown> = {};
-    if (type === 'deals') {
-      filter.$or = [{ type: 'deals' }, { type: { $exists: false } }];
-    } else if (type === 'leads') {
+    if (type === 'leads') {
       filter.type = 'leads';
+      // Legacy lead pipelines created before this field existed have no leadVertical set;
+      // treat those as 'property_listing' so they don't silently disappear from either board.
+      if (leadVertical === 'property_management') {
+        filter.leadVertical = 'property_management';
+      } else if (leadVertical === 'property_listing') {
+        filter.$or = [
+          { leadVertical: 'property_listing' },
+          { leadVertical: { $exists: false } },
+          { leadVertical: null },
+        ];
+      }
     } else if (type === 'proposals') {
       filter.type = 'proposals';
     } else if (type === 'quotations') {
@@ -68,50 +79,50 @@ export class PipelinesService implements OnModuleInit {
   }
 
   async seedDefault() {
-    const dealCount = await this.pipelineModel.countDocuments({
-      $or: [{ type: 'deals' }, { type: { $exists: false } }],
-    });
-    if (dealCount === 0) {
-      await this.create({
-        name: 'Standard Sales',
-        type: 'deals',
-        categoryType: 'it_consulting',
-        isDefault: true,
-        stages: [
-          { name: 'Qualification', probability: 10, order: 1, isDefault: true },
-          {
-            name: 'Needs Analysis',
-            probability: 20,
-            order: 2,
-            isDefault: false,
-          },
-          { name: 'Proposal', probability: 50, order: 3, isDefault: false },
-          { name: 'Negotiation', probability: 80, order: 4, isDefault: false },
-          { name: 'Closed Won', probability: 100, order: 5, isDefault: false },
-          { name: 'Closed Lost', probability: 0, order: 6, isDefault: false },
-        ],
-      });
-    }
-    const leadCount = await this.pipelineModel.countDocuments({
+    // Leads split into two independently-customizable verticals: Property Listing and
+    // Property Management. Each gets its own seeded starter pipeline (stage names below
+    // are just a starting point — admins can rename/add/remove stages freely from
+    // CRM > Settings > Pipelines, same as any other pipeline).
+    const listingLeadCount = await this.pipelineModel.countDocuments({
       type: 'leads',
+      leadVertical: 'property_listing',
     });
-    if (leadCount === 0) {
+    if (listingLeadCount === 0) {
       await this.create({
-        name: 'Lead Qualification',
+        name: 'Property Listing Pipeline',
         type: 'leads',
-        categoryType: 'it_consulting',
+        leadVertical: 'property_listing',
+        categoryType: 'generic',
         isDefault: true,
         stages: [
           { name: 'New', probability: 5, order: 1, isDefault: true },
           { name: 'Contacted', probability: 15, order: 2, isDefault: false },
-          { name: 'Qualified', probability: 40, order: 3, isDefault: false },
-          {
-            name: 'Meeting Scheduled',
-            probability: 60,
-            order: 4,
-            isDefault: false,
-          },
-          { name: 'Converted', probability: 100, order: 5, isDefault: false },
+          { name: 'Site Visit Scheduled', probability: 35, order: 3, isDefault: false },
+          { name: 'Offer Made', probability: 60, order: 4, isDefault: false },
+          { name: 'Negotiation', probability: 80, order: 5, isDefault: false },
+          { name: 'Closed Won', probability: 100, order: 6, isDefault: false },
+          { name: 'Closed Lost', probability: 0, order: 7, isDefault: false },
+        ],
+      });
+    }
+
+    const managementLeadCount = await this.pipelineModel.countDocuments({
+      type: 'leads',
+      leadVertical: 'property_management',
+    });
+    if (managementLeadCount === 0) {
+      await this.create({
+        name: 'Property Management Pipeline',
+        type: 'leads',
+        leadVertical: 'property_management',
+        categoryType: 'generic',
+        isDefault: true,
+        stages: [
+          { name: 'New', probability: 5, order: 1, isDefault: true },
+          { name: 'Contacted', probability: 15, order: 2, isDefault: false },
+          { name: 'Agreement Sent', probability: 40, order: 3, isDefault: false },
+          { name: 'Agreement Signed', probability: 70, order: 4, isDefault: false },
+          { name: 'Onboarded', probability: 100, order: 5, isDefault: false },
           { name: 'Disqualified', probability: 0, order: 6, isDefault: false },
         ],
       });

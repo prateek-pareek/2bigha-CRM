@@ -7,7 +7,6 @@ import WorkspaceShell, {
 } from "../_components/WorkspaceShell";
 import FollowUpsPanel from "../_components/FollowUpsPanel";
 import TasksDuePanel from "../_components/TasksDuePanel";
-import NextStepPanel from "../_components/NextStepPanel";
 import { EmptyHs, HS_PANEL } from "../_components/workspace-ui";
 import { EmptyDash } from "../_components/dashboards/dashboardShared";
 import { CRM_PANEL } from "@/lib/crm/ui";
@@ -28,7 +27,7 @@ const CrmSalesAttention = dynamic(
 
 /**
  * Dedicated Action Queue page — same detailed sections that previously lived on
- * Work Dashboard (Work queue, Follow-ups, Tasks due, Next step), all together.
+ * Work Dashboard (Work queue, Follow-ups, Tasks due), all together.
  */
 export default function QueueDashboardPage() {
   return (
@@ -44,7 +43,6 @@ function ActionQueueContent({
   error,
   isTabLoading,
   hasAccess,
-  canViewRevenueForecast,
   owner,
   canSeeOwnerPicker,
   taskSearch,
@@ -64,8 +62,7 @@ function ActionQueueContent({
   if (
     !hasAccess("dashboard:read") &&
     !hasAccess("workspace-work:read") &&
-    !hasAccess("leads:read") &&
-    !hasAccess("deals:read")
+    !hasAccess("leads:read")
   ) {
     return (
       <div className={cn(HS_PANEL, "p-6")}>
@@ -148,14 +145,6 @@ function ActionQueueContent({
         renderedTasks={renderedTasks}
         setVisibleTaskCount={setVisibleTaskCount}
       />
-
-      {/* 4. Next step */}
-      {hasAccess("deals:read") ? (
-        <NextStepPanel
-          ws={ws}
-          canViewRevenueForecast={canViewRevenueForecast}
-        />
-      ) : null}
     </div>
   );
 }

@@ -182,12 +182,12 @@ export default function ReportsShell({ slug, onRefresh, children }: ReportsShell
         {/*
           Property filtering only flows into the Overview report's `/crm/dashboard`
           call (see ReportsShellContext.filters below) — every other report page
-          ignores it. Restricting the control to Overview avoids showing a "Deals"
+          ignores it. Restricting the control to Overview avoids showing a "Leads"
           field picker on Lead/Email/Forecast pages where it silently does nothing.
         */}
         {slug === "overview" && (
           <CRMFilterBar
-            module="deals"
+            module="leads"
             filters={filters}
             onChange={setFilters}
             onClear={() => setFilters([])}

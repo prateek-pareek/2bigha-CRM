@@ -25,6 +25,8 @@ export interface LeadCreatePanelProps {
   isOpen: boolean;
   onClose: () => void;
   initialPipelineId?: string;
+  /** Property Listing vs Property Management — scopes which pipelines are offered below. */
+  initialLeadVertical?: "property_listing" | "property_management";
   onSuccess?: () => void;
   /** Use `contact` for the same slide-panel UX on the Contacts page */
   entity?: CrmPersonEntity;
@@ -47,6 +49,7 @@ export default function LeadCreatePanel({
   isOpen,
   onClose,
   initialPipelineId = "",
+  initialLeadVertical = "property_listing",
   onSuccess,
   entity = "lead",
 }: LeadCreatePanelProps) {
@@ -58,6 +61,9 @@ export default function LeadCreatePanel({
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState<string>(initialPipelineId);
   const [selectedStage, setSelectedStage] = useState("");
+  const [leadVertical, setLeadVertical] = useState<"property_listing" | "property_management">(
+    initialLeadVertical,
+  );
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [layoutTick, setLayoutTick] = useState(0);
   const [showCustomize, setShowCustomize] = useState(false);
@@ -175,6 +181,26 @@ export default function LeadCreatePanel({
   useEffect(() => {
     if (isOpen && initialPipelineId) setSelectedPipeline(initialPipelineId);
   }, [isOpen, initialPipelineId]);
+
+  useEffect(() => {
+    if (isOpen) setLeadVertical(initialLeadVertical);
+  }, [isOpen, initialLeadVertical]);
+
+  // Keep the selected pipeline in sync with the chosen vertical — a Property Listing
+  // pipeline should never end up attached to a Property Management lead or vice versa.
+  useEffect(() => {
+    if (entity !== "lead" || !pipelines.length) return;
+    const matches = (p: any) =>
+      leadVertical === "property_management"
+        ? p.leadVertical === "property_management"
+        : p.leadVertical === "property_listing" || !p.leadVertical;
+    const current = pipelines.find((p) => p._id === selectedPipeline);
+    if (current && matches(current)) return;
+    const forVertical = pipelines.filter(matches);
+    if (forVertical.length) {
+      setSelectedPipeline((forVertical.find((p) => p.isDefault) || forVertical[0])._id);
+    }
+  }, [leadVertical, pipelines, entity, selectedPipeline]);
 
   useEffect(() => {
     const handler = () => fetchCustomFields();
@@ -432,6 +458,7 @@ export default function LeadCreatePanel({
       clientId:
         entity === "lead" && selectedClient?.kind === "client" ? selectedClient._id : undefined,
       leadCategory: entity === "lead" ? data.leadCategory : undefined,
+      leadVertical: entity === "lead" ? leadVertical : undefined,
       group: entity === "lead" ? data.group : undefined,
       notes: entity === "lead" ? data.notes : undefined,
       leadIntents: entity === "lead" && selectedIntents.length ? selectedIntents : undefined,
@@ -656,6 +683,8 @@ export default function LeadCreatePanel({
               setSelectedPipeline={setSelectedPipeline}
               selectedStage={selectedStage}
               setSelectedStage={setSelectedStage}
+              leadVertical={leadVertical}
+              setLeadVertical={setLeadVertical}
               variant="stack"
               isAdmin={isAdmin}
               onDeleteCustom={(fieldId) => handleDeleteField(fieldId)}

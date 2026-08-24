@@ -25,7 +25,6 @@ export class AssociationsController {
     'leads:read',
     'contacts:read',
     'organizations:read',
-    'deals:read',
     'clients:read',
     'settings:read',
   )
@@ -38,7 +37,6 @@ export class AssociationsController {
     'leads:read',
     'contacts:read',
     'organizations:read',
-    'deals:read',
     'clients:read',
     'settings:read',
   )
@@ -61,7 +59,6 @@ export class AssociationsController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
     'clients:write',
     'settings:write',
   )
@@ -78,7 +75,6 @@ export class AssociationsController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
     'clients:write',
     'settings:write',
   )

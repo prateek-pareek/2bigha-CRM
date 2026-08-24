@@ -39,6 +39,8 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'relatedService', label: 'Related service' },
   /** Shown when editing a lead (create panel omits this field; API sets owner on create). */
   { key: 'leadOwner', label: 'Lead Owner' },
+  /** Determines which Pipeline options (Property Listing vs Property Management) are offered below. */
+  { key: 'leadVertical', label: 'Lead Vertical', pinned: true },
   { key: 'pipeline', label: 'Pipeline', pinned: true },
   { key: 'stage', label: 'Stage' },
   { key: 'status', label: 'Status (legacy)' },

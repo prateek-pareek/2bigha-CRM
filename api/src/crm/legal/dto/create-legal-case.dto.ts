@@ -106,11 +106,6 @@ export class CreateLegalCaseDto {
   associatedLeads?: string[];
 
   @IsOptional()
-  @IsArray()
-  @IsMongoId({ each: true })
-  associatedDeals?: string[];
-
-  @IsOptional()
   @IsObject()
   customFields?: Record<string, unknown>;
 

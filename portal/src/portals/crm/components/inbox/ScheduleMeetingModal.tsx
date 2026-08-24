@@ -11,7 +11,6 @@ import { DatePickerField, formatDateOnly } from '@/components/ui/date-picker';
 function relatedTypeFromModule(module: string): string {
   const m = (module || "").toLowerCase();
   if (m === "leads" || m === "lead") return "Lead";
-  if (m === "deals" || m === "deal") return "Deal";
   if (m === "contacts" || m === "contact") return "Contact";
   if (m === "clients" || m === "client") return "Client";
   if (m === "organizations" || m === "organization") return "Organization";

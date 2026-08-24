@@ -1,7 +1,7 @@
 import { isHrmsManagementAdmin, isPlatformTechServicesAdmin } from '../../auth/hrms-management-admin.util';
 import { isPlatformSuperAdminUser } from '../../auth/platform-super-admin.util';
 
-/** Deal amounts / annual revenue / pipeline money — ceo@mathionix.com only. */
+/** Revenue amounts / annual revenue / pipeline money — ceo@mathionix.com only. */
 export function canViewCrmRevenue(
   user: { email?: unknown } | null | undefined,
 ): boolean {
@@ -10,10 +10,6 @@ export function canViewCrmRevenue(
 
 /** Scalar financial fields stripped from CRM API payloads for non–super-admins. */
 export const CRM_REVENUE_SCALAR_KEYS = [
-  'dealValue',
-  'expectedDealValue',
-  'dealValueINR',
-  'dealValueUSD',
   'annualRevenue',
   'pipelineValue',
   'grossValueINR',
@@ -33,7 +29,6 @@ export const CRM_REVENUE_SCALAR_KEYS = [
   'monthlyGross',
   'dailyRate',
   'independentInvested',
-  'dealLinkedInvested',
   'salaryInvested',
   'profit',
   'spent',
@@ -163,7 +158,7 @@ export function hasCrmAdminFromDbUser(dbUser?: any): boolean {
 }
 
 /**
- * Full CRM data scope (edit any lead/deal/contact) — aligns with RbacGuard admin override.
+ * Full CRM data scope (edit any lead/contact) — aligns with RbacGuard admin override.
  * Pass `user.crmDbUser` when set by RbacGuard after CRM user lookup.
  */
 export function hasCrmFullDataAccess(user?: any): boolean {
@@ -173,7 +168,6 @@ export function hasCrmFullDataAccess(user?: any): boolean {
   const perms = jwtCrmPermissionSet(user);
   return (
     perms.has('leads:read:all') ||
-    perms.has('deals:read:all') ||
     perms.has('contacts:read:all')
   );
 }

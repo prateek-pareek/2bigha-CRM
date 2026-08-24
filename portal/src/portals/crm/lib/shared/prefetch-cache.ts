@@ -61,7 +61,7 @@ export function notifyCrmDataChanged(detail?: { scope?: string }): void {
 }
 
 export const crmCacheKeys = {
-  pipelines: (type: "leads" | "deals") => `pipelines:${type}`,
+  pipelines: (type: "leads") => `pipelines:${type}`,
   attention: (owner: string) => `attention:${owner || "All"}`,
   workspace: (owner: string, window: string, sections: string) =>
     `workspace:v5:${owner}:${window}:${sections}`,
@@ -90,11 +90,6 @@ export const crmCacheKeys = {
     const so = `|so=${opts?.sortOrder ?? "desc"}`;
     return `contacts:p=${opts?.page ?? 1}|ps=${opts?.pageSize ?? 25}|q=${opts?.search ?? ""}${f}${e}${m}${sb}${so}`;
   },
-  dealsList: (
-    pipelineId: string,
-    opts?: { page?: number; pageSize?: number; unassigned?: boolean },
-  ) =>
-    `deals:${pipelineId || "__all__"}|p=${opts?.page ?? 1}|ps=${opts?.pageSize ?? 25}|ua=${opts?.unassigned ? 1 : 0}`,
 };
 
 export function runWhenIdle(work: () => void, timeoutMs = 1200): () => void {
@@ -126,22 +121,19 @@ export function defaultWorkspaceOwner(
 }
 
 export function resolveActivePipelineId(
-  type: "leads" | "deals",
+  type: "leads",
   pipelines: Array<{ _id: string; isDefault?: boolean }>,
   user?: {
     assignedLeadsPipeline?: string;
-    assignedDealsPipeline?: string;
   } | null,
 ): { pipelineId: string; isDefault: boolean } {
   if (!pipelines.length) return { pipelineId: "", isDefault: false };
-  const assigned =
-    type === "leads" ? user?.assignedLeadsPipeline : user?.assignedDealsPipeline;
+  const assigned = user?.assignedLeadsPipeline;
   if (assigned && pipelines.some((p) => String(p._id) === String(assigned))) {
     const row = pipelines.find((p) => String(p._id) === String(assigned));
     return { pipelineId: String(assigned), isDefault: !!row?.isDefault };
   }
-  const storageKey =
-    type === "leads" ? "crm_active_pipeline_leads" : "crm_active_pipeline_deals";
+  const storageKey = "crm_active_pipeline_leads";
   const saved =
     typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
   if (saved && pipelines.some((p) => String(p._id) === saved)) {
@@ -168,13 +160,11 @@ export type WarmCrmOptions = {
     _id?: string;
     role?: unknown;
     assignedLeadsPipeline?: string;
-    assignedDealsPipeline?: string;
   } | null;
   skipWorkspace?: boolean;
   skipAttention?: boolean;
   skipLeads?: boolean;
   skipContacts?: boolean;
-  skipDeals?: boolean;
 };
 
 /**
@@ -188,7 +178,7 @@ export async function warmCrmEssentials(options: WarmCrmOptions): Promise<void> 
   const { hasAccess, user } = options;
   const tasks: Array<Promise<void>> = [];
 
-  const warmPipelines = async (type: "leads" | "deals") => {
+  const warmPipelines = async (type: "leads") => {
     const key = crmCacheKeys.pipelines(type);
     if (crmCachePeek(key)) return;
     const data = await fetchJson<unknown[]>(
@@ -201,18 +191,13 @@ export async function warmCrmEssentials(options: WarmCrmOptions): Promise<void> 
   if (hasAccess("leads:read")) {
     tasks.push(warmPipelines("leads"));
   }
-  if (hasAccess("deals:read")) {
-    tasks.push(warmPipelines("deals"));
-  }
 
-  if (!options.skipWorkspace && hasAccess("deals:read")) {
+  if (!options.skipWorkspace && hasAccess("leads:read")) {
     tasks.push(
       (async () => {
         const owner = defaultWorkspaceOwner(user);
         const window = "last_30_days";
-        const sections = hasAccess("leads:read")
-          ? "deals,tasks,activity,leads"
-          : "deals,tasks,activity";
+        const sections = "tasks,activity,leads";
         const key = crmCacheKeys.workspace(owner, window, sections);
         if (crmCachePeek(key)) return;
         const q = new URLSearchParams({ window, sections });
@@ -227,7 +212,7 @@ export async function warmCrmEssentials(options: WarmCrmOptions): Promise<void> 
   }
 
   const canUseAttention =
-    hasAccess("deals:read") || hasAccess("leads:read") || hasAccess("contacts:read");
+    hasAccess("leads:read") || hasAccess("contacts:read");
   if (!options.skipAttention && canUseAttention) {
     tasks.push(
       (async () => {
@@ -294,73 +279,6 @@ export async function warmCrmEssentials(options: WarmCrmOptions): Promise<void> 
           headers,
         );
         if (payload) crmCacheSet(listKey, payload);
-      })(),
-    );
-  }
-
-  if (!options.skipDeals && hasAccess("deals:read")) {
-    tasks.push(
-      (async () => {
-        const pipelines =
-          crmCacheGet<Array<{ _id: string; isDefault?: boolean }>>(
-            crmCacheKeys.pipelines("deals"),
-          ) ??
-          (await fetchJson<Array<{ _id: string; isDefault?: boolean }>>(
-            `${CRM_API_URL}/crm/pipelines?type=deals`,
-            headers,
-          ));
-        if (!Array.isArray(pipelines) || !pipelines.length) return;
-        if (!crmCacheGet(crmCacheKeys.pipelines("deals"))) {
-          crmCacheSet(crmCacheKeys.pipelines("deals"), pipelines);
-        }
-        const { pipelineId, isDefault } = resolveActivePipelineId("deals", pipelines, user);
-        if (!pipelineId) return;
-        const listKey = crmCacheKeys.dealsList(pipelineId, {
-          page: 1,
-          pageSize: 25,
-          unassigned: isDefault,
-        });
-        if (crmCachePeek(listKey)) return;
-        const params = buildCrmListSearchParams({
-          page: 1,
-          pageSize: 25,
-          extra: {
-            pipeline: pipelineId,
-            unassigned: isDefault ? "1" : undefined,
-          },
-        });
-        const payload = await fetchJson<{ data?: unknown[]; total?: number } | unknown[]>(
-          `${CRM_API_URL}/crm/deals?${params.toString()}`,
-          headers,
-        );
-        if (payload) crmCacheSet(listKey, payload);
-        const otherIds = pipelines
-          .map((p) => String(p._id))
-          .filter((id) => id && id !== pipelineId)
-          .slice(0, 2);
-        await Promise.allSettled(
-          otherIds.map(async (pid) => {
-            const siblingKey = crmCacheKeys.dealsList(pid, {
-              page: 1,
-              pageSize: 25,
-              unassigned: false,
-            });
-            if (crmCachePeek(siblingKey)) return;
-            const siblingDefault = !!pipelines.find((p) => String(p._id) === pid)?.isDefault;
-            const siblingParams = buildCrmListSearchParams({
-              page: 1,
-              pageSize: 25,
-              extra: {
-                pipeline: pid,
-                unassigned: siblingDefault ? "1" : undefined,
-              },
-            });
-            const siblingPayload = await fetchJson<
-              { data?: unknown[]; total?: number } | unknown[]
-            >(`${CRM_API_URL}/crm/deals?${siblingParams.toString()}`, headers);
-            if (siblingPayload) crmCacheSet(siblingKey, siblingPayload);
-          }),
-        );
       })(),
     );
   }

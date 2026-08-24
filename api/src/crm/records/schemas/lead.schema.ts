@@ -107,6 +107,18 @@ export class Lead {
   @Prop({ default: 'standard', index: true })
   leadType?: 'standard' | 'platform';
 
+  /**
+   * Business vertical this lead belongs to — determines which set of `type:'leads'`
+   * Pipeline documents (and their fully admin-customizable stages) apply to it.
+   * Defaults to 'property_listing' so pre-existing leads keep working unchanged.
+   */
+  @Prop({
+    enum: ['property_listing', 'property_management'],
+    default: 'property_listing',
+    index: true,
+  })
+  leadVertical?: 'property_listing' | 'property_management';
+
   /** Client or company label on the platform when no email exists yet. */
   @Prop()
   platformClientLabel?: string;
@@ -232,9 +244,6 @@ export class Lead {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Contact' }], default: [] })
   associatedContacts: Types.ObjectId[];
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Deal' }], default: [] })
-  associatedDeals: Types.ObjectId[];
-
   /** Legal cases referencing this lead (bidirectional; see LegalCase.associatedLeads). */
   @Prop({ type: [{ type: Types.ObjectId, ref: 'LegalCase' }], default: [] })
   associatedLegalCases: Types.ObjectId[];
@@ -285,6 +294,8 @@ LeadSchema.index({ nextFollowUpAt: 1 });
 LeadSchema.index({ email: 1, createdAt: -1 });
 /** Platform opportunities list (Upwork, Freelancer, etc.). */
 LeadSchema.index({ leadType: 1, createdAt: -1 });
+/** Property Listing / Property Management vertical toggle + board. */
+LeadSchema.index({ leadVertical: 1, pipeline: 1, createdAt: -1 });
 /** Lead-type tab bar (All Leads/Reference/Investor/Lead/Buyer lead). */
 LeadSchema.index({ leadCategory: 1, createdAt: -1 });
 /** "Group" filter. */

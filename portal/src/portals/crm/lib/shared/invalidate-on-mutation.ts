@@ -2,7 +2,6 @@ import { notifyCrmDataChanged } from "@/lib/crm/shared/prefetch-cache";
 
 export type CrmMutationScope =
   | "leads"
-  | "deals"
   | "contacts"
   | "organizations"
   | "clients"
@@ -13,7 +12,6 @@ export type CrmMutationScope =
 
 const SCOPE_PREFIX: Record<Exclude<CrmMutationScope, "all">, string> = {
   leads: "leads:",
-  deals: "deals:",
   contacts: "contacts:",
   organizations: "organizations:",
   clients: "clients:",
@@ -26,8 +24,6 @@ const SCOPE_PREFIX: Record<Exclude<CrmMutationScope, "all">, string> = {
 const ENTITY_DEFAULT_SCOPES: Record<string, CrmMutationScope[]> = {
   lead: ["leads", "workspace", "attention"],
   leads: ["leads", "workspace", "attention"],
-  deal: ["deals", "workspace", "attention"],
-  deals: ["deals", "workspace", "attention"],
   contact: ["contacts", "workspace", "attention"],
   contacts: ["contacts", "workspace", "attention"],
   organization: ["organizations", "workspace"],

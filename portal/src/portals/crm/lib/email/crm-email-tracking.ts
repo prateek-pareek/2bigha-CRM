@@ -15,7 +15,7 @@ export type CrmEmailTrackingRow = {
   clicks?: Array<{ url: string; clickedAt: string }>;
   emailId?: string;
   createdAt?: string;
-  /** Set when merged from a linked lead/deal/company/contact on contact view */
+  /** Set when merged from a linked lead/company/contact on contact view */
   _recordContext?: string;
 };
 

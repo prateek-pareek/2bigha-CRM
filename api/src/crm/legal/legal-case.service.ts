@@ -115,9 +115,6 @@ export class LegalCaseService {
     if (payload.associatedLeads !== undefined) {
       payload.associatedLeads = this.normalizeObjectIdArray(payload.associatedLeads);
     }
-    if (payload.associatedDeals !== undefined) {
-      payload.associatedDeals = this.normalizeObjectIdArray(payload.associatedDeals);
-    }
 
     const requestedRecordId = payload.recordId as string | undefined;
     delete payload.recordId;
@@ -206,7 +203,6 @@ export class LegalCaseService {
     const assocPopulate = [
       { path: 'associatedContacts', select: 'firstName lastName email stage' },
       { path: 'associatedLeads', select: 'firstName lastName email status stage' },
-      { path: 'associatedDeals', select: 'title stage dealValue' },
     ];
     let doc: LegalCaseDocument | null = null;
     if (isMongoObjectIdString(id)) {
@@ -247,9 +243,6 @@ export class LegalCaseService {
     }
     if (payload.associatedLeads !== undefined) {
       payload.associatedLeads = this.normalizeObjectIdArray(payload.associatedLeads);
-    }
-    if (payload.associatedDeals !== undefined) {
-      payload.associatedDeals = this.normalizeObjectIdArray(payload.associatedDeals);
     }
 
     return this.legalCaseModel

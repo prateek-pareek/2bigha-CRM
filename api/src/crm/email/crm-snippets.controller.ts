@@ -59,7 +59,6 @@ export class CrmSnippetsController {
   @Permissions(
     'settings:write',
     'leads:read',
-    'deals:read',
     'contacts:read',
     'inbox:read',
     'clients:read',
@@ -74,7 +73,6 @@ export class CrmSnippetsController {
   @Permissions(
     'settings:write',
     'leads:read',
-    'deals:read',
     'contacts:read',
     'inbox:read',
     'clients:read',
@@ -86,7 +84,7 @@ export class CrmSnippetsController {
   }
 
   @Post()
-  @Permissions('settings:write', 'contacts:write', 'leads:write', 'deals:write')
+  @Permissions('settings:write', 'contacts:write', 'leads:write')
   create(@Request() req: any, @Body() body: any) {
     return this.snippetsService.create({
       name: body.name,
@@ -103,7 +101,7 @@ export class CrmSnippetsController {
   }
 
   @Put(':id')
-  @Permissions('settings:write', 'contacts:write', 'leads:write', 'deals:write')
+  @Permissions('settings:write', 'contacts:write', 'leads:write')
   update(
     @Request() req: any,
     @Param('id') id: string,
@@ -141,7 +139,7 @@ export class CrmSnippetsController {
   }
 
   @Delete(':id')
-  @Permissions('settings:write', 'contacts:write', 'leads:write', 'deals:write')
+  @Permissions('settings:write', 'contacts:write', 'leads:write')
   remove(@Request() req: any, @Param('id') id: string) {
     return this.snippetsService.delete(
       id,

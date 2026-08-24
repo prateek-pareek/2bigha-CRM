@@ -32,7 +32,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
   )
   listPlatforms() {
     return this.migration.listPlatforms();
@@ -43,7 +42,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
   )
   entityFields(@Param('entityType') entityType: string) {
     return this.migration.getEntityTargets(
@@ -56,7 +54,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
   )
   @UseInterceptors(FileInterceptor('file'))
   preview(
@@ -80,7 +77,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
   )
   createJob(
     @Request() req: any,
@@ -114,7 +110,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
   )
   @UseInterceptors(FileInterceptor('file'))
   startFileJob(
@@ -159,7 +154,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
   )
   ingestBatch(
     @Param('jobId') jobId: string,
@@ -179,7 +173,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
     'leads:read',
   )
   listRecent(@Query('limit') limit?: string) {
@@ -191,7 +184,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
   )
   revertJob(@Param('jobId') jobId: string) {
     return this.migration.revertJob(jobId);
@@ -202,7 +194,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
     'leads:read',
   )
   getJob(@Param('jobId') jobId: string) {
@@ -214,7 +205,6 @@ export class CrmMigrationController {
     'leads:write',
     'contacts:write',
     'organizations:write',
-    'deals:write',
   )
   completeJob(@Param('jobId') jobId: string) {
     return this.migration.completeJob(jobId);

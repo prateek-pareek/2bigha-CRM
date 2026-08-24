@@ -29,12 +29,10 @@ export class CustomFieldsController {
   @Get()
   @Permissions(
     'leads:read',
-    'deals:read',
     'contacts:read',
     'organizations:read',
     'clients:read',
     'leads:write',
-    'deals:write',
     'contacts:write',
     'organizations:write',
     'clients:write',
@@ -52,12 +50,10 @@ export class CustomFieldsController {
   @Get(':id')
   @Permissions(
     'leads:read',
-    'deals:read',
     'contacts:read',
     'organizations:read',
     'clients:read',
     'leads:write',
-    'deals:write',
     'contacts:write',
     'organizations:write',
     'clients:write',

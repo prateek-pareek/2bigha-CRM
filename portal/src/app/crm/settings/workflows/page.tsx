@@ -30,7 +30,6 @@ import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 import CrmSlidePanelShell from "@/components/crm/shell/CrmSlidePanelShell";
 import LeadEngagementAutomationTemplates from "@/components/crm/automation/playbooks/LeadEngagementAutomationTemplates";
-import DealEngagementAutomationTemplates from "@/components/crm/automation/playbooks/DealEngagementAutomationTemplates";
 
 const LBL = "block text-xs font-semibold text-[var(--text-muted)] mb-1";
 const INP =
@@ -55,21 +54,6 @@ const TRIGGERS = [
   {
     value: "lead_tracked_email_replied",
     label: "Lead — client replied to tracked email",
-  },
-  { value: "deal_created", label: "Deal — created" },
-  { value: "deal_updated", label: "Deal — updated" },
-  { value: "deal_stage_changed", label: "Deal — stage changed" },
-  { value: "deal_pipeline_changed", label: "Deal — pipeline changed" },
-  { value: "deal_value_changed", label: "Deal — value changed" },
-  { value: "deal_owner_changed", label: "Deal — owner changed" },
-  { value: "deal_probability_changed", label: "Deal — probability changed" },
-  {
-    value: "deal_tracked_email_opened",
-    label: "Deal — tracked email opened (first open)",
-  },
-  {
-    value: "deal_tracked_email_replied",
-    label: "Deal — client replied to tracked email",
   },
   { value: "contact_created", label: "Contact — created" },
   { value: "contact_updated", label: "Contact — updated" },
@@ -97,7 +81,6 @@ const TRIGGERS = [
 
 const TRIGGER_GROUPS = [
   { heading: "Leads", prefix: "lead_" as const },
-  { heading: "Deals", prefix: "deal_" as const },
   { heading: "Contacts", prefix: "contact_" as const },
   { heading: "Organizations", prefix: "organization_" as const },
 ] as const;
@@ -492,8 +475,6 @@ export default function WorkflowsSettingsPage() {
 
       <LeadEngagementAutomationTemplates canEdit={canManageLeadAutomation} />
 
-      <DealEngagementAutomationTemplates canEdit={canManageLeadAutomation} />
-
       <div className="space-y-4">
         {/* Filter bar */}
         {!loading && (
@@ -554,7 +535,7 @@ export default function WorkflowsSettingsPage() {
             </div>
             <p className="text-sm font-semibold text-[var(--text-main)]">No workflows yet</p>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--primary-muted)]">
-              Create your first automation to react to leads, deals, or contacts — with branches, delays, and email steps.
+              Create your first automation to react to leads, contacts, or organizations — with branches, delays, and email steps.
             </p>
             <div className="mt-6 flex flex-col items-center gap-2">
               <button

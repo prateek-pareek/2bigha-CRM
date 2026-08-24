@@ -43,13 +43,6 @@ export class UserConfigController {
             title: 'Sales Trend',
             layout: { x: 6, y: 0, w: 6, h: 4 },
           },
-          {
-            id: 'deals-stage',
-            type: 'chart',
-            component: 'DealsByStage',
-            title: 'Deals by Stage',
-            layout: { x: 0, y: 4, w: 12, h: 4 },
-          },
         ],
         savedReports: [],
       };

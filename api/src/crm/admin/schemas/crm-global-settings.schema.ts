@@ -14,7 +14,7 @@ export class CrmGlobalSettings {
   @Prop({ default: 'default', index: true, unique: true })
   key: string;
 
-  /** USD → INR rate — kept for backward-compat with existing deal logic. */
+  /** USD → INR rate — kept for backward-compat with existing currency logic. */
   @Prop({ type: Number, default: 83 })
   usdToInr: number;
 

@@ -17,7 +17,7 @@ export type SalesAgentApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export type SalesAgentRiskTier = 'low' | 'high';
 
-export type SalesAgentRecordType = 'Lead' | 'Deal' | 'Contact';
+export type SalesAgentRecordType = 'Lead' | 'Contact';
 
 export type SalesAgentTrigger =
   | 'manual'
@@ -25,8 +25,6 @@ export type SalesAgentTrigger =
   | 'cron'
   | 'lead_created'
   | 'lead_stage_changed'
-  | 'deal_created'
-  | 'deal_stage_changed'
   | 'email_reply_received'
   | 'website_inbound'
   | 'chat_inbound'

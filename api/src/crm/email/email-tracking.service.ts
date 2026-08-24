@@ -7,12 +7,10 @@ import {
   EmailTrackingDocument,
 } from '../schemas/email-tracking.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Client, ClientDocument } from '../schemas/client.schema';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { WorkflowsService } from '../automation/workflows.service';
 import { LeadEngagementAutomationService } from '../automation/lead-engagement-automation.service';
-import { DealEngagementAutomationService } from '../automation/deal-engagement-automation.service';
 import { getTrackingPublicBase } from '../shared/crm-deliverability.util';
 import {
   isDuplicateOpenBurst,
@@ -31,8 +29,6 @@ export class EmailTrackingService implements OnModuleInit {
     private trackingModel: Model<EmailTrackingDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private contactModel: Model<ContactDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private dealModel: Model<DealDocument>,
     @InjectModel(Client.name, 'crmConnection')
     private clientModel: Model<ClientDocument>,
     private readonly realtimeGateway: RealtimeGateway,
@@ -40,7 +36,6 @@ export class EmailTrackingService implements OnModuleInit {
     @Inject(forwardRef(() => WorkflowsService))
     private readonly workflowsService: WorkflowsService,
     private readonly leadEngagementAutomation: LeadEngagementAutomationService,
-    private readonly dealEngagementAutomation: DealEngagementAutomationService,
     @Inject(forwardRef(() => InboxAccountsService))
     private readonly inboxAccountsService: InboxAccountsService,
   ) {}
@@ -305,7 +300,7 @@ export class EmailTrackingService implements OnModuleInit {
    */
   async summarizeEngagementForCrmRecord(
     entityId: string,
-    module: 'leads' | 'deals' | 'contacts' | 'organizations',
+    module: 'leads' | 'contacts' | 'organizations',
   ): Promise<{ anySend: boolean; anyOpened: boolean }> {
     if (!Types.ObjectId.isValid(entityId)) {
       return { anySend: false, anyOpened: false };
@@ -326,10 +321,10 @@ export class EmailTrackingService implements OnModuleInit {
     return { anySend: true, anyOpened };
   }
 
-  /** Latest tracked send linked to a CRM record (lead/contact/deal/org). */
+  /** Latest tracked send linked to a CRM record (lead/contact/org). */
   async getLatestOutboundIdentityForCrmRecord(
     entityId: string,
-    module: 'leads' | 'deals' | 'contacts' | 'organizations',
+    module: 'leads' | 'contacts' | 'organizations',
     preferOpened = false,
   ): Promise<{ accountId: string | null; fromEmail: string | null } | null> {
     if (!Types.ObjectId.isValid(entityId)) return null;
@@ -453,10 +448,6 @@ export class EmailTrackingService implements OnModuleInit {
         const mod = String(result.module).toLowerCase();
         if (mod === 'leads') {
           void this.leadEngagementAutomation.onLeadEmailOpened(
-            String(result.entityId),
-          );
-        } else if (mod === 'deals') {
-          void this.dealEngagementAutomation.onDealEmailOpened(
             String(result.entityId),
           );
         }
@@ -633,10 +624,6 @@ export class EmailTrackingService implements OnModuleInit {
         void this.leadEngagementAutomation.onLeadEmailOpened(
           String(result.entityId),
         );
-      } else if (mod === 'deals') {
-        void this.dealEngagementAutomation.onDealEmailOpened(
-          String(result.entityId),
-        );
       }
     }
 
@@ -771,7 +758,7 @@ export class EmailTrackingService implements OnModuleInit {
   }
 
   /**
-   * Tracking rows for an entity. For deals and clients, also includes email tracking
+   * Tracking rows for an entity. For clients, also includes email tracking
    * logged on the linked source lead (same person / conversion history).
    */
   async getTrackingByEntity(
@@ -783,18 +770,6 @@ export class EmailTrackingService implements OnModuleInit {
 
     if (!entityId?.match(/^[0-9a-fA-F]{24}$/)) return base;
 
-    if (mod === 'deals') {
-      const deal = await this.dealModel
-        .findById(entityId)
-        .select('lead')
-        .lean()
-        .exec();
-      const leadId = (deal as { lead?: Types.ObjectId } | null)?.lead;
-      if (leadId) {
-        const fromLead = await this.rawTrackingRows(String(leadId), 'leads');
-        return this.mergeTrackingDeduped(base, fromLead);
-      }
-    }
     if (mod === 'clients') {
       const client = await this.clientModel
         .findById(entityId)
@@ -812,7 +787,7 @@ export class EmailTrackingService implements OnModuleInit {
   }
 
   /**
-   * Contact view: own sends + sends logged on associated leads, deals, companies, and other contacts.
+   * Contact view: own sends + sends logged on associated leads, companies, and other contacts.
    * Deduped by trackingToken; optional _recordContext marks rows from linked records.
    */
   async getAggregatedTrackingForContact(
@@ -823,7 +798,7 @@ export class EmailTrackingService implements OnModuleInit {
     const contact = await this.contactModel
       .findById(contactId)
       .select(
-        'associatedLeads associatedDeals associatedOrganizations associatedContacts sourceLead',
+        'associatedLeads associatedOrganizations associatedContacts sourceLead',
       )
       .lean()
       .exec();
@@ -866,12 +841,6 @@ export class EmailTrackingService implements OnModuleInit {
       }
     }
 
-    const deals =
-      (contact as { associatedDeals?: Types.ObjectId[] }).associatedDeals || [];
-    for (const did of deals) {
-      await pushRows(String(did), 'deals', 'Deal');
-    }
-
     const orgs =
       (contact as { associatedOrganizations?: Types.ObjectId[] })
         .associatedOrganizations || [];
@@ -904,7 +873,6 @@ export class EmailTrackingService implements OnModuleInit {
     if (!Types.ObjectId.isValid(id)) return undefined;
     const m = String(module || '').toLowerCase();
     if (m === 'leads') return `/crm/leads/${id}`;
-    if (m === 'deals') return `/crm/deals/${id}`;
     if (m === 'contacts') return `/crm/contacts/${id}`;
     if (m === 'clients') return `/crm/clients/${id}`;
     if (m === 'organizations') return `/crm/organizations/${id}`;

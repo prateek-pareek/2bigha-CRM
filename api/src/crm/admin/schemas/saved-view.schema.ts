@@ -10,7 +10,7 @@ export class SavedView {
   user: Types.ObjectId;
 
   @Prop({ required: true })
-  module: string; // 'leads', 'deals', 'contacts', 'organizations'
+  module: string; // 'leads', 'contacts', 'organizations'
 
   @Prop({ required: true })
   name: string;

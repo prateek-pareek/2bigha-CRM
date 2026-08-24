@@ -67,9 +67,6 @@ export function PmJiraAppHeader({
             if (t.id === 'vault') {
                 return hasExplicitTool || hasAccess('vault:read') || hasAccess('hrms:admin');
             }
-            if (t.id === 'client-portals') {
-                return hasAccess('clients:read');
-            }
             return hasExplicitTool;
         });
     }, [isAdmin, permittedTools, permissions, hasAccess]);
@@ -82,7 +79,6 @@ export function PmJiraAppHeader({
         if (path.startsWith('/hrms')) return 'hrms';
         if (path.startsWith('/social')) return 'social';
         if (path.startsWith('/vault')) return 'vault';
-        if (path.startsWith('/client-portals')) return 'client-portals';
         return '';
     }, []);
 

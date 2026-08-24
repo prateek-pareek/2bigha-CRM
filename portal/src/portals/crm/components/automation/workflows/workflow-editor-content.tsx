@@ -59,7 +59,6 @@ const WorkflowCanvasEditor = dynamic(
 
 function triggerEntityKind(trigger: string): WorkflowCanvasEntityKind {
   if (trigger.startsWith("lead_")) return "lead";
-  if (trigger.startsWith("deal_")) return "deal";
   if (trigger.startsWith("contact_")) return "contact";
   if (trigger.startsWith("organization_")) return "org";
   return "any";
@@ -80,21 +79,6 @@ const TRIGGERS = [
   {
     value: "lead_tracked_email_replied",
     label: "Lead — client replied to tracked email",
-  },
-  { value: "deal_created", label: "Deal — created" },
-  { value: "deal_updated", label: "Deal — updated" },
-  { value: "deal_stage_changed", label: "Deal — stage changed" },
-  { value: "deal_pipeline_changed", label: "Deal — pipeline changed" },
-  { value: "deal_value_changed", label: "Deal — value changed" },
-  { value: "deal_owner_changed", label: "Deal — owner changed" },
-  { value: "deal_probability_changed", label: "Deal — probability changed" },
-  {
-    value: "deal_tracked_email_opened",
-    label: "Deal — tracked email opened (first open)",
-  },
-  {
-    value: "deal_tracked_email_replied",
-    label: "Deal — client replied to tracked email",
   },
   { value: "contact_created", label: "Contact — created" },
   { value: "contact_updated", label: "Contact — updated" },
@@ -129,7 +113,7 @@ const ACTION_TYPES = [
   { value: "set_property", label: "Set property (fields…)" },
   { value: "add_to_segment", label: "Add to segment (static list)" },
   { value: "remove_from_segment", label: "Remove from segment" },
-  { value: "assign_owner", label: "Assign owner (lead/deal)" },
+  { value: "assign_owner", label: "Assign owner (lead)" },
   { value: "create_task", label: "Create task" },
   { value: "create_note", label: "Create note" },
   { value: "send_email_template", label: "Send email (template)" },
@@ -366,17 +350,14 @@ export function WorkflowEditorContent({ workflowId }: { workflowId: string }) {
     const t = localStorage.getItem("token");
     void (async () => {
       try {
-        const [rL, rD, rT, rInbox] = await Promise.all([
+        const [rL, rT, rInbox] = await Promise.all([
           fetch(`${CRM_API_URL}/crm/pipelines?type=leads`, { headers: { Authorization: `Bearer ${t}` } }),
-          fetch(`${CRM_API_URL}/crm/pipelines?type=deals`, { headers: { Authorization: `Bearer ${t}` } }),
           fetch(`${CRM_API_URL}/email-templates`, { headers: { Authorization: `Bearer ${t}` } }),
           fetch(`${CRM_API_URL}/crm/inbox-accounts`, { headers: { Authorization: `Bearer ${t}` } }),
         ]);
         const leads = rL.ok ? await rL.json() : [];
-        const deals = rD.ok ? await rD.json() : [];
         const merged: WorkflowCanvasPipelineOption[] = [
           ...(Array.isArray(leads) ? leads : []),
-          ...(Array.isArray(deals) ? deals : []),
         ].map((p: { _id?: string; name?: string; type?: string; stages?: { name: string }[] }) => ({
           _id: String(p._id ?? ""),
           name: String(p.name ?? ""),
@@ -1501,7 +1482,7 @@ function ActionFields({
     return (
       <input
         className="border border-[var(--border-color)] rounded-[var(--radius-md)] px-2 py-1.5 text-sm w-full"
-        placeholder="Owner display name (lead / deal)"
+        placeholder="Owner display name (lead)"
         value={String(row.ownerName ?? "")}
         onChange={(e) => onChange({ ownerName: e.target.value })}
       />

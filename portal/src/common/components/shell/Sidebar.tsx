@@ -147,7 +147,7 @@ function isPmNavItemActive(
     return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export type SuiteToolId = 'crm' | 'client-portals' | 'executive' | 'hrms' | 'pm' | 'social' | 'vault';
+export type SuiteToolId = 'crm' | 'executive' | 'hrms' | 'pm' | 'social' | 'vault';
 
 export type SuiteTool = {
     id: SuiteToolId;
@@ -169,15 +169,6 @@ export const tools: SuiteTool[] = [
         icon: Handshake,
         logoClass: 'bg-[#0c66e4]',
         logoClassIdle: 'bg-[#0c66e4]/15 text-[#0c66e4]',
-    },
-    {
-        id: 'client-portals',
-        name: 'Client Portals',
-        tagline: 'Client updates & access',
-        href: '/client-portals',
-        icon: Globe,
-        logoClass: 'bg-[#de350b]',
-        logoClassIdle: 'bg-[#de350b]/15 text-[#de350b]',
     },
 ];
 
@@ -233,15 +224,6 @@ const socialGroups = [
     },
 ];
 
-const clientPortalGroups = [
-    {
-        name: 'Client Portals',
-        items: [
-            { name: 'Portal Console', href: '/client-portals', icon: Globe, permission: 'clients:read' as const },
-        ],
-    },
-];
-
 /**
  * CRM sidebar IA — grouped by job-to-be-done (not by route family):
  * Work = daily ops dashboards · Engage = messaging/tasks · Reports = analytics ·
@@ -254,7 +236,7 @@ const REPORT_NAV_ICONS: Record<string, typeof CrmNavIcon.BarChart> = {
     'leads-aging': CrmNavIcon.Activity,
     'leads-conversion': CrmNavIcon.TrendingUp,
     email: CrmNavIcon.Mail,
-    forecast: CrmNavIcon.Deals,
+    forecast: CrmNavIcon.Pipeline,
     health: CrmNavIcon.Activity,
     revenue: CrmNavIcon.TrendingUp,
 };
@@ -304,7 +286,6 @@ const reportNavChildren = (() => {
 const DASHBOARD_NAV_ICONS: Record<string, typeof CrmNavIcon.Dashboard> = {
     work: CrmNavIcon.Tasks,
     summary: CrmNavIcon.Dashboard,
-    deals: CrmNavIcon.Deals,
     prospecting: CrmNavIcon.Leads,
     growth: CrmNavIcon.BarChart,
     calls: CrmNavIcon.Phone,
@@ -420,26 +401,11 @@ const crmGroups = [
     {
         name: 'Commercials',
         items: [
-            { name: 'Deals', href: '/crm/deals', icon: CrmNavIcon.Deals, permission: 'deals:read' },
             {
                 name: 'Legal',
                 href: '/crm/legal/verification',
                 icon: CrmNavIcon.Legal,
                 permission: 'legal:read',
-                children: [
-                    {
-                        name: 'Verification',
-                        href: '/crm/legal/verification',
-                        icon: CrmNavIcon.Legal,
-                        permission: 'legal:read',
-                    },
-                    {
-                        name: 'Cases',
-                        href: '/crm/legal',
-                        icon: CrmNavIcon.Legal,
-                        permission: 'legal:read',
-                    },
-                ],
             },
             {
                 name: 'Proposals',
@@ -790,7 +756,6 @@ export default function Sidebar({
     };
 
     const activeToolId = useMemo((): SuiteToolId => {
-        if (pathname.startsWith('/client-portals')) return 'client-portals';
         return 'crm';
     }, [pathname]);
 
@@ -818,9 +783,6 @@ export default function Sidebar({
     const visibleTools = useMemo(() => {
         return tools.filter((t) => {
             if (isAdmin) return true;
-            if (t.id === 'client-portals') {
-                return hasAccess('clients:read');
-            }
             const hasExplicitTool =
                 Array.isArray(permittedTools) &&
                 permittedTools.some((p) => p?.toUpperCase() === t.id.toUpperCase());
@@ -836,9 +798,7 @@ export default function Sidebar({
     const suiteNavGroups =
         activeToolId === 'crm' && visibleTools.some(t => t.id === 'crm')
             ? crmGroups
-            : activeToolId === 'client-portals' && visibleTools.some(t => t.id === 'client-portals')
-              ? clientPortalGroups
-              : crmGroups;
+            : crmGroups;
 
     return (
         <>

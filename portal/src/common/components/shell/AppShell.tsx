@@ -8,9 +8,6 @@ import dynamic from 'next/dynamic';
 import NotificationList from '@/components/suite/notifications/NotificationList';
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { isQuickChatEnabled } from '@/lib/feature-flags';
-import QuickChatWidget from './QuickChatWidget';
-
 import api from '@/lib/pm/api';
 import { io } from 'socket.io-client';
 import { API_HOST_URL } from '@/lib/api/config';
@@ -58,7 +55,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const isPmBoardsListRoute = pathname === '/pm/boards' || pathname.startsWith('/pm/boards/');
     const isPmFlushMain = isWikiRoute || isPmBoardRoute || isPmBoardsListRoute;
     const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-    const [quickAddType, setQuickAddType] = useState<'Lead' | 'Deal' | 'Org' | 'Contact' | 'Note' | 'Task' | 'Call'>('Lead');
+    const [quickAddType, setQuickAddType] = useState<'Lead' | 'Org' | 'Contact' | 'Note' | 'Task' | 'Call'>('Lead');
     const [quickAddPipelineId, setQuickAddPipelineId] = useState<string>('');
     const [quickAddStage, setQuickAddStage] = useState<string>('');
     const [quickAddSource, setQuickAddSource] = useState<string>('');
@@ -422,7 +419,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     initialSource={quickAddSource}
                 />
             )}
-            {isQuickChatEnabled() && <QuickChatWidget />}
         </div>
     );
 }

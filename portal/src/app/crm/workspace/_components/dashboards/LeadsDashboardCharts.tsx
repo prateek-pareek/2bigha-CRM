@@ -48,22 +48,14 @@ import {
   type DashRecentLead,
 } from "./dashboardShared";
 import {
-  DealKpiTile,
-  InteractiveCategoryBarChart,
+  KpiTile,
   InteractiveChartShell,
-  InteractiveDealsTrendChart,
-  InteractiveHorizontalStageChart,
-  InteractiveStageBarChart,
-  PeriodSelect,
-} from "./DealsDashboardCharts";
+} from "./DashboardInteractiveShell";
+import { PeriodSelect } from "./SalesOverviewCharts";
 
 export {
-  DealKpiTile as LeadKpiTile,
-  InteractiveCategoryBarChart,
+  KpiTile as LeadKpiTile,
   InteractiveChartShell,
-  InteractiveDealsTrendChart,
-  InteractiveHorizontalStageChart,
-  InteractiveStageBarChart,
   PeriodSelect,
 };
 

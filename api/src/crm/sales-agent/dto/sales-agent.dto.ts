@@ -2,7 +2,7 @@ import { IsArray, IsBoolean, IsNumber, IsOptional, IsString, Min } from 'class-v
 
 export class TriggerSalesAgentDto {
   @IsString()
-  recordType: 'Lead' | 'Deal' | 'Contact';
+  recordType: 'Lead' | 'Contact';
 
   @IsString()
   recordId: string;
@@ -38,10 +38,6 @@ export class UpdateSalesAgentSettingsDto {
   @IsOptional()
   @IsArray()
   enabledLeadPipelineIds?: string[];
-
-  @IsOptional()
-  @IsArray()
-  enabledDealPipelineIds?: string[];
 
   @IsOptional()
   @IsBoolean()

@@ -7,7 +7,6 @@ import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 
 const CLIENT_ASSOC_KEYS = [
   'associatedLeads',
-  'associatedDeals',
   'associatedOrganizations',
   'associatedContacts',
 ] as const;
@@ -206,7 +205,6 @@ export class ClientsService {
       .findById(id)
       .populate('organization')
       .populate('associatedLeads', 'firstName lastName email status stage')
-      .populate('associatedDeals', 'title stage dealValue')
       .populate('associatedOrganizations', 'name industry')
       .populate('associatedContacts', 'firstName lastName email stage')
       .exec();
@@ -224,7 +222,7 @@ export class ClientsService {
     const existing = await this.clientModel
       .findById(id)
       .select(
-        'assignedTo associatedLeads associatedDeals associatedOrganizations associatedContacts',
+        'assignedTo associatedLeads associatedOrganizations associatedContacts',
       )
       .exec();
     if (!existing) return null;
@@ -268,11 +266,6 @@ export class ClientsService {
           associationType: 'client_contact',
         },
         {
-          key: 'associatedDeals',
-          toType: 'deals',
-          associationType: 'client_deal',
-        },
-        {
           key: 'associatedLeads',
           toType: 'leads',
           associationType: 'client_lead',
@@ -304,7 +297,6 @@ export class ClientsService {
         .findById(updated._id)
         .populate('organization')
         .populate('associatedLeads', 'firstName lastName email status stage')
-        .populate('associatedDeals', 'title stage dealValue')
         .populate('associatedOrganizations', 'name industry')
         .populate('associatedContacts', 'firstName lastName email stage')
         .exec();

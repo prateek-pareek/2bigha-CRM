@@ -2,7 +2,7 @@ import type { WorkflowCanvasPipelineOption } from "@/lib/crm/workflow-canvas-gra
 import { getFieldDefsForModule, type CrmFieldDef } from "@/lib/crm/crm-field-layout";
 
 /** Entity kind derived from workflow trigger — used for field presets & value dropdowns. */
-export type WorkflowCanvasEntityKind = "lead" | "deal" | "contact" | "org" | "any";
+export type WorkflowCanvasEntityKind = "lead" | "contact" | "org" | "any";
 
 export type WorkflowCustomFieldDef = {
   key: string;
@@ -38,12 +38,10 @@ export const WORKFLOW_BUILTIN_VALUE_OPTIONS: Record<string, string[]> = {
 };
 
 const NUMBER_FIELDS = new Set([
-  "dealValue",
   "probability",
   "annualRevenue",
   "noOfEmployees",
   "exchangeRate",
-  "expectedDealValue",
 ]);
 
 function inferBuiltinValueKind(field: string): WorkflowFieldValueKind {
@@ -91,10 +89,6 @@ export const WORKFLOW_FIELD_PRESETS: Record<
     { field: "emailTrackingSubject", label: "Email subject (tracked send)" },
     { field: "emailClickedUrl", label: "Clicked URL (engagement)" },
   ]),
-  deal: withExtras(defsToPresets(getFieldDefsForModule("deals")), [
-    { field: "emailTrackingSubject", label: "Email subject (tracked send)" },
-    { field: "emailClickedUrl", label: "Clicked URL (engagement)" },
-  ]),
   contact: withExtras(defsToPresets(getFieldDefsForModule("contacts")), [
     { field: "emailTrackingSubject", label: "Email subject (tracked send)" },
     { field: "emailClickedUrl", label: "Clicked URL (engagement)" },
@@ -116,8 +110,6 @@ export function entityKindToCustomFieldModule(
   switch (entityKind) {
     case "lead":
       return "leads";
-    case "deal":
-      return "deals";
     case "contact":
       return "contacts";
     case "org":
@@ -134,8 +126,6 @@ export function buildWorkflowFieldOptions(
 ): WorkflowFieldOption[] {
   const canView = opts?.canViewCrmRevenue !== false;
   const moneyFields = new Set([
-    "dealValue",
-    "expectedDealValue",
     "annualRevenue",
     "currency",
     "exchangeRate",
@@ -173,11 +163,9 @@ export function workflowPipesForKind(
   entityKind: WorkflowCanvasEntityKind,
   pipelines: WorkflowCanvasPipelineOption[],
 ): WorkflowCanvasPipelineOption[] {
-  const leadPipes = pipelines.filter((p) => p.type === "leads");
-  const dealPipes = pipelines.filter((p) => p.type === "deals" || p.type == null);
+  const leadPipes = pipelines.filter((p) => p.type === "leads" || p.type == null);
   if (entityKind === "lead") return leadPipes;
-  if (entityKind === "deal") return dealPipes;
-  return [...leadPipes, ...dealPipes];
+  return leadPipes;
 }
 
 export function workflowStageNamesForKind(

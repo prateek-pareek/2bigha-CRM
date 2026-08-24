@@ -9,9 +9,8 @@ export class Pipeline {
   @Prop({ required: true })
   name: string; // e.g., 'Standard Sales', 'Implementation', 'Partnership'
 
-  @Prop({ default: 'deals', index: true })
+  @Prop({ default: 'leads', index: true })
   type:
-    | 'deals'
     | 'leads'
     | 'proposals'
     | 'quotations'
@@ -24,6 +23,18 @@ export class Pipeline {
     index: true,
   })
   categoryType: 'it_consulting' | 'freelancer' | 'healthcare' | 'generic';
+
+  /**
+   * Only meaningful when `type === 'leads'`: which lead vertical this pipeline serves
+   * (Property Listing vs Property Management). Each vertical keeps its own independent,
+   * fully admin-customizable `stages` list — this field just routes a lead to the right one.
+   * Unset for non-lead pipelines and for legacy lead pipelines predating this field.
+   */
+  @Prop({
+    enum: ['property_listing', 'property_management'],
+    index: true,
+  })
+  leadVertical?: 'property_listing' | 'property_management';
 
   @Prop({
     type: [
@@ -51,9 +62,6 @@ export class Pipeline {
    */
   @Prop({ type: Types.ObjectId, ref: 'LeadEngagementAutomationTemplate' })
   leadEngagementAutomationTemplateId?: Types.ObjectId;
-
-  @Prop({ type: Types.ObjectId, ref: 'DealEngagementAutomationTemplate' })
-  dealEngagementAutomationTemplateId?: Types.ObjectId;
 
   /**
    * Pipeline-specific AI outreach context (agency vs freelancer positioning, tone, required fields).

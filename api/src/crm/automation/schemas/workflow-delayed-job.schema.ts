@@ -4,14 +4,14 @@ import type { WorkflowTrigger } from './workflow.schema';
 
 export type WorkflowDelayedJobDocument = WorkflowDelayedJob & Document;
 
-export type WorkflowEntityType = 'Lead' | 'Deal' | 'Contact' | 'Organization';
+export type WorkflowEntityType = 'Lead' | 'Contact' | 'Organization';
 
 @Schema({ timestamps: true })
 export class WorkflowDelayedJob {
   @Prop({ type: Types.ObjectId, ref: 'Workflow', required: true })
   workflowId: Types.ObjectId;
 
-  @Prop({ required: true, enum: ['Lead', 'Deal', 'Contact', 'Organization'] })
+  @Prop({ required: true, enum: ['Lead', 'Contact', 'Organization'] })
   entityType: WorkflowEntityType;
 
   @Prop({ type: Types.ObjectId, required: true })

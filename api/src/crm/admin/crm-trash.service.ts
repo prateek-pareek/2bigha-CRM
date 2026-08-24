@@ -6,7 +6,6 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import { Client, ClientDocument } from '../schemas/client.schema';
 import {
@@ -41,14 +40,6 @@ import {
   ServiceOfferingDocument,
 } from '../schemas/service-offering.schema';
 import {
-  PaymentTerm,
-  PaymentTermDocument,
-} from '../schemas/payment-term.schema';
-import {
-  PortalClientNeed,
-  PortalClientNeedDocument,
-} from '../schemas/portal-client-need.schema';
-import {
   LeadEngagementAutomationTemplate,
   LeadEngagementAutomationTemplateDocument,
 } from '../schemas/lead-engagement-automation-template.schema';
@@ -73,8 +64,6 @@ export class CrmTrashService {
   constructor(
     @InjectModel(Lead.name, 'crmConnection')
     leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    dealModel: Model<DealDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     contactModel: Model<ContactDocument>,
     @InjectModel(Client.name, 'crmConnection')
@@ -105,10 +94,6 @@ export class CrmTrashService {
     savedViewModel: Model<SavedViewDocument>,
     @InjectModel(ServiceOffering.name, 'crmConnection')
     serviceOfferingModel: Model<ServiceOfferingDocument>,
-    @InjectModel(PaymentTerm.name, 'crmConnection')
-    paymentTermModel: Model<PaymentTermDocument>,
-    @InjectModel(PortalClientNeed.name, 'crmConnection')
-    portalNeedModel: Model<PortalClientNeedDocument>,
     @InjectModel(LeadEngagementAutomationTemplate.name, 'crmConnection')
     engagementTemplateModel: Model<LeadEngagementAutomationTemplateDocument>,
     @InjectModel(WorkflowTriggerProgress.name, 'crmConnection')
@@ -117,7 +102,6 @@ export class CrmTrashService {
   ) {
     this.models = {
       leads: leadModel,
-      deals: dealModel,
       contacts: contactModel,
       clients: clientModel,
       organizations: organizationModel,
@@ -133,8 +117,6 @@ export class CrmTrashService {
       'custom-fields': customFieldModel,
       'saved-views': savedViewModel,
       'service-offerings': serviceOfferingModel,
-      'payment-terms': paymentTermModel,
-      'portal-needs': portalNeedModel,
       'engagement-templates': engagementTemplateModel,
     };
   }

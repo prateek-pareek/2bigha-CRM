@@ -19,12 +19,6 @@ export const WORKSPACE_ROUTES = [
     permission: "workspace-summary:read",
   },
   {
-    slug: "deals",
-    label: "Deals Dashboard",
-    href: "/crm/workspace/deals",
-    permission: "workspace-deals:read",
-  },
-  {
     slug: "prospecting",
     label: "Leads Dashboard",
     href: "/crm/workspace/prospecting",
@@ -63,19 +57,9 @@ export const WORKSPACE_ROUTES = [
   /**
    * Legacy routes — kept for redirects / deep links; excluded from sidebar via `legacy: true`.
    */
-  {
-    slug: "revenue-summary",
-    label: "Revenue Summary",
-    href: "/crm/workspace/revenue-summary",
-    section: "revenue_summary",
-    revenueOnly: true,
-    legacy: true,
-    permission: "workspace-summary:read",
-  },
   { slug: "lead-status", label: "Lead Status", href: "/crm/workspace/lead-status", section: "lead_status", legacy: true, permission: "workspace-prospecting:read" },
   { slug: "follow-ups", label: "Follow-ups", href: "/crm/workspace/follow-ups", section: "follow_ups", legacy: true, permission: "workspace-prospecting:read" },
   { slug: "tasks", label: "Tasks due", href: "/crm/workspace/tasks", legacy: true, permission: "workspace-work:read" },
-  { slug: "next-step", label: "Next Step", href: "/crm/workspace/next-step", section: "next_step", legacy: true, permission: "workspace-deals:read" },
   { slug: "activity", label: "Activity", href: "/crm/workspace/activity", legacy: true, permission: "workspace-work:read" },
 ] as const;
 
@@ -121,27 +105,15 @@ export const LEAD_REPORT_ROUTES = LEAD_REPORT_SECTIONS;
 export type LeadReportVariant = (typeof LEAD_REPORT_SECTIONS)[number]["variant"];
 
 /**
- * Deal / forecast pages — each is its own route (Dreams Deal Reports group).
- */
-export const DEAL_REPORT_SECTIONS = [
-  { slug: "forecast", label: "Deal Reports", href: "/crm/reports/forecast", permission: "reports-forecast:read" },
-  { slug: "health", label: "Sales Health", href: "/crm/reports/forecast/health", permission: "reports-health:read" },
-  { slug: "revenue", label: "Forecast", href: "/crm/reports/forecast/revenue", revenueOnly: true, permission: "reports-revenue:read" },
-] as const;
-
-export type DealReportSection = (typeof DEAL_REPORT_SECTIONS)[number]["slug"];
-
-/**
  * Reports — one dedicated page per topic (Dreams-style; no in-page sibling tabs).
- * Order: Overview → Lead reports → Email → Deal reports.
+ * Order: Overview → Lead reports → Email → Pipeline insights.
  * Each page has its own RBAC module (`reports-*:read`).
  */
 export const REPORT_ROUTES = [
   { slug: "overview", label: "Overview", href: "/crm/reports/overview", permission: "reports-overview:read" },
   ...LEAD_REPORT_SECTIONS.map(({ slug, label, href, permission }) => ({ slug, label, href, permission })),
-  { slug: "forecast", label: "Deal Reports", href: "/crm/reports/forecast", permission: "reports-forecast:read" },
+  { slug: "forecast", label: "Pipeline Insights", href: "/crm/reports/forecast", permission: "reports-forecast:read" },
   { slug: "health", label: "Sales Health", href: "/crm/reports/forecast/health", permission: "reports-health:read" },
-  { slug: "revenue", label: "Forecast", href: "/crm/reports/forecast/revenue", revenueOnly: true, permission: "reports-revenue:read" },
   { slug: "agents", label: "Agent Performance", href: "/crm/reports/agents", permission: "dashboard:read" },
 ] as const;
 
@@ -152,13 +124,12 @@ export const REPORT_SECTION_DESCRIPTIONS: Record<string, string> = {
   overview: "Period analytics — KPIs, funnel, revenue trend, activity mix, and engagement summary.",
   leads:
     "Daily lead intake by platform (LinkedIn, Website, …) and employee, plus volume and channel detail.",
-  "leads-funnel": "Created → converted → deals funnel, open stages, and lost/converted stage detail.",
+  "leads-funnel": "Created → converted funnel, open stages, and lost/converted stage detail.",
   "leads-aging": "Follow-up coverage and stale open leads needing attention.",
   "leads-conversion": "Time from lead created to first outreach and between follow-ups.",
   forecast:
-    "Daily deal intake by platform and employee, pipeline outcomes, closers, and board outreach insights.",
+    "Daily lead intake by platform and employee plus board outreach insights.",
   health: "Work done, activity mix, and pipeline risk signals.",
-  revenue: "Generated revenue vs weighted open-pipeline forecast.",
   agents: "Calls, activities, leads, and properties/farms listed per human agent, with target-vs-actual.",
 };
 
@@ -187,9 +158,4 @@ export function reportNavRoutes() {
 /** Lead report pages (Dreams Lead Reports group). */
 export function leadReportNavRoutes() {
   return LEAD_REPORT_SECTIONS;
-}
-
-/** Deal / forecast pages (Dreams Deal Reports group). */
-export function dealReportNavRoutes() {
-  return DEAL_REPORT_SECTIONS;
 }

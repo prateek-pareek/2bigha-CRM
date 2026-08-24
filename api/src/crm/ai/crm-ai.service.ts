@@ -35,8 +35,7 @@ import {
 type PersonModule = 'leads' | 'contacts';
 export type ProposalSourceModule =
   | 'leads'
-  | 'contacts'
-  | 'deals';
+  | 'contacts';
 type ProposalKind = 'proposal' | 'quotation';
 
 const TONE_HINTS: Record<string, string> = {
@@ -495,136 +494,7 @@ export class CrmAiService {
     context: Record<string, unknown>,
     module: ProposalSourceModule,
   ) {
-    if (module === 'deals') {
-      const first = String(context.contactFirstName || '').trim();
-      const last = String(context.contactLastName || '').trim();
-      const name = `${first} ${last}`.trim();
-      const email = String(context.contactEmail || '').trim();
-      const org = String(context.organization || '').trim();
-      if (!draft.clientName && name) draft.clientName = name;
-      if (!draft.clientName && org) draft.clientName = org;
-      if (!draft.clientEmail && email) draft.clientEmail = email;
-    }
     return draft;
-  }
-
-  async draftClientPortalUpdate(
-    user: any,
-    dealId: string,
-    input: {
-      cadence?: 'daily' | 'weekly' | 'general';
-      instructions?: string;
-      lookbackHours?: number;
-    },
-  ): Promise<{ title: string; body: string; cadence: 'daily' | 'weekly' | 'general' }> {
-    const dealRecordId = String(dealId || '').trim();
-    if (!dealRecordId) {
-      throw new BadRequestException('dealId is required');
-    }
-    await this.crmService.assertClientPortalAccess(user, dealRecordId, 'manager');
-
-    this.requireLlmConfigured('AI drafting');
-    const promptSettings =
-      await this.outreachAiSettings.getEffectiveForPromptSafe();
-    if (promptSettings.enabled === false) {
-      throw new ServiceUnavailableException(
-        'AI outreach drafting is disabled. Enable it under CRM Settings → AI outreach.',
-      );
-    }
-
-    const lookbackHours = Math.max(1, Number(input?.lookbackHours || 24));
-    const [deal, baseDraft, recentUpdates] = await Promise.all([
-      this.crmService.findOneDeal(dealRecordId, user),
-      this.crmService.buildClientPortalDailyUpdateDraft(dealRecordId, user, lookbackHours),
-      this.crmService.listClientPortalUpdates(dealRecordId, 5),
-    ]);
-
-    const requestedCadence =
-      input?.cadence === 'daily' || input?.cadence === 'weekly' || input?.cadence === 'general'
-        ? input.cadence
-        : 'daily';
-
-    const model = this.settingsModel(promptSettings as Record<string, unknown>);
-
-    const prompt = [
-      'You are generating a clear, client-facing project update for a client portal.',
-      '',
-      'CRM deal context JSON:',
-      JSON.stringify(
-        {
-          title: (deal as any)?.title || '',
-          stage: (deal as any)?.stage || '',
-          portalScopeSummary: (deal as any)?.portalScopeSummary || '',
-          portalMilestones: (deal as any)?.portalMilestones || [],
-          portalDeadlines: (deal as any)?.portalDeadlines || [],
-        },
-        null,
-        2,
-      ),
-      '',
-      'Ticket-movement baseline draft JSON:',
-      JSON.stringify(baseDraft, null, 2),
-      '',
-      'Recent already-posted portal updates (avoid repeating verbatim):',
-      JSON.stringify(
-        (recentUpdates || []).map((u: any) => ({
-          title: u?.title || '',
-          body: u?.body || '',
-          cadence: u?.cadence || 'general',
-          createdAt: u?.createdAt || null,
-        })),
-        null,
-        2,
-      ),
-      '',
-      `Requested cadence: ${requestedCadence}`,
-      input?.instructions?.trim()
-        ? `Additional author instructions:\n${input.instructions.trim()}`
-        : '',
-      '',
-      'Write an update that is concise, transparent, and non-technical where possible.',
-      'Include: progress snapshot, key completed/in-progress items, blockers/risks (if any), and next steps.',
-      'Do not invent metrics or commitments not supported by context.',
-      '',
-      'Return ONLY valid JSON in this exact shape (no markdown):',
-      '{"title":"...","body":"...","cadence":"daily|weekly|general"}',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const raw = await this.anthropic.createMessageText({
-      userPrompt: prompt,
-      model,
-      featureLabel: 'Client portal update',
-    });
-    let parsed: { title?: unknown; body?: unknown; cadence?: unknown } | null = null;
-    try {
-      parsed = JSON.parse(raw) as { title?: unknown; body?: unknown; cadence?: unknown };
-    } catch {
-      const start = raw.indexOf('{');
-      const end = raw.lastIndexOf('}');
-      if (start >= 0 && end > start) {
-        parsed = JSON.parse(raw.slice(start, end + 1)) as {
-          title?: unknown;
-          body?: unknown;
-          cadence?: unknown;
-        };
-      }
-    }
-    if (!parsed) {
-      throw new BadRequestException('Could not parse AI client-portal update response.');
-    }
-
-    const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
-    const body = typeof parsed.body === 'string' ? parsed.body.trim() : '';
-    const cadence =
-      parsed.cadence === 'daily' || parsed.cadence === 'weekly' || parsed.cadence === 'general'
-        ? parsed.cadence
-        : requestedCadence;
-    if (!title || !body) {
-      throw new BadRequestException('AI response missing title or body for client-portal update.');
-    }
-    return { title, body, cadence };
   }
 
   private async resolvePersonDraftContext(
@@ -923,7 +793,6 @@ export class CrmAiService {
     const labels: Record<ProposalSourceModule, string> = {
       leads: 'Lead',
       contacts: 'Contact',
-      deals: 'Deal',
     };
     return `${labels[module] || 'Record'} not found`;
   }
@@ -943,88 +812,11 @@ export class CrmAiService {
       const context = await this.buildPersonContext('leads', record);
       return { record, context };
     }
-    if (module === 'contacts') {
-      const contact = await this.crmService.findOneContact(entityId);
-      if (!contact) return { record: null, context: {} };
-      const record = JSON.parse(JSON.stringify(contact)) as Record<string, unknown>;
-      const context = await this.buildPersonContext('contacts', record);
-      return { record, context };
-    }
-    const deal = await this.crmService.findOneDeal(entityId, user);
-    if (!deal) return { record: null, context: {} };
-    const record = JSON.parse(JSON.stringify(deal)) as Record<string, unknown>;
-    const context = await this.buildDealContext(record);
+    const contact = await this.crmService.findOneContact(entityId);
+    if (!contact) return { record: null, context: {} };
+    const record = JSON.parse(JSON.stringify(contact)) as Record<string, unknown>;
+    const context = await this.buildPersonContext('contacts', record);
     return { record, context };
-  }
-
-  private async buildDealContext(o: Record<string, unknown>) {
-    const customFields =
-      o.customFields &&
-      typeof o.customFields === 'object' &&
-      o.customFields !== null &&
-      !Array.isArray(o.customFields)
-        ? { ...(o.customFields as Record<string, unknown>) }
-        : {};
-
-    let pipelineName: string | undefined;
-    let senderBusinessContext = PIPELINE_CATEGORY_CONTEXT.it_consulting;
-    const pipelineIdRaw = o.pipeline;
-    const pipelineId =
-      typeof pipelineIdRaw === 'string'
-        ? pipelineIdRaw
-        : pipelineIdRaw && typeof pipelineIdRaw === 'object'
-          ? String(
-              (pipelineIdRaw as { _id?: unknown })._id ||
-                (pipelineIdRaw as { id?: unknown }).id ||
-                '',
-            )
-          : '';
-    if (pipelineId) {
-      const pipelineDoc = await this.pipelinesService.findOne(pipelineId);
-      if (pipelineDoc) {
-        const pipe = pipelineDoc as unknown as {
-          name?: string;
-          categoryType?: string;
-        };
-        pipelineName = pipe.name;
-        const mapped =
-          typeof pipe.categoryType === 'string'
-            ? PIPELINE_CATEGORY_CONTEXT[pipe.categoryType]
-            : undefined;
-        if (mapped) senderBusinessContext = mapped;
-      }
-    }
-
-    const contact = o.contactPerson as Record<string, unknown> | undefined;
-    const org = o.organization as Record<string, unknown> | string | undefined;
-    const orgName =
-      typeof org === 'string'
-        ? org
-        : org && typeof org === 'object'
-          ? String(org.name || '')
-          : '';
-
-    return {
-      recordType: 'deal',
-      title: o.title,
-      stage: o.stage,
-      dealValue: o.dealValue,
-      expectedDealValue: o.expectedDealValue,
-      currency: o.currency,
-      dealOwner: o.dealOwner,
-      nextStep: o.nextStep,
-      expectedClosureDate: o.expectedClosureDate,
-      organization: orgName,
-      pipelineName,
-      pipelineCategoryType: undefined,
-      senderBusinessContext,
-      contactFirstName: contact?.firstName,
-      contactLastName: contact?.lastName,
-      contactEmail: contact?.email,
-      contactJobTitle: contact?.jobTitle,
-      associatedContacts: o.associatedContacts,
-      customFields,
-    };
   }
 
   private async buildPersonContext(

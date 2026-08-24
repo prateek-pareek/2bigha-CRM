@@ -29,7 +29,7 @@ export class RoleAuditLog {
   })
   action: string;
 
-  /** e.g. 'UserRole' | 'User' | 'Lead' | 'Deal' | 'LegalCase' */
+  /** e.g. 'UserRole' | 'User' | 'Lead' | 'LegalCase' */
   @Prop({ required: true, trim: true, index: true })
   targetType: string;
 

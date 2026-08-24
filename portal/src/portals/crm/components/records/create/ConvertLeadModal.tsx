@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { CrmJiraPortal } from "@/components/crm/shell/CrmJiraPortal";
 import { useRouter } from "next/navigation";
-import { User, Building2, Handshake, Loader2, UserCheck, CheckCircle2 } from "lucide-react";
-import { usePermissions } from "@/hooks/usePermissions";
+import { User, Building2, Loader2, UserCheck, CheckCircle2 } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { invalidateCrmForEntityType } from "@/lib/crm/shared/invalidate-on-mutation";
 import CrmSlidePanelShell from "@/components/crm/shell/CrmSlidePanelShell";
@@ -30,39 +29,11 @@ export default function ConvertLeadModal({
   onSuccess,
 }: ConvertLeadModalProps) {
   const router = useRouter();
-  const { user } = usePermissions();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [convertType, setConvertType] = useState<
-    "contact" | "organization" | "deal" | "client"
+    "contact" | "organization" | "client"
   >("contact");
-  const [dealPipelines, setDealPipelines] = useState<any[]>([]);
-  const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
-
-  useEffect(() => {
-    if (isOpen && convertType === "deal") {
-      const token = localStorage.getItem("token");
-      fetch(`${CRM_API_URL}/crm/pipelines?type=deals`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setDealPipelines(data);
-          if (data.length > 0) {
-            const assignedPipeline = (user as any)?.assignedDealsPipeline;
-            if (
-              assignedPipeline &&
-              data.some((p: any) => p._id === assignedPipeline)
-            ) {
-              setSelectedPipelineId(assignedPipeline);
-            } else {
-              const defaultP = data.find((p: any) => p.isDefault) || data[0];
-              setSelectedPipelineId(defaultP._id);
-            }
-          }
-        });
-    }
-  }, [isOpen, convertType, user]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -87,8 +58,6 @@ export default function ConvertLeadModal({
         },
         body: JSON.stringify({
           type: convertType,
-          ...(convertType === "deal" &&
-            selectedPipelineId && { pipelineId: selectedPipelineId }),
         }),
       });
       if (res.ok) {
@@ -110,7 +79,6 @@ export default function ConvertLeadModal({
           if (type === "contact") router.push(`/crm/contacts/${entity._id}`);
           else if (type === "organization")
             router.push(`/crm/organizations/${entity._id}`);
-          else if (type === "deal") router.push(`/crm/deals/${entity._id}`);
         }
       } else {
         const err = await res.json();
@@ -133,9 +101,7 @@ export default function ConvertLeadModal({
       ? "Contact"
       : convertType === "organization"
         ? "Organization"
-        : convertType === "deal"
-          ? "Deal"
-          : "Client";
+        : "Client";
 
   const panel = (
     <CrmSlidePanelShell
@@ -198,12 +164,6 @@ export default function ConvertLeadModal({
                 desc: "Create organization from company info",
               },
               {
-                type: "deal" as const,
-                label: "Deal",
-                icon: Handshake,
-                desc: "Move to sales pipeline as a deal",
-              },
-              {
                 type: "client" as const,
                 label: "Client",
                 icon: UserCheck,
@@ -236,35 +196,6 @@ export default function ConvertLeadModal({
               </div>
             </button>
           ))}
-
-          {convertType === "deal" && dealPipelines.length > 0 ? (
-            <div className="pt-1">
-              <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">
-                Deal pipeline
-              </label>
-              <select
-                value={selectedPipelineId}
-                onChange={(e) => setSelectedPipelineId(e.target.value)}
-                disabled={!!(user as any)?.assignedDealsPipeline}
-                title={
-                  (user as any)?.assignedDealsPipeline
-                    ? "Pipeline is fixed for your account"
-                    : "Choose deal pipeline"
-                }
-                className={`w-full mt-1.5 h-10 px-3 bg-white border border-[var(--border-color)] rounded-md text-sm font-medium text-[var(--text-main)] outline-none focus:border-primary focus:ring-1 focus:ring-primary/35 ${
-                  (user as any)?.assignedDealsPipeline
-                    ? "cursor-not-allowed opacity-90"
-                    : "cursor-pointer"
-                }`}
-              >
-                {dealPipelines.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
         </div>
       )}
     </CrmSlidePanelShell>

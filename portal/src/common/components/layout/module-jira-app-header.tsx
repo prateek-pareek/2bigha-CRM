@@ -225,9 +225,6 @@ export function ModuleJiraAppHeader({
       if (t.id === "vault") {
         return hasExplicitTool || hasAccess("vault:read") || hasAccess("hrms:admin");
       }
-      if (t.id === "client-portals") {
-        return hasAccess("clients:read");
-      }
       return hasExplicitTool;
     });
   }, [isAdmin, hasExecutiveAccess, permittedTools, permissions, hasAccess]);
@@ -240,7 +237,6 @@ export function ModuleJiraAppHeader({
     if (path.startsWith("/hrms")) return "hrms";
     if (path.startsWith("/social")) return "social";
     if (path.startsWith("/vault")) return "vault";
-    if (path.startsWith("/client-portals")) return "client-portals";
     return "";
   }, [productHref]);
 

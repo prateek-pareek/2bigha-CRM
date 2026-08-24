@@ -333,7 +333,7 @@ export default function EmailTemplatesPage() {
                 <summary className="cursor-pointer font-bold text-text-main select-none">Personalization (merge fields)</summary>
                 <p className="mt-2 text-text-muted text-xs leading-relaxed">
                   Use tokens like <code className="font-mono bg-surface-dim px-1 rounded">{'{{firstName}}'}</code> in the subject or body. Optional fallback if empty:{' '}
-                  <code className="font-mono bg-surface-dim px-1 rounded">{'{{firstName|there}}'}</code>. Available fields depend on the record (lead, contact, deal, etc.).
+                  <code className="font-mono bg-surface-dim px-1 rounded">{'{{firstName|there}}'}</code>. Available fields depend on the record (lead, contact, organization, etc.).
                 </p>
                 <div className="mt-3 max-h-44 overflow-y-auto space-y-2.5 text-xs border-t border-[var(--border-color)] pt-3">
                   {EMAIL_TEMPLATE_MERGE_GROUPS.map((g) => (

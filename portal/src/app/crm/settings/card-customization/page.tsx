@@ -10,7 +10,6 @@ import {
   User,
   Building2,
   Briefcase,
-  DollarSign,
   Tag,
   Loader2,
 } from 'lucide-react';
@@ -33,7 +32,6 @@ import {
 
 const ENTITY_ICONS: Record<CrmCardEntityId, typeof User> = {
   leads: User,
-  deals: DollarSign,
   contacts: Briefcase,
   clients: Building2,
 };
@@ -113,7 +111,7 @@ export default function CardCustomizationPage() {
 
   const mockPreviewValue = (key: string, label: string): string => {
     if (key.startsWith('cf_')) return `Sample ${label}`;
-    if (key === 'dealValue' || key === 'amount' || key === 'dealValueINR') return '₹12,500';
+    if (key === 'amount' || key === 'annualRevenue') return '₹12,500';
     if (key === 'status' || key === 'stage') return 'Negotiation';
     if (key === 'probability') return '85%';
     if (key === 'expectedClosureDate' || key === 'closeDate' || key === 'createdAt') {
@@ -348,7 +346,7 @@ export default function CardCustomizationPage() {
                   </div>
 
                   <p className="mt-4 text-center text-xs leading-relaxed text-[var(--primary-muted)]">
-                    Standard and custom properties from your CRM module appear here. Kanban boards for leads and deals use these footer fields today.
+                    Standard and custom properties from your CRM module appear here. Kanban boards for leads use these footer fields today.
                   </p>
                 </div>
               </div>

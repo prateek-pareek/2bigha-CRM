@@ -51,7 +51,7 @@ export class LegalCase {
   })
   documents?: { name: string; url: string; uploadedAt: Date }[];
 
-  /** Assigned lawyer / owner label (same convention as Lead.leadOwner / Deal.dealOwner). */
+  /** Assigned lawyer / owner label (same convention as Lead.leadOwner). */
   @Prop()
   caseOwner: string;
 
@@ -73,9 +73,6 @@ export class LegalCase {
   /** Bidirectional link — see Lead.associatedLegalCases. */
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Lead' }], default: [] })
   associatedLeads: Types.ObjectId[];
-
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Deal' }], default: [] })
-  associatedDeals: Types.ObjectId[];
 
   /** Values are strings, string[] (multi-select), or other JSON-serializable primitives. */
   @Prop({ type: Object, default: {} })

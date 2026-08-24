@@ -4,7 +4,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
   {
     name: 'crm_search',
     description:
-      'Search CRM records by keyword (leads, deals, contacts, organizations, clients).',
+      'Search CRM records by keyword (leads, contacts, organizations, clients).',
     input_schema: {
       type: 'object',
       properties: {
@@ -29,22 +29,13 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
     },
   },
   {
-    name: 'get_deal',
-    description: 'Fetch a deal by MongoDB id with pipeline, stage, value, and associations.',
-    input_schema: {
-      type: 'object',
-      properties: { dealId: { type: 'string' } },
-      required: ['dealId'],
-    },
-  },
-  {
     name: 'get_record_context',
     description:
       'Rich context for the current record: agent memory, email engagement summary, recent activities.',
     input_schema: {
       type: 'object',
       properties: {
-        recordType: { type: 'string', enum: ['Lead', 'Deal', 'Contact'] },
+        recordType: { type: 'string', enum: ['Lead', 'Contact'] },
         recordId: { type: 'string' },
       },
       required: ['recordType', 'recordId'],
@@ -77,13 +68,13 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
   },
   {
     name: 'draft_proposal',
-    description: 'AI-draft a proposal or quotation HTML for a lead, contact, or deal.',
+    description: 'AI-draft a proposal or quotation HTML for a lead or contact.',
     input_schema: {
       type: 'object',
       properties: {
         module: {
           type: 'string',
-          enum: ['leads', 'contacts', 'deals'],
+          enum: ['leads', 'contacts'],
         },
         entityId: { type: 'string' },
         kind: { type: 'string', enum: ['proposal', 'quotation'] },
@@ -94,13 +85,13 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
   },
   {
     name: 'draft_contract',
-    description: 'AI-draft a contract HTML for a lead, contact, or deal.',
+    description: 'AI-draft a contract HTML for a lead or contact.',
     input_schema: {
       type: 'object',
       properties: {
         module: {
           type: 'string',
-          enum: ['leads', 'contacts', 'deals'],
+          enum: ['leads', 'contacts'],
         },
         entityId: { type: 'string' },
         instructions: { type: 'string' },
@@ -114,7 +105,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
     input_schema: {
       type: 'object',
       properties: {
-        recordType: { type: 'string', enum: ['Lead', 'Deal', 'Contact'] },
+        recordType: { type: 'string', enum: ['Lead', 'Contact'] },
         recordId: { type: 'string' },
         title: { type: 'string' },
         content: { type: 'string' },
@@ -129,7 +120,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
     input_schema: {
       type: 'object',
       properties: {
-        recordType: { type: 'string', enum: ['Lead', 'Deal', 'Contact'] },
+        recordType: { type: 'string', enum: ['Lead', 'Contact'] },
         recordId: { type: 'string' },
         title: { type: 'string' },
         content: { type: 'string' },
@@ -147,18 +138,6 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
         stageName: { type: 'string' },
       },
       required: ['leadId', 'stageName'],
-    },
-  },
-  {
-    name: 'update_deal_stage',
-    description: 'Move a deal to a pipeline stage.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        dealId: { type: 'string' },
-        stageName: { type: 'string' },
-      },
-      required: ['dealId', 'stageName'],
     },
   },
   {
@@ -185,7 +164,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
         to: { type: 'string' },
         subject: { type: 'string' },
         bodyHtml: { type: 'string' },
-        module: { type: 'string', enum: ['leads', 'contacts', 'deals'] },
+        module: { type: 'string', enum: ['leads', 'contacts'] },
         entityId: { type: 'string' },
         replyToInboxEmailId: { type: 'string' },
       },
@@ -195,35 +174,19 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
   {
     name: 'convert_lead',
     description:
-      'Convert a lead to contact, organization, deal, or client. Requires approval.',
+      'Convert a lead to contact, organization, or client. Requires approval.',
     input_schema: {
       type: 'object',
       properties: {
         leadId: { type: 'string' },
         type: {
           type: 'string',
-          enum: ['contact', 'organization', 'deal', 'client'],
+          enum: ['contact', 'organization', 'client'],
         },
         pipelineId: { type: 'string' },
         stage: { type: 'string' },
       },
       required: ['leadId', 'type'],
-    },
-  },
-  {
-    name: 'create_deal',
-    description: 'Create a new deal from lead context. Requires approval.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        leadId: { type: 'string' },
-        pipelineId: { type: 'string' },
-        stage: { type: 'string' },
-        value: { type: 'number' },
-        expectedCloseDate: { type: 'string' },
-      },
-      required: ['name'],
     },
   },
   {
@@ -236,7 +199,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
         accountId: { type: 'string' },
         module: {
           type: 'string',
-          enum: ['leads', 'contacts', 'deals'],
+          enum: ['leads', 'contacts'],
         },
         entityId: { type: 'string' },
         to: { type: 'string' },
@@ -247,26 +210,12 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
     },
   },
   {
-    name: 'update_deal_value',
-    description: 'Update deal amount and/or expected close date. Requires approval.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        dealId: { type: 'string' },
-        value: { type: 'number' },
-        expectedCloseDate: { type: 'string' },
-        probability: { type: 'number' },
-      },
-      required: ['dealId'],
-    },
-  },
-  {
     name: 'assign_owner',
-    description: 'Assign leadOwner or dealOwner. Requires approval.',
+    description: 'Assign leadOwner. Requires approval.',
     input_schema: {
       type: 'object',
       properties: {
-        recordType: { type: 'string', enum: ['Lead', 'Deal'] },
+        recordType: { type: 'string', enum: ['Lead'] },
         recordId: { type: 'string' },
         ownerName: { type: 'string' },
       },
@@ -275,11 +224,11 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
   },
   {
     name: 'list_pipelines',
-    description: 'List CRM pipelines and stages (optionally filter by type: leads, deals).',
+    description: 'List CRM pipelines and stages (optionally filter by type: leads).',
     input_schema: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['leads', 'deals'] },
+        type: { type: 'string', enum: ['leads'] },
       },
     },
   },
@@ -289,7 +238,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
     input_schema: {
       type: 'object',
       properties: {
-        entityType: { type: 'string', enum: ['Lead', 'Contact', 'Deal'] },
+        entityType: { type: 'string', enum: ['Lead', 'Contact'] },
       },
     },
   },
@@ -300,11 +249,11 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
   },
   {
     name: 'get_email_thread',
-    description: 'Tracked email send/open/reply history for a lead, deal, or contact record.',
+    description: 'Tracked email send/open/reply history for a lead or contact record.',
     input_schema: {
       type: 'object',
       properties: {
-        module: { type: 'string', enum: ['leads', 'deals', 'contacts'] },
+        module: { type: 'string', enum: ['leads', 'contacts'] },
         entityId: { type: 'string' },
         limit: { type: 'number' },
       },
@@ -317,7 +266,7 @@ export const SALES_AGENT_TOOLS: AnthropicToolDef[] = [
     input_schema: {
       type: 'object',
       properties: {
-        recordType: { type: 'string', enum: ['Lead', 'Deal', 'Contact'] },
+        recordType: { type: 'string', enum: ['Lead', 'Contact'] },
         recordId: { type: 'string' },
         title: { type: 'string' },
         content: { type: 'string' },

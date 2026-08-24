@@ -301,7 +301,7 @@ export function CrmThemeCustomizer() {
               <section className="rounded-[8px] border border-[var(--border-color)] bg-white p-3 shadow-sm dark:bg-[var(--card-bg)]">
                 <h3 className="mb-1 text-sm font-semibold text-[var(--text-main)]">CRM Setup</h3>
                 <p className="mb-2.5 text-xs text-[var(--text-muted)]">
-                  Shortcuts for how your team works leads and deals.
+                  Shortcuts for how your team works leads.
                 </p>
                 <ul className="space-y-1">
                   {QUICK_LINKS.map((item) => {

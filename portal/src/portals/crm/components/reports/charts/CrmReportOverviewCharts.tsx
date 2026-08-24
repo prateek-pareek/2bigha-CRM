@@ -87,13 +87,6 @@ export const CRM_CHART_CATALOG = [
     defaultOn: true,
   },
   {
-    id: "deals_by_stage",
-    category: "Pipeline",
-    label: "Deals by stage",
-    description: "Open pipeline mix",
-    defaultOn: true,
-  },
-  {
     id: "leads_by_owner",
     category: "Pipeline",
     label: "Leads by owner",
@@ -125,7 +118,7 @@ export const CRM_CHART_CATALOG = [
     id: "channel_performance",
     category: "Outreach",
     label: "Channel performance",
-    description: "Leads, replies, and deals by acquisition channel",
+    description: "Leads and replies by acquisition channel",
     defaultOn: true,
   },
   {
@@ -185,24 +178,10 @@ export const CRM_CHART_CATALOG = [
     defaultOn: true,
   },
   {
-    id: "funnel_deals",
-    category: "Pipeline",
-    label: "Deal funnel",
-    description: "Pipeline stage drop-off",
-    defaultOn: false,
-  },
-  {
     id: "leads_by_pipeline_stage",
     category: "Pipeline",
     label: "Leads by stage",
     description: "Open leads by stage with share of pipeline",
-    defaultOn: true,
-  },
-  {
-    id: "deals_by_pipeline_stage",
-    category: "Pipeline",
-    label: "Deals by pipeline stage",
-    description: "Open deals per stage (all pipelines)",
     defaultOn: true,
   },
   {
@@ -232,7 +211,6 @@ const SWITCHABLE_CHART_IDS = new Set<CrmChartId>([
   "sales_activity",
   "leads_by_owner",
   "leads_by_pipeline_stage",
-  "deals_by_pipeline_stage",
 ]);
 
 const DEFAULT_CHART_VIEWS: Partial<Record<CrmChartId, ChartViewType>> = {
@@ -249,7 +227,6 @@ const DEFAULT_CHART_VIEWS: Partial<Record<CrmChartId, ChartViewType>> = {
   sales_activity: "area",
   leads_by_owner: "bar",
   leads_by_pipeline_stage: "bar",
-  deals_by_pipeline_stage: "bar",
 };
 
 function loadChartViews(): Partial<Record<CrmChartId, ChartViewType>> {
@@ -349,11 +326,8 @@ function withRollingAverage<T extends { count: number }>(rows: T[], window = 7) 
   });
 }
 
-type DealStageRow = { name: string; value: number };
-
 const CHART_ICONS: Record<CrmChartId, ReactNode> = {
   leads_over_time: <Users className="h-4 w-4" />,
-  deals_by_stage: <Briefcase className="h-4 w-4" />,
   leads_by_owner: <Users className="h-4 w-4" />,
   email_opens: <Mail className="h-4 w-4" />,
   email_sends_vs_opens: <Send className="h-4 w-4" />,
@@ -367,9 +341,7 @@ const CHART_ICONS: Record<CrmChartId, ReactNode> = {
   sales_activity: <Activity className="h-4 w-4" />,
   activity_mix: <Activity className="h-4 w-4" />,
   venn_overlap: <Activity className="h-4 w-4" />,
-  funnel_deals: <Briefcase className="h-4 w-4" />,
   leads_by_pipeline_stage: <Users className="h-4 w-4" />,
-  deals_by_pipeline_stage: <Briefcase className="h-4 w-4" />,
   email_engagement_breakdown: <Mail className="h-4 w-4" />,
 };
 
@@ -383,7 +355,6 @@ export default function CrmReportOverviewCharts({
   className?: string;
 }) {
   const [board, setBoard] = useState<BoardReportPayload | null>(null);
-  const [deals, setDeals] = useState<DealStageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [matrixOpen, setMatrixOpen] = useState(true);
   const [selection, setSelection] = useState<Record<CrmChartId, boolean>>(defaultSelection);
@@ -437,22 +408,14 @@ export default function CrmReportOverviewCharts({
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
       const q = new URLSearchParams({ days, owner });
       try {
-        const [boardRes, dealsRes] = await Promise.all([
-          fetch(`${CRM_API_URL}/crm/reports/board?${q}`, { headers }),
-          fetch(`${CRM_API_URL}/crm/reports/deals?${q}`, { headers }),
-        ]);
+        const boardRes = await fetch(`${CRM_API_URL}/crm/reports/board?${q}`, { headers });
         if (!cancelled) {
           if (boardRes.ok) setBoard(await boardRes.json());
           else setBoard(null);
-          if (dealsRes.ok) {
-            const j = await dealsRes.json();
-            setDeals(Array.isArray(j) ? j : []);
-          } else setDeals([]);
         }
       } catch {
         if (!cancelled) {
           setBoard(null);
-          setDeals([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -637,7 +600,6 @@ export default function CrmReportOverviewCharts({
             fullName: channel,
             leads: Number(r.leads) || 0,
             replies: Number(r.replies) || 0,
-            deals: Number(r.deals) || 0,
             conversionRate: Number(r.conversionRate) || 0,
             replyRate: Number(r.replyRate) || 0,
           };
@@ -647,7 +609,7 @@ export default function CrmReportOverviewCharts({
   const topReplyChannel = useMemo(() => {
     const rows = board?.channelPerformance ?? [];
     if (!rows.length) return null;
-    return [...rows].sort((a, b) => b.replies - a.replies || b.deals - a.deals)[0] ?? null;
+    return [...rows].sort((a, b) => b.replies - a.replies)[0] ?? null;
   }, [board?.channelPerformance]);
 
   const emailTotals = useMemo(() => {
@@ -692,23 +654,6 @@ export default function CrmReportOverviewCharts({
     () => leadsByPipelineStage.reduce((s, r) => s + r.count, 0),
     [leadsByPipelineStage],
   );
-
-  const dealsByPipelineStage = useMemo(() => {
-    const stageMap = new Map<string, number>();
-    for (const p of board?.openDealsByPipeline ?? []) {
-      for (const s of p.stages) {
-        stageMap.set(s.stage, (stageMap.get(s.stage) || 0) + s.count);
-      }
-    }
-    return [...stageMap.entries()]
-      .map(([stage, count]) => ({
-        name: stage.length > 18 ? `${stage.slice(0, 16)}…` : stage,
-        fullStage: stage,
-        count,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-  }, [board?.openDealsByPipeline]);
 
   const emailEngagementSlices = useMemo(() => {
     const s = board?.emailEngagementSummary;
@@ -791,7 +736,7 @@ export default function CrmReportOverviewCharts({
                 value={topReplyChannel?.channel ?? "—"}
                 sub={
                   topReplyChannel
-                    ? `${topReplyChannel.replies} replies · ${topReplyChannel.deals} deals`
+                    ? `${topReplyChannel.replies} replies`
                     : undefined
                 }
               />
@@ -840,7 +785,6 @@ export default function CrmReportOverviewCharts({
                     <ChartBody
                       chartId={meta.id}
                       viewType={viewType}
-                      deals={deals}
                       leadsByDay={leadsByDay}
                       leadsByDayStats={leadsByDayStats}
                       opensByDay={opensByDay}
@@ -856,7 +800,6 @@ export default function CrmReportOverviewCharts({
                       channelPerformance={channelPerformance}
                       leadsByPipelineStage={leadsByPipelineStage}
                       leadsByStageTotal={leadsByStageTotal}
-                      dealsByPipelineStage={dealsByPipelineStage}
                       emailEngagementSlices={emailEngagementSlices}
                       emailTotals={emailTotals}
                       repliesByAttempt={board.followUpReplyAnalytics?.repliesByAttempt ?? []}
@@ -883,7 +826,6 @@ export default function CrmReportOverviewCharts({
 function ChartBody({
   chartId,
   viewType,
-  deals,
   leadsByDay,
   leadsByDayStats,
   opensByDay,
@@ -899,7 +841,6 @@ function ChartBody({
   channelPerformance,
   leadsByPipelineStage,
   leadsByStageTotal,
-  dealsByPipelineStage,
   emailEngagementSlices,
   emailTotals,
   repliesByAttempt,
@@ -910,7 +851,6 @@ function ChartBody({
 }: {
   chartId: CrmChartId;
   viewType: ChartViewType;
-  deals: DealStageRow[];
   leadsByDay: Array<{
     date: string;
     label: string;
@@ -957,7 +897,6 @@ function ChartBody({
     fullName: string;
     leads: number;
     replies: number;
-    deals: number;
     conversionRate: number;
     replyRate: number;
   }>;
@@ -970,7 +909,6 @@ function ChartBody({
     label: string;
   }>;
   leadsByStageTotal: number;
-  dealsByPipelineStage: { name: string; fullStage: string; count: number }[];
   emailEngagementSlices: { name: string; value: number }[];
   emailTotals: { sends: number; opened: number; rate: number };
   repliesByAttempt: Array<{ attempt: number; label: string; replies: number }>;
@@ -1059,10 +997,9 @@ function ChartBody({
           series: [
             { key: "leads", name: "Leads", color: "#3b82f6" },
             { key: "replies", name: "Replies", color: CRM_CHART_SECONDARY },
-            { key: "deals", name: "Deals", color: "#10b981" },
           ],
           empty: "No channel data in this range — check Lead Source / opportunity platform on new leads",
-          hasData: channelPerformance.some((r) => r.leads > 0 || r.replies > 0 || r.deals > 0),
+          hasData: channelPerformance.some((r) => r.leads > 0 || r.replies > 0),
           footer:
             channelPerformance.length > 0 ? (
               <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border-color)] shrink-0">
@@ -1072,7 +1009,6 @@ function ChartBody({
                       <th className="px-3 py-2 font-bold">Channel</th>
                       <th className="px-3 py-2 font-bold text-right">Leads</th>
                       <th className="px-3 py-2 font-bold text-right">Replies</th>
-                      <th className="px-3 py-2 font-bold text-right">Deals</th>
                       <th className="px-3 py-2 font-bold text-right">Conv %</th>
                       <th className="px-3 py-2 font-bold text-right">Reply %</th>
                     </tr>
@@ -1085,7 +1021,6 @@ function ChartBody({
                         </td>
                         <td className="px-3 py-1.5 text-right tabular-nums">{row.leads}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">{row.replies}</td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">{row.deals}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">{row.conversionRate}%</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">{row.replyRate}%</td>
                       </tr>
@@ -1176,14 +1111,6 @@ function ChartBody({
             </div>
           ),
         };
-      case "deals_by_pipeline_stage":
-        return {
-          data: dealsByPipelineStage as unknown as Array<Record<string, string | number>>,
-          categoryKey: "name",
-          fullNameKey: "fullStage",
-          series: [{ key: "count", name: "Open deals", color: "#14b8a6" }],
-          empty: "No open deals",
-        };
       default:
         return null;
     }
@@ -1222,39 +1149,6 @@ function ChartBody({
   }
 
   switch (chartId) {
-    case "deals_by_stage":
-      if (deals.length === 0) return <ChartEmpty message="No open deals yet" />;
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={deals}
-              cx="50%"
-              cy="50%"
-              innerRadius={56}
-              outerRadius={88}
-              paddingAngle={3}
-              dataKey="value"
-              nameKey="name"
-              label={({ name, percent, value }) => (percent != null && percent > 0.05 ? `${name} (${value}, ${(percent * 100).toFixed(0)}%)` : "")}
-              labelLine={true}
-            >
-              {deals.map((_, i) => (
-                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip contentStyle={tooltipStyle} />
-            <Legend
-              layout="vertical"
-              align="right"
-              verticalAlign="middle"
-              iconType="circle"
-              wrapperStyle={{ fontSize: 11, fontWeight: 600 }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      );
-
     case "leads_by_owner":
       if (leadsByOwner.length === 0) return <ChartEmpty message="No leads in this range" />;
       return (
@@ -1302,27 +1196,6 @@ function ChartBody({
             height={220}
           />
         </div>
-      );
-
-    case "funnel_deals":
-      if (deals.length === 0) return <ChartEmpty message="No pipeline data" />;
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <FunnelChart>
-            <Tooltip contentStyle={tooltipStyle} />
-            <Funnel
-              dataKey="value"
-              data={[...deals].sort((a, b) => b.value - a.value)}
-              isAnimationActive
-            >
-              <LabelList position="right" fill="var(--text-main)" stroke="none" dataKey="name" fontSize={11} />
-              <LabelList position="center" fill="#fff" stroke="none" dataKey="value" fontSize={12} formatter={(val: any) => val || ""} />
-              {deals.map((_, i) => (
-                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-              ))}
-            </Funnel>
-          </FunnelChart>
-        </ResponsiveContainer>
       );
 
     case "activity_mix":
@@ -1452,35 +1325,6 @@ function ChartBody({
               }
             />
             <Bar dataKey="count" fill="url(#colorLeadsPipeline)" radius={[0, 6, 6, 0]} barSize={14}>
-              <LabelList dataKey="count" position="right" fontSize={10} fontWeight={600} fill="#64748b" />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      );
-
-    case "deals_by_pipeline_stage":
-      if (dealsByPipelineStage.length === 0) return <ChartEmpty message="No open deals" />;
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={dealsByPipelineStage} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="colorDealsPipeline" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#14b8a6" stopOpacity={1}/>
-                <stop offset="100%" stopColor="#2dd4bf" stopOpacity={1}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" opacity={0.5} />
-            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: "var(--text-muted)", fontWeight: 600 }} axisLine={false} tickLine={false} />
-            <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11, fill: "var(--text-main)", fontWeight: 600 }} axisLine={false} tickLine={false} />
-            <Tooltip
-              cursor={{fill: 'var(--surface-dim)', opacity: 0.5}}
-              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', fontSize: 12, fontWeight: 600, padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)' }}
-              itemStyle={{ padding: '3px 0' }}
-              labelFormatter={(_, payload) =>
-                payload?.[0]?.payload?.fullStage ? String(payload[0].payload.fullStage) : ""
-              }
-            />
-            <Bar dataKey="count" fill="url(#colorDealsPipeline)" radius={[0, 6, 6, 0]} barSize={14}>
               <LabelList dataKey="count" position="right" fontSize={10} fontWeight={600} fill="#64748b" />
             </Bar>
           </BarChart>

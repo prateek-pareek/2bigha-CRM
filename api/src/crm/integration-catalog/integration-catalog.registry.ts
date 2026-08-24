@@ -40,7 +40,7 @@ export const INTEGRATION_CATALOG: IntegrationCatalogDefinition[] = [
     id: 'microsoft-teams',
     name: 'Microsoft Teams',
     description:
-      'Broadcast CRM updates, deal closures, and new leads to Teams channels via webhooks. Bot DMs power workflow Notify actions.',
+      'Broadcast CRM updates and new leads to Teams channels via webhooks. Bot DMs power workflow Notify actions.',
     category: 'communication',
     authType: 'webhook',
     configurePath: '/crm/settings/integrations#microsoft-teams',
@@ -106,7 +106,7 @@ export const INTEGRATION_CATALOG: IntegrationCatalogDefinition[] = [
     id: 'slack',
     name: 'Slack',
     description:
-      'Push CRM reminders, deal updates, and lead alerts to Slack channels through Incoming Webhooks.',
+      'Push CRM reminders and lead alerts to Slack channels through Incoming Webhooks.',
     category: 'communication',
     authType: 'webhook',
     configurePath: '/crm/settings/integrations#slack',
@@ -119,7 +119,7 @@ export const INTEGRATION_CATALOG: IntegrationCatalogDefinition[] = [
     id: 'stripe',
     name: 'Stripe',
     description:
-      'Sync invoices and payment status from Stripe into CRM deals and clients.',
+      'Sync invoices and payment status from Stripe into CRM clients.',
     category: 'payments',
     authType: 'oauth',
     configurePath: '/crm/settings/integrations',
@@ -131,7 +131,7 @@ export const INTEGRATION_CATALOG: IntegrationCatalogDefinition[] = [
     id: 'zoom',
     name: 'Zoom',
     description:
-      'Create Zoom meetings from deals and log call outcomes automatically.',
+      'Create Zoom meetings from CRM records and log call outcomes automatically.',
     category: 'productivity',
     authType: 'oauth',
     configurePath: '/crm/settings/integrations',
@@ -143,7 +143,7 @@ export const INTEGRATION_CATALOG: IntegrationCatalogDefinition[] = [
     id: 'notion',
     name: 'Notion',
     description:
-      'Sync playbooks and deal notes with Notion workspaces.',
+      'Sync playbooks and notes with Notion workspaces.',
     category: 'productivity',
     authType: 'oauth',
     configurePath: '/crm/settings/integrations',

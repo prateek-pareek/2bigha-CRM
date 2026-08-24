@@ -57,9 +57,6 @@ export class CreateUserDto {
   @IsOptional()
   assignedLeadsPipeline?: string;
 
-  @IsString()
-  @IsOptional()
-  assignedDealsPipeline?: string;
   @IsOptional()
   accessibleEmailAccounts?: string[];
 

@@ -15,7 +15,7 @@ type AgentRow = {
   activities: number;
   leadsCreated: number;
   leadsConverted: number;
-  target: { leadsTarget: number; callsTarget: number; dealsTarget: number; propertiesTarget: number } | null;
+  target: { leadsTarget: number; callsTarget: number; propertiesTarget: number } | null;
 };
 
 type PropertyCounts = Record<string, { propertyCount: number; farmCount: number }>;
@@ -45,7 +45,7 @@ export default function AgentPerformancePage() {
   const [propertyCounts, setPropertyCounts] = useState<PropertyCounts>({});
   const [loading, setLoading] = useState(true);
   const [targetAgent, setTargetAgent] = useState<AgentRow | null>(null);
-  const [targetForm, setTargetForm] = useState({ leadsTarget: "0", callsTarget: "0", dealsTarget: "0", propertiesTarget: "0" });
+  const [targetForm, setTargetForm] = useState({ leadsTarget: "0", callsTarget: "0", propertiesTarget: "0" });
   const [savingTarget, setSavingTarget] = useState(false);
 
   const authHeaders = useCallback((): Record<string, string> => {
@@ -164,7 +164,6 @@ export default function AgentPerformancePage() {
                             setTargetForm({
                               leadsTarget: String(agent.target?.leadsTarget ?? 0),
                               callsTarget: String(agent.target?.callsTarget ?? 0),
-                              dealsTarget: String(agent.target?.dealsTarget ?? 0),
                               propertiesTarget: String(agent.target?.propertiesTarget ?? 0),
                             });
                             setTargetAgent(agent);
@@ -191,7 +190,6 @@ export default function AgentPerformancePage() {
               {([
                 ["leadsTarget", "Leads target"],
                 ["callsTarget", "Calls target"],
-                ["dealsTarget", "Deals target"],
                 ["propertiesTarget", "Properties/farms target"],
               ] as const).map(([key, label]) => (
                 <div key={key}>
@@ -223,7 +221,6 @@ export default function AgentPerformancePage() {
                       body: JSON.stringify({
                         leadsTarget: Number(targetForm.leadsTarget) || 0,
                         callsTarget: Number(targetForm.callsTarget) || 0,
-                        dealsTarget: Number(targetForm.dealsTarget) || 0,
                         propertiesTarget: Number(targetForm.propertiesTarget) || 0,
                       }),
                     });

@@ -9,15 +9,6 @@ export const CRM_ASSOCIATION_TYPES = {
     legacyFromField: 'associatedOrganizations',
     legacyToField: 'associatedContacts',
   },
-  contact_deal: {
-    key: 'contact_deal',
-    fromType: 'contacts',
-    toType: 'deals',
-    label: 'Deal',
-    inverseLabel: 'Contact',
-    legacyFromField: 'associatedDeals',
-    legacyToField: 'associatedContacts',
-  },
   contact_contact: {
     key: 'contact_contact',
     fromType: 'contacts',
@@ -45,15 +36,6 @@ export const CRM_ASSOCIATION_TYPES = {
     legacyFromField: 'associatedContacts',
     legacyToField: 'associatedLeads',
   },
-  lead_deal: {
-    key: 'lead_deal',
-    fromType: 'leads',
-    toType: 'deals',
-    label: 'Deal',
-    inverseLabel: 'Lead',
-    legacyFromField: 'associatedDeals',
-    legacyToField: 'associatedLeads',
-  },
   lead_lead: {
     key: 'lead_lead',
     fromType: 'leads',
@@ -62,16 +44,6 @@ export const CRM_ASSOCIATION_TYPES = {
     inverseLabel: 'Related lead',
     legacyFromField: 'associatedLeads',
     legacyToField: 'associatedLeads',
-  },
-  deal_company: {
-    key: 'deal_company',
-    fromType: 'deals',
-    toType: 'organizations',
-    label: 'Company',
-    inverseLabel: 'Deal',
-    /** Deals use associatedCompanies historically. */
-    legacyFromField: 'associatedCompanies',
-    legacyToField: 'associatedDeals',
   },
   client_company: {
     key: 'client_company',
@@ -89,15 +61,6 @@ export const CRM_ASSOCIATION_TYPES = {
     label: 'Contact',
     inverseLabel: 'Client',
     legacyFromField: 'associatedContacts',
-    legacyToField: undefined,
-  },
-  client_deal: {
-    key: 'client_deal',
-    fromType: 'clients',
-    toType: 'deals',
-    label: 'Deal',
-    inverseLabel: 'Client',
-    legacyFromField: 'associatedDeals',
     legacyToField: undefined,
   },
   client_lead: {

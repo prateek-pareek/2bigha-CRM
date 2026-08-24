@@ -35,7 +35,6 @@ export class ProposalBlocksController {
   @Permissions(
     'proposals:read',
     'proposals:write',
-    'deals:read',
     'leads:read',
   )
   categories() {
@@ -49,7 +48,6 @@ export class ProposalBlocksController {
   @Permissions(
     'proposals:read',
     'proposals:write',
-    'deals:read',
     'leads:read',
   )
   findAll(
@@ -66,7 +64,6 @@ export class ProposalBlocksController {
   @Permissions(
     'proposals:read',
     'proposals:write',
-    'deals:read',
     'leads:read',
   )
   findOne(@Param('id') id: string) {
@@ -74,7 +71,7 @@ export class ProposalBlocksController {
   }
 
   @Post()
-  @Permissions('proposals:write', 'deals:write', 'leads:write')
+  @Permissions('proposals:write', 'leads:write')
   create(@Request() req: any, @Body() body: any) {
     const cat = PROPOSAL_BLOCK_CATEGORIES.includes(body.category)
       ? body.category
@@ -89,7 +86,7 @@ export class ProposalBlocksController {
   }
 
   @Patch(':id')
-  @Permissions('proposals:write', 'deals:write', 'leads:write')
+  @Permissions('proposals:write', 'leads:write')
   update(@Request() req: any, @Param('id') id: string, @Body() body: any) {
     const cat =
       body.category != null && PROPOSAL_BLOCK_CATEGORIES.includes(body.category)
@@ -109,7 +106,7 @@ export class ProposalBlocksController {
   }
 
   @Delete(':id')
-  @Permissions('proposals:write', 'deals:write', 'leads:write')
+  @Permissions('proposals:write', 'leads:write')
   remove(@Request() req: any, @Param('id') id: string) {
     return this.blocksService.delete(
       id,

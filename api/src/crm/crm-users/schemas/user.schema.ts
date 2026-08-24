@@ -35,9 +35,6 @@ export class CRMUser {
   @Prop()
   assignedLeadsPipeline?: string;
 
-  @Prop()
-  assignedDealsPipeline?: string;
-
   @Prop({ type: [String], default: [] })
   accessibleEmailAccounts: string[];
 }

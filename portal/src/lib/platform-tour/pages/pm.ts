@@ -32,7 +32,7 @@ export const PM_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Virtual office',
         description:
-          'See teammates online and jump into huddles while working in Projects.',
+          'See teammates online and jump into meeting links while working in Projects.',
         side: 'top',
       },
     ],

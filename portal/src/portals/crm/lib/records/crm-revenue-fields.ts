@@ -1,9 +1,5 @@
 /** Field keys that expose money / commercial amounts in CRM. */
 export const CRM_REVENUE_FIELD_KEYS = [
-  'dealValue',
-  'expectedDealValue',
-  'dealValueINR',
-  'dealValueUSD',
   'annualRevenue',
   'pricingType',
   'contractMonths',
@@ -25,7 +21,6 @@ export const CRM_REVENUE_FIELD_KEYS = [
   'invested',
   'returned',
   'independentInvested',
-  'dealLinkedInvested',
   'salaryInvested',
   'profit',
   'resourceDailyRate',

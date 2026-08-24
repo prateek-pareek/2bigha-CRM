@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
-import { Deal, DealDocument } from '../schemas/deal.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import {
   Organization,
@@ -136,8 +135,6 @@ export class EmailTemplateMergeService {
   constructor(
     @InjectModel(Lead.name, 'crmConnection')
     private readonly leadModel: Model<LeadDocument>,
-    @InjectModel(Deal.name, 'crmConnection')
-    private readonly dealModel: Model<DealDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private readonly contactModel: Model<ContactDocument>,
     @InjectModel(Organization.name, 'crmConnection')
@@ -187,28 +184,6 @@ export class EmailTemplateMergeService {
       await this.appendSmartSnippetLinkFields(out, leanDoc(doc));
       return out;
     }
-    if (mod === 'deals') {
-      const doc = await this.dealModel
-        .findById(oid)
-        .populate(
-          'lead',
-          'firstName lastName email phone mobileNo organization jobTitle relatedService',
-        )
-        .populate(
-          'contactPerson',
-          'firstName lastName email phone mobileNo organization jobTitle salutation',
-        )
-        .populate({
-          path: 'associatedCompanies',
-          select: 'name website industry noOfEmployees territory phone email address',
-        })
-        .lean()
-        .exec();
-      if (!doc) return {};
-      const out = this.mergeFromDealDoc(leanDoc(doc), sender);
-      await this.appendSmartSnippetLinkFields(out, leanDoc(doc));
-      return out;
-    }
     if (mod === 'organizations') {
       const doc = await this.organizationModel.findById(oid).lean().exec();
       if (!doc) return {};
@@ -243,30 +218,6 @@ export class EmailTemplateMergeService {
     const orgSelect =
       'name website industry noOfEmployees territory phone email address';
 
-    if (entityType === 'Deal') {
-      const doc = await this.dealModel
-        .findById(entityId)
-        .populate(
-          'lead',
-          'firstName lastName email phone mobileNo organization jobTitle relatedService',
-        )
-        .populate(
-          'contactPerson',
-          'firstName lastName email phone mobileNo organization jobTitle salutation',
-        )
-        .populate({
-          path: 'associatedCompanies',
-          select: orgSelect,
-        })
-        .lean()
-        .exec();
-      if (doc) {
-        const out = this.mergeFromDealDoc(leanDoc(doc), sender);
-        await this.appendSmartSnippetLinkFields(out, leanDoc(doc));
-        return out;
-      }
-      return {};
-    }
     if (entityType === 'Lead') {
       const doc = await this.leadModel
         .findById(entityId)
@@ -471,98 +422,6 @@ export class EmailTemplateMergeService {
     add(out, 'accountPhone', org.phone);
     add(out, 'accountEmail', org.email);
     add(out, 'accountAddress', org.address);
-  }
-
-  private mergeFromDealDoc(
-    d: Record<string, unknown>,
-    sender?: EmailMergeSender,
-  ): Record<string, string> {
-    const out: Record<string, string> = {};
-    add(out, 'title', d.title);
-    add(out, 'dealTitle', d.title);
-    add(out, 'stage', d.stage);
-    add(out, 'dealOwner', d.dealOwner);
-    add(out, 'nextStep', d.nextStep);
-    add(out, 'organization', d.organization);
-    add(out, 'company', d.organization);
-    add(out, 'companyName', d.organization);
-    if (d.dealValue != null) {
-      add(out, 'dealValue', d.dealValue);
-      const n = Number(d.dealValue);
-      if (!Number.isNaN(n))
-        out.dealValueFormatted = formatMoney(n, String(d.currency || 'USD'));
-    }
-    if (d.expectedDealValue != null) {
-      add(out, 'expectedDealValue', d.expectedDealValue);
-      const n = Number(d.expectedDealValue);
-      if (!Number.isNaN(n)) {
-        out.expectedDealValueFormatted = formatMoney(
-          n,
-          String(d.currency || 'USD'),
-        );
-      }
-    }
-    add(out, 'currency', d.currency);
-    if (d.probability != null) add(out, 'probability', d.probability);
-    const ecd = formatDate(d.expectedClosureDate as Date);
-    if (ecd) out.expectedClosureDate = ecd;
-    mergeCustomFields(out, d.customFields as Record<string, unknown>);
-
-    this.applyFirstAssociatedCompany(out, d.associatedCompanies);
-
-    const lead = d.lead as Record<string, unknown> | null;
-    if (lead && typeof lead === 'object' && 'email' in lead) {
-      add(out, 'leadFirstName', lead.firstName);
-      add(out, 'leadLastName', lead.lastName);
-      const lf = String(lead.firstName || '').trim();
-      const ll = String(lead.lastName || '').trim();
-      const lfull = [lf, ll].filter(Boolean).join(' ');
-      if (lfull) out.leadFullName = lfull;
-      add(out, 'leadEmail', lead.email);
-      add(out, 'leadPhone', lead.phone ?? lead.mobileNo);
-      add(out, 'leadJobTitle', lead.jobTitle);
-      add(out, 'leadCompany', lead.organization);
-    }
-
-    const cp = d.contactPerson as Record<string, unknown> | null;
-    if (cp && typeof cp === 'object' && 'email' in cp) {
-      add(out, 'contactSalutation', cp.salutation);
-      add(out, 'contactFirstName', cp.firstName);
-      add(out, 'contactLastName', cp.lastName);
-      const cf = String(cp.firstName || '').trim();
-      const cl = String(cp.lastName || '').trim();
-      const cfull = [cf, cl].filter(Boolean).join(' ');
-      if (cfull) out.contactFullName = cfull;
-      add(out, 'contactEmail', cp.email);
-      add(out, 'contactPhone', cp.phone ?? cp.mobileNo);
-      add(out, 'contactJobTitle', cp.jobTitle);
-      add(out, 'contactCompany', cp.organization);
-      // Primary person on deal: default greeting fields
-      if (!out.firstName && cf) out.firstName = cf;
-      if (!out.lastName && cl) out.lastName = cl;
-      if (!out.fullName && cfull) out.fullName = cfull;
-      if (!out.email) add(out, 'email', cp.email);
-      if (!out.jobTitle) add(out, 'jobTitle', cp.jobTitle);
-      if (!out.companyName) {
-        const cc = String(cp.organization || '').trim();
-        if (cc) {
-          out.companyName = cc;
-          out.company = cc;
-        }
-      }
-    } else if (lead && typeof lead === 'object' && !out.firstName) {
-      add(out, 'firstName', lead.firstName);
-      add(out, 'lastName', lead.lastName);
-      const lf = String(lead.firstName || '').trim();
-      const ll = String(lead.lastName || '').trim();
-      const lfull = [lf, ll].filter(Boolean).join(' ');
-      if (lfull) out.fullName = lfull;
-      add(out, 'email', lead.email);
-    }
-
-    appendSender(out, sender);
-    appendToday(out);
-    return out;
   }
 
   private mergeFromOrganization(

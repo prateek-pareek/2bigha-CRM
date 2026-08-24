@@ -24,7 +24,7 @@ export class AuditLogController {
   }
 
   @Get('entity/:id')
-  @Permissions('leads:read', 'deals:read', 'contacts:read', 'settings:admin')
+  @Permissions('leads:read', 'contacts:read', 'settings:admin')
   findByEntity(@Param('id') id: string) {
     return this.auditLogService.findByEntity(id);
   }

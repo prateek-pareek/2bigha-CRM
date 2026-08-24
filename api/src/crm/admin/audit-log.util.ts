@@ -15,8 +15,6 @@ export function moduleToRelatedType(module: string): string {
   const map: Record<string, string> = {
     leads: 'Lead',
     lead: 'Lead',
-    deals: 'Deal',
-    deal: 'Deal',
     contacts: 'Contact',
     contact: 'Contact',
     clients: 'Client',
@@ -36,7 +34,6 @@ export function moduleToRelatedType(module: string): string {
 export function formatModuleLabel(module: string): string {
   const map: Record<string, string> = {
     leads: 'lead',
-    deals: 'deal',
     contacts: 'contact',
     organizations: 'company',
     clients: 'client',
@@ -160,7 +157,6 @@ export function crmRecordPath(
   if (!id) return null;
   const t = String(relatedType || '').toLowerCase();
   if (t === 'lead' || t === 'leads') return `/crm/leads/${id}`;
-  if (t === 'deal' || t === 'deals') return `/crm/deals/${id}`;
   if (t === 'contact' || t === 'contacts') return `/crm/contacts/${id}`;
   if (t === 'client' || t === 'clients') return `/crm/clients/${id}`;
   if (t === 'organization' || t === 'organizations') {

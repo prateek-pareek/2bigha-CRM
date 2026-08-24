@@ -2,7 +2,7 @@ import { CRM_API_URL } from '@/lib/crm/config';
 import { getCrmAuthToken } from '@/lib/crm/api';
 
 /**
- * CRM legal cases API client — mirrors the Deal/Lead fetch conventions used across
+ * CRM legal cases API client — mirrors the Lead fetch conventions used across
  * the CRM portal (bearer token from localStorage, JSON body, `{ data, total }` list
  * payloads). Owned under lib/crm so pages/components can import a single typed surface
  * instead of re-writing `fetch(`${CRM_API_URL}/crm/legal-cases...`)` everywhere.
@@ -33,7 +33,6 @@ export type LegalCase = {
   clientId?: string;
   associatedContacts?: any[];
   associatedLeads?: any[];
-  associatedDeals?: any[];
   customFields?: Record<string, unknown>;
   recordId?: string;
   createdAt?: string;

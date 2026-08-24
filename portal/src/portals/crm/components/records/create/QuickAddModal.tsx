@@ -3,12 +3,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { CrmJiraPortal } from '@/components/crm/shell/CrmJiraPortal';
 import { crmModalChrome } from '@/lib/crm/chrome';
-import { X, User, Building2, Handshake, FileText, CheckCircle, PhoneCall, UserCheck, ShieldAlert, Settings2 } from 'lucide-react';
+import { X, User, Building2, FileText, CheckCircle, PhoneCall, UserCheck, ShieldAlert, Settings2 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CRM_API_URL } from '@/lib/crm/config';
 import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
 import CRMLeadFormFields from '@/components/crm/records/forms/CRMLeadFormFields';
-import CRMDealFormFields from '@/components/crm/records/forms/CRMDealFormFields';
 import CRMContactFormFields from '@/components/crm/records/forms/CRMContactFormFields';
 import CRMOrganizationFormFields from '@/components/crm/records/forms/CRMOrganizationFormFields';
 import CRMClientFormFields from '@/components/crm/records/forms/CRMClientFormFields';
@@ -28,13 +27,13 @@ interface QuickAddModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
-  initialTab?: 'Lead' | 'Deal' | 'Org' | 'Contact' | 'Note' | 'Task' | 'Call' | 'Client';
+  initialTab?: 'Lead' | 'Org' | 'Contact' | 'Note' | 'Task' | 'Call' | 'Client';
   initialPipelineId?: string;
   initialStage?: string;
   initialSource?: string;
 }
 
-export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab = 'Deal', initialPipelineId = '', initialStage = '', initialSource = '' }: QuickAddModalProps) {
+export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab = 'Lead', initialPipelineId = '', initialStage = '', initialSource = '' }: QuickAddModalProps) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const [saveAndAddAnother, setSaveAndAddAnother] = useState(false);
@@ -47,31 +46,20 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
   const [leadSelectedStage, setLeadSelectedStage] = useState('');
   const [contactSelectedStage, setContactSelectedStage] = useState('');
   const [layoutTickLead, setLayoutTickLead] = useState(0);
-  const [layoutTickDeal, setLayoutTickDeal] = useState(0);
   const [layoutTickContact, setLayoutTickContact] = useState(0);
   const [layoutTickOrg, setLayoutTickOrg] = useState(0);
   const [layoutTickClient, setLayoutTickClient] = useState(0);
   const [serviceOfferings, setServiceOfferings] = useState<Array<{ _id: string; name: string }>>([]);
   const [showCustomizeLead, setShowCustomizeLead] = useState(false);
-  const [showCustomizeDeal, setShowCustomizeDeal] = useState(false);
   const [showCustomizeContact, setShowCustomizeContact] = useState(false);
   const [showCustomizeOrg, setShowCustomizeOrg] = useState(false);
   const [showCustomizeClient, setShowCustomizeClient] = useState(false);
   const { hasAccess, user } = usePermissions();
-  const defaultDealOwner = useMemo(() => {
-    const n = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim();
-    return n || String(user?.email || "").trim();
-  }, [user?.firstName, user?.lastName, user?.email]);
 
   const visibleLeadKeys = useMemo(() => {
     if (activeTab !== 'Lead') return [];
     return getVisibleFieldKeysOrdered('leads', 'form', customFields.map((f) => f.key));
   }, [customFields, layoutTickLead, activeTab]);
-
-  const visibleDealKeys = useMemo(() => {
-    if (activeTab !== 'Deal') return [];
-    return getVisibleFieldKeysOrdered('deals', 'form', customFields.map((f) => f.key));
-  }, [customFields, layoutTickDeal, activeTab]);
 
   const visibleContactKeys = useMemo(() => {
     if (activeTab !== 'Contact') return [];
@@ -94,11 +82,10 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
       let startingTab = initialTab;
 
       // Validate if user has permission for the requested initialTab
-      const tabPerm: any = { 'Lead': 'leads:write', 'Deal': 'deals:write', 'Org': 'organizations:write', 'Contact': 'contacts:write', 'Client': 'clients:write', 'Note': 'activities:write', 'Task': 'activities:write', 'Call': 'activities:write' };
+      const tabPerm: any = { 'Lead': 'leads:write', 'Org': 'organizations:write', 'Contact': 'contacts:write', 'Client': 'clients:write', 'Note': 'activities:write', 'Task': 'activities:write', 'Call': 'activities:write' };
       if (tabPerm[startingTab] && !hasAccess(tabPerm[startingTab])) {
         const availableTabs = [
           { name: 'Lead', permission: 'leads:write' },
-          { name: 'Deal', permission: 'deals:write' },
           { name: 'Org', permission: 'organizations:write' },
           { name: 'Contact', permission: 'contacts:write' },
           { name: 'Client', permission: 'clients:write' },
@@ -128,11 +115,6 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
 
   useEffect(() => {
     fetchCustomFields(activeTab);
-    if (activeTab === 'Deal') {
-      fetchPipelines('deals');
-      fetchOrganizations();
-      fetchContacts();
-    }
     if (activeTab === 'Lead' || activeTab === 'Contact') {
       fetchPipelines('leads');
     }
@@ -198,7 +180,7 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
     }
   };
 
-  const fetchPipelines = async (type?: 'deals' | 'leads') => {
+  const fetchPipelines = async (type?: 'leads') => {
     const token = localStorage.getItem('token');
     const url = type ? `${CRM_API_URL}/crm/pipelines?type=${type}` : `${CRM_API_URL}/crm/pipelines`;
     try {
@@ -209,10 +191,7 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
         const data = await res.json();
         setPipelines(data);
         if (data.length > 0) {
-          const assignedId =
-            type === 'leads'
-              ? (user as any)?.assignedLeadsPipeline
-              : (user as any)?.assignedDealsPipeline;
+          const assignedId = (user as any)?.assignedLeadsPipeline;
 
           if (assignedId && data.some((p: any) => p._id === assignedId)) {
             setSelectedPipeline(assignedId);
@@ -235,7 +214,6 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
   const fetchCustomFields = async (tab: string) => {
     const moduleMap: any = {
       Lead: 'leads',
-      Deal: 'deals',
       Org: 'organizations',
       Contact: 'contacts',
       Client: 'clients',
@@ -307,10 +285,9 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
     setLoading(true);
 
     const endpoint = activeTab === 'Lead' ? 'leads' :
-      activeTab === 'Deal' ? 'deals' :
-        activeTab === 'Org' ? 'organizations' :
-          activeTab === 'Client' ? 'clients' :
-            activeTab === 'Contact' ? 'contacts' : 'activities';
+      activeTab === 'Org' ? 'organizations' :
+        activeTab === 'Client' ? 'clients' :
+          activeTab === 'Contact' ? 'contacts' : 'activities';
 
     // Extract custom fields
     const customFieldsData: any = {};
@@ -355,45 +332,6 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
       payload.customFields = customFieldsData;
     }
 
-    if (activeTab === 'Deal' && selectedPipeline) {
-      payload.pipeline = selectedPipeline;
-    }
-    if (activeTab === 'Deal') {
-      if (payload.expectedClosureDate === '') delete payload.expectedClosureDate;
-      if (payload.closedDate === '') delete payload.closedDate;
-      if (payload.dealValue !== undefined && payload.dealValue !== '') payload.dealValue = Number(payload.dealValue);
-      if (payload.expectedDealValue !== undefined && payload.expectedDealValue !== '')
-        payload.expectedDealValue = Number(payload.expectedDealValue);
-      if (payload.exchangeRate !== undefined && payload.exchangeRate !== '') payload.exchangeRate = Number(payload.exchangeRate);
-      payload.pricingType =
-        String(payload.pricingType || '').toLowerCase() === 'monthly' ? 'monthly' : 'fixed';
-      if (payload.pricingType === 'monthly') {
-        const months = Number(payload.contractMonths);
-        payload.contractMonths =
-          Number.isFinite(months) && months > 0 ? Math.min(60, Math.round(months)) : 12;
-      } else {
-        delete payload.contractMonths;
-      }
-
-      // Stage owns win probability — never ask for it on create.
-      const dealPipeline = pipelines.find((p: any) => String(p._id) === String(selectedPipeline));
-      const sortedStages = [...(dealPipeline?.stages || [])].sort(
-        (a: any, b: any) => a.order - b.order,
-      );
-      const firstStage =
-        sortedStages.find((s: any) => s.isDefault)?.name ||
-        sortedStages[0]?.name ||
-        'Qualification';
-      const stage = (payload.stage as string) || firstStage;
-      payload.stage = stage;
-      payload.status = (payload.status as string) || stage;
-      const stageProb = sortedStages.find((s: any) => s.name === stage)?.probability;
-      if (typeof stageProb === 'number') {
-        payload.probability = stageProb;
-      } else {
-        delete payload.probability;
-      }
-    }
     if (activeTab === 'Lead') {
       if (selectedPipeline) payload.pipeline = selectedPipeline;
       const firstStage =
@@ -450,7 +388,6 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
         invalidateCrmForEntityType(activeTab);
         if ((activeTab === 'Lead' || activeTab === 'Contact') && payload.pipeline)
           localStorage.setItem('crm_active_pipeline_leads', payload.pipeline);
-        if (activeTab === 'Deal' && payload.pipeline) localStorage.setItem('crm_active_pipeline_deals', payload.pipeline);
         if (saveAndAddAnother) {
           // Reset form fields but keep modal open
           formRef.current?.reset();
@@ -486,7 +423,6 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
 
   const tabs = [
     { name: 'Lead', icon: User, color: 'text-primary', permission: 'leads:write' },
-    { name: 'Deal', icon: Handshake, color: 'text-amber-600', permission: 'deals:write' },
     { name: 'Org', icon: Building2, color: 'text-purple-600', permission: 'organizations:write' },
     { name: 'Contact', icon: User, color: 'text-emerald-600', permission: 'contacts:write' },
     { name: 'Client', icon: UserCheck, color: 'text-text-main', permission: 'clients:write' },
@@ -569,33 +505,6 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
                     visualVariant="hubspot"
                     identifierContext={{ entityType: 'lead' }}
                     services={serviceOfferings}
-                  />
-                </div>
-              )}
-
-              {activeTab === 'Deal' && (
-                <div className="space-y-4">
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomizeDeal(true)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-color)] bg-white px-3 py-1.5 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors shrink-0"
-                    >
-                      <Settings2 size={13} className="text-[var(--text-muted)]" /> Fields
-                    </button>
-                  </div>
-                  <CRMDealFormFields
-                    visibleKeys={visibleDealKeys}
-                    customFields={customFields}
-                    pipelines={pipelines}
-                    selectedPipeline={selectedPipeline}
-                    setSelectedPipeline={setSelectedPipeline}
-                    organizations={organizations}
-                    contacts={contacts}
-                    userAssignedPipeline={(user as any)?.assignedDealsPipeline}
-                    defaultDealOwner={defaultDealOwner}
-                    variant="stack"
-                    visualVariant="hubspot"
                   />
                 </div>
               )}
@@ -715,10 +624,10 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
 
         {/* Sticky CTA Footer */}
         {tabs.length > 0 && (() => {
-          const activePermission = activeTab === 'Lead' ? 'leads:write' : activeTab === 'Deal' ? 'deals:write' : activeTab === 'Org' ? 'organizations:write' : activeTab === 'Contact' ? 'contacts:write' : activeTab === 'Client' ? 'clients:write' : 'activities:write';
+          const activePermission = activeTab === 'Lead' ? 'leads:write' : activeTab === 'Org' ? 'organizations:write' : activeTab === 'Contact' ? 'contacts:write' : activeTab === 'Client' ? 'clients:write' : 'activities:write';
           const hasWriteAccess = hasAccess(activePermission);
           const isDisabled = loading || !hasWriteAccess;
-          const showAddAnother = ['Lead', 'Deal', 'Client'].includes(activeTab) && hasWriteAccess;
+          const showAddAnother = ['Lead', 'Client'].includes(activeTab) && hasWriteAccess;
           return (
             <div className="p-6 bg-surface-dim/30 border-t border-[var(--border-color)] shrink-0">
               <div className={`flex gap-2 ${showAddAnother ? 'flex-col sm:flex-row' : ''}`}>
@@ -765,14 +674,6 @@ export default function QuickAddModal({ isOpen, onClose, onSuccess, initialTab =
         context="form"
         customFieldKeys={customFields.map((f) => ({ key: f.key, label: f.name }))}
         onSaved={() => setLayoutTickLead((t) => t + 1)}
-      />
-      <CRMFieldLayoutCustomizer
-        isOpen={showCustomizeDeal}
-        onClose={() => setShowCustomizeDeal(false)}
-        module="deals"
-        context="form"
-        customFieldKeys={customFields.map((f) => ({ key: f.key, label: f.name }))}
-        onSaved={() => setLayoutTickDeal((t) => t + 1)}
       />
       <CRMFieldLayoutCustomizer
         isOpen={showCustomizeContact}

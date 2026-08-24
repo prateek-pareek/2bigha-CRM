@@ -2,7 +2,6 @@ import { create } from 'zustand';
 
 export type CrmImportEntityType =
   | 'leads'
-  | 'deals'
   | 'contacts'
   | 'clients'
   | 'organizations';

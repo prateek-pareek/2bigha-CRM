@@ -113,7 +113,6 @@ export default function CustomFieldModal({ isOpen, onClose, onSuccess, field }: 
                 className={SEL}
               >
                 <option value="leads">Leads</option>
-                <option value="deals">Deals</option>
                 <option value="contacts">Contacts</option>
                 <option value="organizations">Organizations</option>
               </select>

@@ -60,6 +60,12 @@ const LEAD_PROPERTIES: FilterProperty[] = [
   { key: 'lastName', label: 'Last Name', type: 'text' },
   { key: 'email', label: 'Email', type: 'text' },
   { key: 'organization', label: 'Company', type: 'text' },
+  {
+    key: 'leadVertical',
+    label: 'Lead Vertical',
+    type: 'select',
+    options: ['Property Listing', 'Property Management'],
+  },
   { key: 'stage', label: 'Stage', type: 'text' },
   { key: 'status', label: 'Status', type: 'text' },
   { key: 'phone', label: 'Phone', type: 'text' },
@@ -250,7 +256,13 @@ export function applyFilters<T extends Record<string, any>>(
     return filters.every(f => {
       const val = getProp(item, f.property);
       const strVal = String(val ?? '').toLowerCase();
-      const filterVal = f.value?.toLowerCase() ?? '';
+      let filterVal = f.value?.toLowerCase() ?? '';
+      // 'Lead Vertical' is stored as a raw enum but the filter dropdown shows human labels —
+      // accept either so both the tab toggle (raw value) and manual filter bar (label) match.
+      if (f.property === 'leadVertical') {
+        if (filterVal === 'property listing') filterVal = 'property_listing';
+        else if (filterVal === 'property management') filterVal = 'property_management';
+      }
 
       switch (f.operator) {
         case 'equals':

@@ -15,9 +15,7 @@ function recordHref(approval: SalesAgentApproval) {
   const base =
     approval.recordType === "Lead"
       ? "/crm/leads"
-      : approval.recordType === "Deal"
-        ? "/crm/deals"
-        : "/crm/contacts";
+      : "/crm/contacts";
   return `${base}/${approval.recordId}`;
 }
 

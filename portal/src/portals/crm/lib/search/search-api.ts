@@ -9,13 +9,6 @@ export type CrmSearchResults = {
     organization?: string;
     status?: string;
   }>;
-  deals?: Array<{
-    _id: string;
-    title?: string;
-    organization?: string;
-    dealValue?: number;
-    status?: string;
-  }>;
   contacts?: Array<{
     _id: string;
     firstName?: string;
@@ -51,7 +44,6 @@ export function crmSearchHasResults(data: CrmSearchResults | null | undefined) {
   if (!data) return false;
   return (
     (data.leads?.length ?? 0) > 0 ||
-    (data.deals?.length ?? 0) > 0 ||
     (data.contacts?.length ?? 0) > 0 ||
     (data.organizations?.length ?? 0) > 0 ||
     (data.clients?.length ?? 0) > 0

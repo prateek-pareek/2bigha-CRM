@@ -24,7 +24,6 @@ export class ServiceOfferingsController {
     'services:read',
     'services:write',
     'leads:read',
-    'deals:read',
     'proposals:read',
   )
   findAll(@Query('includeInactive') includeInactive?: string) {
@@ -38,7 +37,6 @@ export class ServiceOfferingsController {
     'services:read',
     'services:write',
     'leads:read',
-    'deals:read',
     'proposals:read',
   )
   findOne(@Param('id') id: string) {

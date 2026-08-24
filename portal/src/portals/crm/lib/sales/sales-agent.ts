@@ -6,7 +6,6 @@ export type SalesAgentSettings = {
   maxRunsPerCronTick: number;
   cooldownHours: number;
   enabledLeadPipelineIds: string[];
-  enabledDealPipelineIds: string[];
   triggerOnLeadCreated: boolean;
   triggerOnEmailReply: boolean;
   triggerOnNeverContacted: boolean;
@@ -171,7 +170,7 @@ export async function fetchSalesAgentRuns(params?: {
 }
 
 export async function triggerSalesAgentRun(input: {
-  recordType: 'Lead' | 'Deal' | 'Contact';
+  recordType: 'Lead' | 'Contact';
   recordId: string;
   instructions?: string;
 }) {
@@ -201,7 +200,7 @@ export async function fetchSalesAgentPendingCount(): Promise<number> {
 }
 
 export async function fetchSalesAgentRecordSummary(
-  recordType: 'Lead' | 'Deal' | 'Contact',
+  recordType: 'Lead' | 'Contact',
   recordId: string,
 ) {
   const res = await fetch(

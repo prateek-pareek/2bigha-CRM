@@ -24,7 +24,6 @@ async function seed() {
 
     const freeSchema = new mongoose.Schema({}, { strict: false, collection: 'pipelines' });
     const PipelineModel = crmConn.model('pipeline', freeSchema, 'pipelines');
-    const DealModel = crmConn.model('deal', freeSchema, 'deals');
     const LeadModel = crmConn.model('lead', freeSchema, 'leads');
     const ActivityModel = crmConn.model('activity', freeSchema, 'activities');
     const EmailTemplateModel = crmConn.model('emailtemplate', freeSchema, 'emailtemplates');
@@ -37,7 +36,7 @@ async function seed() {
     if (!pipeline) {
       pipeline = await PipelineModel.create({
         name: 'Standard Sales Pipeline',
-        type: 'deals',
+        type: 'leads',
         stages: [
           { name: 'Lead In', order: 1 },
           { name: 'Contact Made', order: 2 },
@@ -53,19 +52,7 @@ async function seed() {
 
     const pipelineId = pipeline._id;
 
-    // 2. Deals
-    console.log('Seeding deals...');
-    await DealModel.deleteMany({ title: { $regex: 'Demo Deal' } });
-    const deals = [
-      { title: 'Demo Deal - TechPartners', stage: 'Proposal Presented', dealValue: 5000, dealOwner: adminId, pipeline: pipelineId },
-      { title: 'Demo Deal - Acme Corp', stage: 'Negotiation', dealValue: 12000, dealOwner: adminId, pipeline: pipelineId },
-      { title: 'Demo Deal - Global Inc', stage: 'Closed Won', dealValue: 45000, dealOwner: adminId, pipeline: pipelineId },
-      { title: 'Demo Deal - Local LLC', stage: 'Lead In', dealValue: 2000, dealOwner: adminId, pipeline: pipelineId },
-      { title: 'Demo Deal - Big Box', stage: 'Closed Lost', dealValue: 30000, dealOwner: adminId, pipeline: pipelineId },
-    ];
-    await DealModel.insertMany(deals);
-
-    // 3. Leads & Templates
+    // 2. Leads & Templates
     console.log('Seeding templates, leads and tracking...');
     await EmailTemplateModel.deleteMany({ name: { $regex: 'Demo Template' } });
     const template1 = await EmailTemplateModel.create({ name: 'Demo Template 1 (High Conv)', subject: 'Welcome!', isActive: true });
@@ -116,7 +103,7 @@ async function seed() {
     }
     await EmailTrackingModel.insertMany(trackings);
 
-    // 4. Activities
+    // 3. Activities
     console.log('Seeding activities...');
     await ActivityModel.deleteMany({ type: { $in: ['call', 'meeting', 'email'] }, author: new Types.ObjectId(adminId) });
     await ActivityModel.insertMany([
@@ -126,7 +113,7 @@ async function seed() {
       { type: 'email', author: new Types.ObjectId(adminId), content: 'Demo Email' },
     ]);
 
-    // 5. Workflows
+    // 4. Workflows
     console.log('Seeding workflows...');
     await WorkflowModel.deleteMany({ name: { $regex: 'Demo' } });
     await WorkflowExecutionModel.deleteMany({ workflowId: { $exists: true } });

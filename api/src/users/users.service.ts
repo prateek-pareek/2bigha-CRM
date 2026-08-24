@@ -213,7 +213,6 @@ export class UsersService {
       'pmSpaces',
       'pmPermissions',
       'assignedLeadsPipeline',
-      'assignedDealsPipeline',
       'accessibleEmailAccounts',
       'salesWorkspaceAccessibleEmployees',
     ];

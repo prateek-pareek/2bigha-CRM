@@ -31,7 +31,6 @@ export default function CrmPrefetch() {
           pathname === "/crm/workspace" || pathname.startsWith("/crm/workspace/"),
         skipLeads: pathname.startsWith("/crm/leads"),
         skipContacts: pathname.startsWith("/crm/contacts"),
-        skipDeals: pathname.startsWith("/crm/deals"),
       });
     });
 

@@ -20,7 +20,7 @@ type Props<TTabId extends string> = {
   detailsToolbar?: React.ReactNode;
 };
 
-/** CRMS-style underline tabs on record detail (matches deals record chrome). */
+/** CRMS-style underline tabs on record detail. */
 export default function CrmRecordDetailTabs<TTabId extends string = CrmRecordDetailTabId>({
   tabs,
   activeTab,

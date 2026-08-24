@@ -85,6 +85,15 @@ export function mergeLeadCategoryFilter(
   return [...filters, { property: 'leadCategory', operator: 'equals', value: leadCategory }];
 }
 
+/** Property Listing / Property Management vertical toggle — empty = show both. */
+export function mergeLeadVerticalFilter(
+  filters: FilterCriteria[],
+  leadVertical: string,
+): FilterCriteria[] {
+  if (!leadVertical) return filters;
+  return [...filters, { property: 'leadVertical', operator: 'equals', value: leadVertical }];
+}
+
 /** Normalize list API payloads that always return `{ data, total }` after scale hardening. */
 export function unwrapCrmListPayload<T>(payload: unknown): {
   data: T[];

@@ -162,7 +162,6 @@ export class CrmCalendarCronService {
         const relatedType = String(task.relatedType || '').toLowerCase();
         if (relatedId && Types.ObjectId.isValid(relatedId)) {
           if (relatedType === 'lead') link = `/crm/leads/${relatedId}`;
-          else if (relatedType === 'deal') link = `/crm/deals/${relatedId}`;
           else if (relatedType === 'contact')
             link = `/crm/contacts/${relatedId}`;
           else if (relatedType === 'client')

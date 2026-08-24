@@ -80,7 +80,7 @@ export class SalesAgentController {
   }
 
   @Post('runs/trigger')
-  @Permissions('leads:write', 'deals:write')
+  @Permissions('leads:write')
   triggerRun(@Body() dto: TriggerSalesAgentDto, @Request() req: any) {
     return this.salesAgent.triggerManual(dto, req.user, req.crmDbUser ?? req.user?.crmDbUser);
   }
@@ -92,9 +92,9 @@ export class SalesAgentController {
   }
 
   @Get('record/:recordType/:recordId')
-  @Permissions('leads:read', 'deals:read')
+  @Permissions('leads:read')
   getRecordSummary(
-    @Param('recordType') recordType: 'Lead' | 'Deal' | 'Contact',
+    @Param('recordType') recordType: 'Lead' | 'Contact',
     @Param('recordId') recordId: string,
   ) {
     return this.salesAgent.getRecordSummary(recordType, recordId);
@@ -107,7 +107,7 @@ export class SalesAgentController {
   }
 
   @Post('approvals/:id/approve')
-  @Permissions('inbox:send', 'leads:write', 'deals:write')
+  @Permissions('inbox:send', 'leads:write')
   approve(@Param('id') id: string, @Request() req: any) {
     return this.salesAgent.approveAction(
       id,
@@ -117,7 +117,7 @@ export class SalesAgentController {
   }
 
   @Post('approvals/:id/reject')
-  @Permissions('inbox:send', 'leads:write', 'deals:write')
+  @Permissions('inbox:send', 'leads:write')
   reject(
     @Param('id') id: string,
     @Body() dto: RejectSalesAgentApprovalDto,
@@ -145,7 +145,7 @@ export class SalesCopilotController {
   constructor(private readonly salesAgent: SalesAgentService) {}
 
   @Get('status')
-  @Permissions('dashboard:read', 'leads:read', 'deals:read')
+  @Permissions('dashboard:read', 'leads:read')
   getStatus() {
     return this.salesAgent.getCopilotStatus();
   }

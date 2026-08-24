@@ -281,9 +281,8 @@ export default function CrmLeadsReportPanel({
     return [
       { name: "Created", count: c.createdInPeriod },
       { name: "Converted", count: c.convertedInPeriod },
-      { name: "Deals", count: board?.dealsCreatedInPeriod ?? 0 },
     ];
-  }, [board?.leadConversion, board?.dealsCreatedInPeriod]);
+  }, [board?.leadConversion]);
 
   const followUpSlices = useMemo(() => {
     const h = board?.followUpHealth;
@@ -303,7 +302,6 @@ export default function CrmLeadsReportPanel({
         converted: r.converted,
         conversionRate: r.conversionRate,
         replies: r.replies,
-        deals: r.deals,
       })),
     [board?.channelPerformance],
   );
@@ -432,7 +430,7 @@ export default function CrmLeadsReportPanel({
           </div>
           <p className="text-md font-medium text-[var(--color-text-muted)] leading-[18px]">
             {variant === "funnel"
-              ? "Stage-by-stage progression from new lead creation to converted deals."
+              ? "Stage-by-stage progression from new lead creation to conversion."
               : variant === "aging"
                 ? "Lead activity freshness, stale lead tracking, and follow-up coverage."
                 : variant === "conversion_time"
@@ -507,7 +505,6 @@ export default function CrmLeadsReportPanel({
           <CrmDailyIntakeDetailPanel
             days={days}
             owner={owner}
-            entity="leads"
             board={board}
           />
 
@@ -553,7 +550,7 @@ export default function CrmLeadsReportPanel({
             {/* Channel Performance Dual Grouped Bar Chart */}
             <CrmChartPanel
               title="Channel Performance"
-              subtitle="Leads generated vs converted deals by source"
+              subtitle="Leads generated vs converted by source"
               icon={<Target className="h-4 w-4" />}
               className="shadow-[rgba(219,219,219,0.25)_0px_4px_4px_0px] border border-[#e2e8f0]"
               bodyClassName="pt-2"
@@ -575,7 +572,7 @@ export default function CrmLeadsReportPanel({
                       />
                       <Legend {...CRM_CHART_LEGEND} />
                       <Bar dataKey="leads" fill="#2563eb" name="Total Leads" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="converted" fill="#10b981" name="Converted Deals" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="converted" fill="#10b981" name="Converted" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -688,7 +685,7 @@ export default function CrmLeadsReportPanel({
           <div className="grid gap-4 lg:grid-cols-2">
             <CrmChartPanel
               title="Lead conversion funnel"
-              subtitle="Created → converted → deals in period"
+              subtitle="Created → converted in period"
               icon={<TrendingUp className="h-4 w-4" />}
               bodyClassName="pt-2"
             >
