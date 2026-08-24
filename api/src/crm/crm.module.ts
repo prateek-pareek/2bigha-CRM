@@ -59,6 +59,8 @@ import { IntegrationsController } from './integrations/integrations.controller';
 import { IntegrationCatalogService } from './integration-catalog/integration-catalog.service';
 import { Client, ClientSchema } from './schemas/client.schema';
 import { ClientsService } from './records/clients.service';
+import { TwoBighaClientService } from './records/twobigha-client.service';
+import { TwoBighaLeadService } from './records/twobigha-lead.service';
 import { GlobalSearchService } from './core/global-search.service';
 import { ClientsController } from './records/clients.controller';
 import { Pipeline, PipelineSchema } from './schemas/pipeline.schema';
@@ -420,6 +422,8 @@ import {
     SlackIntegrationService,
     IntegrationCatalogService,
     ClientsService,
+    TwoBighaClientService,
+    TwoBighaLeadService,
     InboxAccountsService,
     InboxClassificationService,
     InboxSyncCronService,

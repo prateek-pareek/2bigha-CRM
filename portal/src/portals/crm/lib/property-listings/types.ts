@@ -38,6 +38,11 @@ export const LISTING_BUCKETS: { key: ListingBucket; label: string; description: 
   { key: "farm", label: "Farms", description: "Farm & farmland marketplace listings" },
 ];
 
+/** Type guard narrowing a PropertyRecordBucket to the marketplace-only ListingBucket (i.e. not "pm"). */
+export function isMarketplaceBucket(bucket: PropertyRecordBucket): bucket is ListingBucket {
+  return bucket !== "pm";
+}
+
 export type PropertyListingStatus =
   | "Available"
   | "Under Offer"

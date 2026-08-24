@@ -10,10 +10,10 @@ import {
 } from "@/lib/crm/property-listings/third-party-api";
 import {
   formatAddress,
-  pmStageBadgeTone,
   type LeadSubscriptionMock,
   type PropertyListingRecord,
 } from "@/lib/crm/property-listings/types";
+import { pmStageBadgeTone } from "@/lib/crm/property-management/types";
 import { CrmStatusBadge } from "@/components/crm/ui";
 
 /**

@@ -76,6 +76,24 @@ export class Client {
 
   @Prop({ type: Types.ObjectId })
   deletedBy?: Types.ObjectId;
+
+  /** 2bigha platform-user id once synced (see TwoBighaClientService, adminCreateUser). Unset until a sync attempt with an email succeeds. */
+  @Prop({ trim: true, index: true })
+  twobighaUserId?: string;
+
+  /** 'skipped' = no email on file — 2bigha's adminCreateUser requires one, so no sync was attempted. */
+  @Prop({
+    enum: ['not_synced', 'synced', 'mock', 'failed', 'skipped'],
+    default: 'not_synced',
+    index: true,
+  })
+  twobighaSyncStatus?: 'not_synced' | 'synced' | 'mock' | 'failed' | 'skipped';
+
+  @Prop({ trim: true })
+  twobighaSyncError?: string;
+
+  @Prop()
+  twobighaSyncedAt?: Date;
 }
 
 export const ClientSchema = SchemaFactory.createForClass(Client);

@@ -9,13 +9,11 @@ import {
 import type { CreateThirdPartyPropertyInput } from "@/lib/crm/property-listings/third-party-api";
 import {
   AREA_UNITS,
-  PM_PLANS,
-  PM_PROPERTY_TYPES,
   type AreaUnit,
-  type PmPlan,
   type PropertyListingRecord,
   type PropertyListingType,
 } from "@/lib/crm/property-listings/types";
+import { PM_PLANS, PM_PROPERTY_TYPES, type PmPlan } from "@/lib/crm/property-management/types";
 
 export type PmPropertyDraft = {
   pmPlan: string;

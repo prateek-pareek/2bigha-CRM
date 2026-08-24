@@ -16,6 +16,11 @@ const PROPERTY_TYPES = [
   'Commercial',
   'Office',
   'Warehouse',
+  // Was missing despite being a valid schema enum value (and the value the
+  // service/stats/leaderboard aggregations already branch on) — omitting it
+  // silently rejected every "Add Farm" create call. Farm-typed listings sync
+  // to 2bigha's separate Farm API (createFarmByAdmin) instead of Property.
+  'Farm',
   'Other',
 ] as const;
 

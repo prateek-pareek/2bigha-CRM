@@ -14,6 +14,7 @@ import * as bcrypt from 'bcrypt';
 import { TrashService } from '../trash/trash.service';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { isPlatformSuperAdminEmail } from '../auth/platform-super-admin.util';
+import { TwoBighaAgentService } from './twobigha-agent.service';
 
 const CRM_PORTAL_MANAGEMENT_ROLES = new Set(
   [
@@ -99,6 +100,7 @@ export class CRMUsersService implements OnModuleInit {
     @InjectModel(User.name)
     private hrmsUserModel: Model<UserDocument>,
     private trashService: TrashService,
+    private readonly twoBighaAgentService: TwoBighaAgentService,
   ) {}
 
   async onModuleInit() {
@@ -210,7 +212,25 @@ export class CRMUsersService implements OnModuleInit {
       ...createUserDto,
       password: hashedPassword,
     });
-    return createdUser.save();
+    await createdUser.save();
+
+    // Sync this agent to 2bigha (createAdmin) — never throws; a 2bigha
+    // outage or missing role-id config must not block creating the CRM
+    // user locally, the sync status is stored instead.
+    const syncResult = await this.twoBighaAgentService.syncAgentCreate({
+      _id: String(createdUser._id),
+      email: createdUser.email,
+      firstName: createdUser.firstName,
+      lastName: createdUser.lastName,
+    });
+    createdUser.twobighaAdminId = syncResult.twobighaAdminId ?? createdUser.twobighaAdminId;
+    createdUser.twobighaSyncStatus = syncResult.status;
+    createdUser.twobighaSyncError =
+      syncResult.status === 'failed' || syncResult.status === 'skipped' ? syncResult.error : undefined;
+    createdUser.twobighaSyncedAt = syncResult.syncedAt;
+    await createdUser.save();
+
+    return createdUser;
   }
 
   async update(

@@ -24,9 +24,9 @@ import {
   type PmPropertyDraft,
 } from "@/components/crm/property-listings/PmPropertyForm";
 import { createThirdPartyProperty } from "@/lib/crm/property-listings/third-party-api";
-import type { ListingBucket } from "@/lib/crm/property-listings/types";
+import type { PropertyRecordBucket } from "@/lib/crm/property-listings/types";
 
-function parseBucket(raw: string | null): ListingBucket {
+function parseBucket(raw: string | null): PropertyRecordBucket {
   if (raw === "buy" || raw === "sell" || raw === "farm" || raw === "pm") return raw;
   return "sell";
 }

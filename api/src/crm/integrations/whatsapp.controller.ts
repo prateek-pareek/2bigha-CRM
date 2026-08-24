@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Body,
+  Param,
   Query,
   UseGuards,
   Request,
@@ -29,6 +30,13 @@ export class WhatsAppController {
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
     });
+  }
+
+  /** Every image/document/video/audio ever exchanged with this contact — powers the "Shared Media" panel. */
+  @Get('conversations/:waId/media')
+  @Permissions('inbox:read', 'leads:read', 'contacts:read', 'activities:read')
+  getSharedMedia(@Param('waId') waId: string) {
+    return this.whatsappService.getSharedMedia(waId);
   }
 
   @Get('contacts')

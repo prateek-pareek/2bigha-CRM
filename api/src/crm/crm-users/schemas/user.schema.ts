@@ -37,6 +37,24 @@ export class CRMUser {
 
   @Prop({ type: [String], default: [] })
   accessibleEmailAccounts: string[];
+
+  /** 2bigha-side admin/agent id once synced (see TwoBighaAgentService, createAdmin). Unset until a sync attempt succeeds. */
+  @Prop({ trim: true, index: true })
+  twobighaAdminId?: string;
+
+  /** 'skipped' = no TWOBIGHA_DEFAULT_AGENT_ROLE_ID configured — createAdmin requires a 2bigha roleId. */
+  @Prop({
+    enum: ['not_synced', 'synced', 'mock', 'failed', 'skipped'],
+    default: 'not_synced',
+    index: true,
+  })
+  twobighaSyncStatus?: 'not_synced' | 'synced' | 'mock' | 'failed' | 'skipped';
+
+  @Prop({ trim: true })
+  twobighaSyncError?: string;
+
+  @Prop()
+  twobighaSyncedAt?: Date;
 }
 
 export const CRMUserSchema = SchemaFactory.createForClass(CRMUser);

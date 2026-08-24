@@ -27,6 +27,19 @@ export type PropertyListingFor = 'Sale' | 'Rent';
 export type PropertyListingApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
 
 /**
+ * Outcome of the most recent sync attempt to 2bigha — see TwoBighaPropertyService.
+ * 'unsupported' is farm-specific: 2bigha has no general farm-update mutation
+ * (only updateFarmSeo, for SEO fields only), so an edit to an already-synced
+ * Farm listing can't be pushed and is reported this way instead of 'failed'.
+ */
+export type TwoBighaSyncStatus =
+  | 'not_synced'
+  | 'synced'
+  | 'mock'
+  | 'failed'
+  | 'unsupported';
+
+/**
  * A real-estate property listing — standalone module (not tied to
  * Lead/Client/Pipeline). Follows the `WhatsAppTemplate` schema conventions:
  * its own `collection` name, soft delete, and explicit indexes for the
@@ -131,6 +144,28 @@ export class PropertyListing {
 
   @Prop({ type: Types.ObjectId, ref: 'Lead', index: true })
   leadId?: Types.ObjectId;
+
+  /** 2bigha-side property id once synced (see TwoBighaPropertyService). Unset until the first create sync (real or mock) succeeds. */
+  @Prop({ trim: true, index: true })
+  twobighaPropertyId?: string;
+
+  @Prop({
+    enum: ['not_synced', 'synced', 'mock', 'failed', 'unsupported'],
+    default: 'not_synced',
+    index: true,
+  })
+  twobighaSyncStatus?: TwoBighaSyncStatus;
+
+  /** Error message from the last failed sync attempt — cleared on the next successful (or mock) sync. */
+  @Prop({ trim: true })
+  twobighaSyncError?: string;
+
+  @Prop()
+  twobighaSyncedAt?: Date;
+
+  /** Raw property/farm detail snapshot last returned by 2bigha (create/update response, or a getPropertyBySlug read) — for display, not a schema-enforced shape. */
+  @Prop({ type: Object })
+  twobighaDetail?: Record<string, unknown>;
 
   @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   createdBy?: Types.ObjectId;

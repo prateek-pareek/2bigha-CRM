@@ -7,24 +7,52 @@ import { CrmButton } from "@/components/crm/ui";
 import {
   EMPTY_PROPERTY_LISTING_DRAFT,
   PropertyListingFormFields,
-  draftToCreateInput,
+  isLandPropertyType,
+  parseImageUrls,
   validatePropertyListingDraft,
   type PropertyListingDraft,
 } from "@/components/crm/property-listings/PropertyListingForm";
-import { createThirdPartyProperty } from "@/lib/crm/property-listings/third-party-api";
-import type { PropertyListingRecord } from "@/lib/crm/property-listings/types";
+import {
+  createBackendPropertyListing,
+  type BackendPropertyListing,
+} from "@/lib/crm/property-listings/backend-api";
+
+/**
+ * Frontend land/farm types (Agricultural/Farm/Farmland/Farmhouse) all route
+ * to 2bigha's separate Farm API (createFarmByAdmin) once they reach the
+ * backend — TwoBighaPropertyService only checks for propertyType === 'Farm'.
+ * 'Plot' is a real Property-domain type in 2bigha's schema, so it stays on
+ * the Property API rather than being folded in here.
+ */
+const LAND_TO_FARM_TYPES = new Set(["Agricultural", "Farm", "Farmland", "Farmhouse"]);
+const BACKEND_PROPERTY_TYPES = new Set([
+  "Apartment",
+  "Villa",
+  "Independent House",
+  "Plot",
+  "Commercial",
+  "Office",
+  "Warehouse",
+  "Other",
+]);
+
+/** Maps the portal's richer PropertyListingType set onto the backend's smaller enum (see property-listing.schema.ts). */
+function toBackendPropertyType(type: string): string {
+  if (LAND_TO_FARM_TYPES.has(type)) return "Farm";
+  return BACKEND_PROPERTY_TYPES.has(type) ? type : "Other";
+}
 
 type Props = {
   open: boolean;
   onClose: () => void;
   leadId?: string;
   leadName?: string;
-  onSuccess?: (property: PropertyListingRecord) => void;
+  onSuccess?: (property: BackendPropertyListing) => void;
   /** 'Farm' / 'Agricultural' opens land-first form ("Add Farm" quick action). */
   defaultPropertyType?: string;
 };
 
-/** Create a property/farm listing via the third-party mock API (linked to a lead when provided). */
+/** Create a property/farm listing in the CRM (linked to a lead when provided) — synced to 2bigha via TwoBighaPropertyService. */
 export default function AddPropertyModal({
   open,
   onClose,
@@ -58,15 +86,39 @@ export default function AddPropertyModal({
       return;
     }
     setSaving(true);
+    const land = isLandPropertyType(draft.propertyType);
     try {
-      const created = await createThirdPartyProperty(
-        draftToCreateInput(draft, {
-          leadId,
-          approvalStatus: "Approved",
-          listingBucket: isFarm ? "farm" : "sell",
-        }),
-      );
-      toast.success(isFarm ? "Farm listing submitted" : "Property listing submitted");
+      const created = await createBackendPropertyListing({
+        title: draft.title.trim(),
+        address: draft.address.trim() || undefined,
+        city: draft.city.trim() || undefined,
+        state: draft.state.trim() || undefined,
+        price: Number(draft.price),
+        currency: draft.currency,
+        propertyType: toBackendPropertyType(draft.propertyType),
+        listedFor: draft.listedFor as "Sale" | "Rent",
+        bedrooms: !land && draft.bedrooms ? Number(draft.bedrooms) : undefined,
+        bathrooms: !land && draft.bathrooms ? Number(draft.bathrooms) : undefined,
+        areaSqft: draft.areaSqft ? Number(draft.areaSqft) : undefined,
+        status: draft.status,
+        description: draft.description.trim() || undefined,
+        images: parseImageUrls(draft.images),
+        contactName: draft.contactName.trim() || undefined,
+        contactPhone: draft.contactPhone.trim() || undefined,
+        contactEmail: draft.contactEmail.trim() || undefined,
+        leadId,
+      });
+      const syncNote =
+        created.twobighaSyncStatus === "synced"
+          ? " · synced to 2bigha"
+          : created.twobighaSyncStatus === "mock"
+            ? " · 2bigha sync pending (mock mode)"
+            : created.twobighaSyncStatus === "unsupported"
+              ? " · saved (2bigha has no farm-edit API)"
+              : created.twobighaSyncStatus === "failed"
+                ? " · 2bigha sync failed, will retry"
+                : "";
+      toast.success((isFarm ? "Farm listing saved" : "Property listing saved") + syncNote);
       onSuccess?.(created);
       onClose();
     } catch {
@@ -90,10 +142,10 @@ export default function AddPropertyModal({
               </h3>
               <p className="text-xs text-[var(--text-muted)]">
                 {leadName
-                  ? `Linked to ${leadName} · submitted to third-party API (mock)`
+                  ? `Linked to ${leadName} · synced to 2bigha`
                   : leadId
-                    ? "Linked to this lead · third-party API (mock)"
-                    : "Third-party listing API (mock)"}
+                    ? "Linked to this lead · synced to 2bigha"
+                    : "Synced to 2bigha"}
               </p>
             </div>
           </div>
