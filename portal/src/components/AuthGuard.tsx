@@ -19,7 +19,6 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
             pathname.startsWith('/wiki/public') ||
             pathname.startsWith('/career-portal') ||
             pathname.startsWith('/public/employee-agreements/sign') ||
-            pathname.startsWith('/huddle/join') ||
             isClientPortalTokenPath;
 
         // Get search params for error and from checks
@@ -80,7 +79,6 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         pathname.startsWith('/wiki/public') ||
         pathname.startsWith('/career-portal') ||
         pathname.startsWith('/public/employee-agreements/sign') ||
-        pathname.startsWith('/huddle/join') ||
         isClientPortalTokenPath;
 
     if (isLoading) {

@@ -112,9 +112,6 @@
       "@/components/Providers": [
         "./src/common/components/shell/Providers"
       ],
-      "@/components/QuickChatWidget": [
-        "./src/common/components/shell/QuickChatWidget"
-      ],
       "@/components/RealtimeManager": [
         "./src/common/components/shell/RealtimeManager"
       ],
@@ -196,9 +193,6 @@
       "@/lib/utils": [
         "./src/common/lib/utils"
       ],
-      "@/lib/feature-flags": [
-        "./src/common/lib/feature-flags"
-      ],
       "@/lib/brand-assets": [
         "./src/common/lib/brand-assets"
       ],
@@ -225,9 +219,6 @@
       ],
       "@/lib/suite-layout": [
         "./src/common/lib/suite-layout"
-      ],
-      "@/lib/webrtc-ice-servers": [
-        "./src/common/lib/webrtc-ice-servers"
       ],
       "@/lib/rich-text": [
         "./src/common/lib/rich-text"

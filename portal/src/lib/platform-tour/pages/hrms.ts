@@ -20,7 +20,7 @@ export const HRMS_PAGE_TOURS: PageTourEntry[] = [
         element: '[data-tour="main-content"]',
         title: 'Virtual office',
         description:
-          'See colleagues online, join huddles, and stay connected without leaving HRMS.',
+          'See colleagues online and stay connected without leaving HRMS.',
         side: 'top',
       },
     ],

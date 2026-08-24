@@ -4110,7 +4110,7 @@ html:not(.dark) [data-pm-jira] .crm-suite-sidebar {
   border-color: rgba(71, 145, 255, 0.35) !important;
 }
 
-/* Amber / emerald huddle badges inside rooms list */
+/* Amber / emerald status badges inside rooms list */
 .dark [data-pm-jira] .bg-amber-100 {
   background-color: rgba(251, 191, 36, 0.18) !important;
 }

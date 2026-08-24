@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Users, Video, Plus, Trash2, PhoneCall } from 'lucide-react';
+import { Users, Video, Plus, Trash2 } from 'lucide-react';
 import api from '@/lib/pm/api';
 import { Button } from '@/components/pm/ui/button';
 import { Input } from '@/components/pm/ui/input';
@@ -20,12 +20,10 @@ import { jiraClasses, jiraLayout } from '@/lib/pm/jira-ui';
 
 type VirtualOfficeRoom = {
   name: string;
-  mode: 'external' | 'huddle';
+  mode: 'external';
   provider?: string;
   link?: string;
-  huddleRoomId?: string;
   purpose?: string;
-  alwaysLive?: boolean;
   updatedAt?: string;
 };
 
@@ -35,23 +33,14 @@ function normalizeLink(value: string) {
   return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 }
 
-function createHuddleRoomId(name: string, purpose: string, alwaysLive: boolean) {
-  const seed = `${name}-${purpose}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `${alwaysLive ? 'live' : 'huddle'}-${seed || 'room'}-${suffix}`;
-}
-
 /** Shared Virtual Office UI; mount under `/pm`, `/hrms`, or `/crm` so AppShell + module layout apply. */
 export default function VirtualOfficePage() {
   const queryClient = useQueryClient();
   const [roomName, setRoomName] = useState('');
-  const [roomMode, setRoomMode] = useState<'external' | 'huddle'>('external');
   const [roomProvider, setRoomProvider] = useState<'google-meet' | 'zoom' | 'teams' | 'other'>(
     'google-meet',
   );
   const [roomLink, setRoomLink] = useState('');
-  const [roomPurpose, setRoomPurpose] = useState('');
-  const [roomAlwaysLive, setRoomAlwaysLive] = useState(false);
 
   const { data } = useQuery({
     queryKey: ['pm-virtual-office-rooms'],
@@ -61,7 +50,7 @@ export default function VirtualOfficePage() {
   const rooms: VirtualOfficeRoom[] = useMemo(
     () =>
       Array.isArray((data as any)?.virtualOfficeRooms)
-        ? (data as any).virtualOfficeRooms
+        ? (data as any).virtualOfficeRooms.filter((room: any) => room?.mode === 'external')
         : [],
     [data],
   );
@@ -72,11 +61,8 @@ export default function VirtualOfficePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pm-virtual-office-rooms'] });
       setRoomName('');
-      setRoomMode('external');
       setRoomProvider('google-meet');
       setRoomLink('');
-      setRoomPurpose('');
-      setRoomAlwaysLive(false);
       toast.success('Virtual office updated');
     },
     onError: () => toast.error('Failed to update virtual office'),
@@ -101,7 +87,7 @@ export default function VirtualOfficePage() {
           <div>
             <h1 className={jiraLayout.title}>Virtual office</h1>
             <p className={jiraLayout.lead}>
-              Company-wide rooms for video links and internal Quick Chat huddles.
+              Company-wide rooms for video links.
             </p>
           </div>
         </div>
@@ -119,94 +105,44 @@ export default function VirtualOfficePage() {
               />
             </div>
             <div>
-              <label className={cn(jiraClasses.label, 'mb-1 block')}>Room type</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Provider</label>
               <Select
-                value={roomMode}
-                onValueChange={(value) => setRoomMode(value as 'external' | 'huddle')}
+                value={roomProvider}
+                onValueChange={(value) =>
+                  setRoomProvider(value as 'google-meet' | 'zoom' | 'teams' | 'other')
+                }
               >
                 <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Select room type" />
+                  <SelectValue placeholder="Select provider" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="external">External Link</SelectItem>
-                  <SelectItem value="huddle">Internal Huddle</SelectItem>
+                  <SelectItem value="google-meet">Google Meet</SelectItem>
+                  <SelectItem value="zoom">Zoom</SelectItem>
+                  <SelectItem value="teams">Microsoft Teams</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {roomMode === 'external' ? (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Provider</label>
-                <Select
-                  value={roomProvider}
-                  onValueChange={(value) =>
-                    setRoomProvider(value as 'google-meet' | 'zoom' | 'teams' | 'other')
-                  }
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="google-meet">Google Meet</SelectItem>
-                    <SelectItem value="zoom">Zoom</SelectItem>
-                    <SelectItem value="teams">Microsoft Teams</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Internal room</label>
-                <Input value="Auto-created private huddle room" className="h-9" disabled />
-                <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5 rounded border-slate-300"
-                    checked={roomAlwaysLive}
-                    onChange={(e) => setRoomAlwaysLive(e.target.checked)}
-                  />
-                  Always live (room stays available; invites still control who can join)
-                </label>
-              </div>
-            )}
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                {roomMode === 'external' ? 'Meeting link' : 'Purpose'}
-              </label>
-              {roomMode === 'external' ? (
-                <Input
-                  value={roomLink}
-                  onChange={(e) => setRoomLink(e.target.value)}
-                  placeholder="https://meet.google.com/..."
-                  className="h-9"
-                />
-              ) : (
-                <Input
-                  value={roomPurpose}
-                  onChange={(e) => setRoomPurpose(e.target.value)}
-                  placeholder="Daily sync"
-                  className="h-9"
-                />
-              )}
+              <label className="mb-1 block text-xs font-medium text-slate-600">Meeting link</label>
+              <Input
+                value={roomLink}
+                onChange={(e) => setRoomLink(e.target.value)}
+                placeholder="https://meet.google.com/..."
+                className="h-9"
+              />
             </div>
             <Button
               type="button"
               size="sm"
               className="h-9 text-xs bg-[var(--hs-link)] hover:bg-[var(--hs-link-hover)]"
-              disabled={
-                updateRoomsMutation.isPending ||
-                !roomName.trim() ||
-                (roomMode === 'external' ? !roomLink.trim() : false)
-              }
+              disabled={updateRoomsMutation.isPending || !roomName.trim() || !roomLink.trim()}
               onClick={() => {
                 const name = roomName.trim();
-                const link = roomMode === 'external' ? normalizeLink(roomLink) : undefined;
-                const purpose = roomPurpose.trim();
-                const huddleRoomId =
-                  roomMode === 'huddle' ? createHuddleRoomId(name, purpose, roomAlwaysLive) : undefined;
-                if (roomMode === 'external' && !link) return;
+                const link = normalizeLink(roomLink);
+                if (!link) return;
                 const duplicate = rooms.some(
-                  (r) =>
-                    String(r?.name || '').trim().toLowerCase() === name.toLowerCase() && r?.mode === roomMode,
+                  (r) => String(r?.name || '').trim().toLowerCase() === name.toLowerCase(),
                 );
                 if (duplicate) {
                   toast.info('This room is already added');
@@ -216,12 +152,9 @@ export default function VirtualOfficePage() {
                   ...rooms,
                   {
                     name,
-                    mode: roomMode,
-                    provider: roomMode === 'external' ? roomProvider : 'huddle',
+                    mode: 'external',
+                    provider: roomProvider,
                     link,
-                    huddleRoomId,
-                    purpose,
-                    alwaysLive: roomMode === 'huddle' ? roomAlwaysLive : false,
                     updatedAt: new Date().toISOString(),
                   },
                 ]);
@@ -245,7 +178,7 @@ export default function VirtualOfficePage() {
                   room.updatedAt &&
                   new Date(room.updatedAt).toDateString() === new Date().toDateString()
                 );
-                return room.mode === 'external' ? (
+                return (
                   <div
                     key={`${room.name}-${room.link}-${index}`}
                     className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
@@ -304,52 +237,6 @@ export default function VirtualOfficePage() {
                         Remove
                       </Button>
                     </div>
-                  </div>
-                ) : (
-                  <div
-                    key={`${room.name}-${room.huddleRoomId}-${index}`}
-                    className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2"
-                  >
-                    <Link
-                      href="#"
-                      className="inline-flex min-w-0 items-center gap-2 text-sm text-[#0c66e4] hover:underline"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        const roomId = String(room.huddleRoomId || '').trim();
-                        if (!roomId) return;
-                        window.dispatchEvent(
-                          new CustomEvent('quick-chat:join-huddle-room', {
-                            detail: { roomId },
-                          }),
-                        );
-                        toast.success('Opening Quick Chat huddle...');
-                      }}
-                    >
-                      <PhoneCall className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{room.name}</span>
-                      <span className="truncate text-xs text-slate-500">[Huddle]</span>
-                      {room.purpose ? (
-                        <span className="truncate text-xs text-slate-500">- {room.purpose}</span>
-                      ) : null}
-                      <span className="truncate rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
-                        Invite only
-                      </span>
-                      {room.alwaysLive ? (
-                        <span className="truncate rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">
-                          Always Live
-                        </span>
-                      ) : null}
-                    </Link>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-xs text-red-600 hover:text-red-600"
-                      onClick={() => updateRoomsMutation.mutate(rooms.filter((_, i) => i !== index))}
-                    >
-                      <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      Remove
-                    </Button>
                   </div>
                 );
               })}
