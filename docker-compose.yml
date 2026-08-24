@@ -1,12 +1,11 @@
-name: myapp
+name: 2bighacrm
 
 services:
   # Reverse proxy + automatic Let's Encrypt TLS. The backend/frontend services
-  # below carry traefik.* labels but nothing was serving them — this is that
-  # missing piece. Ports 80/443 must be free on the VPS (stop any host nginx).
+  # below carry traefik.* labels.
   traefik:
     image: traefik:v3.3
-    container_name: mathionix-traefik
+    container_name: 2bighacrm-traefik
     restart: always
     command:
       - --providers.docker=true
@@ -32,7 +31,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: mathionix-redis
+    container_name: 2bighacrm-redis
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes']
     volumes:
@@ -41,11 +40,9 @@ services:
 
   mongodb:
     image: mongo:8.2
-    container_name: mathionix-mongodb
+    container_name: 2bighacrm-mongodb
     restart: always
     stop_grace_period: 30s
-    # Cap container + WiredTiger cache so mongod cannot OOM-kill the VPS
-    # (default WT cache ≈ 50% of host RAM — fatal on small Hostinger boxes).
     mem_limit: 1536m
     memswap_limit: 1536m
     oom_score_adj: -500
@@ -54,15 +51,6 @@ services:
       - --bind_ip_all
       - --wiredTigerCacheSizeGB
       - '0.5'
-    # ═══════════════════════════════════════════════════════════════════
-    # PRODUCTION DATA — DO NOT RESET
-    # Volume name MUST stay `myapp_mongodb_data` (external name below).
-    # Safe:  docker rm -f mathionix-mongodb && docker compose up -d --no-deps mongodb
-    # NEVER: docker compose down -v
-    # NEVER: docker volume rm / prune myapp_mongodb_data
-    # NEVER: mongosh dropDatabase / drop collection on prod
-    # NEVER: migrate-atlas-to-local.sh unless explicitly approved
-    # ═══════════════════════════════════════════════════════════════════
     volumes:
       - mongodb_data:/data/db
     healthcheck:
@@ -73,34 +61,26 @@ services:
       start_period: 40s
 
   backend:
-    # CI/CD (see .github/workflows/deploy.yml) sets BACKEND_IMAGE to a GHCR tag
-    # and runs `docker compose pull && up -d --no-build`, skipping the build:
-    # block below entirely. Local/manual deploys fall back to the bundled tag
-    # and build from source.
     image: ${BACKEND_IMAGE:-myapp_backend:latest}
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: mathionix-backend
+    container_name: 2bighacrm-backend
     restart: always
     expose:
       - "4000"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mathionix-backend.rule=Host(`${APP_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))"
-      - "traefik.http.routers.mathionix-backend.priority=2"
-      - "traefik.http.routers.mathionix-backend.entrypoints=websecure"
-      - "traefik.http.routers.mathionix-backend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.mathionix-backend.loadbalancer.server.port=4000"
+      - "traefik.http.routers.2bighacrm-backend.rule=Host(`${APP_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))"
+      - "traefik.http.routers.2bighacrm-backend.priority=2"
+      - "traefik.http.routers.2bighacrm-backend.entrypoints=websecure"
+      - "traefik.http.routers.2bighacrm-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.2bighacrm-backend.loadbalancer.server.port=4000"
     depends_on:
       - mongodb
-    # Uploaded images/files are stored on local disk under /app/uploads — mount a
-    # named volume so they survive container recreation (like mongodb_data above).
     volumes:
       - uploads_data:/app/uploads
     environment:
-      # Defaults target the bundled `mongodb` service. Point these at an
-      # external/managed MongoDB by setting MONGO_URI in .env (see DEPLOY.md).
       - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/mathionix-crm}
       - MONGO_URI_CRM=${MONGO_URI_CRM:-${MONGO_URI:-mongodb://mongodb:27017/mathionix-crm}}
       - MONGO_URI_PM=${MONGO_URI_PM:-${MONGO_URI:-mongodb://mongodb:27017/mathionix-crm}}
@@ -122,7 +102,6 @@ services:
       - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
       - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}
       - MICROSOFT_CALLBACK_URL=${MICROSOFT_CALLBACK_URL}
-      # CRM inbox Gmail OAuth (and fallbacks GOOGLE_* used by api-hrms if CRM_INBOX_* unset)
       - CRM_INBOX_GOOGLE_CLIENT_ID=${CRM_INBOX_GOOGLE_CLIENT_ID}
       - CRM_INBOX_GOOGLE_CLIENT_SECRET=${CRM_INBOX_GOOGLE_CLIENT_SECRET}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
@@ -139,29 +118,22 @@ services:
       - TEAMS_TENANT_ID=${TEAMS_TENANT_ID}
       - BOT_SERVICE_URL=${BOT_SERVICE_URL}
       - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
-      # Entra user object ID for Graph 1:1 Teams chats (required with TEAMS_* / MICROSOFT_* Graph app)
       - TEAMS_SENDER_ID=${TEAMS_SENDER_ID}
       - FRONTEND_URL=${FRONTEND_URL}
-      # Same origin browsers use for /api (OAuth redirect_uri must match Azure/Google)
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       - PUBLIC_API_URL=${PUBLIC_API_URL}
       - TRACKING_BASE_URL=${TRACKING_BASE_URL}
-      # Github Creds
       - PM_GITHUB_CLIENT_ID=${PM_GITHUB_CLIENT_ID}
       - PM_GITHUB_CLIENT_SECRET=${PM_GITHUB_CLIENT_SECRET}
-      # CRM AI email drafting (api-hrms reads process.env — must be present at container runtime)
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-}
-      # Social / Marketing SEO — Semrush automated rank checks (SerpAPI fallback)
       - SEMRUSH_API_KEY=${SEMRUSH_API_KEY:-}
       - SERPAPI_API_KEY=${SERPAPI_API_KEY:-}
       - SEO_SIMULATE_RANK=${SEO_SIMULATE_RANK:-}
-      # Social desk AI image generation (OpenAI Images API)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_IMAGE_MODEL=${OPENAI_IMAGE_MODEL:-dall-e-3}
       - IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER:-auto}
       - IMAGE_GEN_SIMULATE=${IMAGE_GEN_SIMULATE:-}
-      # Local disk image/file storage (./uploads inside the container, see volumes above)
       - IMAGE_UPLOAD_MAX_INPUT_BYTES=${IMAGE_UPLOAD_MAX_INPUT_BYTES:-15728640}
       - FILE_UPLOAD_MAX_BYTES=${FILE_UPLOAD_MAX_BYTES:-26214400}
       - INTERNAL_CLIENT_PORTAL_KEY=${INTERNAL_CLIENT_PORTAL_KEY}
@@ -169,40 +141,32 @@ services:
   frontend:
     image: ${FRONTEND_IMAGE:-myapp_frontend:latest}
     build:
-      # Root context (not ./portal): portal/package.json links the shared UI kit
-      # as "file:../packages/ui", which must be inside the build context.
       context: .
       dockerfile: portal/Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set in .env}
         - NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL:-}
         - NEXT_PUBLIC_CRM_STANDALONE=true
-    container_name: mathionix-frontend
+    container_name: 2bighacrm-frontend
     restart: always
     expose:
       - "3000"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mathionix-frontend.rule=Host(`${APP_DOMAIN}`)"
-      - "traefik.http.routers.mathionix-frontend.priority=1"
-      - "traefik.http.routers.mathionix-frontend.entrypoints=websecure"
-      - "traefik.http.routers.mathionix-frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.mathionix-frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.2bighacrm-frontend.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.2bighacrm-frontend.priority=1"
+      - "traefik.http.routers.2bighacrm-frontend.entrypoints=websecure"
+      - "traefik.http.routers.2bighacrm-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.2bighacrm-frontend.loadbalancer.server.port=3000"
     depends_on:
       - backend
 
 volumes:
   letsencrypt_data:
-    name: myapp_letsencrypt_data
-    # PRODUCTION: Let's Encrypt certs + account key. Losing this re-issues certs
-    # and can trip the 5-per-week duplicate-certificate rate limit.
+    name: 2bighacrm_letsencrypt_data
   mongodb_data:
-    name: myapp_mongodb_data
-    # PRODUCTION: survives container recreate. Never rename this volume name.
-    # Never: docker volume rm / prune myapp_mongodb_data or compose down -v.
+    name: 2bighacrm_mongodb_data
   redis_data:
-    name: myapp_redis_data
+    name: 2bighacrm_redis_data
   uploads_data:
-    name: myapp_uploads_data
-    # PRODUCTION: user-uploaded images/files. Survives container recreate.
-    # Never: docker volume rm / prune myapp_uploads_data or compose down -v.
+    name: 2bighacrm_uploads_data
