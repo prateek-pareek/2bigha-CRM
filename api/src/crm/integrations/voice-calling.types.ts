@@ -55,6 +55,8 @@ export type KommunoVoiceConfig = {
   apiUrl?: string;
   /** Virtual/toll-free number registered with Kommuno, shown as caller ID */
   callerId?: string;
+  /** SME ID registered with Kommuno */
+  smeId?: string;
   /**
    * Optional agent phone for click-to-call: Kommuno rings the agent first,
    * then bridges to the lead (mirrors Twilio's agentPhone behavior). Leave
@@ -74,7 +76,7 @@ export type VoiceCallingConfig = {
 };
 
 export const DEFAULT_VOICE_CALLING_CONFIG: VoiceCallingConfig = {
-  activeProvider: 'twilio',
+  activeProvider: process.env.KOMMUNO_API_KEY ? 'kommuno' : 'twilio',
   providers: {
     twilio: { enabled: false },
     readymode: {
@@ -83,7 +85,13 @@ export const DEFAULT_VOICE_CALLING_CONFIG: VoiceCallingConfig = {
       apiUrl: '',
     },
     elevenlabs: { enabled: false },
-    kommuno: { enabled: false, apiUrl: '' },
+    kommuno: {
+      enabled: !!(process.env.KOMMUNO_API_KEY || process.env.KOMMUNO_VIRTUAL_NUMBER),
+      apiUrl: process.env.KOMMUNO_BASE_URL || process.env.KOMMUNO_API_URL || 'https://dialer-crmapi.kommuno.com/v1/kcrm',
+      apiKey: process.env.KOMMUNO_API_KEY || '',
+      callerId: process.env.KOMMUNO_VIRTUAL_NUMBER || process.env.KOMMUNO_CALLER_ID || '',
+      smeId: process.env.KOMMUNO_SME_ID || '',
+    },
   },
 };
 

@@ -477,20 +477,23 @@ export class VoiceCallingService {
   ) {
     const km = config.providers.kommuno;
     const apiUrl = String(km.apiUrl || '').trim();
-    const apiKey = String(km.apiKey || '').trim();
-    const callerId = String(km.callerId || '').trim();
-    const agentPhone = normalizeE164(String(km.agentPhone || ''));
+    const smeId = String(km.smeId || process.env.KOMMUNO_SME_ID || '').trim();
 
     if (!apiUrl || !apiKey || !callerId) {
       throw new BadRequestException(
-        'Kommuno API URL, API key, and Caller ID are required. Waiting on API docs from Kommuno — see Settings → Integrations → Voice calling.',
+        'Kommuno API URL, API key, and Virtual Number (Caller ID) are required.',
       );
     }
 
     const payload = {
+      sme_id: smeId || undefined,
+      smeId: smeId || undefined,
       caller_id: callerId,
+      virtual_number: callerId,
       customer_number: toNumber,
+      customerNumber: toNumber,
       agent_number: agentPhone || undefined,
+      agentNumber: agentPhone || undefined,
       lead_name: dto.leadName,
       related_to: dto.relatedTo,
       related_type: dto.relatedType || 'Lead',
@@ -501,7 +504,9 @@ export class VoiceCallingService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: apiKey.startsWith('Bearer ') ? apiKey : `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
+        apiKey: apiKey,
       },
       body: JSON.stringify(payload),
     });
