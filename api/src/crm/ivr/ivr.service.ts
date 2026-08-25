@@ -98,7 +98,7 @@ export class IvrService {
       process.env.KOMMUNO_API_KEY &&
       process.env.KOMMUNO_SME_ID &&
       process.env.KOMMUNO_VIRTUAL_NUMBER &&
-      process.env.KOMMUNO_API_BASE_URL
+      (process.env.KOMMUNO_API_BASE_URL || process.env.KOMMUNO_BASE_URL)
     );
   }
 
@@ -134,7 +134,13 @@ export class IvrService {
     const smeId = String(process.env.KOMMUNO_SME_ID).trim();
     const apiKey = String(process.env.KOMMUNO_API_KEY).trim();
     const pilotNumber = normalizeE164(String(process.env.KOMMUNO_VIRTUAL_NUMBER));
-    const baseUrl = String(process.env.KOMMUNO_API_BASE_URL).trim().replace(/\/+$/, '');
+    const baseUrl = String(
+      process.env.KOMMUNO_API_BASE_URL ||
+        process.env.KOMMUNO_BASE_URL ||
+        'https://dialer-crmapi.kommuno.com/v1/kcrm',
+    )
+      .trim()
+      .replace(/\/+$/, '');
 
     const payload = {
       smeId,
