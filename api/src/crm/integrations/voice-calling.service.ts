@@ -476,8 +476,11 @@ export class VoiceCallingService {
     dto: InitiateVoiceCallDto,
   ) {
     const km = config.providers.kommuno;
-    const apiUrl = String(km.apiUrl || '').trim();
+    const apiUrl = String(km.apiUrl || process.env.KOMMUNO_API_BASE_URL || process.env.KOMMUNO_BASE_URL || '').trim();
     const smeId = String(km.smeId || process.env.KOMMUNO_SME_ID || '').trim();
+    const apiKey = String(km.apiKey || process.env.KOMMUNO_API_KEY || '').trim();
+    const callerId = String(km.callerId || process.env.KOMMUNO_VIRTUAL_NUMBER || '').trim();
+    const agentPhone = normalizeE164(String(km.agentPhone || ''));
 
     if (!apiUrl || !apiKey || !callerId) {
       throw new BadRequestException(

@@ -144,6 +144,9 @@ services:
       - KOMMUNO_API_BASE_URL=${KOMMUNO_API_BASE_URL:-${KOMMUNO_BASE_URL:-https://dialer-crmapi.kommuno.com/v1/kcrm}}
       - KOMMUNO_BASE_URL=${KOMMUNO_BASE_URL:-${KOMMUNO_API_BASE_URL:-https://dialer-crmapi.kommuno.com/v1/kcrm}}
       - KOMMUNO_WEBHOOK_SECRET=${KOMMUNO_WEBHOOK_SECRET}
+      # WhatsApp (AiSensy)
+      - AISENSY_WEBHOOK_SECRET=${AISENSY_WEBHOOK_SECRET}
+      - AISENSY_API_BASE_URL=${AISENSY_API_BASE_URL:-https://backend.aisensy.com}
 
   frontend:
     image: ${FRONTEND_IMAGE:-myapp_frontend:latest}
