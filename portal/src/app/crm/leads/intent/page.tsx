@@ -243,7 +243,7 @@ export default function LeadIntentListPage() {
           const lead = callLead;
           setCallLead(null);
           if (lead) {
-            setCallActivityLead(lead);
+            setActivityLead(lead);
           }
         }}
       />
