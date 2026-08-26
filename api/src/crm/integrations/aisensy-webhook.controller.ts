@@ -1,5 +1,6 @@
 import { Controller, Get, Headers, Logger, Post, Query, Req, Res } from '@nestjs/common';
 import * as express from 'express';
+import * as crypto from 'crypto';
 import { WhatsAppService } from './whatsapp.service';
 
 /**
@@ -37,9 +38,45 @@ export class AiSensyWebhookController {
     @Headers('x-aisensy-secret') headerSecret?: string,
   ) {
     const expectedSecret = process.env.AISENSY_WEBHOOK_SECRET;
-    if (expectedSecret && querySecret !== expectedSecret && headerSecret !== expectedSecret) {
-      this.logger.warn('AiSensy webhook received with an invalid/missing secret — rejecting');
-      return res.status(401).send('Unauthorized');
+    
+    let isAuthorized = false;
+    if (expectedSecret) {
+      // 1. Check signature header if present (as documented in AiSensy docs)
+      const signature = req.headers['x-aisensy-signature'];
+      if (signature) {
+        // Try rawBody first (most reliable as it matches exact payload bytes)
+        const rawBody = (req as any).rawBody;
+        if (rawBody) {
+          const computedRaw = crypto
+            .createHmac('sha256', expectedSecret)
+            .update(rawBody)
+            .digest('hex');
+          if (computedRaw === signature) {
+            isAuthorized = true;
+          }
+        }
+        
+        // Fallback to JSON.stringify of body
+        if (!isAuthorized) {
+          const computedStr = crypto
+            .createHmac('sha256', expectedSecret)
+            .update(JSON.stringify(req.body || {}))
+            .digest('hex');
+          if (computedStr === signature) {
+            isAuthorized = true;
+          }
+        }
+      }
+
+      // 2. Check direct secret query/header match as fallback
+      if (!isAuthorized && (querySecret === expectedSecret || headerSecret === expectedSecret)) {
+        isAuthorized = true;
+      }
+
+      if (!isAuthorized) {
+        this.logger.warn('AiSensy webhook received with an invalid signature or secret — rejecting');
+        return res.status(401).send('Unauthorized');
+      }
     }
 
     // Ack immediately — never let our processing time or a downstream error
@@ -123,7 +160,39 @@ export class AiSensyWebhookController {
       filename?: string;
     };
   } | null {
-    // 1. Check official AiSensy "message.created" topic
+    // 1. Check official AiSensy "message.sender.*" topic (e.g. message.sender.user)
+    if (body?.topic?.startsWith('message.sender.') && body?.data?.message) {
+      const message = body.data.message;
+      const rawPhone = message.phone_number || message.contact?.phoneNumber || message.contact?.phone || message.from;
+      const waId = String(rawPhone || '').replace(/\D/g, '');
+      const messageId = String(message.messageId || message.id || `aisensy_${Date.now()}`);
+      const sender = String(message.sender || (body.topic.endsWith('.user') ? 'USER' : 'AGENT')).toUpperCase();
+
+      if (waId.length >= 10) {
+        let text = '';
+        let attachment: any = undefined;
+
+        const mContent = message.message_content || {};
+        const mType = String(message.message_type || '').toUpperCase();
+
+        if (['IMAGE', 'DOCUMENT', 'VIDEO', 'AUDIO'].includes(mType)) {
+          attachment = {
+            type: mType.toLowerCase(),
+            url: mContent.media?.url || (typeof mContent.content === 'string' && mContent.content.startsWith('http') ? mContent.content : ''),
+            filename: mContent.media?.filename || mContent.filename || undefined,
+          };
+          text = mContent.caption || mContent.text || `[${mType}]`;
+        } else if (mType === 'INTERACTIVE') {
+          text = mContent.interactive?.body?.text || mContent.text || '[Interactive Message]';
+        } else {
+          text = mContent.text || mContent.content || '';
+        }
+
+        return { waId, text, messageId, sender, attachment };
+      }
+    }
+
+    // 2. Check legacy official AiSensy "message.created" topic
     if (body?.topic === 'message.created' && body?.data) {
       const data = body.data;
       const rawPhone = data.contact?.phoneNumber || data.contact?.phone || data.from;
@@ -150,7 +219,7 @@ export class AiSensyWebhookController {
       }
     }
 
-    // 2. Fallback to Meta Cloud API webhook forwarded shape
+    // 3. Fallback to Meta Cloud API webhook forwarded shape
     const metaValue = body?.entry?.[0]?.changes?.[0]?.value;
     const metaMessage = metaValue?.messages?.[0];
     if (metaMessage?.from) {
@@ -182,7 +251,7 @@ export class AiSensyWebhookController {
       }
     }
 
-    // 3. Fallback to candidate fields
+    // 4. Fallback to candidate fields
     const candidates = [body, body?.data, body?.payload, body?.message, body?.entry?.[0]];
     for (const c of candidates) {
       if (!c) continue;
@@ -212,6 +281,16 @@ export class AiSensyWebhookController {
    * no message text to key off of.
    */
   private extractStatusUpdate(body: any): { messageId: string; status: string } | null {
+    if (body?.topic === 'message.status.updated' && body?.data?.message) {
+      const message = body.data.message;
+      const rawId = message.messageId || message.id || body.data.messageId;
+      const rawStatus = message.status || message.messageStatus || body.data.status;
+      const status = String(rawStatus || '').toLowerCase();
+      if (rawId && ['sent', 'delivered', 'read', 'failed'].includes(status)) {
+        return { messageId: String(rawId), status };
+      }
+    }
+
     if (body?.topic === 'message.status.updated' && body?.data) {
       const data = body.data;
       const rawId = data.messageId || data.id;
