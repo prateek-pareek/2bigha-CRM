@@ -239,6 +239,13 @@ export default function LeadIntentListPage() {
         phone={callLead?.mobileNo || callLead?.phone}
         leadId={callLead?._id}
         leadName={callLead ? fullName(callLead) : undefined}
+        onSuccess={() => {
+          const lead = callLead;
+          setCallLead(null);
+          if (lead) {
+            setCallActivityLead(lead);
+          }
+        }}
       />
       <AddPropertyModal
         open={!!propertyLead}

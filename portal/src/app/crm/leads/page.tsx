@@ -2622,6 +2622,13 @@ export default function LeadsPage() {
         leadId={callLead?._id}
         leadName={`${callLead?.firstName || ''} ${callLead?.lastName || ''}`.trim()}
         relatedType="Lead"
+        onSuccess={() => {
+          const lead = callLead;
+          setCallLead(null);
+          if (lead) {
+            setCallActivityLead(lead);
+          }
+        }}
       />
       <AddPropertyModal
         open={!!propertyLead}
