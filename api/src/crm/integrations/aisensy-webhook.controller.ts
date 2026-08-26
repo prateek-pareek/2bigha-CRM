@@ -50,6 +50,20 @@ export class AiSensyWebhookController {
     this.logger.log(`AiSensy webhook payload: ${JSON.stringify(body)}`);
 
     try {
+      const db = (this.whatsappService as any).integrationModel?.db || (this.whatsappService as any).messageModel?.db;
+      if (db) {
+        await db.collection('raw_webhooks').insertOne({
+          receivedAt: new Date(),
+          body,
+          url: req.url,
+          headers: req.headers,
+        });
+      }
+    } catch (e: any) {
+      this.logger.error(`Failed to save raw webhook for diagnostics: ${e?.message}`);
+    }
+
+    try {
       const inbound = this.extractInbound(body);
       if (inbound) {
         if (inbound.sender === 'AGENT' || inbound.sender === 'ASSISTANT') {

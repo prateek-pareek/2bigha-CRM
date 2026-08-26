@@ -62,9 +62,25 @@ async function seed() {
       { timestamps: true },
     );
 
+    const suiteUserSchema = new mongoose.Schema(
+      {
+        email: { type: String, required: true, unique: true },
+        password: { type: String, required: true },
+        firstName: String,
+        lastName: String,
+        role: { type: String, default: 'Employee' },
+        permittedTools: { type: [String], default: [] },
+        crmPermissions: { type: [String], default: [] },
+        useRoleOverrides: { type: Boolean, default: true },
+        permissions: { type: [String], default: [] },
+      },
+      { timestamps: true },
+    );
+
     const PermissionModel = conn.model('Permission', permissionSchema);
     const RoleModel = conn.model('Role', roleSchema);
     const UserModel = conn.model('CRMUser', userSchema);
+    const SuiteUserModel = conn.model('User', suiteUserSchema);
 
     // 1. Ensure every canonical permission exists.
     console.log('Seeding permissions...');
@@ -88,8 +104,8 @@ async function seed() {
       { upsert: true, new: true },
     );
 
-    // 3. Ensure the admin user exists with a freshly hashed password.
-    console.log(`Seeding admin user (${ADMIN_EMAIL})...`);
+    // 3. Ensure the admin user exists with a freshly hashed password in CRMUser collection.
+    console.log(`Seeding admin user (${ADMIN_EMAIL}) in CRMUser collection...`);
     const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
     await UserModel.findOneAndUpdate(
       { email: ADMIN_EMAIL },
@@ -102,6 +118,25 @@ async function seed() {
           role: 'Admin',
           permissions: ['admin:manage'],
           isActive: true,
+        },
+      },
+      { upsert: true, new: true },
+    );
+
+    // 4. Ensure the admin user exists with a freshly hashed password in User collection (Suite authentication).
+    console.log(`Seeding admin user (${ADMIN_EMAIL}) in User collection...`);
+    await SuiteUserModel.findOneAndUpdate(
+      { email: ADMIN_EMAIL },
+      {
+        $set: {
+          password: hashedPassword,
+          firstName: ADMIN_FIRST_NAME,
+          lastName: ADMIN_LAST_NAME,
+          role: 'CEO',
+          permittedTools: ['CRM'],
+          crmPermissions: ['admin:manage'],
+          useRoleOverrides: true,
+          permissions: [],
         },
       },
       { upsert: true, new: true },
