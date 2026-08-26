@@ -160,59 +160,31 @@ export class AiSensyWebhookController {
       filename?: string;
     };
   } | null {
-    // 1. Check official AiSensy "message.sender.*" topic (e.g. message.sender.user)
-    if (body?.topic?.startsWith('message.sender.') && body?.data?.message) {
-      const message = body.data.message;
-      const rawPhone = message.phone_number || message.contact?.phoneNumber || message.contact?.phone || message.from;
-      const waId = String(rawPhone || '').replace(/\D/g, '');
-      const messageId = String(message.messageId || message.id || `aisensy_${Date.now()}`);
-      const sender = String(message.sender || (body.topic.endsWith('.user') ? 'USER' : 'AGENT')).toUpperCase();
-
-      if (waId.length >= 10) {
-        let text = '';
-        let attachment: any = undefined;
-
-        const mContent = message.message_content || {};
-        const mType = String(message.message_type || '').toUpperCase();
-
-        if (['IMAGE', 'DOCUMENT', 'VIDEO', 'AUDIO'].includes(mType)) {
-          attachment = {
-            type: mType.toLowerCase(),
-            url: mContent.media?.url || (typeof mContent.content === 'string' && mContent.content.startsWith('http') ? mContent.content : ''),
-            filename: mContent.media?.filename || mContent.filename || undefined,
-          };
-          text = mContent.caption || mContent.text || `[${mType}]`;
-        } else if (mType === 'INTERACTIVE') {
-          text = mContent.interactive?.body?.text || mContent.text || '[Interactive Message]';
-        } else {
-          text = mContent.text || mContent.content || '';
-        }
-
-        return { waId, text, messageId, sender, attachment };
-      }
-    }
-
-    // 2. Check legacy official AiSensy "message.created" topic
-    if (body?.topic === 'message.created' && body?.data) {
-      const data = body.data;
-      const rawPhone = data.contact?.phoneNumber || data.contact?.phone || data.from;
+    // 1. Check official AiSensy "message.created" or "message.sender.*" topic
+    if ((body?.topic === 'message.created' || body?.topic?.startsWith('message.sender.')) && body?.data) {
+      const data = body.data.message || body.data;
+      const rawPhone = data.phone_number || data.contact?.phoneNumber || data.contact?.phone || data.from;
       const waId = String(rawPhone || '').replace(/\D/g, '');
       const messageId = String(data.messageId || data.id || `aisensy_${Date.now()}`);
-      const sender = String(data.sender || 'USER').toUpperCase();
+      const sender = String(data.sender || (body.topic.endsWith('.user') ? 'USER' : 'AGENT')).toUpperCase();
 
       if (waId.length >= 10) {
         let text = '';
         let attachment: any = undefined;
 
-        if (['image', 'document', 'video', 'audio'].includes(data.type)) {
+        const typeUpper = String(data.message_type || data.type || '').toUpperCase();
+
+        if (['IMAGE', 'DOCUMENT', 'VIDEO', 'AUDIO', 'FILE'].includes(typeUpper)) {
           attachment = {
-            type: data.type,
-            url: data.media?.url || (data.content?.startsWith('http') ? data.content : ''),
-            filename: data.media?.filename || data.filename || undefined,
+            type: typeUpper === 'FILE' ? 'document' : typeUpper.toLowerCase(),
+            url: data.message_content?.url || data.message_content?.media?.url || data.media?.url || (typeof data.content === 'string' && data.content.startsWith('http') ? data.content : ''),
+            filename: data.message_content?.filename || data.message_content?.media?.filename || data.media?.filename || data.filename || undefined,
           };
-          text = data.caption || (!data.content?.startsWith('http') ? data.content : '') || `[${data.type.toUpperCase()}]`;
+          text = data.message_content?.caption || data.caption || (typeof data.content === 'string' && !data.content.startsWith('http') ? data.content : '') || `[${typeUpper}]`;
+        } else if (typeUpper === 'INTERACTIVE') {
+          text = data.message_content?.interactive?.body?.text || data.message_content?.text || '[Interactive Message]';
         } else {
-          text = data.content || '';
+          text = data.message_content?.text || data.content || '';
         }
 
         return { waId, text, messageId, sender, attachment };
