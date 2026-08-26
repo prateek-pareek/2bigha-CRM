@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -10,6 +10,10 @@ import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { AiSensyClient } from './aisensy-client.util';
 import { StorageService } from '../../storage/storage.service';
 import { resolvePublicMediaUrl } from '../../storage/media-url.util';
+import { Lead } from '../schemas/lead.schema';
+import { WhatsAppLeadLink } from '../whatsapp-links/schemas/whatsapp-lead-link.schema';
+import { CRMUser } from '../crm-users/schemas/user.schema';
+import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
 
 const META_API = 'https://graph.facebook.com/v18.0';
 
@@ -50,6 +54,12 @@ export class WhatsAppService {
     private messageModel: Model<WhatsAppMessageDocument>,
     @InjectModel(Integration.name, 'crmConnection')
     private integrationModel: Model<any>,
+    @InjectModel(Lead.name, 'crmConnection')
+    private leadModel: Model<any>,
+    @InjectModel(WhatsAppLeadLink.name, 'crmConnection')
+    private linkModel: Model<any>,
+    @InjectModel(CRMUser.name, 'crmConnection')
+    private crmUserModel: Model<any>,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly storageService: StorageService,
   ) {}
@@ -128,6 +138,39 @@ export class WhatsAppService {
     return out;
   }
 
+  private async validateSendAccess(waId: string, userIdStr?: string): Promise<void> {
+    if (!userIdStr) return; // System processes or cron jobs can send
+    const user = await this.crmUserModel.findById(userIdStr).populate('roleId').lean().exec();
+    if (!user) return;
+
+    if (hasCrmFullDataAccess(user)) {
+      return; // Admins can always send
+    }
+
+    const userId = this.userObjectId(user);
+    if (!userId) return;
+
+    // Check if they are forbidden to access the chat completely first
+    const forbidden = await this.getUserForbiddenWaIds(user);
+    if (forbidden && forbidden.includes(waId)) {
+      throw new ForbiddenException('You do not have access to this chat');
+    }
+
+    // Check if the chat has a temporary grant for this user, and what type it is
+    const normalizedWaId = String(waId || '').replace(/\D/g, '');
+    const link = await this.linkModel.findOne({ waId: normalizedWaId }).lean().exec();
+    if (link && link.temporaryGrants) {
+      const activeGrant = link.temporaryGrants.find(
+        (g: any) =>
+          String(g.userId) === String(userId) &&
+          new Date(g.expiresAt) > new Date()
+      );
+      if (activeGrant && activeGrant.accessType === 'read') {
+        throw new ForbiddenException('You only have read-only temporary access to this chat');
+      }
+    }
+  }
+
   async sendMessage(
     to: string,
     body: string,
@@ -142,6 +185,8 @@ export class WhatsAppService {
     const phone = to.replace(/\D/g, '');
     if (phone.length < 10)
       return { success: false, error: 'Invalid phone number' };
+
+    await this.validateSendAccess(phone, userId);
 
     if (config.provider === 'aisensy') {
       // Free-text sends go through AiSensy's separate Project API, which
@@ -178,6 +223,7 @@ export class WhatsAppService {
         module,
         entityId: entityId ? new Types.ObjectId(entityId) : undefined,
         status: 'sent',
+        isRead: true,
         meta: { ...result.raw, provider: 'aisensy' },
       });
       this.emitWhatsAppEvent(phone, saved);
@@ -222,6 +268,7 @@ export class WhatsAppService {
         module,
         entityId: entityId ? new Types.ObjectId(entityId) : undefined,
         status: 'sent',
+        isRead: true,
         meta: data,
       });
       this.emitWhatsAppEvent(phone, saved);
@@ -254,6 +301,8 @@ export class WhatsAppService {
     const phone = params.to.replace(/\D/g, '');
     if (phone.length < 10)
       return { success: false, error: 'Invalid phone number' };
+
+    await this.validateSendAccess(phone, params.userId);
 
     const templateName = String(params.name || '').trim();
     const language = String(params.language || '').trim();
@@ -299,6 +348,7 @@ export class WhatsAppService {
           ? new Types.ObjectId(params.entityId)
           : undefined,
         status: 'sent',
+        isRead: true,
         attachment: params.mediaUrl ? {
           type: params.mediaType || 'image',
           url: params.mediaUrl,
@@ -366,6 +416,7 @@ export class WhatsAppService {
           ? new Types.ObjectId(params.entityId)
           : undefined,
         status: 'sent',
+        isRead: true,
         meta: {
           ...data,
           template: {
@@ -667,6 +718,7 @@ export class WhatsAppService {
       body,
       messageId,
       status: 'delivered',
+      isRead: false,
       attachment,
     });
     this.emitWhatsAppEvent(waId, saved);
@@ -690,19 +742,171 @@ export class WhatsAppService {
       body,
       messageId,
       status: 'sent',
+      isRead: true,
       attachment,
     });
     this.emitWhatsAppEvent(waId, saved);
   }
 
+  private repOwnerLabelFromUser(user?: any): string {
+    if (!user) return 'Unknown';
+    const fn = String(user.firstName || '').trim();
+    const ln = String(user.lastName || '').trim();
+    const n = [fn, ln].filter(Boolean).join(' ');
+    if (n) return n;
+    const email = String(user.email || '').trim();
+    return email;
+  }
+
+  private userObjectId(user?: any): Types.ObjectId | null {
+    const raw = user?._id || user?.userId || null;
+    if (!raw) return null;
+    return Types.ObjectId.isValid(String(raw)) ? new Types.ObjectId(String(raw)) : null;
+  }
+
+  async getUserForbiddenWaIds(user: any): Promise<string[] | null> {
+    if (!user || hasCrmFullDataAccess(user)) {
+      return null; // Null means they can access everything (no isolation)
+    }
+
+    const userId = this.userObjectId(user);
+    const ownerName = this.repOwnerLabelFromUser(user).trim();
+
+    // 1. Find all Lead IDs that this user owns/has access to (explicit permissions)
+    const leadFilters: any[] = [];
+    if (ownerName) {
+      leadFilters.push({ leadOwner: ownerName });
+    }
+    if (userId) {
+      leadFilters.push({ createdBy: userId });
+      leadFilters.push({ sharedWith: userId });
+      leadFilters.push({ leadOwner: String(userId) });
+    }
+
+    let allowedLeadIds: Types.ObjectId[] = [];
+    if (leadFilters.length > 0) {
+      const leads = await this.leadModel
+        .find({ $or: leadFilters })
+        .select('_id')
+        .lean()
+        .exec();
+      allowedLeadIds = leads.map((l) => l._id);
+    }
+
+    // 2. Query all links that have active temporary grants for this user.
+    // These chats should NOT be forbidden for this user.
+    let activeGrantWaIds: string[] = [];
+    if (userId) {
+      const linksWithGrants = await this.linkModel
+        .find({
+          temporaryGrants: {
+            $elemMatch: {
+              userId,
+              expiresAt: { $gt: new Date() },
+            },
+          },
+        })
+        .select('waId')
+        .lean()
+        .exec();
+      activeGrantWaIds = linksWithGrants.map((l) => l.waId);
+    }
+
+    // 3. Find all chats linked to leads NOT owned by this user, where they aren't the assignee,
+    // and where they don't have an active temporary grant.
+    const forbiddenLinksQuery: any = {
+      leadId: { $exists: true, $ne: null },
+    };
+
+    if (allowedLeadIds.length > 0) {
+      forbiddenLinksQuery.leadId = { $nin: allowedLeadIds };
+    }
+    if (userId) {
+      forbiddenLinksQuery.assignee = { $ne: userId };
+    }
+    if (activeGrantWaIds.length > 0) {
+      forbiddenLinksQuery.waId = { $nin: activeGrantWaIds };
+    }
+
+    const forbiddenLinks = await this.linkModel
+      .find(forbiddenLinksQuery)
+      .select('waId')
+      .lean()
+      .exec();
+
+    return forbiddenLinks.map((l) => l.waId);
+  }
+
+  async grantTemporaryAccess(
+    waId: string,
+    targetUserId: string,
+    accessType: 'read' | 'read_write',
+    durationMinutes: number,
+    actorId?: string,
+  ): Promise<any> {
+    if (!Types.ObjectId.isValid(targetUserId)) {
+      throw new BadRequestException('A valid target user is required');
+    }
+    const expiresAt = new Date(Date.now() + durationMinutes * 60000);
+
+    // Make sure the chat link exists, otherwise upsert/create one
+    const normalizedWaId = String(waId || '').replace(/\D/g, '');
+    if (normalizedWaId.length < 10) {
+      throw new BadRequestException('A valid phone number is required');
+    }
+
+    // Push the new grant to temporaryGrants array
+    const grant = {
+      userId: new Types.ObjectId(targetUserId),
+      accessType,
+      expiresAt,
+    };
+
+    // First remove any existing temporary grants for this user in this chat to avoid duplicates
+    await this.linkModel.updateOne(
+      { waId: normalizedWaId },
+      { $pull: { temporaryGrants: { userId: grant.userId } } }
+    ).exec();
+
+    const link = await this.linkModel.findOneAndUpdate(
+      { waId: normalizedWaId },
+      {
+        $set: { waId: normalizedWaId },
+        $push: { temporaryGrants: grant },
+      },
+      { upsert: true, new: true }
+    ).exec();
+
+    return link;
+  }
+
   async getConversations(
     options: { waId?: string; page?: number; pageSize?: number } = {},
+    user?: any,
   ): Promise<{ messages: WhatsAppMessage[]; total: number }> {
     const filter: any = {};
     if (options.waId) filter.waId = options.waId;
+
+    const forbidden = await this.getUserForbiddenWaIds(user);
+    if (forbidden && forbidden.length > 0) {
+      if (options.waId && forbidden.includes(options.waId)) {
+        return { messages: [], total: 0 };
+      }
+      filter.waId = { ...(filter.waId ? { $eq: filter.waId, $nin: forbidden } : { $nin: forbidden }) };
+    }
+
     const page = options.page ?? 1;
     const pageSize = options.pageSize ?? 50;
     const skip = (page - 1) * pageSize;
+
+    if (options.waId) {
+      await this.messageModel
+        .updateMany(
+          { waId: options.waId, direction: 'inbound', isRead: false },
+          { $set: { isRead: true } },
+        )
+        .exec();
+    }
 
     const [messages, total] = await Promise.all([
       this.messageModel
@@ -719,16 +923,91 @@ export class WhatsAppService {
     return { messages, total };
   }
 
-  async getUniqueContacts(): Promise<{ waId: string; lastMessageAt: Date }[]> {
-    const agg = await this.messageModel
-      .aggregate([
-        { $sort: { createdAt: -1 } },
-        { $group: { _id: '$waId', lastMessageAt: { $first: '$createdAt' } } },
-        { $project: { waId: '$_id', lastMessageAt: 1, _id: 0 } },
-        { $sort: { lastMessageAt: -1 } },
-      ])
-      .exec();
-    return agg;
+  async getUniqueContacts(user?: any): Promise<any[]> {
+    const forbidden = await this.getUserForbiddenWaIds(user);
+    const matchStage = forbidden && forbidden.length > 0 ? { $match: { waId: { $nin: forbidden } } } : null;
+
+    const pipeline: any[] = [];
+    if (matchStage) {
+      pipeline.push(matchStage);
+    }
+    pipeline.push(
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: '$waId',
+          lastMessageAt: { $first: '$createdAt' },
+          unreadCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$direction', 'inbound'] },
+                    { $eq: ['$isRead', false] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+      { $project: { waId: '$_id', lastMessageAt: 1, unreadCount: 1, _id: 0 } },
+      { $sort: { lastMessageAt: -1 } },
+    );
+
+    const agg = await this.messageModel.aggregate(pipeline).exec();
+
+    // Batch resolve Lead/Link details for each contact
+    const contactsWithLeads = await Promise.all(
+      agg.map(async (c) => {
+        const waId = c.waId;
+        const link = await this.linkModel
+          .findOne({ waId })
+          .populate('leadId', 'firstName lastName')
+          .lean()
+          .exec();
+
+        if (link && link.leadId) {
+          const lead = link.leadId as any;
+          return {
+            ...c,
+            leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
+            leadId: String(lead._id),
+          };
+        }
+
+        // Fallback: search Lead collection
+        const localNumber = waId.slice(-10);
+        if (localNumber.length >= 10) {
+          const lead = await this.leadModel
+            .findOne({
+              $or: [
+                { mobileNo: new RegExp(localNumber + '$') },
+                { phone: new RegExp(localNumber + '$') },
+                { mobileNo: waId },
+                { phone: waId },
+              ],
+            })
+            .select('firstName lastName')
+            .lean()
+            .exec();
+
+          if (lead) {
+            return {
+              ...c,
+              leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
+              leadId: String(lead._id),
+            };
+          }
+        }
+
+        return c;
+      })
+    );
+
+    return contactsWithLeads;
   }
 
   async handleMediaMessage(
@@ -838,6 +1117,7 @@ export class WhatsAppService {
       module: params.module,
       entityId: params.entityId,
       status: 'sent',
+      isRead: true,
       attachment: params.mediaUrl ? {
         type: 'image',
         url: params.mediaUrl,
@@ -883,6 +1163,8 @@ export class WhatsAppService {
     const phone = to.replace(/\D/g, '');
     if (phone.length < 10)
       return { success: false, error: 'Invalid phone number' };
+
+    await this.validateSendAccess(phone, userId);
 
     const absoluteUrl = resolvePublicMediaUrl(mediaUrl) || mediaUrl;
 
@@ -950,6 +1232,7 @@ export class WhatsAppService {
         module,
         entityId: entityId ? new Types.ObjectId(entityId) : undefined,
         status: 'sent',
+        isRead: true,
         attachment: { type: 'document', url: mediaUrl, filename },
         meta: data,
       });

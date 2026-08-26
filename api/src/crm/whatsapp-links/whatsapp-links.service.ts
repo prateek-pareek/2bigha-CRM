@@ -61,21 +61,56 @@ export class WhatsAppLinksService {
     waId: string;
     leadId: string;
     leadName: string;
+    assignee?: string;
+    temporaryGrants?: any[];
   } | null> {
+    const normWa = normalizeWaId(waId);
     const link = await this.linkModel
-      .findOne({ waId: normalizeWaId(waId) })
+      .findOne({ waId: normWa })
       .populate('leadId', 'firstName lastName')
       .lean()
       .exec();
-    if (!link) return null;
-    const lead = link.leadId as any;
-    return {
-      waId: link.waId,
-      leadId: String(lead?._id || lead),
-      leadName: lead?.firstName
-        ? `${lead.firstName || ''} ${lead.lastName || ''}`.trim()
-        : '',
-    };
+
+    if (link) {
+      const lead = link.leadId as any;
+      return {
+        waId: link.waId,
+        leadId: String(lead?._id || lead),
+        leadName: lead?.firstName
+          ? `${lead.firstName || ''} ${lead.lastName || ''}`.trim()
+          : '',
+        assignee: link.assignee ? String(link.assignee) : undefined,
+        temporaryGrants: link.temporaryGrants || [],
+      };
+    }
+
+    // Fallback search by phone number directly in Lead collection
+    const phoneDigits = normWa.replace(/\D/g, '');
+    if (phoneDigits.length >= 10) {
+      const localNumber = phoneDigits.slice(-10);
+      const lead = await this.leadModel
+        .findOne({
+          $or: [
+            { mobileNo: new RegExp(localNumber + '$') },
+            { phone: new RegExp(localNumber + '$') },
+            { mobileNo: phoneDigits },
+            { phone: phoneDigits },
+          ],
+        })
+        .select('firstName lastName')
+        .lean()
+        .exec();
+
+      if (lead) {
+        return {
+          waId: normWa,
+          leadId: String(lead._id),
+          leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
+        };
+      }
+    }
+
+    return null;
   }
 
   /** Every WhatsApp conversation attached to a given Lead. */

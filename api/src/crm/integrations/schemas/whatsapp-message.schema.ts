@@ -43,6 +43,9 @@ export class WhatsAppMessage {
   @Prop({ default: 'sent', enum: ['sent', 'delivered', 'read', 'failed'] })
   status: string;
 
+  @Prop({ default: false, index: true })
+  isRead?: boolean;
+
   @Prop({ type: Object })
   meta?: Record<string, any>;
 

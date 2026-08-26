@@ -20,8 +20,10 @@ import {
   Share2,
   Smile,
   User,
+  UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isAdmin as isHrmsAdmin } from "@/lib/suite/auth";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { cn } from "@/lib/utils";
 import { CrmButton } from "@/components/crm/ui";
@@ -54,6 +56,9 @@ interface WhatsAppMessage {
 interface WhatsAppContact {
   waId: string;
   lastMessageAt: string;
+  unreadCount?: number;
+  leadName?: string;
+  leadId?: string;
 }
 
 const THREAD_POLL_MS = 20000;
@@ -117,7 +122,18 @@ export default function WhatsAppChatsPage() {
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [newChatPhone, setNewChatPhone] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [linkedLead, setLinkedLead] = useState<{ leadId: string; leadName: string } | null>(null);
+  const [linkedLead, setLinkedLead] = useState<{
+    leadId?: string;
+    leadName?: string;
+    assignee?: string;
+    temporaryGrants?: Array<{
+      userId: string;
+      accessType: "read" | "read_write";
+      expiresAt: string;
+    }>;
+  } | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [grantAccessModalOpen, setGrantAccessModalOpen] = useState(false);
   const [linkLeadModalOpen, setLinkLeadModalOpen] = useState(false);
   const [callModalOpen, setCallModalOpen] = useState(false);
   const [addPropertyModalOpen, setAddPropertyModalOpen] = useState(false);
@@ -125,6 +141,42 @@ export default function WhatsAppChatsPage() {
   const [sharedMediaOpen, setSharedMediaOpen] = useState(false);
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+
+  const isAdminUser = useMemo(() => {
+    if (!currentUser) return false;
+    if (isHrmsAdmin(currentUser)) return true;
+    const roleKey = String(currentUser.role || "").trim().toUpperCase();
+    if (["ADMIN", "SUPERADMIN", "CEO", "CTO", "OWNER"].includes(roleKey)) return true;
+    const perms = Array.isArray(currentUser.crmPermissions) ? currentUser.crmPermissions : [];
+    if (perms.includes("admin:manage") || perms.includes("leads:read:all") || perms.includes("contacts:read:all")) return true;
+    return false;
+  }, [currentUser]);
+
+  const isReadOnly = useMemo(() => {
+    if (!currentUser || isAdminUser) return false;
+    
+    // If not linked to a lead and has no assignee, it's a direct enquiry (not restricted)
+    if (!linkedLead?.leadId && !linkedLead?.assignee) {
+      return false;
+    }
+
+    const userId = currentUser._id || currentUser.userId;
+    if (!userId) return false;
+
+    // If there is an active temporary grant for this user, check its type
+    if (linkedLead.temporaryGrants) {
+      const activeGrant = linkedLead.temporaryGrants.find(
+        (g) =>
+          String(g.userId) === String(userId) &&
+          new Date(g.expiresAt) > new Date()
+      );
+      if (activeGrant) {
+        return activeGrant.accessType === "read";
+      }
+    }
+
+    return false;
+  }, [currentUser, isAdminUser, linkedLead]);
 
   const loadContacts = useCallback(async () => {
     setContactsLoading(true);
@@ -162,11 +214,29 @@ export default function WhatsAppChatsPage() {
       const list = Array.isArray(data.messages) ? data.messages : [];
       // API returns newest-first; render oldest-first like a chat thread.
       setMessages([...list].reverse());
+      // Refresh contact list to clear unread badge locally
+      void loadContacts();
     } catch {
       toast.error("Failed to load conversation");
     } finally {
       setThreadLoading(false);
     }
+  }, [loadContacts]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const res = await fetch(`${CRM_API_URL}/crm-users/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data);
+        }
+      } catch (err) {}
+    };
+    void fetchProfile();
   }, []);
 
   useEffect(() => {
@@ -186,7 +256,12 @@ export default function WhatsAppChatsPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((body) => {
         if (cancelled) return;
-        setLinkedLead(body?.leadId ? { leadId: body.leadId, leadName: body.leadName || "Lead" } : null);
+        setLinkedLead(body ? {
+          leadId: body.leadId,
+          leadName: body.leadName,
+          assignee: body.assignee,
+          temporaryGrants: body.temporaryGrants,
+        } : null);
       })
       .catch(() => {
         if (!cancelled) setLinkedLead(null);
@@ -312,14 +387,6 @@ export default function WhatsAppChatsPage() {
         <div className="flex min-h-0 flex-col border-b border-[#d1d7db] bg-white md:border-b-0 md:border-r">
           <div className="flex items-center justify-between gap-2 bg-[#f0f2f5] px-4 py-3">
             <span className="text-base font-semibold text-[#111b21]">Chats</span>
-            <button
-              type="button"
-              onClick={() => setNewChatOpen(true)}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#54656f] transition hover:bg-black/5"
-              title="New chat"
-            >
-              <Plus size={18} />
-            </button>
           </div>
 
           <div className="bg-white px-3 py-2">
@@ -366,22 +433,35 @@ export default function WhatsAppChatsPage() {
                   </div>
                   <div className="min-w-0 flex-1 border-b border-[#e9edef] pb-3 pt-0.5">
                     <div className="flex items-baseline justify-between gap-2">
-                      <p className="truncate text-sm font-medium text-[#111b21]">
-                        {formatPhone(c.waId)}
+                      <p className={cn(
+                        "truncate text-sm text-[#111b21]",
+                        c.unreadCount && c.unreadCount > 0 ? "font-bold" : "font-medium"
+                      )}>
+                        {c.leadName || formatPhone(c.waId)}
                       </p>
-                      <span className="shrink-0 text-[11px] text-[#667781]">
+                      <span className={cn(
+                        "shrink-0 text-[11px]",
+                        c.unreadCount && c.unreadCount > 0 ? "font-bold text-emerald-600" : "text-[#667781]"
+                      )}>
                         {new Date(c.lastMessageAt).toLocaleString([], {
                           month: "short",
                           day: "numeric",
                         })}
                       </span>
                     </div>
-                    <p className="truncate text-xs text-[#667781]">
-                      {new Date(c.lastMessageAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="truncate text-xs text-[#667781]">
+                        {new Date(c.lastMessageAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      {c.unreadCount && c.unreadCount > 0 ? (
+                        <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                          {c.unreadCount}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </button>
               ))
@@ -419,38 +499,49 @@ export default function WhatsAppChatsPage() {
                     <User size={16} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">{formatPhone(selectedWaId)}</p>
-                    {linkedLead ? (
-                      <Link
-                        href={`/crm/leads/${linkedLead.leadId}`}
-                        className="flex items-center gap-1 text-[11px] text-white/80 hover:text-white hover:underline"
-                      >
-                        <Link2 size={10} /> {linkedLead.leadName}
-                      </Link>
+                    {linkedLead?.leadId ? (
+                      <>
+                        <p className="text-sm font-semibold">{linkedLead.leadName || formatPhone(selectedWaId)}</p>
+                        <div className="flex items-center gap-2 text-[11px] text-white/75">
+                          <span>{formatPhone(selectedWaId)}</span>
+                          <span>•</span>
+                          <Link
+                            href={`/crm/leads/${linkedLead.leadId}`}
+                            className="flex items-center gap-0.5 text-white/90 hover:text-white hover:underline"
+                          >
+                            <Link2 size={10} /> View Lead
+                          </Link>
+                        </div>
+                      </>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setLinkLeadModalOpen(true)}
-                        className="flex items-center gap-1 text-[11px] text-white/70 hover:text-white hover:underline"
-                      >
-                        <Link2 size={10} /> Link to lead
-                      </button>
+                      <>
+                        <p className="text-sm font-semibold">{formatPhone(selectedWaId)}</p>
+                        <button
+                          type="button"
+                          onClick={() => setLinkLeadModalOpen(true)}
+                          className="flex items-center gap-1 text-[11px] text-white/70 hover:text-white hover:underline"
+                        >
+                          <Link2 size={10} /> Link to lead
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <CrmButton
                     variant="secondary"
+                    disabled={isReadOnly}
                     onClick={() => setSharePropertyModalOpen(true)}
-                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
+                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25 disabled:opacity-45"
                     title="Share property"
                   >
                     <Share2 size={14} /> Share property
                   </CrmButton>
                   <CrmButton
                     variant="secondary"
+                    disabled={isReadOnly}
                     onClick={() => setAddPropertyModalOpen(true)}
-                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
+                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25 disabled:opacity-45"
                     title="Add property"
                   >
                     <Building2 size={14} /> Add property
@@ -463,10 +554,21 @@ export default function WhatsAppChatsPage() {
                   >
                     <Phone size={14} /> Call
                   </CrmButton>
+                  {isAdminUser && (
+                    <CrmButton
+                      variant="secondary"
+                      onClick={() => setGrantAccessModalOpen(true)}
+                      className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
+                      title="Grant temporary access to another agent"
+                    >
+                      <UserPlus size={14} /> Grant Access
+                    </CrmButton>
+                  )}
                   <CrmButton
                     variant="secondary"
+                    disabled={isReadOnly}
                     onClick={() => setTemplatePickerOpen(true)}
-                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25"
+                    className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25 disabled:opacity-45"
                   >
                     Send template
                   </CrmButton>
@@ -610,7 +712,7 @@ export default function WhatsAppChatsPage() {
                 <Paperclip size={20} className="shrink-0 text-[#54656f]" />
                 <input
                   value={composerText}
-                  disabled={!canSendFreeform || sending}
+                  disabled={!canSendFreeform || sending || isReadOnly}
                   onChange={(e) => setComposerText(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -619,13 +721,17 @@ export default function WhatsAppChatsPage() {
                     }
                   }}
                   placeholder={
-                    canSendFreeform ? "Type a message" : "Outside the 24h window — send a template"
+                    isReadOnly
+                      ? "This chat is read-only (temporary access)"
+                      : canSendFreeform
+                      ? "Type a message"
+                      : "Outside the 24h window — send a template"
                   }
                   className="h-10 flex-1 rounded-lg border-none bg-white px-4 text-sm text-[#111b21] outline-none placeholder:text-[#667781] disabled:bg-[#f0f2f5]/60 disabled:text-[#98a3a8]"
                 />
                 <button
                   type="button"
-                  disabled={!canSendFreeform || sending || !composerText.trim()}
+                  disabled={!canSendFreeform || sending || !composerText.trim() || isReadOnly}
                   onClick={() => void sendFreeform()}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ backgroundColor: WA_ACCENT }}
@@ -728,6 +834,168 @@ export default function WhatsAppChatsPage() {
           waId={selectedWaId}
         />
       )}
+
+      {selectedWaId && (
+        <GrantAccessModal
+          isOpen={grantAccessModalOpen}
+          onClose={() => setGrantAccessModalOpen(false)}
+          waId={selectedWaId}
+          onSuccess={() => {
+            if (selectedWaId) {
+              const token = localStorage.getItem("token");
+              fetch(`${CRM_API_URL}/crm/whatsapp-links/by-wa/${encodeURIComponent(selectedWaId)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              })
+                .then((res) => (res.ok ? res.json() : null))
+                .then((body) => {
+                  setLinkedLead(body ? {
+                    leadId: body.leadId,
+                    leadName: body.leadName,
+                    assignee: body.assignee,
+                    temporaryGrants: body.temporaryGrants,
+                  } : null);
+                });
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+interface GrantAccessModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  waId: string;
+  onSuccess: () => void;
+}
+
+function GrantAccessModal({ isOpen, onClose, waId, onSuccess }: GrantAccessModalProps) {
+  const [users, setUsers] = useState<any[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [accessType, setAccessType] = useState<"read" | "read_write">("read");
+  const [duration, setDuration] = useState("60"); // 1 hour default
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchUsers = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const res = await fetch(`${CRM_API_URL}/crm-users/list/crm-portal`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => []);
+          setUsers(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    void fetchUsers();
+  }, [isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserId) {
+      toast.error("Please select a user");
+      return;
+    }
+    setLoading(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/whatsapp/grant-temporary-access`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          waId,
+          targetUserId: selectedUserId,
+          accessType,
+          durationMinutes: parseInt(duration, 10),
+        }),
+      });
+      if (res.ok) {
+        toast.success("Temporary access granted successfully");
+        onSuccess();
+        onClose();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Failed to grant access");
+      }
+    } catch {
+      toast.error("Failed to grant access");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-[var(--radius-md)] border border-border bg-white p-5 shadow-2xl">
+        <h3 className="text-sm font-bold text-text-main">Grant Temporary Access</h3>
+        <p className="mt-1 text-xs text-text-muted">
+          Grant temporary access to this chat thread for another agent.
+        </p>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-main mb-1">Select Agent</label>
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs outline-none focus:border-primary text-text-main"
+            >
+              <option value="">-- Choose Agent --</option>
+              {users.map((u) => (
+                <option key={u._id} value={u._id}>
+                  {u.firstName || ""} {u.lastName || ""} ({u.email})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-main mb-1">Access Type</label>
+            <select
+              value={accessType}
+              onChange={(e) => setAccessType(e.target.value as any)}
+              className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs outline-none focus:border-primary text-text-main"
+            >
+              <option value="read">Read Only</option>
+              <option value="read_write">Read and Send</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-main mb-1">Duration</label>
+            <select
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs outline-none focus:border-primary text-text-main"
+            >
+              <option value="60">1 Hour</option>
+              <option value="240">4 Hours</option>
+              <option value="1440">24 Hours</option>
+              <option value="10080">7 Days</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <CrmButton type="button" variant="secondary" onClick={onClose} disabled={loading}>
+              Cancel
+            </CrmButton>
+            <CrmButton type="submit" disabled={loading}>
+              {loading ? "Granting..." : "Grant Access"}
+            </CrmButton>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -7,11 +7,13 @@ import {
   Query,
   UseGuards,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { WhatsAppService } from './whatsapp.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RbacGuard } from '../crm-users/rbac.guard';
 import { Permissions } from '../crm-users/permissions.decorator';
+import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
 
 @Controller('crm/whatsapp')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -21,6 +23,7 @@ export class WhatsAppController {
   @Get('conversations')
   @Permissions('inbox:read', 'leads:read', 'contacts:read', 'activities:read')
   getConversations(
+    @Request() req: any,
     @Query('waId') waId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
@@ -29,7 +32,7 @@ export class WhatsAppController {
       waId,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
-    });
+    }, req.user);
   }
 
   /** Every image/document/video/audio ever exchanged with this contact — powers the "Shared Media" panel. */
@@ -41,8 +44,8 @@ export class WhatsAppController {
 
   @Get('contacts')
   @Permissions('inbox:read', 'leads:read', 'contacts:read', 'activities:read')
-  getContacts() {
-    return this.whatsappService.getUniqueContacts();
+  getContacts(@Request() req: any) {
+    return this.whatsappService.getUniqueContacts(req.user);
   }
 
   @Get('templates')
@@ -109,5 +112,30 @@ export class WhatsAppController {
       mediaUrl: body.mediaUrl,
       mediaFilename: body.mediaFilename,
     });
+  }
+
+  @Post('grant-temporary-access')
+  @Permissions('leads:write', 'contacts:write')
+  async grantTemporaryAccess(
+    @Request() req: any,
+    @Body()
+    body: {
+      waId: string;
+      targetUserId: string;
+      accessType: 'read' | 'read_write';
+      durationMinutes: number;
+    },
+  ) {
+    const actor = req.user;
+    if (!hasCrmFullDataAccess(actor)) {
+      throw new ForbiddenException('Only administrators can grant temporary access');
+    }
+    return this.whatsappService.grantTemporaryAccess(
+      body.waId,
+      body.targetUserId,
+      body.accessType,
+      body.durationMinutes,
+      actor?.userId,
+    );
   }
 }

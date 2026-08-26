@@ -125,6 +125,7 @@ interface WhatsAppMessage {
 interface WhatsAppContact {
   waId: string;
   lastMessageAt: string;
+  unreadCount?: number;
 }
 
 const INBOX_ICON_FILTER_TIP =
@@ -1068,13 +1069,14 @@ export default function CRMInboxPage() {
       if (res.ok) {
         const data = await res.json();
         setWaMessages(data.messages || []);
+        void fetchWaContacts();
       }
     } catch (err) {
       toast.error('Failed to load messages');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchWaContacts]);
 
   const handleWaSend = async () => {
     if (!selectedWaId || !waNewMessage.trim()) return;
@@ -2123,19 +2125,13 @@ export default function CRMInboxPage() {
                     </div>
                     <h3 className="text-xs font-semibold text-text-main">No conversations</h3>
                     <p className="text-xs text-text-muted mt-2 leading-relaxed">
-                      Incoming messages appear here, or start a chat with a phone number.
+                      Incoming messages appear here.
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setWaNewChatOpen(true)}
-                      className="mt-5 inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-border bg-white px-4 py-2.5 text-xs font-semibold text-text-main hover:bg-slate-50"
-                    >
-                      <Plus size={14} /> New chat
-                    </button>
                   </div>
                 ) : (
                   waContacts.map((c) => {
                     const isSelected = selectedWaId === c.waId;
+                    const hasUnread = c.unreadCount && c.unreadCount > 0;
                     return (
                       <button
                         key={c.waId}
@@ -2154,18 +2150,28 @@ export default function CRMInboxPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-baseline justify-between gap-2">
                             <span className={cn(
-                              "text-sm font-bold truncate flex-1 min-w-0",
-                              isSelected ? "text-emerald-900" : "text-text-main"
+                              "text-sm truncate flex-1 min-w-0",
+                              hasUnread ? "font-bold text-emerald-600" : (isSelected ? "text-emerald-900 font-bold" : "text-text-main font-medium")
                             )}>
                               {formatPhone(c.waId)}
                             </span>
-                            <span className="text-xs font-bold text-text-muted tabular-nums opacity-60">
+                            <span className={cn(
+                              "text-xs tabular-nums opacity-60",
+                              hasUnread ? "font-bold text-emerald-600" : "text-text-muted font-medium"
+                            )}>
                               {new Date(c.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <p className="mt-1 line-clamp-1 text-xs font-bold text-text-muted opacity-40">
-                            Active WhatsApp
-                          </p>
+                          <div className="flex items-center justify-between mt-1">
+                            <p className="line-clamp-1 text-xs text-text-muted opacity-40 font-medium">
+                              Active WhatsApp
+                            </p>
+                            {hasUnread ? (
+                              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                                {c.unreadCount}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </button>
                     );

@@ -3,6 +3,20 @@ import { Document, Types } from 'mongoose';
 
 export type WhatsAppLeadLinkDocument = WhatsAppLeadLink & Document;
 
+@Schema({ _id: false })
+export class WhatsAppTemporaryGrant {
+  @Prop({ type: Types.ObjectId, ref: 'CRMUser', required: true })
+  userId: Types.ObjectId;
+
+  @Prop({ type: String, enum: ['read', 'read_write'], required: true })
+  accessType: 'read' | 'read_write';
+
+  @Prop({ type: Date, required: true })
+  expiresAt: Date;
+}
+
+export const WhatsAppTemporaryGrantSchema = SchemaFactory.createForClass(WhatsAppTemporaryGrant);
+
 /**
  * Explicit attachment of a WhatsApp conversation (identified by `waId`,
  * the digits-only phone number used across WhatsAppMessage) to a Lead.
@@ -36,6 +50,9 @@ export class WhatsAppLeadLink {
 
   @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   assignedBy?: Types.ObjectId;
+
+  @Prop({ type: [WhatsAppTemporaryGrantSchema], default: [] })
+  temporaryGrants?: WhatsAppTemporaryGrant[];
 }
 
 export const WhatsAppLeadLinkSchema =

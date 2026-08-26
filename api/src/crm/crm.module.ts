@@ -90,6 +90,10 @@ import {
   WhatsAppMessage,
   WhatsAppMessageSchema,
 } from './schemas/whatsapp-message.schema';
+import {
+  WhatsAppLeadLink,
+  WhatsAppLeadLinkSchema,
+} from './whatsapp-links/schemas/whatsapp-lead-link.schema';
 import { WhatsAppService } from './integrations/whatsapp.service';
 import { VoiceCallingService } from './integrations/voice-calling.service';
 import { VoiceCallingController } from './integrations/voice-calling.controller';
@@ -295,6 +299,7 @@ import {
         { name: InboxRule.name, schema: InboxRuleSchema },
         { name: EmailTracking.name, schema: EmailTrackingSchema },
         { name: WhatsAppMessage.name, schema: WhatsAppMessageSchema },
+        { name: WhatsAppLeadLink.name, schema: WhatsAppLeadLinkSchema },
         { name: Workflow.name, schema: WorkflowSchema },
         { name: WorkflowExecution.name, schema: WorkflowExecutionSchema },
         { name: WorkflowEnrollment.name, schema: WorkflowEnrollmentSchema },

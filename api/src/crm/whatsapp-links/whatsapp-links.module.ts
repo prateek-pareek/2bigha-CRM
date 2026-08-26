@@ -11,13 +11,10 @@ import { CRMModule } from '../crm.module';
 @Module({
   imports: [
     // CRMModule re-exports MongooseModule so the already-registered `Lead`
-    // model (on 'crmConnection') can be injected here without this module
-    // re-registering it itself, which would throw OverwriteModelError.
+    // and `WhatsAppLeadLink` models (on 'crmConnection') can be injected
+    // here without this module re-registering them, which would throw
+    // OverwriteModelError.
     CRMModule,
-    MongooseModule.forFeature(
-      [{ name: WhatsAppLeadLink.name, schema: WhatsAppLeadLinkSchema }],
-      'crmConnection',
-    ),
   ],
   controllers: [WhatsAppLinksController],
   providers: [WhatsAppLinksService],
