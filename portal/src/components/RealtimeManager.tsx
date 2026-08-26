@@ -53,11 +53,15 @@ export default function RealtimeManager() {
     useEffect(() => {
         if (!socketRoomIds.length || !supportsRealtime || !isVisible) return;
 
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         const socket = io(process.env.NEXT_PUBLIC_HRMS_API_URL || API_HOST_URL, {
             transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: 10,
-            reconnectionDelay: 2000
+            reconnectionDelay: 2000,
+            auth: {
+                token: token || undefined
+            }
         });
         
         socketRef.current = socket;
@@ -107,6 +111,16 @@ export default function RealtimeManager() {
                 window.dispatchEvent(
                     new CustomEvent('crm:realtime-event', {
                         detail: { event: 'crm:inbox:refresh', payload },
+                    }),
+                );
+            }
+        });
+
+        socket.on('whatsapp:message', (payload: any) => {
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                    new CustomEvent('crm:realtime-event', {
+                        detail: { event: 'whatsapp:message', payload },
                     }),
                 );
             }

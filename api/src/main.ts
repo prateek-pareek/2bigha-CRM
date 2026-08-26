@@ -46,7 +46,21 @@ async function bootstrap() {
   // request origin only when FRONTEND_URL isn't set (local dev convenience) -
   // on a real deploy this env var is required by docker-compose.yml.
   app.enableCors({
-    origin: process.env.FRONTEND_URL || true,
+    origin: (origin, callback) => {
+      const frontendUrl = process.env.FRONTEND_URL;
+      if (
+        !origin ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.includes('mathionix.tech') ||
+        (frontendUrl && origin === frontendUrl.replace(/\/$/, ''))
+      ) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
+    credentials: true,
   });
   app.setGlobalPrefix('api');
 
