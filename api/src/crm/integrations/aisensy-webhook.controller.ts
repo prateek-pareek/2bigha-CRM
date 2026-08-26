@@ -123,10 +123,10 @@ export class AiSensyWebhookController {
       filename?: string;
     };
   } | null {
-    // 1. Check official AiSensy "message.created" topic
-    if (body?.topic === 'message.created' && body?.data) {
-      const data = body.data;
-      const rawPhone = data.contact?.phoneNumber || data.contact?.phone || data.from;
+    // 1. Check official AiSensy "message.created" or real "message.sender.user" topic
+    if ((body?.topic === 'message.created' || body?.topic === 'message.sender.user') && body?.data) {
+      const data = body.data.message || body.data;
+      const rawPhone = data.phone_number || data.contact?.phoneNumber || data.contact?.phone || data.from;
       const waId = String(rawPhone || '').replace(/\D/g, '');
       const messageId = String(data.messageId || data.id || `aisensy_${Date.now()}`);
       const sender = String(data.sender || 'USER').toUpperCase();
@@ -135,15 +135,17 @@ export class AiSensyWebhookController {
         let text = '';
         let attachment: any = undefined;
 
-        if (['image', 'document', 'video', 'audio'].includes(data.type)) {
+        const typeUpper = String(data.message_type || data.type || '').toUpperCase();
+
+        if (['IMAGE', 'DOCUMENT', 'VIDEO', 'AUDIO', 'FILE'].includes(typeUpper)) {
           attachment = {
-            type: data.type,
-            url: data.media?.url || (data.content?.startsWith('http') ? data.content : ''),
-            filename: data.media?.filename || data.filename || undefined,
+            type: typeUpper === 'FILE' ? 'document' : typeUpper.toLowerCase(),
+            url: data.message_content?.url || data.media?.url || (data.content?.startsWith('http') ? data.content : ''),
+            filename: data.message_content?.filename || data.media?.filename || data.filename || undefined,
           };
-          text = data.caption || (!data.content?.startsWith('http') ? data.content : '') || `[${data.type.toUpperCase()}]`;
+          text = data.message_content?.caption || data.caption || (!data.content?.startsWith('http') ? data.content : '') || `[${typeUpper}]`;
         } else {
-          text = data.content || '';
+          text = data.message_content?.text || data.content || '';
         }
 
         return { waId, text, messageId, sender, attachment };
