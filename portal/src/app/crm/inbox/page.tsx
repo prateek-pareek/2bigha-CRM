@@ -1052,7 +1052,8 @@ export default function CRMInboxPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setWaContacts(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : (data.contacts || []);
+        setWaContacts(list);
       }
     } catch (err) {
       toast.error('Failed to load WhatsApp contacts');

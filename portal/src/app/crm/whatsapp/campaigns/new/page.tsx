@@ -223,7 +223,29 @@ export default function NewWhatsAppCampaignPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 animate-in fade-in duration-500 pb-10">
+    <div id="new-campaign-page-container" className="w-full space-y-6 animate-in fade-in duration-500 pb-10">
+      <style dangerouslySetInnerHTML={{ __html: `
+        #new-campaign-page-container input, 
+        #new-campaign-page-container select {
+          border: 1px solid #cbd5e1 !important;
+          border-radius: 0.5rem !important;
+          box-shadow: none !important;
+          transition: all 0.15s ease-in-out !important;
+          background-color: #ffffff !important;
+          color: #1e293b !important;
+        }
+        #new-campaign-page-container input:focus, 
+        #new-campaign-page-container select:focus {
+          border-color: #10b981 !important;
+          box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+          outline: none !important;
+        }
+        #new-campaign-page-container .rounded-\[var\(--radius-md\)\] {
+          border-radius: 0.75rem !important;
+          border-color: #e2e8f0 !important;
+          background-color: #ffffff !important;
+        }
+      `}} />
       <div className="flex items-start gap-3">
         <Link
           href="/crm/whatsapp/campaigns"

@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import * as mongoose from 'mongoose';
 import {
   WhatsAppMessage,
   WhatsAppMessageDocument,
@@ -13,6 +14,7 @@ import { resolvePublicMediaUrl } from '../../storage/media-url.util';
 import { Lead } from '../schemas/lead.schema';
 import { WhatsAppLeadLink } from '../whatsapp-links/schemas/whatsapp-lead-link.schema';
 import { CRMUser } from '../crm-users/schemas/user.schema';
+import { User, UserDocument } from '../../users/schemas/user.schema';
 import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
 
 const META_API = 'https://graph.facebook.com/v18.0';
@@ -60,6 +62,8 @@ export class WhatsAppService {
     private linkModel: Model<any>,
     @InjectModel(CRMUser.name, 'crmConnection')
     private crmUserModel: Model<any>,
+    @InjectModel(User.name)
+    private userModel: Model<UserDocument>,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly storageService: StorageService,
   ) {}
@@ -140,18 +144,24 @@ export class WhatsAppService {
 
   private async validateSendAccess(waId: string, userIdStr?: string): Promise<void> {
     if (!userIdStr) return; // System processes or cron jobs can send
-    const user = await this.crmUserModel.findById(userIdStr).populate('roleId').lean().exec();
-    if (!user) return;
+    let dbUser = await this.crmUserModel.findById(userIdStr).populate('roleId').lean().exec();
+    if (!dbUser) {
+      const suiteUser = await this.userModel.findById(userIdStr).lean().exec();
+      if (suiteUser && (suiteUser as any).email) {
+        dbUser = await this.crmUserModel.findOne({ email: (suiteUser as any).email }).populate('roleId').lean().exec();
+      }
+    }
+    if (!dbUser) return;
 
-    if (hasCrmFullDataAccess(user)) {
+    if (hasCrmFullDataAccess(dbUser)) {
       return; // Admins can always send
     }
 
-    const userId = this.userObjectId(user);
+    const userId = dbUser._id;
     if (!userId) return;
 
     // Check if they are forbidden to access the chat completely first
-    const forbidden = await this.getUserForbiddenWaIds(user);
+    const forbidden = await this.getUserForbiddenWaIds(dbUser);
     if (forbidden && forbidden.includes(waId)) {
       throw new ForbiddenException('You do not have access to this chat');
     }
@@ -769,8 +779,14 @@ export class WhatsAppService {
       return null; // Null means they can access everything (no isolation)
     }
 
-    const userId = this.userObjectId(user);
-    const ownerName = this.repOwnerLabelFromUser(user).trim();
+    const email = user.email;
+    if (!email) return [];
+
+    const dbUser = await this.crmUserModel.findOne({ email }).lean().exec();
+    if (!dbUser) return [];
+
+    const userId = dbUser._id;
+    const ownerName = this.repOwnerLabelFromUser(dbUser).trim();
 
     // 1. Find all Lead IDs that this user owns/has access to (explicit permissions)
     const leadFilters: any[] = [];
@@ -814,9 +830,7 @@ export class WhatsAppService {
 
     // 3. Find all chats linked to leads NOT owned by this user, where they aren't the assignee,
     // and where they don't have an active temporary grant.
-    const forbiddenLinksQuery: any = {
-      leadId: { $exists: true, $ne: null },
-    };
+    const forbiddenLinksQuery: any = {};
 
     if (allowedLeadIds.length > 0) {
       forbiddenLinksQuery.leadId = { $nin: allowedLeadIds };
@@ -834,7 +848,16 @@ export class WhatsAppService {
       .lean()
       .exec();
 
-    return forbiddenLinks.map((l) => l.waId);
+    const forbiddenFromLinks = forbiddenLinks.map((l) => l.waId);
+
+    // 4. Also find all unique waIds in messages that have no link document (unlinked/unassigned)
+    const allLinks = await this.linkModel.find().select('waId').lean().exec();
+    const linkedWaIdsSet = new Set(allLinks.map((l) => l.waId));
+
+    const allMsgWaIds = await this.messageModel.distinct('waId').exec();
+    const unlinkedWaIds = allMsgWaIds.filter((waId) => !linkedWaIdsSet.has(waId));
+
+    return [...forbiddenFromLinks, ...unlinkedWaIds];
   }
 
   async grantTemporaryAccess(
@@ -923,9 +946,52 @@ export class WhatsAppService {
     return { messages, total };
   }
 
-  async getUniqueContacts(user?: any): Promise<any[]> {
+  async getUniqueContacts(
+    user?: any,
+    options: { page?: number; pageSize?: number; assigneeId?: string } = {},
+  ): Promise<{ contacts: any[]; total: number }> {
+    let resolvedAssigneeId: string | null = null;
+    if (options.assigneeId) {
+      if (Types.ObjectId.isValid(options.assigneeId)) {
+        let dbUser = await this.crmUserModel.findById(options.assigneeId).lean().exec();
+        if (dbUser) {
+          resolvedAssigneeId = String(dbUser._id);
+        } else {
+          const suiteUser = await this.userModel.findById(options.assigneeId).lean().exec();
+          if (suiteUser && (suiteUser as any).email) {
+            const crmUser = await this.crmUserModel.findOne({ email: (suiteUser as any).email }).lean().exec();
+            if (crmUser) {
+              resolvedAssigneeId = String(crmUser._id);
+            }
+          }
+        }
+      }
+      if (!resolvedAssigneeId) {
+        resolvedAssigneeId = options.assigneeId;
+      }
+    }
+
+    let assignedWaIds: string[] | null = null;
+    if (resolvedAssigneeId) {
+      const links = await this.linkModel
+        .find({ assignee: new Types.ObjectId(resolvedAssigneeId) })
+        .select('waId')
+        .lean()
+        .exec();
+      assignedWaIds = links.map((l) => l.waId);
+    }
+
     const forbidden = await this.getUserForbiddenWaIds(user);
-    const matchStage = forbidden && forbidden.length > 0 ? { $match: { waId: { $nin: forbidden } } } : null;
+    
+    const matchQuery: any = {};
+    if (forbidden && forbidden.length > 0) {
+      matchQuery.waId = { $nin: forbidden };
+    }
+    if (assignedWaIds !== null) {
+      matchQuery.waId = { ...matchQuery.waId, $in: assignedWaIds };
+    }
+
+    const matchStage = Object.keys(matchQuery).length > 0 ? { $match: matchQuery } : null;
 
     const pipeline: any[] = [];
     if (matchStage) {
@@ -958,10 +1024,17 @@ export class WhatsAppService {
     );
 
     const agg = await this.messageModel.aggregate(pipeline).exec();
+    const total = agg.length;
+
+    const page = options.page ?? 1;
+    const pageSize = options.pageSize ?? 20;
+    const skip = (page - 1) * pageSize;
+
+    const paginated = agg.slice(skip, skip + pageSize);
 
     // Batch resolve Lead/Link details for each contact
     const contactsWithLeads = await Promise.all(
-      agg.map(async (c) => {
+      paginated.map(async (c) => {
         const waId = c.waId;
         const link = await this.linkModel
           .findOne({ waId })
@@ -1007,7 +1080,7 @@ export class WhatsAppService {
       })
     );
 
-    return contactsWithLeads;
+    return { contacts: contactsWithLeads, total };
   }
 
   async handleMediaMessage(

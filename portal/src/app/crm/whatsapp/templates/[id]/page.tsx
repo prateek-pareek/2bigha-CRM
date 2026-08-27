@@ -248,7 +248,7 @@ export default function WhatsAppTemplateDetailPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <Link
@@ -275,7 +275,7 @@ export default function WhatsAppTemplateDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <CrmButton variant="secondary" disabled={syncing} onClick={() => void resync()} className="h-10 gap-2">
+          <CrmButton variant="secondary" disabled={syncing} onClick={() => void resync()} className="h-10 gap-2 border-slate-200">
             {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
             Refresh status
           </CrmButton>
@@ -283,7 +283,7 @@ export default function WhatsAppTemplateDetailPage() {
             <button
               type="button"
               onClick={() => void remove()}
-              className="flex h-10 items-center gap-2 rounded-[var(--radius-md)] border border-border px-3 text-xs font-semibold text-text-muted hover:bg-rose-50 hover:text-rose-600"
+              className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all duration-150"
             >
               <Trash2 size={14} /> Delete
             </button>
@@ -312,11 +312,11 @@ export default function WhatsAppTemplateDetailPage() {
         </div>
       )}
 
-      <div className="rounded-[var(--radius-md)] border border-border bg-white p-4">
-        <div className="flex items-center gap-2 text-sm font-bold text-text-main">
-          <Link2 size={14} /> AiSensy campaign mapping
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3.5">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
+          <Link2 size={15} className="text-emerald-600" /> AiSensy campaign mapping
         </div>
-        <p className="mt-1 text-xs text-text-muted">
+        <p className="text-xs text-slate-400 leading-relaxed font-medium">
           AiSensy has no public API to create or check the approval of templates — create &amp; approve
           this template in the AiSensy dashboard first, then map the Campaign name it&apos;s attached to
           here. WhatsApp campaigns and inbox sends via AiSensy use this mapping.
@@ -326,7 +326,7 @@ export default function WhatsAppTemplateDetailPage() {
             <select
               value={aisensyCampaignName}
               onChange={(e) => setAisensyCampaignName(e.target.value)}
-              className="h-9 min-w-[220px] flex-1 rounded-[var(--radius-md)] border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="h-10 min-w-[220px] flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all"
             >
               <option value="">-- Select live campaign --</option>
               {liveCampaigns.map((c) => (
@@ -340,14 +340,14 @@ export default function WhatsAppTemplateDetailPage() {
               value={aisensyCampaignName}
               onChange={(e) => setAisensyCampaignName(e.target.value)}
               placeholder="AiSensy campaign name"
-              className="h-9 min-w-[220px] flex-1 rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="h-10 min-w-[220px] flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all"
             />
           )}
           <CrmButton
             variant="secondary"
             disabled={linkingAiSensy}
             onClick={() => void linkAiSensy()}
-            className="h-9 gap-2"
+            className="h-10 gap-2 border-slate-200 shadow-sm"
           >
             {linkingAiSensy && <Loader2 size={14} className="animate-spin" />}
             Save mapping
@@ -356,7 +356,7 @@ export default function WhatsAppTemplateDetailPage() {
             <select
               value={template.status}
               onChange={(e) => void setAisensyStatus(e.target.value)}
-              className="h-9 rounded-[var(--radius-md)] border border-border px-2 text-xs font-semibold text-text-main outline-none"
+              className="h-10 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 outline-none bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all"
             >
               {["DRAFT", "PENDING", "APPROVED", "REJECTED", "PAUSED", "DISABLED"].map((s) => (
                 <option key={s} value={s}>

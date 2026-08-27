@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Building2, Loader2, Sprout, X } from "lucide-react";
 import { toast } from "sonner";
 import { CrmButton } from "@/components/crm/ui";
+import { cn } from "@/lib/utils";
 import {
   EMPTY_PROPERTY_LISTING_DRAFT,
   PropertyListingFormFields,
@@ -129,18 +130,23 @@ export default function AddPropertyModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-xl overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary-light)] text-[var(--primary)]">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <span className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-full border shadow-sm",
+              isFarm 
+                ? "bg-emerald-50 text-emerald-600 border-emerald-100" 
+                : "bg-sky-50 text-sky-600 border-sky-100"
+            )}>
               {isFarm ? <Sprout size={16} /> : <Building2 size={16} />}
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-[var(--text-main)]">
+              <h3 className="text-sm font-bold text-slate-800">
                 {isFarm ? "Add farm" : "Add property"}
               </h3>
-              <p className="text-xs text-[var(--text-muted)]">
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
                 {leadName
                   ? `Linked to ${leadName} · synced to 2bigha`
                   : leadId
@@ -152,25 +158,44 @@ export default function AddPropertyModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)]"
+            className="rounded-full p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 transition"
           >
             <X size={16} />
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto p-4">
+        <div id="add-property-modal-container" className="max-h-[65vh] overflow-y-auto p-5 custom-scrollbar bg-slate-50/20">
+          <style dangerouslySetInnerHTML={{ __html: `
+            #add-property-modal-container input, 
+            #add-property-modal-container select, 
+            #add-property-modal-container textarea {
+              border: 1px solid #cbd5e1 !important;
+              border-radius: 0.375rem !important;
+              box-shadow: none !important;
+              transition: all 0.15s ease-in-out !important;
+              background-color: #ffffff !important;
+              color: #1e293b !important;
+            }
+            #add-property-modal-container input:focus, 
+            #add-property-modal-container select:focus, 
+            #add-property-modal-container textarea:focus {
+              border-color: #10b981 !important;
+              box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+              outline: none !important;
+            }
+          `}} />
           <PropertyListingFormFields draft={draft} onChange={set} farmMode={isFarm} />
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-[var(--border-color)] px-4 py-3">
-          <CrmButton type="button" variant="secondary" onClick={onClose}>
+        <div className="flex justify-end gap-2.5 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
+          <CrmButton type="button" variant="secondary" onClick={onClose} className="border-slate-200">
             Cancel
           </CrmButton>
           <CrmButton
             type="button"
             disabled={saving}
             onClick={() => void save()}
-            className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700 shadow-md hover:shadow-lg transition font-semibold"
           >
             {saving ? (
               <Loader2 size={14} className="animate-spin" />

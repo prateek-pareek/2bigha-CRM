@@ -124,7 +124,7 @@ export default function WhatsAppCampaignDetailPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <Link
@@ -138,26 +138,26 @@ export default function WhatsAppCampaignDetailPage() {
               <h1 className="text-xl font-medium tracking-tight text-text-main">{campaign.name}</h1>
               <span
                 className={cn(
-                  "rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  "rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider",
                   statusTone(campaign.status),
                 )}
               >
                 {campaign.status}
               </span>
             </div>
-            <p className="text-sm font-medium text-text-muted">
+            <p className="text-xs font-semibold text-slate-400 mt-0.5">
               {campaign.templateName} · AiSensy campaign: {campaign.aisensyCampaignName}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {campaign.status === "sending" && (
-            <CrmButton variant="secondary" disabled={busy} onClick={() => void runAction("pause")} className="h-9 gap-2">
+            <CrmButton variant="secondary" disabled={busy} onClick={() => void runAction("pause")} className="h-10 gap-2 border-slate-200">
               <Pause size={14} /> Pause
             </CrmButton>
           )}
           {campaign.status === "paused" && (
-            <CrmButton variant="primary" disabled={busy} onClick={() => void runAction("resume")} className="h-9 gap-2 bg-emerald-600 hover:bg-emerald-700">
+            <CrmButton variant="primary" disabled={busy} onClick={() => void runAction("resume")} className="h-10 gap-2 bg-emerald-600 hover:bg-emerald-700">
               <Play size={14} /> Resume
             </CrmButton>
           )}
@@ -166,7 +166,7 @@ export default function WhatsAppCampaignDetailPage() {
               type="button"
               disabled={busy}
               onClick={() => void runAction("cancel")}
-              className="flex h-9 items-center gap-2 rounded-[var(--radius-md)] border border-border px-3 text-xs font-semibold text-text-muted hover:bg-rose-50 hover:text-rose-600"
+              className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all duration-150"
             >
               <X size={14} /> Cancel
             </button>
@@ -175,29 +175,29 @@ export default function WhatsAppCampaignDetailPage() {
       </div>
 
       {campaign.lastError && (
-        <div className="rounded-[var(--radius-md)] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 shadow-inner">
           {campaign.lastError}
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-[var(--radius-md)] border border-border bg-white p-4 text-center">
-          <p className="text-2xl font-bold text-text-main">{campaign.totalRecipients}</p>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Recipients</p>
+      <div className="grid grid-cols-3 gap-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+          <p className="text-3xl font-extrabold text-slate-700 leading-none">{campaign.totalRecipients}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2.5">Recipients</p>
         </div>
-        <div className="rounded-[var(--radius-md)] border border-emerald-200 bg-emerald-50 p-4 text-center">
-          <p className="text-2xl font-bold text-emerald-700">{campaign.sentCount}</p>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700/70">Sent</p>
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50/20 p-5 text-center shadow-sm">
+          <p className="text-3xl font-extrabold text-emerald-600 leading-none">{campaign.sentCount}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600/70 mt-2.5">Sent</p>
         </div>
-        <div className="rounded-[var(--radius-md)] border border-rose-200 bg-rose-50 p-4 text-center">
-          <p className="text-2xl font-bold text-rose-700">{campaign.failedCount}</p>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-700/70">Failed</p>
+        <div className="rounded-xl border border-rose-100 bg-rose-50/20 p-5 text-center shadow-sm">
+          <p className="text-3xl font-extrabold text-rose-600 leading-none">{campaign.failedCount}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-rose-700/70 mt-2.5">Failed</p>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[var(--radius-md)] border border-border bg-white shadow-sm">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-bold text-text-main">Recipients</h2>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <h2 className="text-sm font-bold text-slate-800">Recipients</h2>
         </div>
         <div className="max-h-[480px] overflow-y-auto">
           <table className="w-full text-sm">

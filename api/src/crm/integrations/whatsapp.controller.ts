@@ -44,8 +44,17 @@ export class WhatsAppController {
 
   @Get('contacts')
   @Permissions('inbox:read', 'leads:read', 'contacts:read', 'activities:read')
-  getContacts(@Request() req: any) {
-    return this.whatsappService.getUniqueContacts(req.user);
+  getContacts(
+    @Request() req: any,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('assigneeId') assigneeId?: string,
+  ) {
+    return this.whatsappService.getUniqueContacts(req.user, {
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      assigneeId,
+    });
   }
 
   @Get('templates')

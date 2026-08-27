@@ -58,7 +58,7 @@ export default function NewWhatsAppTemplatePage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-10">
       <div className="flex items-start gap-3">
         <Link
           href="/crm/whatsapp/templates"

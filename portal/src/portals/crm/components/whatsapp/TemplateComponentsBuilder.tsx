@@ -120,8 +120,8 @@ export function componentsToDraft(
 }
 
 const inputCls =
-  "h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-text-muted";
-const labelCls = "text-[11px] font-bold uppercase tracking-wide text-text-muted";
+  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+const labelCls = "text-xs font-bold text-slate-700";
 
 export default function TemplateComponentsBuilder({
   draft,
@@ -188,7 +188,7 @@ export default function TemplateComponentsBuilder({
         </label>
       </div>
 
-      <div className="space-y-2 rounded-[var(--radius-md)] border border-border p-4">
+      <div className="space-y-3 bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <span className={labelCls}>Header (optional)</span>
           <label className="flex items-center gap-1.5 text-xs font-medium text-text-muted">
@@ -236,7 +236,7 @@ export default function TemplateComponentsBuilder({
         )}
       </div>
 
-      <div className="space-y-2 rounded-[var(--radius-md)] border border-border p-4">
+      <div className="space-y-3 bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm">
         <span className={labelCls}>Body</span>
         <textarea
           value={draft.bodyText}
@@ -244,7 +244,7 @@ export default function TemplateComponentsBuilder({
           onChange={(e) => set("bodyText", e.target.value)}
           rows={4}
           placeholder="Hi {{1}}, your order #{{2}} has shipped."
-          className="w-full rounded-[var(--radius-md)] border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-text-muted"
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
         />
         {badSequence(bodySlots) && (
           <p className="text-xs font-medium text-rose-600">
@@ -270,7 +270,7 @@ export default function TemplateComponentsBuilder({
         ))}
       </div>
 
-      <div className="space-y-2 rounded-[var(--radius-md)] border border-border p-4">
+      <div className="space-y-3 bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <span className={labelCls}>Footer (optional)</span>
           <label className="flex items-center gap-1.5 text-xs font-medium text-text-muted">
@@ -294,7 +294,7 @@ export default function TemplateComponentsBuilder({
         )}
       </div>
 
-      <div className="space-y-3 rounded-[var(--radius-md)] border border-border p-4">
+      <div className="space-y-4 bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <span className={labelCls}>Buttons (optional, max 3)</span>
           {!disabled && draft.buttons.length < 3 && (
@@ -367,7 +367,7 @@ export default function TemplateComponentsBuilder({
               <button
                 type="button"
                 onClick={() => set("buttons", draft.buttons.filter((_, i) => i !== idx))}
-                className="flex items-center justify-center rounded-[var(--radius-md)] border border-border p-2 text-text-muted hover:bg-rose-50 hover:text-rose-600"
+                className="flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
               >
                 <Trash2 size={14} />
               </button>

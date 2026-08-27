@@ -1,11 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import * as mongoose from 'mongoose';
 import {
   WhatsAppLeadLink,
   WhatsAppLeadLinkDocument,
 } from './schemas/whatsapp-lead-link.schema';
 import { Lead } from '../records/schemas/lead.schema';
+import { CRMUser, CRMUserDocument } from '../crm-users/schemas/user.schema';
+import { User, UserDocument } from '../../users/schemas/user.schema';
 
 function normalizeWaId(waId: string): string {
   return String(waId || '').replace(/\D/g, '');
@@ -18,6 +21,10 @@ export class WhatsAppLinksService {
     private readonly linkModel: Model<WhatsAppLeadLinkDocument>,
     @InjectModel(Lead.name, 'crmConnection')
     private readonly leadModel: Model<any>,
+    @InjectModel(CRMUser.name, 'crmConnection')
+    private readonly crmUserModel: Model<CRMUserDocument>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
   ) {}
 
   /** Attaches (or moves) a WhatsApp conversation to a Lead. */
@@ -61,26 +68,42 @@ export class WhatsAppLinksService {
     waId: string;
     leadId: string;
     leadName: string;
-    assignee?: string;
+    assignee?: { _id: string; name: string; email?: string };
     temporaryGrants?: any[];
   } | null> {
     const normWa = normalizeWaId(waId);
     const link = await this.linkModel
       .findOne({ waId: normWa })
       .populate('leadId', 'firstName lastName')
+      .populate('assignee', 'firstName lastName email')
+      .populate('temporaryGrants.userId', 'firstName lastName email')
       .lean()
       .exec();
 
     if (link) {
       const lead = link.leadId as any;
+      const ass = link.assignee as any;
       return {
         waId: link.waId,
         leadId: String(lead?._id || lead),
         leadName: lead?.firstName
           ? `${lead.firstName || ''} ${lead.lastName || ''}`.trim()
           : '',
-        assignee: link.assignee ? String(link.assignee) : undefined,
-        temporaryGrants: link.temporaryGrants || [],
+        assignee: ass ? {
+          _id: String(ass._id),
+          name: `${ass.firstName || ''} ${ass.lastName || ''}`.trim() || ass.email,
+          email: ass.email,
+        } : undefined,
+        temporaryGrants: (link.temporaryGrants || []).map((g: any) => {
+          const u = g.userId as any;
+          return {
+            userId: u?._id ? String(u._id) : String(g.userId),
+            userEmail: u?.email || '',
+            userName: u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email : '',
+            accessType: g.accessType,
+            expiresAt: g.expiresAt,
+          };
+        }),
       };
     }
 
@@ -124,6 +147,24 @@ export class WhatsAppLinksService {
     return links.map((l) => ({ waId: l.waId }));
   }
 
+  private async resolveCrmUserId(assigneeId: string): Promise<string> {
+    if (!Types.ObjectId.isValid(assigneeId)) return assigneeId;
+    // 1. Try finding by CRMUser ID directly
+    let dbUser = await this.crmUserModel.findById(assigneeId).lean().exec();
+    if (dbUser) {
+      return String(dbUser._id);
+    }
+    // 2. Fallback: Try finding SuiteUser by assigneeId, then resolve CRMUser by email
+    const suiteUser = await this.userModel.findById(assigneeId).lean().exec();
+    if (suiteUser && (suiteUser as any).email) {
+      const crmUser = await this.crmUserModel.findOne({ email: (suiteUser as any).email }).lean().exec();
+      if (crmUser) {
+        return String(crmUser._id);
+      }
+    }
+    return assigneeId;
+  }
+
   /** Assigns (or reassigns) a WhatsApp conversation to a CRM user, for agent-wise triage. */
   async assign(
     waId: string,
@@ -137,13 +178,14 @@ export class WhatsAppLinksService {
     if (!Types.ObjectId.isValid(assigneeId)) {
       throw new BadRequestException('A valid assignee is required');
     }
+    const resolvedId = await this.resolveCrmUserId(assigneeId);
     return this.linkModel
       .findOneAndUpdate(
         { waId: normalizedWaId },
         {
           $set: {
             waId: normalizedWaId,
-            assignee: new Types.ObjectId(assigneeId),
+            assignee: new Types.ObjectId(resolvedId),
             assignedBy: actorId ? new Types.ObjectId(actorId) : undefined,
           },
         },
@@ -165,8 +207,9 @@ export class WhatsAppLinksService {
   /** Every waId currently assigned to a given CRM user — powers the inbox's agent filter. */
   async findByAssignee(assigneeId: string): Promise<{ waId: string }[]> {
     if (!Types.ObjectId.isValid(assigneeId)) return [];
+    const resolvedId = await this.resolveCrmUserId(assigneeId);
     const links = await this.linkModel
-      .find({ assignee: new Types.ObjectId(assigneeId) })
+      .find({ assignee: new Types.ObjectId(resolvedId) })
       .lean()
       .exec();
     return links.map((l) => ({ waId: l.waId }));
