@@ -15,6 +15,7 @@ import { TrashService } from '../trash/trash.service';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { isPlatformSuperAdminEmail } from '../auth/platform-super-admin.util';
 import { TwoBighaAgentService } from './twobigha-agent.service';
+import { KommunoAgentService } from './kommuno-agent.service';
 
 const CRM_PORTAL_MANAGEMENT_ROLES = new Set(
   [
@@ -101,6 +102,7 @@ export class CRMUsersService implements OnModuleInit {
     private hrmsUserModel: Model<UserDocument>,
     private trashService: TrashService,
     private readonly twoBighaAgentService: TwoBighaAgentService,
+    private readonly kommunoAgentService: KommunoAgentService,
   ) {}
 
   async onModuleInit() {
@@ -125,7 +127,6 @@ export class CRMUsersService implements OnModuleInit {
 
   async findOne(email: string): Promise<CRMUserDocument | undefined> {
     if (!email) return undefined;
-    // Use direct lookup or lowercase to avoid regex injection/crash issues (e.g. with '+')
     const user = await this.userModel
       .findOne({
         email: {
@@ -191,8 +192,6 @@ export class CRMUsersService implements OnModuleInit {
     }));
   }
 
-
-  /** Standalone CRM: optional CRM_ALLOWED_EMAIL_DOMAIN (e.g. @acme.com). Empty = any email. */
   private assertEmailAllowed(email?: string) {
     if (!email) return;
     const domain = (process.env.CRM_ALLOWED_EMAIL_DOMAIN || '').trim().toLowerCase();
@@ -214,9 +213,6 @@ export class CRMUsersService implements OnModuleInit {
     });
     await createdUser.save();
 
-    // Sync this agent to 2bigha (createAdmin) — never throws; a 2bigha
-    // outage or missing role-id config must not block creating the CRM
-    // user locally, the sync status is stored instead.
     const syncResult = await this.twoBighaAgentService.syncAgentCreate({
       _id: String(createdUser._id),
       email: createdUser.email,
@@ -230,6 +226,15 @@ export class CRMUsersService implements OnModuleInit {
     createdUser.twobighaSyncedAt = syncResult.syncedAt;
     await createdUser.save();
 
+    // Sync to Kommuno
+    const kommunoResult = await this.kommunoAgentService.syncAgentCreate(createdUser);
+    createdUser.kommunoAgentId = kommunoResult.kommunoAgentId ?? createdUser.kommunoAgentId;
+    createdUser.kommunoSyncStatus = kommunoResult.status;
+    createdUser.kommunoSyncError =
+      kommunoResult.status === 'failed' || kommunoResult.status === 'skipped' ? kommunoResult.error : undefined;
+    createdUser.kommunoSyncedAt = kommunoResult.syncedAt;
+    await createdUser.save();
+
     return createdUser;
   }
 
@@ -237,13 +242,44 @@ export class CRMUsersService implements OnModuleInit {
     id: string,
     updateUserDto: any,
   ): Promise<CRMUserDocument | null> {
-    this.assertEmailAllowed(updateUserDto.email);
+    if (updateUserDto.email) {
+      this.assertEmailAllowed(updateUserDto.email);
+    }
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
-    return this.userModel
+
+    const bypassSync = !!updateUserDto.bypassKommunoSync;
+    delete updateUserDto.bypassKommunoSync;
+
+    const updatedUser = await this.userModel
       .findByIdAndUpdate(id, updateUserDto, { new: true })
       .exec();
+
+    if (updatedUser) {
+      if (bypassSync) {
+        if (updatedUser.kommunoAgentId) {
+          updatedUser.kommunoSyncStatus = 'synced';
+          updatedUser.kommunoSyncError = undefined;
+          updatedUser.kommunoSyncedAt = new Date();
+          await updatedUser.save();
+        } else {
+          updatedUser.kommunoSyncStatus = 'not_synced';
+          updatedUser.kommunoSyncError = undefined;
+          await updatedUser.save();
+        }
+      } else {
+        const syncResult = await this.kommunoAgentService.syncAgentUpdate(updatedUser);
+        updatedUser.kommunoAgentId = syncResult.kommunoAgentId ?? updatedUser.kommunoAgentId;
+        updatedUser.kommunoSyncStatus = syncResult.status;
+        updatedUser.kommunoSyncError =
+          syncResult.status === 'failed' || syncResult.status === 'skipped' ? syncResult.error : undefined;
+        updatedUser.kommunoSyncedAt = syncResult.syncedAt;
+        await updatedUser.save();
+      }
+    }
+
+    return updatedUser;
   }
 
   async delete(id: string): Promise<any> {
@@ -260,6 +296,9 @@ export class CRMUsersService implements OnModuleInit {
         user.toObject(),
         'Admin',
       );
+      if (user.kommunoAgentId) {
+        void this.kommunoAgentService.syncAgentDelete(user.kommunoAgentId);
+      }
     }
     return this.userModel.findByIdAndDelete(id).exec();
   }
@@ -377,5 +416,18 @@ export class CRMUsersService implements OnModuleInit {
         { upsert: true, new: true },
       )
       .exec();
+  }
+
+  async syncAgentToKommuno(id: string): Promise<CRMUserDocument | null> {
+    const user = await this.userModel.findById(id).exec();
+    if (!user) throw new BadRequestException('User not found');
+
+    const syncResult = await this.kommunoAgentService.syncAgentUpdate(user);
+    user.kommunoAgentId = syncResult.kommunoAgentId ?? user.kommunoAgentId;
+    user.kommunoSyncStatus = syncResult.status;
+    user.kommunoSyncError =
+      syncResult.status === 'failed' || syncResult.status === 'skipped' ? syncResult.error : undefined;
+    user.kommunoSyncedAt = syncResult.syncedAt;
+    return user.save();
   }
 }

@@ -339,8 +339,8 @@ export default function LeadDetailPage() {
 
   const stage = lead.stage || lead.status;
   const hasEmail = Boolean(String(lead.email || '').trim());
-  const hasPhone = Boolean(String(lead.phone || lead.mobile || '').trim());
-  const leadPhone = String(lead.phone || lead.mobile || '').trim();
+  const hasPhone = Boolean(String(lead.phone || lead.mobile || lead.mobileNo || '').trim());
+  const leadPhone = String(lead.phone || lead.mobile || lead.mobileNo || '').trim();
   const leadMobileNo = String(lead.mobileNo || '').trim();
   const displayName = `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Lead';
   const initials = `${(lead.firstName?.[0] || '').toUpperCase()}${(lead.lastName?.[0] || '').toUpperCase()}` || '?';

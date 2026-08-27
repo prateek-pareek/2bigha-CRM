@@ -55,6 +55,37 @@ export class CRMUser {
 
   @Prop()
   twobighaSyncedAt?: Date;
+
+  @Prop({ trim: true, index: true })
+  kommunoAgentId?: string;
+
+  @Prop({
+    enum: ['not_synced', 'synced', 'failed', 'skipped'],
+    default: 'not_synced',
+    index: true,
+  })
+  kommunoSyncStatus?: 'not_synced' | 'synced' | 'failed' | 'skipped';
+
+  @Prop({ trim: true })
+  kommunoSyncError?: string;
+
+  @Prop()
+  kommunoSyncedAt?: Date;
+
+  @Prop({ trim: true })
+  agentMobile?: string;
+
+  @Prop({ default: '09:00' })
+  agentInTime?: string;
+
+  @Prop({ default: '18:00' })
+  agentOutTime?: string;
+
+  @Prop({ default: true })
+  agentOutPermission?: boolean;
+
+  @Prop({ default: false })
+  agentMasking?: boolean;
 }
 
 export const CRMUserSchema = SchemaFactory.createForClass(CRMUser);

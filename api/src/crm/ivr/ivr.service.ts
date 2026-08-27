@@ -42,6 +42,10 @@ function normalizeE164(raw: string): string {
   return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
 }
 
+function normalizeDigits(raw: string): string {
+  return String(raw || '').trim().replace(/\D/g, '');
+}
+
 /** 16-digit numeric session id, unique per call (Kommuno's mandatory `sessionId`). */
 function generateSessionId(): string {
   const time = Date.now().toString(); // 13 digits
@@ -112,6 +116,8 @@ export class IvrService {
    * headers: { apikey, Content-Type: application/json }
    * body: { smeId, sessionId, customerNumber, agentNumber, recordingFlag, pilotNumber }
    */
+
+
   async initiateOutboundCall(dto: InitiateIvrCallDto, user: any) {
     if (!this.kommunoConfigured()) {
       throw new BadRequestException(

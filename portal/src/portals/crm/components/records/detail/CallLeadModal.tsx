@@ -35,8 +35,26 @@ export default function CallLeadModal({
   useEffect(() => {
     if (!open) return;
     setToNumber(String(phone || "").trim());
-    setAgentNumber(localStorage.getItem(AGENT_NUMBER_STORAGE_KEY) || "");
     setStatusMsg(null);
+
+    const stored = localStorage.getItem(AGENT_NUMBER_STORAGE_KEY);
+    if (stored) {
+      setAgentNumber(stored);
+    } else {
+      const token = localStorage.getItem("token");
+      if (token) {
+        fetch(`${CRM_API_URL}/crm-users/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            if (data?.agentMobile) {
+              setAgentNumber(data.agentMobile);
+            }
+          })
+          .catch((err) => console.error("Failed to load user profile in call modal", err));
+      }
+    }
   }, [open, phone]);
 
   if (!open) return null;

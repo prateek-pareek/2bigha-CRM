@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { CRMUsersService } from './crm-users.service';
 import { CRMUsersController } from './crm-users.controller';
 import { TwoBighaAgentService } from './twobigha-agent.service';
+import { KommunoAgentService } from './kommuno-agent.service';
 import { CRMUser, CRMUserSchema } from './schemas/user.schema';
 import { Role, RoleSchema } from './schemas/role.schema';
 import { Permission, PermissionSchema } from './schemas/permission.schema';
@@ -25,7 +26,7 @@ import { UsersModule } from '../users/users.module';
     TrashModule,
   ],
   controllers: [CRMUsersController],
-  providers: [CRMUsersService, TwoBighaAgentService],
-  exports: [CRMUsersService, MongooseModule],
+  providers: [CRMUsersService, TwoBighaAgentService, KommunoAgentService],
+  exports: [CRMUsersService, MongooseModule, KommunoAgentService],
 })
 export class CRMUsersModule {}

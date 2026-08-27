@@ -77,6 +77,7 @@ export class CRMUsersController {
       permissions: consolidatedPermissions,
       crmPermissions: (dbUser as any)?.permissions || user.crmPermissions || [],
       role: dbUser?.role || user.role,
+      agentMobile: dbUser?.agentMobile,
     };
   }
 
@@ -166,5 +167,11 @@ export class CRMUsersController {
   @Permissions('settings:admin')
   createPermission(@Body() dto: any) {
     return this.usersService.createPermission(dto);
+  }
+
+  @Post(':id/kommuno-sync')
+  @Permissions('settings:admin')
+  syncToKommuno(@Param('id') id: string) {
+    return this.usersService.syncAgentToKommuno(id);
   }
 }

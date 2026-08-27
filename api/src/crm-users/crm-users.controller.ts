@@ -63,7 +63,6 @@ export class CRMUsersController {
   @Get('profile')
   async getProfile(@Request() req: any) {
     const user = req.user;
-    // Enrich with latest database permissions to avoid stale JWT issues
     const dbUser = await this.usersService.findOne(user.email);
     const consolidatedPermissions = Array.from(
       new Set([
@@ -77,6 +76,7 @@ export class CRMUsersController {
       permissions: consolidatedPermissions,
       crmPermissions: (dbUser as any)?.permissions || user.crmPermissions || [],
       role: dbUser?.role || user.role,
+      agentMobile: dbUser?.agentMobile,
     };
   }
 
@@ -166,5 +166,11 @@ export class CRMUsersController {
   @Permissions('settings:admin')
   createPermission(@Body() dto: any) {
     return this.usersService.createPermission(dto);
+  }
+
+  @Post(':id/kommuno-sync')
+  @Permissions('settings:admin')
+  syncToKommuno(@Param('id') id: string) {
+    return this.usersService.syncAgentToKommuno(id);
   }
 }

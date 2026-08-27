@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { CrmButton } from "@/components/crm/ui";
 import { cn } from "@/lib/utils";
+import KommunoAgentSyncPanel from "@/components/crm/ivr/KommunoAgentSyncPanel";
 
 type VoiceProviderId = "twilio" | "readymode" | "elevenlabs" | "kommuno";
 
@@ -77,7 +78,7 @@ const PROVIDERS: {
   {
     id: "kommuno",
     name: "Kommuno",
-    blurb: "Indian cloud telephony / click-to-call. API details pending from Kommuno.",
+    blurb: "Indian cloud telephony / click-to-call integration.",
     docs: "https://kommuno.in",
   },
 ];
@@ -564,11 +565,6 @@ export default function VoiceCallingIntegrationPage() {
 
           {tab === "kommuno" && (
             <div className="space-y-4">
-              <p className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                <Info size={14} className="mt-0.5 shrink-0" />
-                Kommuno API docs/credentials are pending. Fields below are a placeholder shape —
-                update them once Kommuno shares their API reference.
-              </p>
               <label className="inline-flex items-center gap-2 text-xs font-semibold">
                 <input
                   type="checkbox"
@@ -675,6 +671,12 @@ export default function VoiceCallingIntegrationPage() {
           {saving ? "Saving…" : "Save configuration"}
         </CrmButton>
       </form>
+
+      {config.activeProvider === "kommuno" && config.providers.kommuno.enabled && (
+        <div className="mt-8 animate-in fade-in duration-300">
+          <KommunoAgentSyncPanel />
+        </div>
+      )}
     </div>
   );
 }
