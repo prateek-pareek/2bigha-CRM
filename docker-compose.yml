@@ -1,33 +1,6 @@
 name: 2bighacrm
 
 services:
-  # Reverse proxy + automatic Let's Encrypt TLS. The backend/frontend services
-  # below carry traefik.* labels.
-  traefik:
-    image: traefik:v3.3
-    container_name: 2bighacrm-traefik
-    restart: always
-    command:
-      - --providers.docker=true
-      # Don't expose a container publicly unless it opts in with traefik.enable=true.
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      # Force every plaintext request to HTTPS.
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set in .env}
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
-    ports:
-      - '80:80'
-      - '443:443'
-    volumes:
-      # Read-only socket: Traefik only needs to watch container labels.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Issued certificates — persist these or you WILL hit Let's Encrypt rate limits.
-      - letsencrypt_data:/letsencrypt
 
   redis:
     image: redis:7-alpine
@@ -172,8 +145,6 @@ services:
       - backend
 
 volumes:
-  letsencrypt_data:
-    name: 2bighacrm_letsencrypt_data
   mongodb_data:
     name: 2bighacrm_mongodb_data
   redis_data:
