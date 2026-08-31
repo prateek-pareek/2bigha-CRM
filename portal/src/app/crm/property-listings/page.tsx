@@ -291,10 +291,6 @@ function PropertyListingsPageContent() {
   // document) — view/edit/delete below would silently hit the unrelated mock
   // store instead, so they're disabled here rather than failing confusingly.
   const openListing = (id: string) => {
-    if (bucket === "farm") {
-      toast.error("Live 2bigha farm detail view isn't available here yet");
-      return;
-    }
     router.push(`/crm/property-listings/${id}`);
   };
   const editListing = (id: string) => {
@@ -350,8 +346,7 @@ function PropertyListingsPageContent() {
           ? "/crm/property-listings/new?bucket=buy"
           : "/crm/property-listings/new?bucket=sell";
 
-  const showCarousel =
-    marketplace && viewMode === "grid" && !search.trim() && statusFilter === "all";
+  const showCarousel = false;
 
   return (
     <div className="theme-crm-hubspot crm-list-page mx-auto w-full animate-in fade-in duration-500 pb-10">

@@ -112,6 +112,7 @@ export interface TwoBighaFarmRaw {
     source?: string;
     isVerified?: boolean;
     isActive?: boolean;
+    images?: string[];
     createdAt?: string;
     updatedAt?: string;
   } | null;
@@ -155,7 +156,7 @@ export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRe
   const p = raw.property || {};
   const now = new Date().toISOString();
   return {
-    _id: String(p.id || raw.seo?.slug || `twobigha-farm-${Math.random().toString(36).slice(2)}`),
+    _id: String(raw.seo?.slug || p.id || `twobigha-farm-${Math.random().toString(36).slice(2)}`),
     listingBucket: "farm",
     title: p.title || p.propertyName || "Untitled farm",
     address: p.address || undefined,
@@ -171,7 +172,7 @@ export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRe
     status: p.isActive === false ? "Off Market" : "Available",
     approvalStatus: "Approved",
     verified: p.isVerified,
-    images: [],
+    images: Array.isArray(p.images) ? p.images : [],
     amenities: [],
     createdAt: p.createdAt || now,
     updatedAt: p.updatedAt || now,

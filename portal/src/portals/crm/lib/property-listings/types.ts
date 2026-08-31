@@ -243,8 +243,8 @@ export function statusTone(status: string): string {
 
 /** Maps a listing status to the shared `CrmStatusBadge` tone palette. */
 export type PropertyStatusBadgeTone = "success" | "warning" | "info" | "neutral";
-export function statusBadgeTone(status: string): PropertyStatusBadgeTone {
-  const s = status.toLowerCase();
+export function statusBadgeTone(status: string | undefined | null): PropertyStatusBadgeTone {
+  const s = (status || "").toLowerCase();
   if (s === "available") return "success";
   if (s === "under offer") return "warning";
   if (s === "sold" || s === "rented") return "info";
@@ -258,8 +258,8 @@ export const PROPERTY_APPROVAL_STATUSES: PropertyListingApprovalStatus[] = [
 ];
 
 /** Maps an approval status to the shared `CrmStatusBadge` tone palette. */
-export function approvalStatusBadgeTone(status: string): PropertyStatusBadgeTone {
-  const s = status.toLowerCase();
+export function approvalStatusBadgeTone(status: string | undefined | null): PropertyStatusBadgeTone {
+  const s = (status || "").toLowerCase();
   if (s === "approved") return "success";
   if (s === "rejected") return "neutral";
   return "warning";

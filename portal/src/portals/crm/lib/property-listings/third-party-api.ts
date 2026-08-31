@@ -31,6 +31,9 @@ import type {
   UpdateThirdPartyPropertyInput,
 } from "./mock-third-party";
 
+import api from "@/lib/crm/api";
+import { mapTwoBighaFarmToRecord, type TwoBighaFarmRaw } from "./backend-api";
+
 const mockMode = () => useThirdPartyListingsMock();
 
 export async function fetchThirdPartyPropertyListings(query: ThirdPartyListQuery = {}) {
@@ -38,6 +41,16 @@ export async function fetchThirdPartyPropertyListings(query: ThirdPartyListQuery
 }
 
 export async function fetchThirdPartyPropertyById(id: string) {
+  const isMongoId = /^[0-9a-fA-F]{24}$/.test(id);
+  const isMockId = id.startsWith("tp_listing_") || id.startsWith("mock_");
+
+  if (!isMongoId && !isMockId) {
+    const { data } = await api.get<TwoBighaFarmRaw>(`/crm/property-listings/twobigha/farms/by-slug/${id}`);
+    if (data) {
+      return mapTwoBighaFarmToRecord(data);
+    }
+    return null;
+  }
   return mockMode() ? mock.fetchThirdPartyPropertyById(id) : http.httpFetchById(id);
 }
 

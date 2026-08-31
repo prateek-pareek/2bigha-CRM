@@ -62,6 +62,11 @@ const PROPERTY_TYPE_MAP: Record<string, string> = {
   Commercial: 'COMMERCIAL',
   Office: 'OFFICE',
   Warehouse: 'WAREHOUSE',
+  Agricultural: 'AGRICULTURAL',
+  Residential: 'RESIDENTIAL',
+  Industrial: 'INDUSTRIAL',
+  Farmhouse: 'FARMHOUSE',
+  Farmland: 'FARMLAND',
   Other: 'OTHER',
   // 'Farm' deliberately has no entry: Farm-typed listings never reach
   // buildPropertyInput — PropertyListingsService routes them to
@@ -648,7 +653,28 @@ export class TwoBighaPropertyService {
       const data = await twoBighaGraphqlRequest<{
         getFarmBySlug?: Record<string, unknown> | null;
       }>(config, GET_FARM_BY_SLUG_QUERY, { input: { slug } });
-      return data?.getFarmBySlug ?? null;
+      const farm = data?.getFarmBySlug;
+      if (!farm) return null;
+
+      const propertyId = (farm.property as any)?.id;
+      if (propertyId) {
+        try {
+          const media = await twoBighaGraphqlRequest<{
+            getPropertyMedia?: { images?: { thumbnailUrl: string }[] };
+          }>(config, `
+            query GetPropertyMedia($propertyId: ID!) {
+              getPropertyMedia(propertyId: $propertyId) {
+                images {
+                  thumbnailUrl
+                }
+              }
+            }
+          `, { propertyId });
+          const urls = media?.getPropertyMedia?.images?.map((img) => img.thumbnailUrl) || [];
+          (farm.property as any).images = urls;
+        } catch {}
+      }
+      return farm;
     } catch (e: any) {
       this.logger.error(`2bigha getFarmBySlug failed for slug "${slug}": ${e?.message}`);
       return null;
@@ -679,6 +705,7 @@ export class TwoBighaPropertyService {
           searchTerm: params.searchTerm || undefined,
         },
       });
+
       return {
         data: data?.getFarms?.data || [],
         meta: data?.getFarms?.meta,
@@ -723,6 +750,35 @@ export class TwoBighaPropertyService {
     } catch (e: any) {
       this.logger.error(`2bigha ${field} failed: ${e?.message}`);
       return null;
+    }
+  }
+
+  /** getFarmMediaBySlug — fetch the images for a farm by its slug. */
+  async getFarmMediaBySlug(slug: string): Promise<string[]> {
+    const config = getTwoBighaConfig();
+    if (!config) return [];
+    try {
+      const data = await twoBighaGraphqlRequest<{
+        getFarmBySlug?: { property?: { id?: string } | null } | null;
+      }>(config, GET_FARM_BY_SLUG_QUERY, { input: { slug } });
+      const propertyId = data?.getFarmBySlug?.property?.id;
+      if (!propertyId) return [];
+
+      const media = await twoBighaGraphqlRequest<{
+        getPropertyMedia?: { images?: { thumbnailUrl: string }[] };
+      }>(config, `
+        query GetPropertyMedia($propertyId: ID!) {
+          getPropertyMedia(propertyId: $propertyId) {
+            images {
+              thumbnailUrl
+            }
+          }
+        }
+      `, { propertyId });
+      return media?.getPropertyMedia?.images?.map((img) => img.thumbnailUrl) || [];
+    } catch (e: any) {
+      this.logger.error(`2bigha getFarmMediaBySlug failed for slug "${slug}": ${e?.message}`);
+      return [];
     }
   }
 }

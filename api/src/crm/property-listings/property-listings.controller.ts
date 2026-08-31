@@ -63,6 +63,14 @@ export class PropertyListingsController {
     return this.listingsService.getTwoBighaFarmBySlug(slug);
   }
 
+  /** Fetch live farm listing images by its slug dynamically. */
+  @Get('twobigha/farms/media/:slug')
+  @Permissions('property_listings:read')
+  async getTwoBighaFarmMedia(@Param('slug') slug: string) {
+    const images = await this.listingsService.getTwoBighaFarmMedia(slug);
+    return { images };
+  }
+
   /**
    * Live read-through to 2bigha's Property Approval Queue — `:bucket` is
    * one of pending|approved|rejected, mapping to getPendingApprovalProperties/

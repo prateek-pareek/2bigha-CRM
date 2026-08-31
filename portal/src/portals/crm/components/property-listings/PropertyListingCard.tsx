@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type MouseEvent } from "react";
+import { useState, useEffect, type MouseEvent } from "react";
+import api from "@/lib/api";
 import {
   ChevronDown,
   ChevronRight,
@@ -108,8 +109,35 @@ export function PropertyListingCard({
   onDelete?: () => void;
   className?: string;
 }) {
-  const images = listing.images?.length ? listing.images : [];
+  const [lazyImages, setLazyImages] = useState<string[]>(listing.images || []);
+  const [loadingMedia, setLoadingMedia] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (listing.images && listing.images.length > 0) {
+      setLazyImages(listing.images);
+      return;
+    }
+    if (listing.listingBucket === "farm" && listing._id) {
+      let active = true;
+      setLoadingMedia(true);
+      api.get<{ images: string[] }>(`/crm/property-listings/twobigha/farms/media/${listing._id}`)
+        .then(({ data }) => {
+          if (active && data?.images) {
+            setLazyImages(data.images);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (active) setLoadingMedia(false);
+        });
+      return () => {
+        active = false;
+      };
+    }
+  }, [listing.images, listing.listingBucket, listing._id]);
+
+  const images = lazyImages.length ? lazyImages : [];
   const activeImage = images[Math.min(imageIndex, Math.max(images.length - 1, 0))];
   const areaBigha = resolveAreaBigha(listing);
   const rate = formatRatePerBigha(listing.price, areaBigha);
@@ -146,7 +174,11 @@ export function PropertyListingCard({
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Home size={28} className="text-slate-300" />
+            {loadingMedia ? (
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            ) : (
+              <Home size={28} className="text-slate-300" />
+            )}
           </div>
         )}
 

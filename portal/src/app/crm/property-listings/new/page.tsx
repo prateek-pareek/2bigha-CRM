@@ -140,10 +140,10 @@ function NewPropertyListingPageContent() {
         title={title}
         description={
           isPm
-            ? "Subscription Property Management case — verification pipeline (mock third-party API)."
+            ? "Subscription Property Management case — verification pipeline."
             : leadId
-              ? "Linked to a lead — marketplace listing (mock third-party API)."
-              : "Marketplace listing submitted to the third-party API (mock)."
+              ? "Linked to a lead — marketplace listing."
+              : "Marketplace listing submitted to the third-party API."
         }
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },

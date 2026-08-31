@@ -122,6 +122,11 @@ export class PropertyListingsService {
     return this.twoBighaService.getFarmDetailBySlug(slug);
   }
 
+  /** Live read-through to get farm media urls by slug. */
+  async getTwoBighaFarmMedia(slug: string): Promise<string[]> {
+    return this.twoBighaService.getFarmMediaBySlug(slug);
+  }
+
   /** Live read-through to 2bigha's `getFarms` — farm search/listing, for pulling 2bigha-native farm data into the CRM. */
   async listTwoBighaFarms(params: {
     page?: number;
