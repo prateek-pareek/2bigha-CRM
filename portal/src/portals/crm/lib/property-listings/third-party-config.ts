@@ -9,7 +9,9 @@
  */
 
 export const THIRD_PARTY_LISTINGS_API_URL = (
-  process.env.NEXT_PUBLIC_2BIGHA_LISTINGS_API_URL || ""
+  process.env.NEXT_PUBLIC_2BIGHA_LISTINGS_API_URL ||
+  process.env.NEXT_PUBLIC_CRM_API_URL ||
+  "http://localhost:4000/api"
 ).replace(/\/$/, "");
 
 export const THIRD_PARTY_LISTINGS_API_KEY =
@@ -18,10 +20,9 @@ export const THIRD_PARTY_LISTINGS_API_KEY =
 /** When true (or when no base URL), all calls use the local mock store. */
 export function useThirdPartyListingsMock(): boolean {
   if (process.env.NEXT_PUBLIC_2BIGHA_LISTINGS_USE_MOCK === "true") return true;
-  if (process.env.NEXT_PUBLIC_2BIGHA_LISTINGS_USE_MOCK === "false") {
-    return !THIRD_PARTY_LISTINGS_API_URL;
-  }
-  return !THIRD_PARTY_LISTINGS_API_URL;
+  if (process.env.NEXT_PUBLIC_2BIGHA_LISTINGS_USE_MOCK === "false") return false;
+  // Disable mock mode by default to connect BUY/SELL to the live NestJS/MongoDB backend
+  return false;
 }
 
 export function thirdPartyListingsAuthHeaders(): HeadersInit {

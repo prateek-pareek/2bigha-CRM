@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import api from "@/lib/crm/api";
 import {
   Home,
   Loader2,
@@ -65,6 +66,19 @@ export default function PropertyListingDetailPage() {
       }
       setListing(data);
       setActiveImage(0);
+
+      const isMockId = id.startsWith("tp_listing_") || id.startsWith("mock_");
+      const isMongoId = /^[0-9a-fA-F]{24}$/.test(id);
+      if (!isMockId && !isMongoId) {
+        api.get<{ images: string[] }>(`/crm/property-listings/twobigha/farms/media/${id}`)
+          .then(({ data: mediaData }) => {
+            if (mediaData?.images) {
+              setListing((prev) => (prev ? { ...prev, images: mediaData.images } : null));
+            }
+          })
+          .catch(() => {});
+      }
+
       if (data.leadId && data.listingBucket !== "pm") {
         const subscription = await fetchLeadSubscriptionMock(data.leadId);
         setSub(subscription);

@@ -163,6 +163,32 @@ const GET_PROPERTY_BY_SLUG_QUERY = `
   }
 `;
 
+const GET_PROPERTIES_QUERY = `
+  query GetProperties($input: GetPropertiesInput!) {
+    properties(input: $input) {
+      data {
+        property {
+          ${PROPERTY_DETAIL_FIELDS}
+        }
+        seo {
+          slug
+        }
+        images {
+          variants {
+            thumbnail
+          }
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
 /**
  * Step 1 of the property image-upload flow (per the handbook): request
  * pre-signed Azure Blob upload URLs, one per image, before create/update.
@@ -753,15 +779,26 @@ export class TwoBighaPropertyService {
     }
   }
 
-  /** getFarmMediaBySlug — fetch the images for a farm by its slug. */
-  async getFarmMediaBySlug(slug: string): Promise<string[]> {
+  /** getPropertyMediaBySlug — fetch the images for a farm or standard property by its slug. */
+  async getPropertyMediaBySlug(slug: string): Promise<string[]> {
     const config = getTwoBighaConfig();
     if (!config) return [];
     try {
-      const data = await twoBighaGraphqlRequest<{
-        getFarmBySlug?: { property?: { id?: string } | null } | null;
-      }>(config, GET_FARM_BY_SLUG_QUERY, { input: { slug } });
-      const propertyId = data?.getFarmBySlug?.property?.id;
+      // Try to get standard property ID first
+      let data = await twoBighaGraphqlRequest<{
+        getPropertyBySlug?: { property?: { id?: string } | null } | null;
+      }>(config, GET_PROPERTY_BY_SLUG_QUERY, { input: { slug } }).catch(() => null);
+      
+      let propertyId = data?.getPropertyBySlug?.property?.id;
+      
+      if (!propertyId) {
+        // Fallback to farm ID
+        const farmData = await twoBighaGraphqlRequest<{
+          getFarmBySlug?: { property?: { id?: string } | null } | null;
+        }>(config, GET_FARM_BY_SLUG_QUERY, { input: { slug } }).catch(() => null);
+        propertyId = farmData?.getFarmBySlug?.property?.id;
+      }
+      
       if (!propertyId) return [];
 
       const media = await twoBighaGraphqlRequest<{
@@ -777,8 +814,44 @@ export class TwoBighaPropertyService {
       `, { propertyId });
       return media?.getPropertyMedia?.images?.map((img) => img.thumbnailUrl) || [];
     } catch (e: any) {
-      this.logger.error(`2bigha getFarmMediaBySlug failed for slug "${slug}": ${e?.message}`);
+      this.logger.error(`2bigha getPropertyMediaBySlug failed for slug "${slug}": ${e?.message}`);
       return [];
+    }
+  }
+
+  /** `properties` — standard properties search/listing, pulling live data from 2bigha GraphQL for display. */
+  async listProperties(params: {
+    page?: number;
+    limit?: number;
+    searchTerm?: string;
+    status?: string;
+  }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
+    const config = getTwoBighaConfig();
+    if (!config) return null;
+
+    let availablilityStatus: string | undefined = undefined;
+    if (params.status === "Available") availablilityStatus = "AVAILABLE";
+    else if (params.status === "Sold") availablilityStatus = "SOLD";
+    else if (params.status === "Under Offer") availablilityStatus = "MANAGED";
+
+    try {
+      const data = await twoBighaGraphqlRequest<{
+        properties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+      }>(config, GET_PROPERTIES_QUERY, {
+        input: {
+          page: params.page ?? 1,
+          limit: params.limit ?? 20,
+          searchTerm: params.searchTerm || undefined,
+          availablilityStatus,
+        },
+      });
+      return {
+        data: data?.properties?.data || [],
+        meta: data?.properties?.meta,
+      };
+    } catch (e: any) {
+      this.logger.error(`2bigha getProperties failed: ${e?.message}`);
+      return null;
     }
   }
 }

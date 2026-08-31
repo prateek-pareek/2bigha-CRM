@@ -56,6 +56,23 @@ export class PropertyListingsController {
     });
   }
 
+  /** Live read-through to 2bigha's standard properties search/listing. */
+  @Get('twobigha/properties')
+  @Permissions('property_listings:read')
+  listTwoBighaProperties(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('searchTerm') searchTerm?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.listingsService.listTwoBighaProperties({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      searchTerm,
+      status,
+    });
+  }
+
   /** Live read-through to 2bigha's getFarmBySlug — the farm-detail display operation. */
   @Get('twobigha/farms/by-slug/:slug')
   @Permissions('property_listings:read')

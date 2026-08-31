@@ -178,3 +178,51 @@ export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRe
     updatedAt: p.updatedAt || now,
   };
 }
+
+const PROPERTY_TYPE_REVERSE: Record<string, PropertyListingType> = {
+  APARTMENT: "Apartment",
+  VILLA: "Villa",
+  RESIDENTIAL: "Independent House",
+  PLOT: "Plot",
+  COMMERCIAL: "Commercial",
+  OFFICE: "Office",
+  WAREHOUSE: "Warehouse",
+  FARM: "Farm",
+  AGRICULTURAL: "Agricultural",
+};
+
+/** Maps one live 2bigha standard property row onto PropertyListingRecord shape. */
+export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): PropertyListingRecord {
+  const p = raw.property || {};
+  const now = new Date().toISOString();
+  return {
+    _id: String(raw.seo?.slug || p.id || `twobigha-property-${Math.random().toString(36).slice(2)}`),
+    listingBucket: "properties",
+    title: p.title || p.propertyName || "Untitled property",
+    address: p.address || undefined,
+    city: p.city || undefined,
+    state: p.state || undefined,
+    district: p.district || undefined,
+    country: p.country || undefined,
+    price: typeof p.price === "number" ? p.price : 0,
+    currency: "INR",
+    propertyType: (p.propertyType && PROPERTY_TYPE_REVERSE[p.propertyType]) || "Other",
+    listedFor: "Sale",
+    areaSqft: p.areaUnit === "SQFT" ? p.area : undefined,
+    status: p.isActive === false
+      ? "Off Market"
+      : p.availablilityStatus === "SOLD"
+        ? "Sold"
+        : p.availablilityStatus === "MANAGED"
+          ? "Under Offer"
+          : "Available",
+    approvalStatus: "Approved",
+    verified: p.isVerified,
+    images: Array.isArray(raw.images)
+      ? raw.images.map((img: any) => img.variants?.thumbnail).filter(Boolean)
+      : [],
+    amenities: [],
+    createdAt: p.createdAt || now,
+    updatedAt: p.updatedAt || now,
+  };
+}

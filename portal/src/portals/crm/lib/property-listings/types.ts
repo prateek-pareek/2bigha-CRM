@@ -23,7 +23,7 @@ export type PropertyListingType =
   | "Other";
 
 /** 2Bigha marketplace streams. Property Management is its own module (see @/lib/crm/property-management) — not a bucket here. */
-export type ListingBucket = "buy" | "sell" | "farm";
+export type ListingBucket = "properties" | "farm";
 
 /**
  * Discriminator on the shared record: marketplace buckets plus `"pm"` for
@@ -33,8 +33,7 @@ export type ListingBucket = "buy" | "sell" | "farm";
 export type PropertyRecordBucket = ListingBucket | "pm";
 
 export const LISTING_BUCKETS: { key: ListingBucket; label: string; description: string }[] = [
-  { key: "buy", label: "Buy", description: "Marketplace listings for buyers" },
-  { key: "sell", label: "Sell", description: "Seller / for-sale listings" },
+  { key: "properties", label: "Properties", description: "All property listings from 2Bigha marketplace" },
   { key: "farm", label: "Farms", description: "Farm & farmland marketplace listings" },
 ];
 

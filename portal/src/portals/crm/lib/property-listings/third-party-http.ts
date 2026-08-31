@@ -20,6 +20,9 @@
  * same `request()` helper (exported below), separate module.
  */
 
+import api from "../api";
+import { mapTwoBighaPropertyToRecord } from "./backend-api";
+
 import type {
   LeadSubscriptionMock,
   PropertyLegalStatus,
@@ -68,57 +71,57 @@ function toQuery(params: Record<string, string | number | undefined>): string {
 }
 
 export async function httpFetchListings(query: ThirdPartyListQuery = {}) {
-  return request<{
-    data: PropertyListingRecord[];
-    total: number;
-    page: number;
-    pageSize: number;
-  }>(
-    `/v1/properties${toQuery({
+  const { data } = await api.get<{
+    data: any[];
+    meta?: { page?: number; limit?: number; total?: number; totalPages?: number };
+  }>("/crm/property-listings/twobigha/properties", {
+    params: {
       page: query.page,
-      pageSize: query.pageSize,
-      search: query.search,
+      limit: query.pageSize,
+      searchTerm: query.search,
       status: query.status,
-      approvalStatus: query.approvalStatus,
-      listedFor: query.listedFor,
-      leadId: query.leadId,
-      listingBucket: query.listingBucket,
-      pmStage: query.pmStage,
-      legalStatus: query.legalStatus,
-    })}`,
-  );
+    },
+  });
+
+  const rows = data?.data || [];
+  const mapped = rows.map((r: any) => mapTwoBighaPropertyToRecord(r));
+
+  return {
+    data: mapped,
+    total: data?.meta?.total ?? mapped.length,
+    page: data?.meta?.page ?? Number(query.page || 1),
+    pageSize: data?.meta?.limit ?? Number(query.pageSize || 25),
+  };
 }
 
 export async function httpFetchById(id: string): Promise<PropertyListingRecord | null> {
   try {
-    return await request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}`);
+    const { data } = await api.get<PropertyListingRecord>(`/crm/property-listings/${id}`);
+    return data;
   } catch {
     return null;
   }
 }
 
 export async function httpFetchStats(listingBucket?: string) {
-  return request<PropertyListingStats>(
-    `/v1/properties/stats${toQuery({ listingBucket })}`,
-  );
+  const { data } = await api.get<PropertyListingStats>("/crm/property-listings/stats", {
+    params: { listingBucket },
+  });
+  return data;
 }
 
 export async function httpCreate(input: CreateThirdPartyPropertyInput) {
-  return request<PropertyListingRecord>("/v1/properties", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  const { data } = await api.post<PropertyListingRecord>("/crm/property-listings", input);
+  return data;
 }
 
 export async function httpUpdate(id: string, input: UpdateThirdPartyPropertyInput) {
-  return request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}`, {
-    method: "PUT",
-    body: JSON.stringify(input),
-  });
+  const { data } = await api.put<PropertyListingRecord>(`/crm/property-listings/${id}`, input);
+  return data;
 }
 
 export async function httpDelete(id: string): Promise<void> {
-  await request(`/v1/properties/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await api.delete(`/crm/property-listings/${id}`);
 }
 
 export async function httpLeadSubscription(leadId: string) {

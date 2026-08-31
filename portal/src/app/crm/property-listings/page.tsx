@@ -93,8 +93,10 @@ const PM_BOARD_STAGES: { key: string; stages: PmPipelineStage[] }[] = [
 ];
 
 function parseBucket(raw: string | null): PropertyRecordBucket {
-  if (raw === "buy" || raw === "sell" || raw === "farm" || raw === "pm") return raw;
-  return "sell";
+  if (raw === "properties" || raw === "farm" || raw === "pm") return raw;
+  // Legacy URL compat: treat old buy/sell as properties
+  if (raw === "buy" || raw === "sell") return "properties";
+  return "properties";
 }
 
 function stageForBoardColumn(columnKey: string): PmPipelineStage {
@@ -192,8 +194,6 @@ function PropertyListingsPageContent() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // FARMS is live 2bigha marketplace data (getFarms) — everything else
-      // (BUY/SELL/PM) is still the older mock, pending its own migration.
       if (bucket === "farm") {
         const { data, total: farmTotal } = await fetchTwoBighaFarms({
           page,
@@ -204,12 +204,25 @@ function PropertyListingsPageContent() {
         setTotal(farmTotal);
         return;
       }
+      if (bucket === "properties") {
+        // Live 2bigha GraphQL properties
+        const data = await fetchThirdPartyPropertyListings({
+          page,
+          pageSize,
+          search: search.trim() || undefined,
+          listingBucket: bucket,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+        });
+        setListings(data.data);
+        setTotal(data.total);
+        return;
+      }
+      // PM bucket — still uses the older mock/local store
       const data = await fetchThirdPartyPropertyListings({
         page: pmBoardMode ? 1 : page,
         pageSize: pmBoardMode ? 200 : pageSize,
         search: search.trim() || undefined,
         status: marketplace && statusFilter !== "all" ? statusFilter : undefined,
-        // Board shows all stages as columns — ignore stage filter in kanban.
         pmStage:
           !marketplace && !pmBoardMode && pmStageFilter !== "all" ? pmStageFilter : undefined,
         listingBucket: bucket,
@@ -235,11 +248,8 @@ function PropertyListingsPageContent() {
 
   const loadStats = useCallback(async () => {
     try {
-      if (bucket === "farm") {
-        // 2bigha's Farm API has no aggregate-stats query (per the Integration
-        // Handbook) — total comes from getFarms' real meta.total; portfolio
-        // value is only summed over the currently loaded page (approximate,
-        // not a true aggregate), which is still real data, unlike the mock.
+      if (bucket === "farm" || bucket === "properties") {
+        // 2bigha's API has no aggregate-stats query — compute from loaded page
         const availableCount = listings.filter((l) => l.status === "Available").length;
         setStats({
           total,
@@ -293,17 +303,18 @@ function PropertyListingsPageContent() {
   const openListing = (id: string) => {
     router.push(`/crm/property-listings/${id}`);
   };
+  const isLive2bigha = bucket === "farm" || bucket === "properties";
   const editListing = (id: string) => {
-    if (bucket === "farm") {
-      toast.error("Editing a live 2bigha farm listing isn't available here yet");
+    if (isLive2bigha) {
+      toast.error("Editing a live 2bigha listing isn't available here yet");
       return;
     }
     router.push(`/crm/property-listings/${id}/edit`);
   };
 
   const removeListing = async (id: string) => {
-    if (bucket === "farm") {
-      toast.error("Deleting a live 2bigha farm listing isn't available here yet");
+    if (isLive2bigha) {
+      toast.error("Deleting a live 2bigha listing isn't available here yet");
       return;
     }
     if (!confirm("Delete this listing?")) return;
@@ -342,9 +353,7 @@ function PropertyListingsPageContent() {
       ? "/crm/property-listings/new?bucket=pm"
       : bucket === "farm"
         ? "/crm/property-listings/new?bucket=farm"
-        : bucket === "buy"
-          ? "/crm/property-listings/new?bucket=buy"
-          : "/crm/property-listings/new?bucket=sell";
+        : "/crm/property-listings/new?bucket=properties";
 
   const showCarousel = false;
 
@@ -683,15 +692,15 @@ function PropertyListingsPageContent() {
           <PropertyListingsCarousel
             listings={listings}
             title={
-              bucket === "buy"
-                ? "Buy listings"
+              bucket === "properties"
+                ? "Properties"
                 : bucket === "farm"
                   ? "Farms"
                   : "Trending Properties"
             }
             subtitle={
-              bucket === "buy"
-                ? "Popular buy listings on 2Bigha"
+              bucket === "properties"
+                ? "Popular listings on 2Bigha"
                 : bucket === "farm"
                   ? "Farm listings on 2Bigha"
                   : "Popular sell listings on 2Bigha"

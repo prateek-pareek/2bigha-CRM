@@ -122,9 +122,9 @@ export class PropertyListingsService {
     return this.twoBighaService.getFarmDetailBySlug(slug);
   }
 
-  /** Live read-through to get farm media urls by slug. */
+  /** Live read-through to get farm/property media urls by slug. */
   async getTwoBighaFarmMedia(slug: string): Promise<string[]> {
-    return this.twoBighaService.getFarmMediaBySlug(slug);
+    return this.twoBighaService.getPropertyMediaBySlug(slug);
   }
 
   /** Live read-through to 2bigha's `getFarms` — farm search/listing, for pulling 2bigha-native farm data into the CRM. */
@@ -134,6 +134,16 @@ export class PropertyListingsService {
     searchTerm?: string;
   }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
     return this.twoBighaService.listFarms(params);
+  }
+
+  /** Live read-through to 2bigha's standard properties search/listing. */
+  async listTwoBighaProperties(params: {
+    page?: number;
+    limit?: number;
+    searchTerm?: string;
+    status?: string;
+  }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
+    return this.twoBighaService.listProperties(params);
   }
 
   /**

@@ -202,7 +202,7 @@ export function draftToCreateInput(
   const areaBigha = draft.areaBigha ? Number(draft.areaBigha) : undefined;
   const bucket =
     extras?.listingBucket ||
-    (land && draft.propertyType !== "Plot" ? "farm" : "sell");
+    (land && draft.propertyType !== "Plot" ? "farm" : "properties");
   return {
     listingBucket: bucket,
     title: draft.title.trim(),

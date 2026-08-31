@@ -51,7 +51,7 @@ function daysAgoIso(days: number): string {
 const SEED_LISTINGS: PropertyListingRecord[] = [
   {
     _id: "tp_listing_001",
-    listingBucket: "sell",
+    listingBucket: "properties",
     title: "Agricultural land near Dudu",
     address: "H7W3+588, Dudu, Dhani Nanu",
     city: "Dudu",
@@ -95,7 +95,7 @@ const SEED_LISTINGS: PropertyListingRecord[] = [
   },
   {
     _id: "tp_listing_002",
-    listingBucket: "buy",
+    listingBucket: "properties",
     title: "Farm plot — Sultaniya",
     address: "JGMX+HM Sultaniya, Dudu",
     city: "Dudu",
@@ -175,7 +175,7 @@ const SEED_LISTINGS: PropertyListingRecord[] = [
   },
   {
     _id: "tp_listing_004",
-    listingBucket: "sell",
+    listingBucket: "properties",
     title: "Irrigated farmland — Jaipur outskirts",
     address: "Near Bagru, Jaipur",
     city: "Jaipur",
@@ -203,7 +203,7 @@ const SEED_LISTINGS: PropertyListingRecord[] = [
   },
   {
     _id: "tp_listing_005",
-    listingBucket: "buy",
+    listingBucket: "properties",
     title: "Plot with road access — Ajmer Road",
     address: "Ajmer Road, Jaipur",
     city: "Jaipur",

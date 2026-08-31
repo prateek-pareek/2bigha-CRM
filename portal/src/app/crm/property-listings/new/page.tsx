@@ -27,8 +27,9 @@ import { createThirdPartyProperty } from "@/lib/crm/property-listings/third-part
 import type { PropertyRecordBucket } from "@/lib/crm/property-listings/types";
 
 function parseBucket(raw: string | null): PropertyRecordBucket {
-  if (raw === "buy" || raw === "sell" || raw === "farm" || raw === "pm") return raw;
-  return "sell";
+  if (raw === "properties" || raw === "farm" || raw === "pm") return raw;
+  if (raw === "buy" || raw === "sell") return "properties";
+  return "properties";
 }
 
 export default function NewPropertyListingPage() {
@@ -56,7 +57,7 @@ function NewPropertyListingPageContent() {
   const initialMarketDraft = useMemo<PropertyListingDraft>(
     () => ({
       ...EMPTY_PROPERTY_LISTING_DRAFT,
-      propertyType: farmMode ? "Agricultural" : bucket === "buy" ? "Plot" : "Apartment",
+      propertyType: farmMode ? "Agricultural" : bucket === "properties" ? "Plot" : "Apartment",
     }),
     [farmMode, bucket],
   );
@@ -127,9 +128,9 @@ function NewPropertyListingPageContent() {
     ? "Create PM property"
     : farmMode
       ? "New farm listing"
-      : bucket === "buy"
-        ? "New buy listing"
-        : "New sell listing";
+      : bucket === "properties"
+        ? "New property listing"
+        : "New listing";
 
   return (
     <div className="theme-crm-hubspot mx-auto w-full max-w-3xl animate-in fade-in duration-500 pb-10">

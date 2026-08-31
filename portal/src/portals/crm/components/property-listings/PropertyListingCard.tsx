@@ -118,7 +118,10 @@ export function PropertyListingCard({
       setLazyImages(listing.images);
       return;
     }
-    if (listing.listingBucket === "farm" && listing._id) {
+    // Load images lazily for any 2bigha listing (farm, buy, sell) that has a slug-like _id
+    const isMockId = listing._id?.startsWith("tp_listing_") || listing._id?.startsWith("mock_");
+    const isMongoId = /^[0-9a-fA-F]{24}$/.test(listing._id || "");
+    if (!isMockId && !isMongoId && listing._id) {
       let active = true;
       setLoadingMedia(true);
       api.get<{ images: string[] }>(`/crm/property-listings/twobigha/farms/media/${listing._id}`)
