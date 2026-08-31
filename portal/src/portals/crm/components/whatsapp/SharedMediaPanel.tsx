@@ -9,6 +9,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   waId: string;
+  onPreviewMedia?: (media: { url: string; type: "image" | "video" | "audio"; filename?: string }) => void;
 };
 
 function toAbsolute(url: string): string {
@@ -16,7 +17,7 @@ function toAbsolute(url: string): string {
 }
 
 /** Slide-over listing every image/document ever shared with this contact — mirrors WhatsApp Web's Media/Docs tabs. */
-export default function SharedMediaPanel({ open, onClose, waId }: Props) {
+export default function SharedMediaPanel({ open, onClose, waId, onPreviewMedia }: Props) {
   const [media, setMedia] = useState<SharedMediaResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -62,8 +63,18 @@ export default function SharedMediaPanel({ open, onClose, waId }: Props) {
                       <button
                         key={m._id}
                         type="button"
-                        onClick={() => window.open(toAbsolute(m.attachment!.url), "_blank")}
-                        className="aspect-square overflow-hidden rounded-md border border-[var(--border-color)]"
+                        onClick={() => {
+                          if (onPreviewMedia) {
+                            onPreviewMedia({
+                              url: toAbsolute(m.attachment!.url),
+                              type: "image",
+                              filename: m.attachment?.filename,
+                            });
+                          } else {
+                            window.open(toAbsolute(m.attachment!.url), "_blank");
+                          }
+                        }}
+                        className="aspect-square overflow-hidden rounded-md border border-[var(--border-color)] hover:opacity-90 transition"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -122,12 +133,29 @@ export default function SharedMediaPanel({ open, onClose, waId }: Props) {
                 {media?.videos.length ? (
                   <div className="space-y-2">
                     {media.videos.map((m) => (
-                      <div key={m._id} className="rounded-md border border-[var(--border-color)] bg-[var(--surface-dim)] p-2">
-                        <video controls preload="metadata" className="w-full rounded" src={toAbsolute(m.attachment!.url)}>
-                          Your browser cannot play this video.
-                        </video>
-                        <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
-                          <Video size={12} /> {m.attachment?.filename || "Video"}
+                      <div
+                        key={m._id}
+                        onClick={() => {
+                          if (onPreviewMedia) {
+                            onPreviewMedia({
+                              url: toAbsolute(m.attachment!.url),
+                              type: "video",
+                              filename: m.attachment?.filename,
+                            });
+                          }
+                        }}
+                        className="rounded-md border border-[var(--border-color)] bg-[var(--surface-dim)] p-2 cursor-pointer hover:bg-slate-100 transition group"
+                      >
+                        <div className="relative aspect-video w-full rounded bg-black flex items-center justify-center overflow-hidden">
+                          <video preload="metadata" className="h-full w-full object-cover pointer-events-none" src={toAbsolute(m.attachment!.url)} />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/40 transition">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-md group-hover:scale-110 transition">
+                              <Video size={16} fill="currentColor" />
+                            </div>
+                          </div>
+                        </div>
+                        <p className="mt-1.5 truncate text-[11px] font-medium text-[var(--text-main)] group-hover:text-primary transition">
+                          {m.attachment?.filename || "Video"}
                         </p>
                       </div>
                     ))}

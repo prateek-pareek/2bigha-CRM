@@ -6,6 +6,7 @@ import { CallLog, CallLogDocument } from './schemas/call-log.schema';
 import { Lead, LeadDocument } from '../records/schemas/lead.schema';
 import { LeadIntentService } from '../records/lead-intent.service';
 import { ExportQuotaService } from '../admin/export-quota.service';
+import { Activity, ActivityDocument } from '../schemas/activity.schema';
 
 const CALL_LOG_EXPORT_HEADERS = [
   '_id',
@@ -93,6 +94,8 @@ export class IvrService {
     private readonly callLogModel: Model<CallLogDocument>,
     @InjectModel(Lead.name, 'crmConnection')
     private readonly leadModel: Model<LeadDocument>,
+    @InjectModel(Activity.name, 'crmConnection')
+    private readonly activityModel: Model<ActivityDocument>,
     private readonly leadIntentService: LeadIntentService,
     private readonly exportQuotaService: ExportQuotaService,
   ) {}
@@ -200,6 +203,27 @@ export class IvrService {
       rawPayload: { request: payload, response: data },
     });
 
+    if (dto.relatedTo && Types.ObjectId.isValid(dto.relatedTo)) {
+      const leadOid = new Types.ObjectId(dto.relatedTo);
+      await this.activityModel.create({
+        type: 'Call',
+        title: 'Outgoing Call',
+        content: `Outgoing call initiated to ${customerNumber}.`,
+        relatedTo: leadOid,
+        relatedType: dto.relatedType || 'Lead',
+        author: user?.userId && Types.ObjectId.isValid(user.userId) ? new Types.ObjectId(user.userId) : undefined,
+        involvedEntities: [{ id: leadOid, type: dto.relatedType || 'Lead' }],
+        metadata: {
+          sessionId,
+          duration: 0,
+          status: 'Initiated',
+          direction: 'Outgoing',
+          agentNumber,
+          customerNumber,
+        },
+      });
+    }
+
     return { sessionId, message: data?.message || 'Call initiated', raw: data };
   }
 
@@ -256,13 +280,64 @@ export class IvrService {
     if (agentNumber) update.agentNumber = normalizeE164(String(agentNumber));
     if (agentName) update.agentName = agentName;
 
-    await this.callLogModel
+    const callLogRecord = await this.callLogModel
       .findOneAndUpdate(
         { sessionId },
         { $set: { ...update, sessionId, direction } },
         { upsert: true, new: true },
       )
       .exec();
+
+    if (callLogRecord) {
+      let leadId = callLogRecord.relatedTo;
+      let leadType = callLogRecord.relatedType || 'Lead';
+
+      if (!leadId && update.customerNumber) {
+        const normalizedCustomer = normalizeE164(update.customerNumber);
+        const matchedLead = await this.leadModel.findOne({
+          $or: [
+            { mobileNo: normalizedCustomer },
+            { mobileNo: normalizedCustomer.replace(/^\+91/, '') },
+            { mobileNo: `+91${normalizedCustomer.replace(/^\+91/, '')}` }
+          ]
+        }).exec();
+        if (matchedLead) {
+          leadId = matchedLead._id;
+          leadType = 'Lead';
+          await this.callLogModel.findByIdAndUpdate(callLogRecord._id, { $set: { relatedTo: leadId, relatedType: leadType } }).exec();
+        }
+      }
+
+      if (leadId) {
+        const durationStr = update.duration ? `${Math.floor(update.duration / 60)}m ${update.duration % 60}s` : '0s';
+        const formattedContent = `${direction === 'Incoming' ? 'Incoming' : 'Outgoing'} call ${status.toLowerCase()}. Duration: ${durationStr}.${update.recordingUrl ? ` [Listen to Recording](${update.recordingUrl})` : ''}`;
+
+        await this.activityModel.findOneAndUpdate(
+          { 'metadata.sessionId': sessionId },
+          {
+            $set: {
+              type: 'Call',
+              title: `${direction === 'Incoming' ? 'Incoming' : 'Outgoing'} Call`,
+              content: formattedContent,
+              relatedTo: leadId,
+              relatedType: leadType,
+              involvedEntities: [{ id: leadId, type: leadType }],
+              metadata: {
+                sessionId,
+                duration: update.duration,
+                connectedDuration: update.connectedDuration,
+                status,
+                recordingUrl: update.recordingUrl,
+                direction,
+                agentNumber: update.agentNumber,
+                customerNumber: update.customerNumber,
+              }
+            }
+          },
+          { upsert: true, new: true }
+        ).exec();
+      }
+    }
   }
 
   async listCallLogs(query: CallLogListQuery, onlyUserId?: string) {
@@ -358,6 +433,24 @@ export class IvrService {
           ? new Types.ObjectId(String(user.userId))
           : undefined,
       agentName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : undefined,
+    });
+
+    await this.activityModel.create({
+      type: 'Call',
+      title: 'Outgoing Call (Manual Log)',
+      content: dto.notes?.trim() || `Manual call logged. Status: ${status}.`,
+      relatedTo: leadOid,
+      relatedType: 'Lead',
+      author: user?.userId && Types.ObjectId.isValid(String(user.userId)) ? new Types.ObjectId(String(user.userId)) : undefined,
+      involvedEntities: [{ id: leadOid, type: 'Lead' }],
+      metadata: {
+        sessionId: callLog.sessionId,
+        duration: 0,
+        status,
+        direction: 'Outgoing',
+        notes: dto.notes,
+        loggedManually: true,
+      },
     });
 
     await this.leadModel

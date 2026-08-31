@@ -6,7 +6,7 @@ import { Loader2, Phone, Building2, PhoneCall } from "lucide-react";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
 import { CrmPageHeader, CrmButton } from "@/components/crm/ui";
-import { contactWhatsappUrl } from "@/lib/crm/crm-messaging-links";
+import { contactWhatsappUrl, contactWhatsappWaId } from "@/lib/crm/crm-messaging-links";
 import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
 import AddPropertyModal from "@/components/crm/records/detail/AddPropertyModal";
 import CallActivityFormModal from "@/components/crm/records/detail/CallActivityFormModal";
@@ -186,15 +186,17 @@ export default function LeadIntentListPage() {
                         <Phone size={14} />
                       </button>
                       {contactWhatsappUrl(lead) ? (
-                        <a
-                          href={contactWhatsappUrl(lead) || undefined}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const waId = contactWhatsappWaId(lead);
+                            if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
+                          }}
                           title="WhatsApp"
                           className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-emerald-600"
                         >
                           <PhoneCall size={14} />
-                        </a>
+                        </button>
                       ) : null}
                       <button
                         type="button"

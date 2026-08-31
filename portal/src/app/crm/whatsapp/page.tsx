@@ -60,6 +60,7 @@ interface WhatsAppMessage {
 interface WhatsAppContact {
   waId: string;
   lastMessageAt: string;
+  lastMessageText?: string;
   unreadCount?: number;
   leadName?: string;
   leadId?: string;
@@ -614,25 +615,29 @@ export default function WhatsAppChatsPage() {
                         )}>
                           {c.leadName || formatPhone(c.waId)}
                         </p>
-                        <span className={cn(
+                         <span className={cn(
                           "shrink-0 text-[11px]",
                           c.unreadCount && c.unreadCount > 0 ? "font-bold text-emerald-600" : "text-[#667781]"
                         )}>
-                          {new Date(c.lastMessageAt).toLocaleString([], {
-                            month: "short",
-                            day: "numeric",
-                          })}
+                          {(() => {
+                            const d = new Date(c.lastMessageAt);
+                            const today = new Date();
+                            if (d.toDateString() === today.toDateString()) {
+                              return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                            }
+                            return d.toLocaleDateString([], { month: "short", day: "numeric" });
+                          })()}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <p className="truncate text-xs text-[#667781]">
-                          {new Date(c.lastMessageAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className={cn(
+                          "truncate text-xs flex-1 pr-2",
+                          c.unreadCount && c.unreadCount > 0 ? "font-semibold text-[#111b21]" : "text-[#667781]"
+                        )}>
+                          {c.lastMessageText || "No messages"}
                         </p>
                         {c.unreadCount && c.unreadCount > 0 ? (
-                          <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                          <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white shadow-sm shrink-0">
                             {c.unreadCount}
                           </span>
                         ) : null}
@@ -1057,6 +1062,7 @@ export default function WhatsAppChatsPage() {
           open={sharedMediaOpen}
           onClose={() => setSharedMediaOpen(false)}
           waId={selectedWaId}
+          onPreviewMedia={setActiveMediaPreview}
         />
       )}
 

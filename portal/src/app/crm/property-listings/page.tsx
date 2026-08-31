@@ -42,7 +42,7 @@ import {
 } from "@/components/crm/property-listings/PropertyListingCard";
 import { CrmHoverActionIcon, CrmTableActionMenu } from "@/components/crm/ui/CrmListCells";
 import { CrmIcon, CrmNavIcon } from "@/lib/crm/shared/icons";
-import { contactWhatsappUrl } from "@/lib/crm/crm-messaging-links";
+import { contactWhatsappUrl, contactWhatsappWaId } from "@/lib/crm/crm-messaging-links";
 import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
 import PropertyActivityPopup from "@/components/crm/records/detail/PropertyActivityPopup";
 import {
@@ -664,13 +664,10 @@ function PropertyListingsPageContent() {
                           label="WhatsApp"
                           value={p.contactPhone!}
                           tone="whatsapp"
-                          onClick={() =>
-                            window.open(
-                              contactWhatsappUrl({ phone: p.contactPhone })!,
-                              "_blank",
-                              "noopener,noreferrer",
-                            )
-                          }
+                          onClick={() => {
+                            const waId = contactWhatsappWaId({ phone: p.contactPhone });
+                            if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
+                          }}
                         />
                       ) : null}
                       <CrmTableActionMenu

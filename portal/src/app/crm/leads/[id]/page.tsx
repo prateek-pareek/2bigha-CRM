@@ -14,7 +14,7 @@ import ScheduleMeetingModal from '@/components/crm/inbox/ScheduleMeetingModal';
 import CRMLeadRecordFields from '@/components/crm/records/forms/CRMLeadRecordFields';
 import CRMFieldLayoutCustomizer from '@/components/crm/records/forms/CRMFieldLayoutCustomizer';
 import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
-import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
+import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import LeadAssociationsPanel from '@/components/crm/records/associations/LeadAssociationsPanel';
 import LeadPropertiesPanel from '@/components/crm/records/associations/LeadPropertiesPanel';
@@ -112,7 +112,11 @@ export default function LeadDetailPage() {
     return p?.name;
   }, [lead, pipelines]);
 
-  const whatsappUrl = useMemo(() => (lead ? contactWhatsappUrl(lead) : null), [lead]);
+  const whatsappUrl = useMemo(() => {
+    if (!lead) return null;
+    const waId = contactWhatsappWaId(lead);
+    return waId ? `/crm/whatsapp?wa=${waId}` : null;
+  }, [lead]);
 
   const fetchLead = async () => {
     const token = localStorage.getItem('token');
@@ -404,7 +408,7 @@ export default function LeadDetailPage() {
       label: 'WhatsApp',
       icon: <WhatsAppGlyph className="h-3.5 w-3.5 text-[#25d366]" />,
       href: whatsappUrl,
-      external: true,
+      external: false,
       title: 'Open WhatsApp chat',
     });
   }

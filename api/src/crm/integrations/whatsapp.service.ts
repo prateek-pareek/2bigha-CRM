@@ -1003,6 +1003,7 @@ export class WhatsAppService {
         $group: {
           _id: '$waId',
           lastMessageAt: { $first: '$createdAt' },
+          lastMessageText: { $first: '$body' },
           unreadCount: {
             $sum: {
               $cond: [
@@ -1019,7 +1020,7 @@ export class WhatsAppService {
           },
         },
       },
-      { $project: { waId: '$_id', lastMessageAt: 1, unreadCount: 1, _id: 0 } },
+      { $project: { waId: '$_id', lastMessageAt: 1, lastMessageText: 1, unreadCount: 1, _id: 0 } },
       { $sort: { lastMessageAt: -1 } },
     );
 

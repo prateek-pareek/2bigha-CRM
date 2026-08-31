@@ -2164,9 +2164,7 @@ export default function LeadsPage() {
                                       label="WhatsApp"
                                       value={(lead.mobileNo || lead.phone)!}
                                       tone="whatsapp"
-                                      onClick={() =>
-                                        window.open(contactWhatsappUrl(lead)!, '_blank', 'noopener,noreferrer')
-                                      }
+                                      onClick={() => openLeadWhatsApp(lead)}
                                       className="h-6 w-6 border-transparent shadow-none hover:bg-emerald-50"
                                     />
                                   ) : null}

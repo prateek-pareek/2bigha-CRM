@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import CRMContactRecordFields from '@/components/crm/records/forms/CRMContactRecordFields';
 import CRMFieldLayoutCustomizer from '@/components/crm/records/forms/CRMFieldLayoutCustomizer';
 import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
-import { contactWhatsappUrl, contactTelegramUrl } from '@/lib/crm/crm-messaging-links';
+import { contactWhatsappUrl, contactTelegramUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import { CRMContactCompanySidebarCard } from '@/components/crm/records/associations/CRMCompanySidebarCard';
 import ContactAssociationsPanel from '@/components/crm/records/associations/ContactAssociationsPanel';
@@ -93,7 +93,11 @@ export default function ContactDetailPage() {
     [visibleRecordKeys]
   );
 
-  const whatsappUrl = useMemo(() => (contact ? contactWhatsappUrl(contact) : null), [contact]);
+  const whatsappUrl = useMemo(() => {
+    if (!contact) return null;
+    const waId = contactWhatsappWaId(contact);
+    return waId ? `/crm/whatsapp?wa=${waId}` : null;
+  }, [contact]);
   const telegramUrl = useMemo(() => (contact ? contactTelegramUrl(contact) : null), [contact]);
 
   const fetchContact = async () => {
@@ -311,7 +315,7 @@ export default function ContactDetailPage() {
       label: 'WhatsApp',
       icon: <WhatsAppGlyph className="h-3.5 w-3.5" />,
       href: whatsappUrl,
-      external: true,
+      external: false,
       title: 'Open WhatsApp',
     });
   }

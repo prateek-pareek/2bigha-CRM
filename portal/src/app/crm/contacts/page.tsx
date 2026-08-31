@@ -10,7 +10,7 @@ import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
 import CRMSavedViews, { SavedViewData } from '@/components/crm/segments/CRMSavedViews';
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
-import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
+import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import { BulkEmailToolbarButton } from '@/components/crm/email/composer/BulkEmailToolbarButton';
 import { buildBulkEmailRecipients } from '@/lib/crm/bulk-email';
 import Pagination from '@/components/suite/shell/Pagination';
@@ -778,7 +778,10 @@ export default function ContactsPage() {
                         }
                         onWhatsApp={
                           contactWhatsappUrl(contact)
-                            ? () => window.open(contactWhatsappUrl(contact)!, '_blank', 'noopener,noreferrer')
+                            ? () => {
+                                const waId = contactWhatsappWaId(contact);
+                                if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
+                              }
                             : undefined
                         }
                         onDelete={
@@ -916,7 +919,10 @@ export default function ContactsPage() {
                         }
                         onWhatsApp={
                           contactWhatsappUrl(contact)
-                            ? () => window.open(contactWhatsappUrl(contact)!, '_blank', 'noopener,noreferrer')
+                            ? () => {
+                                const waId = contactWhatsappWaId(contact);
+                                if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
+                              }
                             : undefined
                         }
                         onDelete={

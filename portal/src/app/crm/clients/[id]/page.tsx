@@ -26,7 +26,7 @@ import { CRM_API_URL } from '@/lib/crm/config';
 import CRMClientRecordFields from '@/components/crm/records/forms/CRMClientRecordFields';
 import CRMFieldLayoutCustomizer from '@/components/crm/records/forms/CRMFieldLayoutCustomizer';
 import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
-import { contactWhatsappUrl } from '@/lib/crm/crm-messaging-links';
+import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import ClientAssociationsPanel from '@/components/crm/records/associations/ClientAssociationsPanel';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
@@ -72,7 +72,11 @@ export default function ClientDetailPage() {
     [customFieldDefs, layoutTickRecord]
   );
 
-  const whatsappUrl = useMemo(() => (client ? contactWhatsappUrl(client) : null), [client]);
+  const whatsappUrl = useMemo(() => {
+    if (!client) return null;
+    const waId = contactWhatsappWaId(client);
+    return waId ? `/crm/whatsapp?wa=${waId}` : null;
+  }, [client]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -210,18 +214,19 @@ export default function ClientDetailPage() {
                 </button>
 
                 {whatsappUrl && (
-                  <a
-                    href={whatsappUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-col items-center gap-1 p-1.5 px-2 group hover:bg-[#25D366]/5 rounded-[var(--radius-md)] transition-all"
+                  <button
+                    onClick={() => {
+                      const waId = contactWhatsappWaId(client);
+                      if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
+                    }}
+                    className="flex flex-col items-center gap-1 p-1.5 px-2 group hover:bg-[#25D366]/5 rounded-[var(--radius-md)] transition-all animate-in fade-in"
                     title="Open WhatsApp"
                   >
                     <div className="w-8 h-8 rounded-[var(--radius-md)] bg-surface-dim group-hover:bg-[#25D366]/10 flex items-center justify-center text-[#25D366] transition-all shadow-sm group-hover:shadow-md">
                       <WhatsAppGlyph className="w-[14px] h-[14px]" />
                     </div>
                     <span className="text-[8px] font-semibold text-text-muted group-hover:text-[#128C7E]">WhatsApp</span>
-                  </a>
+                  </button>
                 )}
 
                 <button
