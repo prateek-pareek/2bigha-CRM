@@ -119,6 +119,9 @@ export class PropertyListing {
   approvalStatus: PropertyListingApprovalStatus;
 
   @Prop({ trim: true })
+  approvalMessage?: string;
+
+  @Prop({ trim: true })
   description?: string;
 
   @Prop({ type: [String], default: [] })
@@ -138,6 +141,78 @@ export class PropertyListing {
 
   @Prop({ trim: true })
   contactEmail?: string;
+
+  @Prop({ trim: true })
+  district?: string;
+
+  @Prop({ trim: true })
+  khasraNumber?: string;
+
+  @Prop({ trim: true })
+  murabbaNumber?: string;
+
+  @Prop({ trim: true })
+  khewatNumber?: string;
+
+  @Prop({ trim: true })
+  areaUnit?: string;
+
+  @Prop({ trim: true })
+  pricePerUnit?: string;
+
+  @Prop()
+  roadAccess?: boolean;
+
+  @Prop()
+  roadAccessDistance?: number;
+
+  @Prop()
+  roadAccessWidth?: number;
+
+  @Prop({ trim: true })
+  roadAccessDistanceUnit?: string;
+
+  @Prop()
+  highwayConn?: boolean;
+
+  @Prop()
+  waterLevel?: number;
+
+  @Prop({ trim: true })
+  soilType?: string;
+
+  @Prop()
+  ownershipYes?: boolean;
+
+  @Prop()
+  ownersCount?: number;
+
+  @Prop({ trim: true })
+  category?: string;
+
+  @Prop({ trim: true })
+  landZoning?: string;
+
+  @Prop({ type: [String], default: [] })
+  landMark?: string[];
+
+  @Prop({ type: Object })
+  landMarkName?: Record<string, unknown>;
+
+  @Prop({ trim: true })
+  listerType?: string;
+
+  @Prop({ trim: true })
+  whatsappNumber?: string;
+
+  @Prop({ type: Object })
+  mapBoundaries?: Record<string, unknown> | unknown[];
+
+  @Prop({ type: Object })
+  mapCoordinates?: Record<string, unknown> | unknown[];
+
+  @Prop({ type: Object })
+  mapLocation?: Record<string, unknown>;
 
   @Prop({ type: Object, default: {} })
   customFields: Record<string, unknown>;

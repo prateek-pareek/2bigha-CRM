@@ -71,26 +71,91 @@ function toQuery(params: Record<string, string | number | undefined>): string {
 }
 
 export async function httpFetchListings(query: ThirdPartyListQuery = {}) {
-  const { data } = await api.get<{
-    data: any[];
-    meta?: { page?: number; limit?: number; total?: number; totalPages?: number };
-  }>("/crm/property-listings/twobigha/properties", {
-    params: {
-      page: query.page,
-      limit: query.pageSize,
-      searchTerm: query.search,
-      status: query.status,
-    },
-  });
+  let mapped: PropertyListingRecord[] = [];
+  let total = 0;
 
-  const rows = data?.data || [];
-  const mapped = rows.map((r: any) => mapTwoBighaPropertyToRecord(r));
+  try {
+    const { data } = await api.get<{
+      data: any[];
+      meta?: { page?: number; limit?: number; total?: number; totalPages?: number };
+    }>("/crm/property-listings/twobigha/properties", {
+      params: {
+        page: query.page,
+        limit: query.pageSize,
+        searchTerm: query.search,
+        status: query.status,
+        approvalStatus: query.approvalStatus,
+        priceOrder: query.priceOrder,
+        newlyCreated: query.newlyCreated,
+        lat: query.lat,
+        lng: query.lng,
+      },
+    });
+
+    const rows = data?.data || [];
+    mapped = rows.map((r: any) => mapTwoBighaPropertyToRecord(r));
+    total = data?.meta?.total ?? mapped.length;
+  } catch (err) {
+    console.warn("2bigha live properties fetch error:", err);
+  }
+
+  // Also include listings saved in CRM / synced to 2bigha
+  try {
+    const { data: localRes } = await api.get<{
+      data: any[];
+      total: number;
+    }>("/crm/property-listings", {
+      params: {
+        page: query.page,
+        pageSize: query.pageSize,
+        search: query.search,
+        status: query.status !== "all" ? query.status : undefined,
+      },
+    });
+
+    if (localRes?.data && localRes.data.length > 0) {
+      const localMapped: PropertyListingRecord[] = localRes.data.map((item: any) => ({
+        _id: item._id,
+        listingBucket: "properties",
+        title: item.title,
+        address: item.address,
+        city: item.city,
+        state: item.state,
+        district: item.district,
+        country: item.country || "India",
+        price: item.price || 0,
+        currency: item.currency || "INR",
+        propertyType: item.propertyType || "Plot",
+        listedFor: item.listedFor || "Sale",
+        areaSqft: item.areaSqft,
+        status: item.status || "Available",
+        approvalStatus: item.approvalStatus || "Approved",
+        verified: Boolean(item.twobighaPropertyId),
+        images: Array.isArray(item.images) ? item.images : [],
+        amenities: item.amenities || [],
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || new Date().toISOString(),
+        twobighaPropertyId: item.twobighaPropertyId,
+        twobighaSyncStatus: item.twobighaSyncStatus,
+      }));
+
+      const existingIds = new Set(mapped.map((m) => m._id));
+      for (const loc of localMapped) {
+        if (!existingIds.has(loc._id) && (!loc.twobighaPropertyId || !existingIds.has(loc.twobighaPropertyId))) {
+          mapped.unshift(loc);
+          total += 1;
+        }
+      }
+    }
+  } catch (localErr) {
+    console.warn("CRM property listings fetch error:", localErr);
+  }
 
   return {
     data: mapped,
-    total: data?.meta?.total ?? mapped.length,
-    page: data?.meta?.page ?? Number(query.page || 1),
-    pageSize: data?.meta?.limit ?? Number(query.pageSize || 25),
+    total,
+    page: Number(query.page || 1),
+    pageSize: Number(query.pageSize || 25),
   };
 }
 

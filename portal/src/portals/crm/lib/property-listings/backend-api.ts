@@ -49,9 +49,11 @@ export interface CreateBackendPropertyListingInput {
   title: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   zipCode?: string;
   country?: string;
+  placeId?: string;
   price: number;
   currency?: string;
   propertyType?: string;
@@ -59,13 +61,63 @@ export interface CreateBackendPropertyListingInput {
   bedrooms?: number;
   bathrooms?: number;
   areaSqft?: number;
+  areaUnit?: string;
+  khasraNumber?: string;
+  murabbaNumber?: string;
+  khewatNumber?: string;
+  pricePerUnit?: string;
+  waterLevel?: number;
+  landMark?: string[];
+  landMarkName?: Record<string, unknown>;
+  category?: string;
+  highwayConn?: boolean;
+  landZoning?: string;
+  ownersCount?: number;
+  ownershipYes?: boolean;
+  soilType?: string;
+  roadAccess?: boolean;
+  roadAccessDistance?: number;
+  roadAccessWidth?: number;
+  roadAccessDistanceUnit?: string;
   status?: string;
+  approvalStatus?: string;
   description?: string;
   images?: string[];
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
+  listerType?: string;
+  whatsappNumber?: string;
+  mapBoundaries?: unknown;
+  mapCoordinates?: unknown;
+  mapLocation?: unknown;
   leadId?: string;
+}
+
+export async function fetchTwoBighaImageUploadUrls(
+  count: number,
+): Promise<Array<{ uploadUrl: string; blobPath: string }>> {
+  const { data } = await api.get<Array<{ uploadUrl: string; blobPath: string }>>(
+    "/crm/property-listings/twobigha/image-upload-urls",
+    { params: { count } },
+  );
+  return data || [];
+}
+
+/** Uploads an image file to Azure Blob Storage via backend proxy (avoiding browser CORS). */
+export async function uploadPropertyImageToAzure(
+  file: File,
+): Promise<{ blobPath: string; url: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<{ blobPath: string; url: string }>(
+    "/crm/property-listings/twobigha/upload-image-proxy",
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
+  );
+  return data;
 }
 
 export async function createBackendPropertyListing(
@@ -169,7 +221,7 @@ export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRe
     propertyType: (p.propertyType && FARM_PROPERTY_TYPE_REVERSE[p.propertyType]) || "Farm",
     listedFor: "Sale",
     areaSqft: p.areaUnit === "SQFT" ? p.area : undefined,
-    status: p.isActive === false ? "Off Market" : "Available",
+    status: p.isActive === false ? "Managed" : "Available",
     approvalStatus: "Approved",
     verified: p.isVerified,
     images: Array.isArray(p.images) ? p.images : [],
@@ -195,6 +247,12 @@ const PROPERTY_TYPE_REVERSE: Record<string, PropertyListingType> = {
 export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): PropertyListingRecord {
   const p = raw.property || {};
   const now = new Date().toISOString();
+  const rawImages: string[] = Array.isArray(p.images) && p.images.length > 0
+    ? p.images
+    : Array.isArray(raw.images)
+      ? raw.images.map((img: any) => (typeof img === "string" ? img : img.variants?.thumbnail || img.thumbnailUrl || img.url)).filter(Boolean)
+      : [];
+
   return {
     _id: String(raw.seo?.slug || p.id || `twobigha-property-${Math.random().toString(36).slice(2)}`),
     listingBucket: "properties",
@@ -204,24 +262,48 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
     state: p.state || undefined,
     district: p.district || undefined,
     country: p.country || undefined,
+    zipCode: p.pinCode || p.zipCode || undefined,
     price: typeof p.price === "number" ? p.price : 0,
     currency: "INR",
     propertyType: (p.propertyType && PROPERTY_TYPE_REVERSE[p.propertyType]) || "Other",
     listedFor: "Sale",
     areaSqft: p.areaUnit === "SQFT" ? p.area : undefined,
-    status: p.isActive === false
-      ? "Off Market"
-      : p.availablilityStatus === "SOLD"
-        ? "Sold"
-        : p.availablilityStatus === "MANAGED"
-          ? "Under Offer"
-          : "Available",
-    approvalStatus: "Approved",
+    areaValue: typeof p.area === "number" ? p.area : undefined,
+    areaUnit: p.areaUnit,
+    status: p.availablilityStatus === "SOLD"
+      ? "Sold"
+      : p.availablilityStatus === "MANAGED"
+        ? "Managed"
+        : "Available",
+    approvalStatus: p.approvalStatus || "Approved",
     verified: p.isVerified,
-    images: Array.isArray(raw.images)
-      ? raw.images.map((img: any) => img.variants?.thumbnail).filter(Boolean)
-      : [],
-    amenities: [],
+    description: p.description || undefined,
+    images: rawImages,
+    amenities: p.amenities || [],
+    khasraNumber: p.khasraNumber || undefined,
+    murabbaNumber: p.murabbaNumber || undefined,
+    khewatNumber: p.khewatNumber || undefined,
+    pricePerUnit: p.pricePerUnit ? String(p.pricePerUnit) : undefined,
+    waterLevel: p.waterLevel != null ? Number(p.waterLevel) : undefined,
+    landMark: Array.isArray(p.landMark) ? p.landMark : undefined,
+    landMarkName: p.landMarkName || undefined,
+    category: p.category || undefined,
+    highwayConn: p.highwayConn != null ? Boolean(p.highwayConn) : undefined,
+    landZoning: p.landZoning || undefined,
+    ownersCount: p.ownersCount != null ? Number(p.ownersCount) : undefined,
+    ownershipYes: p.ownershipYes != null ? Boolean(p.ownershipYes) : undefined,
+    soilType: p.soilType || undefined,
+    roadAccess: p.roadAccess != null ? Boolean(p.roadAccess) : undefined,
+    roadAccessDistance: p.roadAccessDistance != null ? Number(p.roadAccessDistance) : undefined,
+    roadAccessWidth: p.roadAccessWidth != null ? Number(p.roadAccessWidth) : undefined,
+    roadAccessDistanceUnit: p.roadAccessDistanceUnit || undefined,
+    listerType: p.listerType || undefined,
+    contactName: p.contactName || undefined,
+    contactPhone: p.contactPhone || undefined,
+    whatsappNumber: p.whatsappNumber || undefined,
+    mapBoundaries: p.mapBoundaries || undefined,
+    mapCoordinates: p.mapCoordinates || undefined,
+    mapLocation: p.mapLocation || undefined,
     createdAt: p.createdAt || now,
     updatedAt: p.updatedAt || now,
   };

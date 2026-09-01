@@ -401,7 +401,7 @@ function PropertyListingsPageContent() {
           <>
             <CrmKpiCard label="Listings" value={stats?.total ?? total} icon={<Building2 size={17} />} />
             <CrmKpiCard label="Available" value={availableCount} icon={<CheckCircle2 size={17} />} />
-            <CrmKpiCard label="Under offer" value={underOfferCount} icon={<Clock3 size={17} />} />
+            <CrmKpiCard label="Managed" value={underOfferCount} icon={<Clock3 size={17} />} />
             <CrmKpiCard
               label="Portfolio value"
               value={formatCompactPrice(stats?.totalValue ?? 0)}
