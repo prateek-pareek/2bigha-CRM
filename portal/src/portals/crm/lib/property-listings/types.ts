@@ -44,10 +44,8 @@ export function isMarketplaceBucket(bucket: PropertyRecordBucket): bucket is Lis
 
 export type PropertyListingStatus =
   | "Available"
-  | "Under Offer"
   | "Sold"
-  | "Rented"
-  | "Off Market";
+  | "Managed";
 
 export type PropertyListingFor = "Sale" | "Rent";
 
@@ -204,6 +202,30 @@ export interface PropertyListingRecord {
   propertyLegal?: PropertyLegalVerification;
   /** Supporting docs for legal review (name + url). */
   documents?: { name: string; url: string; uploadedAt?: string }[];
+  twobighaPropertyId?: string;
+  twobighaSyncStatus?: string;
+  // Detailed land & property fields
+  murabbaNumber?: string;
+  khewatNumber?: string;
+  pricePerUnit?: string;
+  waterLevel?: number;
+  landMark?: string[];
+  landMarkName?: string;
+  category?: string;
+  highwayConn?: boolean;
+  landZoning?: string;
+  ownersCount?: number;
+  ownershipYes?: boolean;
+  soilType?: string;
+  roadAccess?: boolean;
+  roadAccessDistance?: number;
+  roadAccessWidth?: number;
+  roadAccessDistanceUnit?: string;
+  listerType?: string;
+  whatsappNumber?: string;
+  mapBoundaries?: any;
+  mapCoordinates?: any;
+  mapLocation?: any;
   createdAt: string;
   updatedAt: string;
 }
@@ -227,10 +249,8 @@ export const PROPERTY_TYPES: PropertyListingType[] = [
 
 export const PROPERTY_STATUSES: PropertyListingStatus[] = [
   "Available",
-  "Under Offer",
   "Sold",
-  "Rented",
-  "Off Market",
+  "Managed",
 ];
 
 /** Rajasthan / 2Bigha: 1 Bigha ≈ 3,025.006 sq. yd (matches consumer app cards). */
@@ -240,9 +260,8 @@ export const SQFT_PER_BIGHA = SQYD_PER_BIGHA * 9;
 export function statusTone(status: string): string {
   const s = status.toLowerCase();
   if (s === "available") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (s === "under offer") return "bg-amber-50 text-amber-700 border-amber-200";
-  if (s === "sold" || s === "rented") return "bg-sky-50 text-sky-700 border-sky-200";
-  if (s === "off market") return "bg-slate-50 text-slate-600 border-slate-200";
+  if (s === "managed" || s === "under offer") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (s === "sold") return "bg-sky-50 text-sky-700 border-sky-200";
   return "bg-slate-50 text-slate-600 border-slate-200";
 }
 
@@ -251,8 +270,8 @@ export type PropertyStatusBadgeTone = "success" | "warning" | "info" | "neutral"
 export function statusBadgeTone(status: string | undefined | null): PropertyStatusBadgeTone {
   const s = (status || "").toLowerCase();
   if (s === "available") return "success";
-  if (s === "under offer") return "warning";
-  if (s === "sold" || s === "rented") return "info";
+  if (s === "managed" || s === "under offer") return "warning";
+  if (s === "sold") return "info";
   return "neutral";
 }
 

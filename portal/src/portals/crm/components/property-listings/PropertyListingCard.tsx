@@ -207,13 +207,8 @@ export function PropertyListingCard({
           {formatDaysLabel(days)}
         </span>
 
-        <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-lg bg-white/90 px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm backdrop-blur-sm">
-          <Heart size={12} className="fill-rose-500 text-rose-500" />
-          {likes}
-        </span>
-
         {(onEdit || onDelete) && (
-          <div className="absolute right-2.5 top-11" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute right-2.5 top-2.5" onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -240,10 +235,12 @@ export function PropertyListingCard({
           </div>
         )}
 
-        <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
-          <Eye size={12} />
-          {views.toLocaleString("en-IN")} views
-        </span>
+        {views > 0 && (
+          <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
+            <Eye size={12} />
+            {views.toLocaleString("en-IN")} views
+          </span>
+        )}
 
         {images.length > 1 ? (
           <>

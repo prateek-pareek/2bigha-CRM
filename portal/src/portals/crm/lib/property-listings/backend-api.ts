@@ -54,9 +54,11 @@ export interface CreateBackendPropertyListingInput {
   title: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   zipCode?: string;
   country?: string;
+  placeId?: string;
   price: number;
   currency?: string;
   propertyType?: string;
@@ -64,13 +66,63 @@ export interface CreateBackendPropertyListingInput {
   bedrooms?: number;
   bathrooms?: number;
   areaSqft?: number;
+  areaUnit?: string;
+  khasraNumber?: string;
+  murabbaNumber?: string;
+  khewatNumber?: string;
+  pricePerUnit?: string;
+  waterLevel?: number;
+  landMark?: string[];
+  landMarkName?: Record<string, unknown>;
+  category?: string;
+  highwayConn?: boolean;
+  landZoning?: string;
+  ownersCount?: number;
+  ownershipYes?: boolean;
+  soilType?: string;
+  roadAccess?: boolean;
+  roadAccessDistance?: number;
+  roadAccessWidth?: number;
+  roadAccessDistanceUnit?: string;
   status?: string;
+  approvalStatus?: string;
   description?: string;
   images?: string[];
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
+  listerType?: string;
+  whatsappNumber?: string;
+  mapBoundaries?: unknown;
+  mapCoordinates?: unknown;
+  mapLocation?: unknown;
   leadId?: string;
+}
+
+export async function fetchTwoBighaImageUploadUrls(
+  count: number,
+): Promise<Array<{ uploadUrl: string; blobPath: string }>> {
+  const { data } = await api.get<Array<{ uploadUrl: string; blobPath: string }>>(
+    "/crm/property-listings/twobigha/image-upload-urls",
+    { params: { count } },
+  );
+  return data || [];
+}
+
+/** Uploads an image file to Azure Blob Storage via backend proxy (avoiding browser CORS). */
+export async function uploadPropertyImageToAzure(
+  file: File,
+): Promise<{ blobPath: string; url: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<{ blobPath: string; url: string }>(
+    "/crm/property-listings/twobigha/upload-image-proxy",
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
+  );
+  return data;
 }
 
 export async function createBackendPropertyListing(
@@ -305,6 +357,7 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
   const area = mapTwoBighaArea(p.area, p.areaUnit);
   const listedAt = p.publishedAt || p.createdAt || now;
   const contact = contactFromEnvelope(raw);
+
   return {
     _id: String(raw.seo?.slug || p.id || `twobigha-property-${Math.random().toString(36).slice(2)}`),
     listingBucket: "properties",
@@ -314,31 +367,53 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
     state: p.state || undefined,
     district: p.district || undefined,
     country: p.country || undefined,
-    zipCode: p.pinCode || undefined,
+    zipCode: p.pinCode || p.zipCode || undefined,
     price: typeof p.price === "number" ? p.price : 0,
     currency: "INR",
     propertyType: (p.propertyType && PROPERTY_TYPE_REVERSE[p.propertyType]) || "Other",
     listedFor: "Sale",
     ...area,
-    status: p.isActive === false
-      ? "Off Market"
-      : p.availablilityStatus === "SOLD"
-        ? "Sold"
-        : p.availablilityStatus === "MANAGED"
-          ? "Under Offer"
+    status: p.availablilityStatus === "SOLD"
+      ? "Sold"
+      : p.availablilityStatus === "MANAGED"
+        ? "Managed"
+        : p.isActive === false
+          ? "Off Market"
           : "Available",
-    approvalStatus: "Approved",
+    approvalStatus: p.approvalStatus || "Approved",
     verified: p.isVerified,
+    description: p.description || undefined,
     viewCount: typeof p.viewCount === "number" ? p.viewCount : undefined,
     likeCount: typeof p.saveCount === "number" ? p.saveCount : undefined,
     images: extractTwoBighaImageUrls(raw.images ?? p.images),
-    amenities: Array.isArray(p.amenities) ? p.amenities.filter((a: unknown) => typeof a === "string") : [],
+    amenities: Array.isArray(p.amenities) ? p.amenities.filter((a: unknown) => typeof a === "string") : p.amenities || [],
     khasraNumber: p.khasraNumber || undefined,
+    murabbaNumber: p.murabbaNumber || undefined,
+    khewatNumber: p.khewatNumber || undefined,
+    pricePerUnit: p.pricePerUnit ? String(p.pricePerUnit) : undefined,
+    waterLevel: p.waterLevel != null ? Number(p.waterLevel) : undefined,
+    landMark: Array.isArray(p.landMark) ? p.landMark : undefined,
+    landMarkName: p.landMarkName || undefined,
+    category: p.category || undefined,
+    highwayConn: p.highwayConn != null ? Boolean(p.highwayConn) : undefined,
+    landZoning: p.landZoning || undefined,
+    ownersCount: p.ownersCount != null ? Number(p.ownersCount) : undefined,
+    ownershipYes: p.ownershipYes != null ? Boolean(p.ownershipYes) : undefined,
+    soilType: p.soilType || undefined,
+    roadAccess: p.roadAccess != null ? Boolean(p.roadAccess) : undefined,
+    roadAccessDistance: p.roadAccessDistance != null ? Number(p.roadAccessDistance) : undefined,
+    roadAccessWidth: p.roadAccessWidth != null ? Number(p.roadAccessWidth) : undefined,
+    roadAccessDistanceUnit: p.roadAccessDistanceUnit || undefined,
+    listerType: p.listerType || undefined,
+    contactName: contact.contactName || p.contactName || p.ownerName || undefined,
+    contactPhone: contact.contactPhone || p.contactPhone || p.ownerPhone || undefined,
+    contactEmail: contact.contactEmail,
+    whatsappNumber: p.whatsappNumber || undefined,
+    mapBoundaries: p.mapBoundaries || undefined,
+    mapCoordinates: p.mapCoordinates || undefined,
+    mapLocation: p.mapLocation || undefined,
     twobighaPropertyId: p.id || undefined,
     listedDate: listedAt,
-    contactName: contact.contactName || p.ownerName || undefined,
-    contactPhone: contact.contactPhone || p.ownerPhone || undefined,
-    contactEmail: contact.contactEmail,
     createdAt: p.createdAt || now,
     updatedAt: p.updatedAt || now,
   };

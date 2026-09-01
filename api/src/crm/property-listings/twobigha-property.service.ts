@@ -19,16 +19,42 @@ export interface PropertyListingSyncInput {
   title: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   zipCode?: string;
   country?: string;
+  placeId?: string;
   price: number;
   propertyType?: string;
   areaSqft?: number;
+  areaUnit?: string;
+  khasraNumber?: string;
+  murabbaNumber?: string;
+  khewatNumber?: string;
+  pricePerUnit?: string;
+  waterLevel?: number;
+  landMark?: string[];
+  landMarkName?: Record<string, unknown>;
+  category?: string;
+  highwayConn?: boolean;
+  landZoning?: string;
+  ownersCount?: number;
+  ownershipYes?: boolean;
+  soilType?: string;
+  roadAccess?: boolean;
+  roadAccessDistance?: number;
+  roadAccessWidth?: number;
+  roadAccessDistanceUnit?: string;
   description?: string;
   status?: string;
+  listerType?: string;
+  ownerId?: string;
   contactName?: string;
   contactPhone?: string;
+  whatsappNumber?: string;
+  mapBoundaries?: unknown;
+  mapCoordinates?: unknown;
+  mapLocation?: unknown;
   /** Already-hosted image URLs on the listing — re-uploaded to 2bigha's own Azure Blob storage on first sync (see uploadPropertyImages). */
   images?: string[];
   /** Existing 2bigha id, if this listing has synced before — presence routes to updateProperty instead of createProperty. */
@@ -168,6 +194,24 @@ const UPDATE_PROPERTY_MUTATION = `
   }
 `;
 
+const APPROVE_PROPERTY_MUTATION = `
+  mutation ApproveProperty($input: PropertyApprovalInput!) {
+    approveProperty(input: $input) {
+      id
+      isVerified
+    }
+  }
+`;
+
+const REJECT_PROPERTY_MUTATION = `
+  mutation RejectProperty($input: PropertyApprovalInput!) {
+    rejectProperty(input: $input) {
+      id
+      isVerified
+    }
+  }
+`;
+
 /**
  * `getPropertyBySlug` — the handbook's own words: "the operation to use for
  * a property-detail display screen." Response is the `properties` composite
@@ -197,6 +241,32 @@ const GET_PROPERTY_BY_SLUG_QUERY = `
         email
       }
       ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
+    }
+  }
+`;
+
+const GET_APPROVED_PROPERTIES_QUERY = `
+  query GetApprovedProperties($input: GetPropertiesInput!) {
+    getApprovedProperties(input: $input) {
+      data {
+        property {
+          ${PROPERTY_DETAIL_FIELDS}
+        }
+        seo {
+          slug
+        }
+        images {
+          variants {
+            thumbnail
+          }
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
     }
   }
 `;
@@ -376,26 +446,6 @@ const GET_PENDING_APPROVAL_PROPERTIES_QUERY = `
   }
 `;
 
-const GET_APPROVED_PROPERTIES_QUERY = `
-  query GetApprovedProperties($input: GetPropertiesInput!) {
-    getApprovedProperties(input: $input) {
-      data {
-        property {
-          ${PROPERTY_DETAIL_FIELDS}
-        }
-        seo {
-          slug
-        }
-      }
-      meta {
-        page
-        limit
-        total
-        totalPages
-      }
-    }
-  }
-`;
 
 const GET_REJECTED_PROPERTIES_QUERY = `
   query GetRejectedProperties($input: GetPropertiesInput!) {
@@ -483,31 +533,90 @@ export class TwoBighaPropertyService {
     listing: PropertyListingSyncInput,
     blobPaths?: string[],
   ): Record<string, unknown> {
-    const areaUnit = listing.areaSqft != null ? 'SQFT' : undefined; // AreaUnit is also declared twice in 2bigha's SDL (SQFT vs SQUARE_FEET) — confirm via introspection before relying on this.
+    const areaUnit = listing.areaUnit || (listing.areaSqft != null ? 'SQFT' : undefined);
     return {
       location: {
         state: listing.state || undefined,
+        district: listing.district || undefined,
         city: listing.city || undefined,
         pincode: listing.zipCode || undefined,
         address: listing.address || undefined,
         name: listing.title || undefined,
+        placeId: listing.placeId || undefined,
       },
       propertyDetailsSchema: {
         propertyType: listing.propertyType
-          ? PROPERTY_TYPE_MAP[listing.propertyType] || 'OTHER'
+          ? PROPERTY_TYPE_MAP[listing.propertyType] || listing.propertyType.toUpperCase()
           : undefined,
-        // khasraNumber/totalPrice/area etc. are typed String in 2bigha's schema, not numeric scalars — sent as strings intentionally.
+        // khasraNumber/totalPrice/pricePerUnit/area etc. are typed String in 2bigha's schema, not numeric scalars — sent as strings intentionally.
+        khasraNumber: listing.khasraNumber || undefined,
+        murabbaNumber: listing.murabbaNumber || undefined,
+        khewatNumber: listing.khewatNumber || undefined,
         area: listing.areaSqft != null ? String(listing.areaSqft) : undefined,
         areaUnit,
         totalPrice: listing.price != null ? String(listing.price) : undefined,
+        pricePerUnit: listing.pricePerUnit ? String(listing.pricePerUnit) : undefined,
+        waterLevel: listing.waterLevel != null ? Math.round(Number(listing.waterLevel)) : undefined,
+        landMark: listing.landMark?.length ? listing.landMark : undefined,
+        landMarkName: listing.landMarkName || undefined,
+        category: listing.category || undefined,
+        highwayConn: listing.highwayConn != null ? Boolean(listing.highwayConn) : undefined,
+        landZoning: listing.landZoning || undefined,
+        ownersCount: listing.ownersCount != null ? Number(listing.ownersCount) : undefined,
+        ownershipYes: listing.ownershipYes != null ? Boolean(listing.ownershipYes) : undefined,
+        soilType: listing.soilType || undefined,
+        roadAccess: listing.roadAccess != null ? Boolean(listing.roadAccess) : undefined,
+        roadAccessDistance:
+          listing.roadAccessDistance != null
+            ? Math.round(Number(listing.roadAccessDistance))
+            : undefined,
+        roadAccessWidth:
+          listing.roadAccessWidth != null
+            ? Math.round(Number(listing.roadAccessWidth))
+            : undefined,
+        roadAccessDistanceUnit: listing.roadAccessDistanceUnit || undefined,
         description: listing.description || undefined,
       },
       contactDetails: {
+        listerType: listing.listerType || undefined,
         ownerName: listing.contactName || undefined,
         phoneNumber: listing.contactPhone || undefined,
+        whatsappNumber: listing.whatsappNumber || undefined,
+        ownerId: listing.ownerId || undefined,
       },
       images: blobPaths?.length ? blobPaths : undefined,
+      map:
+        listing.mapBoundaries || listing.mapCoordinates || listing.mapLocation
+          ? {
+              boundaries: listing.mapBoundaries || null,
+              coordinates: listing.mapCoordinates || null,
+              location: listing.mapLocation || null,
+            }
+          : undefined,
     };
+  }
+
+  /**
+   * Request pre-signed Azure Blob upload URLs from 2bigha (clamped 1-10) for direct client uploads.
+   */
+  async getImageUploadUrls(count: number): Promise<Array<{ uploadUrl: string; blobPath: string }>> {
+    const config = getTwoBighaConfig();
+    const safeCount = Math.min(Math.max(count, 1), 10);
+    if (!config) {
+      return Array.from({ length: safeCount }, (_, i) => ({
+        uploadUrl: `https://mock-storage.2bigha.net/upload/${Date.now()}_${i}`,
+        blobPath: `properties/mock_${Date.now()}_${i}.jpg`,
+      }));
+    }
+    try {
+      const data = await twoBighaGraphqlRequest<{
+        getPropertyImageUploadUrls?: Array<{ uploadUrl: string; blobPath: string }>;
+      }>(config, GET_PROPERTY_IMAGE_UPLOAD_URLS_QUERY, { count: safeCount });
+      return data?.getPropertyImageUploadUrls || [];
+    } catch (e: any) {
+      this.logger.warn(`2bigha getPropertyImageUploadUrls failed: ${e?.message}`);
+      return [];
+    }
   }
 
   /**
@@ -525,7 +634,27 @@ export class TwoBighaPropertyService {
     imageUrls: string[],
   ): Promise<string[]> {
     if (!config || !imageUrls.length) return [];
-    const wanted = Math.min(imageUrls.length, 10);
+
+    const alreadyUploadedBlobPaths: string[] = [];
+    const pendingToUploadUrls: string[] = [];
+
+    for (const img of imageUrls) {
+      if (!img) continue;
+      if (img.startsWith('properties/')) {
+        alreadyUploadedBlobPaths.push(img);
+      } else if (img.includes('blob.core.windows.net') && img.includes('/properties/')) {
+        const path = img.replace(/^.*\/2bighastaging\//, '').replace(/\?.*$/, '');
+        alreadyUploadedBlobPaths.push(path.startsWith('properties/') ? path : `properties/${path}`);
+      } else {
+        pendingToUploadUrls.push(img);
+      }
+    }
+
+    if (pendingToUploadUrls.length === 0) {
+      return alreadyUploadedBlobPaths;
+    }
+
+    const wanted = Math.min(pendingToUploadUrls.length, 10);
     let slots: Array<{ uploadUrl: string; blobPath: string }> = [];
     try {
       const data = await twoBighaGraphqlRequest<{
@@ -534,14 +663,14 @@ export class TwoBighaPropertyService {
       slots = data?.getPropertyImageUploadUrls || [];
     } catch (e: any) {
       this.logger.warn(`2bigha getPropertyImageUploadUrls failed: ${e?.message}`);
-      return [];
+      return alreadyUploadedBlobPaths;
     }
 
-    const blobPaths: string[] = [];
-    for (let i = 0; i < Math.min(slots.length, imageUrls.length); i++) {
+    const blobPaths: string[] = [...alreadyUploadedBlobPaths];
+    for (let i = 0; i < Math.min(slots.length, pendingToUploadUrls.length); i++) {
       const { uploadUrl, blobPath } = slots[i];
       try {
-        const imgRes = await fetch(imageUrls[i]);
+        const imgRes = await fetch(pendingToUploadUrls[i]);
         if (!imgRes.ok) continue;
         const bytes = Buffer.from(await imgRes.arrayBuffer());
         const contentType = imgRes.headers.get('content-type') || 'application/octet-stream';
@@ -551,12 +680,51 @@ export class TwoBighaPropertyService {
           body: bytes,
         });
         if (putRes.ok) blobPaths.push(blobPath);
-        else this.logger.warn(`2bigha blob upload PUT failed (${putRes.status}) for ${imageUrls[i]}`);
+        else this.logger.warn(`2bigha blob upload PUT failed (${putRes.status}) for ${pendingToUploadUrls[i]}`);
       } catch (e: any) {
-        this.logger.warn(`Skipping image ${imageUrls[i]} — fetch/upload failed: ${e?.message}`);
+        this.logger.warn(`Skipping image ${pendingToUploadUrls[i]} — fetch/upload failed: ${e?.message}`);
       }
     }
     return blobPaths;
+  }
+
+  /** Upload a raw file buffer directly to Azure Blob Storage using 2Bigha's pre-signed token (no browser CORS restrictions). */
+  async uploadBufferToAzure(
+    buffer: Buffer,
+    mimetype: string,
+    originalname: string,
+  ): Promise<{ blobPath: string; url: string }> {
+    const config = getTwoBighaConfig();
+    if (!config) {
+      throw new Error('2Bigha API configuration missing');
+    }
+    const data = await twoBighaGraphqlRequest<{
+      getPropertyImageUploadUrls?: Array<{ uploadUrl: string; blobPath: string }>;
+    }>(config, GET_PROPERTY_IMAGE_UPLOAD_URLS_QUERY, { count: 1 });
+    const slot = data?.getPropertyImageUploadUrls?.[0];
+    if (!slot || !slot.uploadUrl) {
+      throw new Error('Could not obtain Azure pre-signed upload URL from 2Bigha');
+    }
+
+    const res = await fetch(slot.uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': mimetype || 'application/octet-stream',
+        'x-ms-blob-type': 'BlockBlob',
+      },
+      body: new Uint8Array(buffer),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      this.logger.error(`Azure Blob upload failed (${res.status}): ${errText}`);
+      throw new Error(`Azure Blob upload failed with HTTP status ${res.status}`);
+    }
+
+    return {
+      blobPath: slot.blobPath,
+      url: slot.uploadUrl,
+    };
   }
 
   /**
@@ -878,39 +1046,112 @@ export class TwoBighaPropertyService {
     }
   }
 
-  /** `properties` — standard properties search/listing, pulling live data from 2bigha GraphQL for display. */
+  /** `properties` / `getApprovedProperties` — standard properties search/listing, pulling live data from 2bigha GraphQL for display. */
   async listProperties(params: {
     page?: number;
     limit?: number;
     searchTerm?: string;
     status?: string;
+    availablilityStatus?: string;
+    approvalStatus?: string;
+    sort?: {
+      priceOrder?: string;
+      newlyCreated?: boolean;
+      nearMe?: { lat: number; lng: number };
+    };
   }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
     const config = getTwoBighaConfig();
     if (!config) return null;
 
-    let availablilityStatus: string | undefined = undefined;
-    if (params.status === "Available") availablilityStatus = "AVAILABLE";
-    else if (params.status === "Sold") availablilityStatus = "SOLD";
-    else if (params.status === "Under Offer") availablilityStatus = "MANAGED";
+    if (params.status === "Rented" || params.status === "Off Market") {
+      return {
+        data: [],
+        meta: { page: params.page ?? 1, limit: params.limit ?? 20, total: 0, totalPages: 0 },
+      };
+    }
+
+    let availablilityStatus = params.availablilityStatus;
+    if (!availablilityStatus && params.status) {
+      if (params.status === "Available") availablilityStatus = "AVAILABLE";
+      else if (params.status === "Sold") availablilityStatus = "SOLD";
+      else if (params.status === "Managed" || params.status === "Under Offer") availablilityStatus = "MANAGED";
+    }
+
+    const input: Record<string, unknown> = {
+      page: params.page ?? 1,
+      limit: params.limit ?? 20,
+      searchTerm: params.searchTerm || undefined,
+    };
+
+    if (availablilityStatus) {
+      input.availablilityStatus = availablilityStatus;
+    }
+
+    if (params.approvalStatus) {
+      input.approvalStatus = params.approvalStatus;
+      input.approvalstatus = params.approvalStatus;
+    }
+
+    if (params.sort) {
+      input.sort = params.sort;
+    }
 
     try {
       const data = await twoBighaGraphqlRequest<{
         properties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        getApprovedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
       }>(config, GET_PROPERTIES_QUERY, {
-        input: {
-          page: params.page ?? 1,
-          limit: params.limit ?? 20,
-          searchTerm: params.searchTerm || undefined,
-          availablilityStatus,
-        },
+        input,
       });
+      const result = data?.properties || data?.getApprovedProperties;
       return {
-        data: data?.properties?.data || [],
-        meta: data?.properties?.meta,
+        data: result?.data || [],
+        meta: result?.meta,
       };
     } catch (e: any) {
-      this.logger.error(`2bigha getProperties failed: ${e?.message}`);
-      return null;
+      this.logger.warn(`2bigha properties query failed, trying getApprovedProperties: ${e?.message}`);
+      try {
+        const fallbackData = await twoBighaGraphqlRequest<{
+          getApprovedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_APPROVED_PROPERTIES_QUERY, { input });
+        return {
+          data: fallbackData?.getApprovedProperties?.data || [],
+          meta: fallbackData?.getApprovedProperties?.meta,
+        };
+      } catch (fallbackErr: any) {
+        this.logger.error(`2bigha listProperties failed: ${fallbackErr?.message}`);
+        return null;
+      }
+    }
+  }
+
+  /**
+   * Decide property moderation approval status in 2bigha via approveProperty / rejectProperty GraphQL mutation.
+   */
+  async decidePropertyApproval(
+    id: string,
+    status: 'Approved' | 'Rejected',
+    message?: string,
+  ): Promise<{ success: boolean }> {
+    const config = getTwoBighaConfig();
+    if (!config) return { success: true };
+
+    const mutation = status === 'Approved' ? APPROVE_PROPERTY_MUTATION : REJECT_PROPERTY_MUTATION;
+    const msg = message || (status === 'Approved' ? 'Approved by Admin' : 'Rejected by Admin');
+
+    try {
+      await twoBighaGraphqlRequest(config, mutation, {
+        input: {
+          propertyId: id,
+          message: msg,
+          adminNotes: msg,
+          reason: status === 'Rejected' ? msg : undefined,
+        },
+      });
+      return { success: true };
+    } catch (e: any) {
+      this.logger.warn(`2bigha ${status.toLowerCase()}Property mutation error for ${id}: ${e?.message}`);
+      return { success: false };
     }
   }
 }

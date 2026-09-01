@@ -190,7 +190,7 @@ const SEED_LISTINGS: PropertyListingRecord[] = [
     viewCount: 512,
     likeCount: 8,
     verified: true,
-    status: "Under Offer",
+    status: "Managed",
     approvalStatus: "Approved",
     images: [MOCK_IMAGES[3], MOCK_IMAGES[1]],
     amenities: [],
@@ -416,6 +416,11 @@ export type ThirdPartyListQuery = {
   legalRequestedAfter?: string;
   /** Filter by assigned legal reviewer (or "unassigned"). */
   legalAssignee?: string;
+  /** Sort inputs supported by 2bigha GraphQL */
+  priceOrder?: string;
+  newlyCreated?: boolean;
+  lat?: number;
+  lng?: number;
 };
 
 export type CreateThirdPartyPropertyInput = {

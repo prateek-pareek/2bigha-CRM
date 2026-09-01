@@ -266,6 +266,8 @@ import {
   CustomObjectTypesController,
   CustomObjectRecordsController,
 } from './custom-objects/custom-objects.controller';
+import { SubscriptionsController } from './subscriptions/subscriptions.controller';
+import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscriptions.service';
 
 @Module({
   imports: [
@@ -390,6 +392,7 @@ import {
     AssociationsController,
     CustomObjectTypesController,
     CustomObjectRecordsController,
+    SubscriptionsController,
   ],
   providers: [
     LeadEngagementAutomationService,
@@ -462,6 +465,7 @@ import {
     CrmTrashService,
     AssociationsService,
     CustomObjectsService,
+    TwoBighaSubscriptionsService,
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditLogInterceptor,

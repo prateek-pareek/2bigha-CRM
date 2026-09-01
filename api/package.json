@@ -22,6 +22,7 @@
     "seed": "ts-node --transpile-only src/seed.ts",
     "seed:2bigha-demo": "ts-node --transpile-only scripts/seed-2bigha-demo.ts",
     "resync:2bigha-agents": "ts-node --transpile-only scripts/resync-2bigha-agents.ts",
+    "seed:agents": "ts-node --transpile-only scripts/seed-agents.ts",
     "seed:workspace-roles": "ts-node --transpile-only scripts/seed-workspace-roles.ts"
   },
   "dependencies": {
