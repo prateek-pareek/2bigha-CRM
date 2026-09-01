@@ -45,7 +45,9 @@ export function isMarketplaceBucket(bucket: PropertyRecordBucket): bucket is Lis
 export type PropertyListingStatus =
   | "Available"
   | "Sold"
-  | "Managed";
+  | "Managed"
+  | "Off Market"
+  | "Under Offer";
 
 export type PropertyListingFor = "Sale" | "Rent";
 
@@ -202,7 +204,6 @@ export interface PropertyListingRecord {
   propertyLegal?: PropertyLegalVerification;
   /** Supporting docs for legal review (name + url). */
   documents?: { name: string; url: string; uploadedAt?: string }[];
-  twobighaPropertyId?: string;
   twobighaSyncStatus?: string;
   // Detailed land & property fields
   murabbaNumber?: string;
@@ -251,6 +252,8 @@ export const PROPERTY_STATUSES: PropertyListingStatus[] = [
   "Available",
   "Sold",
   "Managed",
+  "Off Market",
+  "Under Offer",
 ];
 
 /** Rajasthan / 2Bigha: 1 Bigha ≈ 3,025.006 sq. yd (matches consumer app cards). */
