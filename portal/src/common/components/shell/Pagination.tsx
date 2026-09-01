@@ -10,6 +10,8 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   className?: string;
+  /** Override the default 10/25/50/100 page-size menu. */
+  pageSizes?: number[];
 }
 
 /** CRMS DataTables-style: “Show N entries” + outline page chips */
@@ -22,6 +24,7 @@ export default function Pagination({
   onPageChange,
   onPageSizeChange,
   className,
+  pageSizes = PAGE_SIZES,
 }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -61,7 +64,7 @@ export default function Pagination({
           className="h-8 rounded-[5px] border border-[#e2e8f0] bg-white px-2 text-sm font-medium text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] outline-none focus:border-[var(--primary)]"
           aria-label="Rows per page"
         >
-          {PAGE_SIZES.map((s) => (
+          {pageSizes.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>

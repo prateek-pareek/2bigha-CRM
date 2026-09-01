@@ -1,5 +1,10 @@
 import api from "@/lib/crm/api";
-import type { PropertyListingRecord, PropertyListingType } from "@/lib/crm/property-listings/types";
+import type {
+  AreaUnit,
+  PropertyListingRecord,
+  PropertyListingType,
+} from "@/lib/crm/property-listings/types";
+import { areaValueToBigha } from "@/lib/crm/property-listings/types";
 
 /**
  * Calls this repo's own NestJS backend (`/crm/property-listings`) — the
@@ -117,6 +122,7 @@ export interface TwoBighaFarmRaw {
     updatedAt?: string;
   } | null;
   seo?: { slug?: string } | null;
+  images?: unknown;
 }
 
 /** Live read-through to 2bigha's getFarms — real farm marketplace data, replacing the FARMS bucket's old static mock. */
@@ -142,19 +148,115 @@ const FARM_PROPERTY_TYPE_REVERSE: Record<string, PropertyListingType> = {
   FARMHOUSE: "Farmhouse",
 };
 
+const AREA_UNIT_REVERSE: Record<string, AreaUnit> = {
+  SQYRD: "Sq. Yard",
+  SQFT: "Sq. Ft",
+  SQUARE_FEET: "Sq. Ft",
+  SQM: "Sq. M",
+  ACRE: "Acre",
+  HECTARE: "Hectare",
+  BIGHA: "Bigha",
+  BIGHAS: "Bigha",
+  KATHA: "Katha",
+  MARLA: "Marla",
+  KANAL: "Kanal",
+  GUNTA: "Guntha",
+  CENT: "Cent",
+  NALI: "Nali",
+};
+
+function isUsableImageUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const url = value.trim();
+  if (!url) return false;
+  if (/^https?:\/\//i.test(url) || url.startsWith("//")) return true;
+  return false;
+}
+
+function pickImageUrl(img: unknown): string | null {
+  if (isUsableImageUrl(img)) return img.trim();
+  if (!img || typeof img !== "object") return null;
+  const row = img as Record<string, unknown>;
+  const variants =
+    row.variants && typeof row.variants === "object"
+      ? (row.variants as Record<string, unknown>)
+      : {};
+  const candidates = [
+    variants.medium,
+    variants.large,
+    variants.original,
+    variants.thumbnail,
+    row.imageUrl,
+    row.thumbnailUrl,
+    row.url,
+  ];
+  const found = candidates.find(isUsableImageUrl);
+  return found ? found.trim() : null;
+}
+
+/** Pull hosted photo URLs from a 2bigha envelope `images` list, `PropertyImage` objects, or raw strings. */
+export function extractTwoBighaImageUrls(raw: unknown): string[] {
+  const items: unknown[] = [];
+  if (Array.isArray(raw)) {
+    items.push(...raw);
+  } else if (raw && typeof raw === "object") {
+    const row = raw as Record<string, unknown>;
+    if (Array.isArray(row.images)) items.push(...row.images);
+    else if (row.images) items.push(row.images);
+  }
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  for (const item of items) {
+    const url = pickImageUrl(item);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+  return urls;
+}
+
+function mapTwoBighaArea(area: unknown, areaUnit: unknown): {
+  areaValue?: number;
+  areaUnit?: AreaUnit;
+  areaSqft?: number;
+  areaBigha?: number;
+} {
+  const value = typeof area === "number" ? area : Number(area);
+  if (!Number.isFinite(value) || value <= 0) return {};
+  const unitKey = String(areaUnit || "").toUpperCase();
+  const unit = AREA_UNIT_REVERSE[unitKey];
+  const areaBigha = areaValueToBigha(value, unit) ?? undefined;
+  return {
+    areaValue: value,
+    areaUnit: unit,
+    areaSqft: unit === "Sq. Ft" ? value : undefined,
+    areaBigha,
+  };
+}
+
+function contactFromEnvelope(raw: { user?: { firstName?: string; lastName?: string; phone?: string; email?: string } | null }) {
+  const u = raw.user;
+  if (!u) return {};
+  const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+  return {
+    contactName: name || undefined,
+    contactPhone: u.phone || undefined,
+    contactEmail: u.email || undefined,
+  };
+}
+
 /**
  * Maps one live 2bigha farm row onto the portal's `PropertyListingRecord`
  * shape so it can reuse the existing card/table rendering unchanged.
- * `images` is deliberately left empty — TwoBighaPropertyService's
- * FARM_DETAIL_FIELDS doesn't request `images` (2bigha's own resolver
- * crashes the whole query for a photo-less property; see that file's
- * comment on PROPERTY_DETAIL_FIELDS). `_id` is 2bigha's own id — these rows
- * are read-only, not CRM-owned Mongo documents, so edit/delete are disabled
- * for them at the call site (see property-listings/page.tsx).
+ * Envelope `images` (not `Property.images`) are safe to request — 2bigha's
+ * Property.images resolver crashes photo-less rows. `_id` is the 2bigha slug
+ * — these rows are read-only, not CRM-owned Mongo documents.
  */
 export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRecord {
   const p = raw.property || {};
   const now = new Date().toISOString();
+  const area = mapTwoBighaArea(p.area, p.areaUnit);
+  const images = extractTwoBighaImageUrls(raw.images ?? p.images);
   return {
     _id: String(raw.seo?.slug || p.id || `twobigha-farm-${Math.random().toString(36).slice(2)}`),
     listingBucket: "farm",
@@ -168,14 +270,16 @@ export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRe
     currency: "INR",
     propertyType: (p.propertyType && FARM_PROPERTY_TYPE_REVERSE[p.propertyType]) || "Farm",
     listedFor: "Sale",
-    areaSqft: p.areaUnit === "SQFT" ? p.area : undefined,
+    ...area,
     status: p.isActive === false ? "Off Market" : "Available",
     approvalStatus: "Approved",
     verified: p.isVerified,
-    images: Array.isArray(p.images) ? p.images : [],
+    images,
     amenities: [],
+    twobighaPropertyId: p.id || undefined,
     createdAt: p.createdAt || now,
     updatedAt: p.updatedAt || now,
+    listedDate: p.createdAt || now,
   };
 }
 
@@ -189,12 +293,18 @@ const PROPERTY_TYPE_REVERSE: Record<string, PropertyListingType> = {
   WAREHOUSE: "Warehouse",
   FARM: "Farm",
   AGRICULTURAL: "Agricultural",
+  INDUSTRIAL: "Industrial",
+  FARMHOUSE: "Farmhouse",
+  FARMLAND: "Farmland",
 };
 
 /** Maps one live 2bigha standard property row onto PropertyListingRecord shape. */
 export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): PropertyListingRecord {
   const p = raw.property || {};
   const now = new Date().toISOString();
+  const area = mapTwoBighaArea(p.area, p.areaUnit);
+  const listedAt = p.publishedAt || p.createdAt || now;
+  const contact = contactFromEnvelope(raw);
   return {
     _id: String(raw.seo?.slug || p.id || `twobigha-property-${Math.random().toString(36).slice(2)}`),
     listingBucket: "properties",
@@ -204,11 +314,12 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
     state: p.state || undefined,
     district: p.district || undefined,
     country: p.country || undefined,
+    zipCode: p.pinCode || undefined,
     price: typeof p.price === "number" ? p.price : 0,
     currency: "INR",
     propertyType: (p.propertyType && PROPERTY_TYPE_REVERSE[p.propertyType]) || "Other",
     listedFor: "Sale",
-    areaSqft: p.areaUnit === "SQFT" ? p.area : undefined,
+    ...area,
     status: p.isActive === false
       ? "Off Market"
       : p.availablilityStatus === "SOLD"
@@ -218,10 +329,16 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
           : "Available",
     approvalStatus: "Approved",
     verified: p.isVerified,
-    images: Array.isArray(raw.images)
-      ? raw.images.map((img: any) => img.variants?.thumbnail).filter(Boolean)
-      : [],
-    amenities: [],
+    viewCount: typeof p.viewCount === "number" ? p.viewCount : undefined,
+    likeCount: typeof p.saveCount === "number" ? p.saveCount : undefined,
+    images: extractTwoBighaImageUrls(raw.images ?? p.images),
+    amenities: Array.isArray(p.amenities) ? p.amenities.filter((a: unknown) => typeof a === "string") : [],
+    khasraNumber: p.khasraNumber || undefined,
+    twobighaPropertyId: p.id || undefined,
+    listedDate: listedAt,
+    contactName: contact.contactName || p.ownerName || undefined,
+    contactPhone: contact.contactPhone || p.ownerPhone || undefined,
+    contactEmail: contact.contactEmail,
     createdAt: p.createdAt || now,
     updatedAt: p.updatedAt || now,
   };

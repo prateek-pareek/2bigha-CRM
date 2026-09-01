@@ -20,6 +20,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "ts-node --transpile-only src/seed.ts",
+    "seed:2bigha-demo": "ts-node --transpile-only scripts/seed-2bigha-demo.ts",
+    "resync:2bigha-agents": "ts-node --transpile-only scripts/resync-2bigha-agents.ts",
     "seed:workspace-roles": "ts-node --transpile-only scripts/seed-workspace-roles.ts"
   },
   "dependencies": {

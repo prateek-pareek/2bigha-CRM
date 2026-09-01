@@ -8,7 +8,6 @@ import {
   Loader2,
   Mail,
   Phone,
-  Ruler,
   Trash2,
   User,
 } from "lucide-react";
@@ -19,6 +18,7 @@ import { CrmPageHeader, CrmSectionCard, CrmSoftBadge, CrmStatusBadge } from "@/c
 import CrmRecordDetailSkeleton from "@/components/crm/records/detail/CrmRecordDetailSkeleton";
 import { fetchThirdPartyPropertyById, deleteThirdPartyProperty, fetchLeadSubscriptionMock, requestPropertyLegalVerification } from "@/lib/crm/property-listings/third-party-api";
 import PmWorkflowPanel from "@/components/crm/property-listings/PmWorkflowPanel";
+import PropertyVisitHistoryPanel from "@/components/crm/property-listings/PropertyVisitHistoryPanel";
 import LegalVerificationReviewPanel from "@/components/crm/property-listings/LegalVerificationReviewPanel";
 import {
   formatAddress,
@@ -26,7 +26,6 @@ import {
   formatListingArea,
   formatPrice,
   legalStatusBadgeTone,
-  resolveAreaBigha,
   statusBadgeTone,
   approvalStatusBadgeTone,
   LISTING_BUCKETS,
@@ -69,12 +68,18 @@ export default function PropertyListingDetailPage() {
 
       const isMockId = id.startsWith("tp_listing_") || id.startsWith("mock_");
       const isMongoId = /^[0-9a-fA-F]{24}$/.test(id);
-      if (!isMockId && !isMongoId) {
-        api.get<{ images: string[] }>(`/crm/property-listings/twobigha/farms/media/${id}`)
+      if (!isMockId && !isMongoId && !(data.images && data.images.length)) {
+        api
+          .get<{ images: string[] }>(
+            `/crm/property-listings/twobigha/farms/media/${encodeURIComponent(id)}`,
+          )
           .then(({ data: mediaData }) => {
-            if (mediaData?.images) {
-              setListing((prev) => (prev ? { ...prev, images: mediaData.images } : null));
-            }
+            const urls = (mediaData?.images || []).filter((url) => /^https?:\/\//i.test(url));
+            if (!urls.length) return;
+            setListing((prev) => {
+              if (!prev || prev.images?.length) return prev;
+              return { ...prev, images: urls };
+            });
           })
           .catch(() => {});
       }
@@ -128,7 +133,6 @@ export default function PropertyListingDetailPage() {
     return <CrmRecordDetailSkeleton />;
   }
 
-  const areaBigha = resolveAreaBigha(listing);
   const isPm = listing.listingBucket === "pm";
   const bucketLabel =
     LISTING_BUCKETS.find((b) => b.key === listing.listingBucket)?.label || listing.listingBucket;
@@ -230,6 +234,7 @@ export default function PropertyListingDetailPage() {
               <img
                 src={listing.images[activeImage]}
                 alt={listing.title}
+                referrerPolicy="no-referrer"
                 className="h-80 w-full object-cover"
               />
             </div>
@@ -246,7 +251,7 @@ export default function PropertyListingDetailPage() {
                     )}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <img src={src} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -259,7 +264,18 @@ export default function PropertyListingDetailPage() {
         )}
 
         {isPm ? (
-          <PmWorkflowPanel listing={listing} onUpdated={setListing} />
+          <>
+            <PmWorkflowPanel listing={listing} onUpdated={setListing} />
+            <PropertyVisitHistoryPanel
+              managePropertyId={
+                listing.userPropertyId ||
+                listing.twobighaPropertyId ||
+                (id.startsWith("tp_") || id.startsWith("mock_") || /^[0-9a-fA-F]{24}$/.test(id)
+                  ? undefined
+                  : id)
+              }
+            />
+          </>
         ) : listing.propertyLegal ? (
           <LegalVerificationReviewPanel listing={listing} onUpdated={setListing} />
         ) : null}
@@ -295,18 +311,7 @@ export default function PropertyListingDetailPage() {
                 <DetailRow label="Price" value={formatPrice(listing.price, listing.currency)} />
                 <DetailRow label="Property type" value={listing.propertyType} />
                 <DetailRow label="Listed for" value={listing.listedFor} />
-                <DetailRow
-                  label="Area"
-                  value={
-                    areaBigha != null ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Ruler size={13} /> {areaBigha} Bigha
-                      </span>
-                    ) : (
-                      formatListingArea(listing)
-                    )
-                  }
-                />
+                <DetailRow label="Area" value={formatListingArea(listing)} />
                 <DetailRow label="Views" value={listing.viewCount ?? 0} />
                 <DetailRow label="Likes" value={listing.likeCount ?? 0} />
               </>

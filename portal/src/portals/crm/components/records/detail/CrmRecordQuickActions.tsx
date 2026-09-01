@@ -80,7 +80,7 @@ export default function CrmRecordQuickActions({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-2 border-t border-[var(--border-color)]/80 pt-4 mt-4",
+        "flex flex-wrap items-center gap-2 border-t border-[var(--border-color)]/80 pt-3 mt-3 crm-record-quick-actions-scroll",
         className,
       )}
     >

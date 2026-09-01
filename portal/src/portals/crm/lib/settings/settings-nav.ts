@@ -160,6 +160,12 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         icon: Share2,
       },
       {
+        name: "2bigha platform sync",
+        description: "Monitor client (platform user) and agent (admin) sync with 2bigha.",
+        href: "/crm/settings/twobigha-sync",
+        icon: Database,
+      },
+      {
         name: "Audit",
         description: "Sales activity stream and system audit trail.",
         href: "/crm/settings/audit-logs",

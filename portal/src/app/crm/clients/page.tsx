@@ -31,6 +31,10 @@ import {
   CrmListStatusBadge,
   CrmListMutedText,
   CrmTableActionMenu,
+  CrmRecordCardGrid,
+  CrmRecordCard,
+  CrmRecordCardSkeleton,
+  type CrmViewMode,
 } from '@/components/crm/ui';
 import { CrmIcon } from '@/lib/crm/shared/icons';
 import { CRM_LIST_PAGE } from '@/lib/crm/ui';
@@ -81,6 +85,8 @@ function saveColumns(cols: Column[]) {
 
 const VIEW_MODE_KEY = 'crm_clients_view_mode_v1';
 
+type ClientViewMode = Extract<CrmViewMode, 'list' | 'grid' | 'calendar'>;
+
 export default function ClientsPage() {
   const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
@@ -96,18 +102,24 @@ export default function ClientsPage() {
   const [columns, setColumns] = useState<Column[]>([]);
   const [isColumnEditorOpen, setIsColumnEditorOpen] = useState(false);
   const [draftColumns, setDraftColumns] = useState<Column[]>([]);
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem(VIEW_MODE_KEY) as any) || 'list';
-    }
-    return 'list';
-  });
+  const [viewMode, setViewMode] = useState<ClientViewMode>('list');
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(VIEW_MODE_KEY, viewMode);
+    const saved = localStorage.getItem(VIEW_MODE_KEY);
+    if (saved === 'list' || saved === 'grid' || saved === 'calendar') {
+      setViewMode(saved);
     }
-  }, [viewMode]);
+  }, []);
+
+  const changeViewMode = useCallback((mode: ClientViewMode) => {
+    setViewMode(mode);
+    setPage(1);
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const [filters, setFilters] = useState<FilterCriteria[]>([]);
   const [filterProperties, setFilterProperties] = useState<FilterProperty[]>([]);
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
@@ -231,8 +243,8 @@ export default function ClientsPage() {
         const initials = client.name.split(' ').map(n => n[0]).join('').slice(0, 2);
         return <CrmListPersonCell name={client.name} initials={initials} />;
       }
-      case 'email': return <CrmListMutedText>{client.email || '—'}</CrmListMutedText>;
-      case 'phone': return <CrmListMutedText>{client.phone || '—'}</CrmListMutedText>;
+      case 'email': return <CrmListMutedText className="crm-cell-wrap block">{client.email || '—'}</CrmListMutedText>;
+      case 'phone': return <CrmListMutedText className="crm-cell-wrap block">{client.phone || '—'}</CrmListMutedText>;
       case 'status': return <CrmListStatusBadge label={client.status || '—'} />;
       case 'createdAt': return (
         <CrmListMutedText>
@@ -247,8 +259,8 @@ export default function ClientsPage() {
 
   return (
     <div className={CRM_LIST_PAGE}>
-      <div className="flex flex-1 h-full overflow-hidden relative min-w-0">
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="crm-list-content">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <CrmPageHeader
             bordered={false}
             title="Clients"
@@ -307,9 +319,11 @@ export default function ClientsPage() {
             right={
               <>
                 <CrmViewToggle
-                  value={viewMode === 'calendar' ? 'calendar' : 'list'}
-                  onChange={(mode) => setViewMode(mode === 'calendar' ? 'calendar' : 'list')}
-                  modes={['list', 'calendar']}
+                  value={viewMode}
+                  onChange={(mode) =>
+                    changeViewMode(mode === 'calendar' ? 'calendar' : mode === 'grid' ? 'grid' : 'list')
+                  }
+                  modes={['list', 'grid', 'calendar']}
                 />
                 {hasAccess("clients:write") && (
                   <CrmButton
@@ -327,10 +341,78 @@ export default function ClientsPage() {
             }
           />
 
-          {viewMode === 'list' ? (
-          <div className="crm-view-panel mt-2">
+          {viewMode === 'calendar' ? (
+              <div className="crm-view-panel mt-1.5 min-h-0 flex-1 overflow-auto custom-scrollbar">
+                <CRMCalendarView items={clients} titleField="name" />
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="mt-1.5 flex min-h-0 flex-1 flex-col gap-3 overflow-auto custom-scrollbar">
+                {loading ? (
+                  <CrmRecordCardSkeleton />
+                ) : paginated.length === 0 ? (
+                  <div className="rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white py-20 text-center text-sm font-medium text-[#707070]">
+                    No clients found
+                  </div>
+                ) : (
+                  <CrmRecordCardGrid>
+                    {paginated.map((client) => {
+                      const initials = client.name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase();
+                      const orgName = client.organization?.name || '';
+                      return (
+                        <CrmRecordCard
+                          key={client._id}
+                          initials={initials}
+                          toneSeed={`${client.name}${client._id}`}
+                          title={client.name}
+                          subtitle={orgName || undefined}
+                          onClick={() => router.push(`/crm/clients/${client._id}`)}
+                          actions={
+                            <CrmTableActionMenu
+                              onEdit={() => router.push(`/crm/clients/${client._id}`)}
+                              onEmail={client.email ? () => setEmailClient(client) : undefined}
+                            />
+                          }
+                          meta={[
+                            { key: 'email', icon: <CrmIcon.Mail size={15} />, label: client.email || '—' },
+                            { key: 'phone', icon: <CrmIcon.Phone size={15} />, label: client.phone || '—' },
+                          ]}
+                          footerLeft={<CrmListStatusBadge label={client.status || '—'} />}
+                          footerRight={
+                            client.createdAt ? (
+                              <CrmListMutedText className="text-xs">
+                                {new Date(client.createdAt).toLocaleDateString(undefined, {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </CrmListMutedText>
+                            ) : null
+                          }
+                        />
+                      );
+                    })}
+                  </CrmRecordCardGrid>
+                )}
+                <Pagination
+                  total={paginationTotal}
+                  page={page}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            ) : (
+          <div className="crm-view-panel mt-1.5 min-h-0 flex-1">
               <>
-              <CrmTableShell>
+              <CrmTableShell scrollClassName="custom-scrollbar overflow-x-auto">
                   <CrmTable>
                     <thead>
                       <tr>
@@ -390,10 +472,6 @@ export default function ClientsPage() {
                 />
               </>
           </div>
-            ) : (
-              <div className="mt-2 min-h-0 flex-1">
-                <CRMCalendarView items={clients} titleField="name" />
-              </div>
             )}
         </div>
       </div>

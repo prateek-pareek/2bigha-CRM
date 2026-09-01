@@ -92,6 +92,7 @@ export function CrmListPersonCell({
   trailing,
   className,
   toneSeed,
+  multiline = false,
 }: {
   name: ReactNode;
   initials: string;
@@ -99,18 +100,37 @@ export function CrmListPersonCell({
   trailing?: ReactNode;
   className?: string;
   toneSeed?: string;
+  multiline?: boolean;
 }) {
   const chars = (initials || "?").slice(0, 2).toUpperCase();
   const tone = crmKanbanAvatarTone(toneSeed || chars);
   return (
-    <div className={cn("crm-list-person-cell flex min-w-0 max-w-[280px] items-center gap-2", className)}>
+    <div
+      className={cn(
+        "crm-list-person-cell flex min-w-0 items-center gap-2",
+        multiline ? "max-w-[320px]" : "max-w-[240px]",
+        className,
+      )}
+    >
       <CrmKanbanAvatar tone={tone}>{chars}</CrmKanbanAvatar>
       <div className="min-w-0 flex-1">
-        <div className="crm-list-name truncate text-[14px] font-medium leading-[1.2] text-[#1f2020] group-hover:text-[var(--primary)]">
+        <div
+          className={cn(
+            "crm-list-name text-[14px] font-medium leading-[1.3] text-[#1f2020] group-hover:text-[var(--primary)]",
+            multiline ? "line-clamp-2 break-words" : "truncate",
+          )}
+        >
           {name}
         </div>
         {subtitle ? (
-          <div className="crm-list-sub truncate mt-0.5 text-[13px] font-normal leading-[1.5] text-[#707070]">{subtitle}</div>
+          <div
+            className={cn(
+              "crm-list-sub mt-0.5 text-[13px] font-normal leading-[1.4] text-[#707070]",
+              multiline ? "line-clamp-2 break-words" : "truncate",
+            )}
+          >
+            {subtitle}
+          </div>
         ) : null}
       </div>
       {trailing ? <div className="shrink-0">{trailing}</div> : null}
@@ -124,11 +144,13 @@ export function CrmListOrgCell({
   subtitle,
   mark,
   className,
+  multiline = false,
 }: {
   name: ReactNode;
   subtitle?: ReactNode;
   mark?: string;
   className?: string;
+  multiline?: boolean;
 }) {
   const label = typeof name === "string" ? name : "";
   const letter = (mark || label?.[0] || "—").toString().slice(0, 1).toUpperCase();
@@ -139,7 +161,13 @@ export function CrmListOrgCell({
   }
 
   return (
-    <div className={cn("crm-list-org-cell flex min-w-0 max-w-[240px] items-center gap-2", className)}>
+    <div
+      className={cn(
+        "crm-list-org-cell flex min-w-0 items-center gap-2",
+        multiline ? "max-w-[360px]" : "max-w-[240px]",
+        className,
+      )}
+    >
       <span
         className="crm-list-org-mark inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e2e8f0] bg-white p-1 text-[14px] font-semibold text-[#1f2020]"
         aria-hidden
@@ -147,9 +175,23 @@ export function CrmListOrgCell({
         {letter}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="crm-list-name truncate text-[14px] font-medium leading-[1.2] text-[#1f2020]">{name}</div>
+        <div
+          className={cn(
+            "crm-list-name text-[14px] font-medium leading-[1.3] text-[#1f2020]",
+            multiline ? "line-clamp-2 break-words" : "truncate",
+          )}
+        >
+          {name}
+        </div>
         {subtitle ? (
-          <div className="crm-list-sub mt-1 truncate text-[13px] font-normal leading-[1.5] text-[#707070]">{subtitle}</div>
+          <div
+            className={cn(
+              "crm-list-sub mt-0.5 text-[13px] font-normal leading-[1.4] text-[#707070]",
+              multiline ? "line-clamp-2 break-words" : "truncate",
+            )}
+          >
+            {subtitle}
+          </div>
         ) : null}
       </div>
     </div>
@@ -161,10 +203,12 @@ export function CrmListOwnerCell({
   name,
   initials,
   className,
+  multiline = false,
 }: {
   name: string;
   initials?: string;
   className?: string;
+  multiline?: boolean;
 }) {
   const label = (name || "").trim();
   if (!label) return <span className="crm-list-muted-text text-[14px] font-normal text-[#707070]">—</span>;
@@ -179,7 +223,14 @@ export function CrmListOwnerCell({
   return (
     <div className={cn("crm-list-owner-cell flex min-w-0 items-center gap-2", className)}>
       <CrmKanbanAvatar size="sm">{chars.toUpperCase()}</CrmKanbanAvatar>
-      <span className="truncate text-[14px] font-normal leading-[1.5] text-[#707070]">{label}</span>
+      <span
+        className={cn(
+          "text-[14px] font-normal leading-[1.4] text-[#707070]",
+          multiline ? "line-clamp-2 break-words" : "truncate",
+        )}
+      >
+        {label}
+      </span>
     </div>
   );
 }

@@ -65,7 +65,8 @@ export type AreaUnit =
   | "Marla"
   | "Kanal"
   | "Guntha"
-  | "Cent";
+  | "Cent"
+  | "Nali";
 
 export const AREA_UNITS: AreaUnit[] = [
   "Bigha",
@@ -79,6 +80,7 @@ export const AREA_UNITS: AreaUnit[] = [
   "Kanal",
   "Guntha",
   "Cent",
+  "Nali",
 ];
 
 /**
@@ -180,6 +182,10 @@ export interface PropertyListingRecord {
   contactPhone?: string;
   contactEmail?: string;
   leadId?: string;
+  /** 2bigha marketplace / managed-property id once synced. */
+  twobighaPropertyId?: string;
+  /** PM user-property id (managePropertyId) when known from 2bigha. */
+  userPropertyId?: string;
   /** PM-only */
   pmPlan?: PmPlan;
   khasraNumber?: string;
@@ -335,14 +341,36 @@ export function formatIndianLandAmount(amount: number): string {
   return formatPrice(amount);
 }
 
+/** Convert a native area into Bigha using the 2Bigha (Rajasthan) convention. Regional units stay unconverted. */
+export function areaValueToBigha(value: number, unit: AreaUnit | string | undefined): number | null {
+  if (!Number.isFinite(value) || value <= 0 || !unit) return null;
+  switch (unit) {
+    case "Bigha":
+      return value;
+    case "Sq. Yard":
+      return value / SQYD_PER_BIGHA;
+    case "Sq. Ft":
+      return value / SQFT_PER_BIGHA;
+    case "Sq. M":
+      return (value * 10.76391041671) / SQFT_PER_BIGHA;
+    case "Acre":
+      return (value * 4840) / SQYD_PER_BIGHA;
+    case "Hectare":
+      return (value * 11959.9004630107) / SQYD_PER_BIGHA;
+    default:
+      return null;
+  }
+}
+
 export function resolveAreaBigha(
   listing: Pick<PropertyListingRecord, "areaBigha" | "areaSqft" | "areaValue" | "areaUnit">,
 ): number | null {
   if (typeof listing.areaBigha === "number" && listing.areaBigha > 0) {
     return listing.areaBigha;
   }
-  if (listing.areaUnit === "Bigha" && typeof listing.areaValue === "number" && listing.areaValue > 0) {
-    return listing.areaValue;
+  if (typeof listing.areaValue === "number" && listing.areaValue > 0) {
+    const converted = areaValueToBigha(listing.areaValue, listing.areaUnit);
+    if (converted != null) return converted;
   }
   if (typeof listing.areaSqft === "number" && listing.areaSqft > 0) {
     return listing.areaSqft / SQFT_PER_BIGHA;

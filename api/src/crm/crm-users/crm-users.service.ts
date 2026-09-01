@@ -436,4 +436,59 @@ export class CRMUsersService implements OnModuleInit {
     user.kommunoSyncedAt = syncResult.syncedAt;
     return user.save();
   }
+
+  /**
+   * Manually (re)sync a CRM agent to 2bigha as an admin (createAdmin) — the
+   * UI-driven counterpart to the automatic create-time sync, mirroring
+   * syncAgentToKommuno. Use for agents whose sync was 'skipped' (no role-id
+   * configured at create) or 'failed'. Persists the status back on the user.
+   */
+  async resyncAgentToTwoBigha(id: string): Promise<CRMUserDocument | null> {
+    const user = await this.userModel.findById(id).exec();
+    if (!user) throw new BadRequestException('User not found');
+
+    const syncResult = await this.twoBighaAgentService.syncAgentCreate({
+      _id: String(user._id),
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      twobighaAdminId: user.twobighaAdminId,
+    });
+    user.twobighaAdminId = syncResult.twobighaAdminId ?? user.twobighaAdminId;
+    user.twobighaSyncStatus = syncResult.status;
+    user.twobighaSyncError =
+      syncResult.status === 'failed' || syncResult.status === 'skipped' ? syncResult.error : undefined;
+    user.twobighaSyncedAt = syncResult.syncedAt;
+    return user.save();
+  }
+
+  /** Read 2bigha's agent/staff list (getAllAdmins) for reconciliation. */
+  async fetchTwoBighaAdmins(filter: any = {}) {
+    return this.twoBighaAgentService.fetchAgents(filter);
+  }
+
+  /** Sync-health rollup for the Settings → 2bigha Sync hub (Agents tab). */
+  async twoBighaSummary() {
+    const rows = await this.userModel
+      .find(
+        {},
+        'firstName lastName email twobighaAdminId twobighaSyncStatus twobighaSyncError twobighaSyncedAt',
+      )
+      .sort({ updatedAt: -1 })
+      .limit(500)
+      .lean()
+      .exec();
+    const counts: Record<string, number> = {
+      synced: 0,
+      mock: 0,
+      failed: 0,
+      skipped: 0,
+      not_synced: 0,
+    };
+    for (const r of rows) {
+      const status = (r as any).twobighaSyncStatus || 'not_synced';
+      counts[status] = (counts[status] || 0) + 1;
+    }
+    return { counts, total: rows.length, items: rows };
+  }
 }

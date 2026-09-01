@@ -2597,3 +2597,106 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   background-color: var(--primary-light) !important;
   color: var(--primary) !important;
 }
+
+/* ── Clients / Leads UI polish — compact layout, visible overflow ── */
+
+/* Wrap long email / phone / text cells instead of clipping */
+.crm-table td.crm-cell-wrap,
+.crm-table .crm-cell-wrap,
+.crm-list-page table td.crm-cell-wrap,
+.crm-list-page table .crm-cell-wrap {
+  white-space: normal !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 220px;
+  min-width: 100px;
+  line-height: 1.4 !important;
+}
+
+/* Compact list sub-tabs (vertical / category rows) */
+.crm-list-subtabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.25rem 0 0.375rem;
+  margin-bottom: 0.25rem;
+  scrollbar-width: thin;
+}
+
+.crm-list-subtabs button {
+  flex-shrink: 0;
+  border-radius: var(--crm-radius-ui);
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+/* Record detail sticky scrollable sidebar */
+.crm-record-sidebar {
+  min-width: 0;
+}
+
+.crm-record-sidebar-group + .crm-record-sidebar-group {
+  margin-top: 0.125rem;
+}
+
+.crm-record-sidebar-group__toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.125rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.crm-record-sidebar-group__toggle:hover {
+  color: var(--text-main);
+}
+
+.crm-record-sidebar-group__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.375rem;
+}
+
+/* List content area — fill remaining height without clipping pagination */
+.crm-list-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.crm-list-content .crm-view-panel {
+  min-height: 0;
+  flex: 1;
+}
+
+/* Slightly tighter table row rhythm on dense lists */
+[data-crm-theme="crms"] .crm-list-page .crm-table tbody td,
+.crm-list-page .crm-table tbody td {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+/* Quick actions row — horizontal scroll on narrow screens */
+.crm-record-quick-actions-scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.crm-record-quick-actions-scroll > div {
+  min-width: min-content;
+}

@@ -2,16 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Building2,
-  CheckCircle2,
-  ClipboardList,
-  Clock3,
-  Home,
-  Wallet,
-} from "lucide-react";
+import { Home, X } from "lucide-react";
 import { toast } from "sonner";
-import { CRM_TOOLBAR_CHIP, CRM_TOOLBAR_CHIP_ACTIVE, CRM_TOOLBAR_SELECT } from "@/lib/crm/ui";
+import { CRM_TOOLBAR_SELECT } from "@/lib/crm/ui";
 import { cn } from "@/lib/utils";
 import Pagination from "@/components/suite/shell/Pagination";
 import {
@@ -19,7 +12,6 @@ import {
   CrmCountBadge,
   CrmEmptyState,
   CrmHeaderTools,
-  CrmKpiCard,
   CrmKanbanBoard,
   CrmKanbanCard,
   CrmKanbanCardHead,
@@ -29,6 +21,7 @@ import {
   CrmListMutedText,
   CrmListToolbar,
   CrmPageHeader,
+  CrmSelect,
   CrmStatusBadge,
   CrmTable,
   CrmTableShell,
@@ -40,6 +33,7 @@ import {
   PropertyListingCardSkeleton,
   PropertyListingsCarousel,
 } from "@/components/crm/property-listings/PropertyListingCard";
+import { SectionTabs, VisitStatPills } from "@/components/crm/visits/visit-chrome";
 import { CrmHoverActionIcon, CrmTableActionMenu } from "@/components/crm/ui/CrmListCells";
 import { CrmIcon, CrmNavIcon } from "@/lib/crm/shared/icons";
 import { contactWhatsappUrl, contactWhatsappWaId } from "@/lib/crm/crm-messaging-links";
@@ -56,7 +50,6 @@ import {
   LISTING_BUCKETS,
   PROPERTY_STATUSES,
   formatAddress,
-  formatCompactPrice,
   formatListingArea,
   formatPrice,
   isMarketplaceBucket,
@@ -68,6 +61,7 @@ import {
 } from "@/lib/crm/property-listings/types";
 import {
   PM_PIPELINE_STAGES,
+  PM_PLANS,
   pmStageBadgeTone,
   type PmPipelineStage,
 } from "@/lib/crm/property-management/types";
@@ -75,6 +69,15 @@ import {
 const VIEW_MODE_KEY = "crm_property_listings_view_mode_v1";
 const PM_VIEW_MODE_KEY = "crm_pm_listings_view_mode_v1";
 const BUCKET_KEY = "crm_property_listings_bucket_v1";
+/** Keep list/kanban payloads modest so production never mounts thousands of cards. */
+const LISTING_PAGE_SIZES = [10, 25, 50];
+const LISTING_PAGE_SIZE_MAX = 50;
+
+const STREAM_TABS: { value: PropertyRecordBucket; label: string }[] = [
+  { value: "properties", label: "Properties" },
+  { value: "farm", label: "Farms" },
+  { value: "pm", label: "Property Management" },
+];
 
 /** Board columns for PM — Visit Report Approved/Rejected share one “Visit Report” outcome lane. */
 const PM_BOARD_STAGES: { key: string; stages: PmPipelineStage[] }[] = [
@@ -122,9 +125,11 @@ function PropertyListingsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [pmStageFilter, setPmStageFilter] = useState<string>("all");
+  const [pmPlanFilter, setPmPlanFilter] = useState<string>("all");
   const [bucket, setBucket] = useState<PropertyRecordBucket>(() =>
     parseBucket(searchParams.get("bucket")),
   );
@@ -163,6 +168,8 @@ function PropertyListingsPageContent() {
       setBucket(next);
       setPage(1);
       setPmStageFilter("all");
+      setPmPlanFilter("all");
+      setStatusFilter("all");
       try {
         localStorage.setItem(BUCKET_KEY, next);
       } catch {
@@ -189,15 +196,15 @@ function PropertyListingsPageContent() {
 
   const marketplace = isMarketplaceBucket(bucket);
   const bucketMeta = LISTING_BUCKETS.find((b) => b.key === bucket);
-  const pmBoardMode = bucket === "pm" && viewMode === "kanban";
 
   const load = useCallback(async () => {
     setLoading(true);
+    const safePageSize = Math.min(Math.max(1, pageSize), LISTING_PAGE_SIZE_MAX);
     try {
       if (bucket === "farm") {
         const { data, total: farmTotal } = await fetchTwoBighaFarms({
           page,
-          limit: pageSize,
+          limit: safePageSize,
           searchTerm: search.trim() || undefined,
         });
         setListings(data.map(mapTwoBighaFarmToRecord));
@@ -208,7 +215,7 @@ function PropertyListingsPageContent() {
         // Live 2bigha GraphQL properties
         const data = await fetchThirdPartyPropertyListings({
           page,
-          pageSize,
+          pageSize: safePageSize,
           search: search.trim() || undefined,
           listingBucket: bucket,
           status: statusFilter !== "all" ? statusFilter : undefined,
@@ -217,16 +224,14 @@ function PropertyListingsPageContent() {
         setTotal(data.total);
         return;
       }
-      // PM bucket — still uses the older mock/local store
+      // PM bucket — same page/pageSize in list and kanban so the board never dumps the full set.
       const data = await fetchThirdPartyPropertyListings({
-        page: pmBoardMode ? 1 : page,
-        pageSize: pmBoardMode ? 200 : pageSize,
+        page,
+        pageSize: safePageSize,
         search: search.trim() || undefined,
-        status: marketplace && statusFilter !== "all" ? statusFilter : undefined,
-        pmStage:
-          !marketplace && !pmBoardMode && pmStageFilter !== "all" ? pmStageFilter : undefined,
+        pmStage: !marketplace && pmStageFilter !== "all" ? pmStageFilter : undefined,
         listingBucket: bucket,
-        approvalStatus: marketplace ? "Approved" : undefined,
+        pmPlan: !marketplace && pmPlanFilter !== "all" ? pmPlanFilter : undefined,
       });
       setListings(data.data);
       setTotal(data.total);
@@ -241,9 +246,9 @@ function PropertyListingsPageContent() {
     search,
     statusFilter,
     pmStageFilter,
+    pmPlanFilter,
     bucket,
     marketplace,
-    pmBoardMode,
   ]);
 
   const loadStats = useCallback(async () => {
@@ -253,7 +258,11 @@ function PropertyListingsPageContent() {
         const availableCount = listings.filter((l) => l.status === "Available").length;
         setStats({
           total,
-          byStatus: { Available: availableCount },
+          byStatus: {
+            Available: listings.filter((l) => l.status === "Available").length,
+            "Under Offer": listings.filter((l) => l.status === "Under Offer").length,
+            Sold: listings.filter((l) => l.status === "Sold").length,
+          },
           totalValue: listings.reduce((sum, l) => sum + (l.price || 0), 0),
           availableValue: listings
             .filter((l) => l.status === "Available")
@@ -276,12 +285,44 @@ function PropertyListingsPageContent() {
   }, [loadStats]);
 
   useEffect(() => {
+    const t = window.setTimeout(() => setSearch(searchInput.trim()), 280);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, pmStageFilter, bucket]);
+  }, [search, statusFilter, pmStageFilter, pmPlanFilter, bucket]);
 
   const availableCount = stats?.byStatus?.["Available"] ?? 0;
   const underOfferCount = stats?.byStatus?.["Under Offer"] ?? 0;
+  const soldCount = stats?.byStatus?.["Sold"] ?? 0;
   const statusOptions = useMemo(() => ["all", ...PROPERTY_STATUSES], []);
+  const filtersActive = marketplace
+    ? statusFilter !== "all" || Boolean(search)
+    : pmStageFilter !== "all" || pmPlanFilter !== "all" || Boolean(search);
+
+  const listingPills = marketplace
+    ? [
+        { key: "all", label: "All", value: stats?.total || total },
+        { key: "Available", label: "Available", value: availableCount },
+        { key: "Under Offer", label: "Under offer", value: underOfferCount },
+        { key: "Sold", label: "Sold", value: soldCount },
+      ]
+    : [
+        { key: "all", label: "All cases", value: stats?.total || total },
+        { key: "Assigned to RM", label: "With RM", value: stats?.byPmStage?.["Assigned to RM"] ?? 0 },
+        { key: "Assigned to Legal", label: "Legal", value: stats?.byPmStage?.["Assigned to Legal"] ?? 0 },
+        {
+          key: "Assigned to Field Agent",
+          label: "Field",
+          value: stats?.byPmStage?.["Assigned to Field Agent"] ?? 0,
+        },
+        {
+          key: "Visit Report Pending",
+          label: "Visit pending",
+          value: stats?.byPmStage?.["Visit Report Pending"] ?? 0,
+        },
+      ];
 
   const pmByStage = useMemo(() => {
     const map = new Map<string, PropertyListingRecord[]>();
@@ -365,8 +406,9 @@ function PropertyListingsPageContent() {
         icon={<Home size={18} />}
         badge={<CrmCountBadge>{total}</CrmCountBadge>}
         description={
-          bucketMeta?.description ||
-          "Buy, Sell, Farms, and Property Management — separate 2Bigha listing streams."
+          bucket === "pm"
+            ? "Subscription verification pipeline — RM, legal, and field visit."
+            : bucketMeta?.description || "Marketplace listings from 2Bigha."
         }
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },
@@ -380,62 +422,33 @@ function PropertyListingsPageContent() {
             }}
           />
         }
-        className="mb-4"
+        className="mb-3"
       />
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {LISTING_BUCKETS.map((b) => (
-          <button
-            key={b.key}
-            type="button"
-            onClick={() => changeBucket(b.key)}
-            className={cn(CRM_TOOLBAR_CHIP, bucket === b.key && CRM_TOOLBAR_CHIP_ACTIVE)}
-          >
-            {b.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {marketplace ? (
-          <>
-            <CrmKpiCard label="Listings" value={stats?.total ?? total} icon={<Building2 size={17} />} />
-            <CrmKpiCard label="Available" value={availableCount} icon={<CheckCircle2 size={17} />} />
-            <CrmKpiCard label="Under offer" value={underOfferCount} icon={<Clock3 size={17} />} />
-            <CrmKpiCard
-              label="Portfolio value"
-              value={formatCompactPrice(stats?.totalValue ?? 0)}
-              sub={`${formatCompactPrice(stats?.availableValue ?? 0)} available`}
-              icon={<Wallet size={17} />}
-            />
-          </>
-        ) : (
-          <>
-            <CrmKpiCard
-              label="PM cases"
-              value={stats?.total ?? total}
-              icon={<ClipboardList size={17} />}
-            />
-            <CrmKpiCard
-              label="With RM"
-              value={stats?.byPmStage?.["Assigned to RM"] ?? 0}
-              icon={<Building2 size={17} />}
-            />
-            <CrmKpiCard
-              label="Legal"
-              value={stats?.byPmStage?.["Assigned to Legal"] ?? 0}
-              icon={<CheckCircle2 size={17} />}
-            />
-            <CrmKpiCard
-              label="Field / visit"
-              value={
-                (stats?.byPmStage?.["Assigned to Field Agent"] ?? 0) +
-                (stats?.byPmStage?.["Visit Report Pending"] ?? 0)
+      <div className="mb-3 overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white shadow-[var(--crm-shadow-card)]">
+        <SectionTabs
+          value={bucket}
+          onChange={changeBucket}
+          items={STREAM_TABS.map((tab) => ({
+            value: tab.value,
+            label: tab.label,
+            count: bucket === tab.value ? total : undefined,
+          }))}
+        />
+        <div className="px-3 py-2">
+          <VisitStatPills
+            items={listingPills}
+            activeKey={marketplace ? statusFilter : pmStageFilter}
+            onSelect={(key) => {
+              if (marketplace) {
+                setStatusFilter(key);
+                return;
               }
-              icon={<Clock3 size={17} />}
-            />
-          </>
-        )}
+              setPmStageFilter(key);
+              if (viewMode === "kanban" && key !== "all") changeViewMode("list");
+            }}
+          />
+        </div>
       </div>
 
       <CrmListToolbar
@@ -443,44 +456,71 @@ function PropertyListingsPageContent() {
           placeholder: marketplace
             ? "Search by title, address, city…"
             : "Search by title, khasra, village, district…",
-          value: search,
-          onChange: (e) => setSearch(e.target.value),
+          value: searchInput,
+          onChange: (e) => setSearchInput(e.target.value),
         }}
         leftExtra={
           marketplace ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {statusOptions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStatusFilter(s)}
-                  className={cn(CRM_TOOLBAR_CHIP, statusFilter === s && CRM_TOOLBAR_CHIP_ACTIVE)}
-                >
-                  {s === "all" ? "All" : s}
-                </button>
-              ))}
-            </div>
-          ) : viewMode === "list" ? (
-            <select
-              value={pmStageFilter}
-              onChange={(e) => setPmStageFilter(e.target.value)}
-              className={cn(CRM_TOOLBAR_SELECT, "shrink-0")}
+            <CrmSelect
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-[38px] w-[160px]"
             >
-              <option value="all">All PM stages</option>
-              {PM_PIPELINE_STAGES.map((s) => (
+              {statusOptions.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {s === "all" ? "All statuses" : s}
                 </option>
               ))}
-            </select>
+            </CrmSelect>
           ) : (
-            <span className="text-xs text-[var(--text-muted)]">
-              Board by PM pipeline stage — drag cards to move
-            </span>
+            <>
+              <select
+                value={pmStageFilter}
+                onChange={(e) => {
+                  setPmStageFilter(e.target.value);
+                  if (viewMode === "kanban" && e.target.value !== "all") changeViewMode("list");
+                }}
+                className={cn(CRM_TOOLBAR_SELECT, "shrink-0")}
+              >
+                <option value="all">All PM stages</option>
+                {PM_PIPELINE_STAGES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={pmPlanFilter}
+                onChange={(e) => setPmPlanFilter(e.target.value)}
+                className={cn(CRM_TOOLBAR_SELECT, "min-w-[120px] shrink-0")}
+              >
+                <option value="all">All plans</option>
+                {PM_PLANS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </>
           )
         }
         right={
           <>
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter("all");
+                  setPmStageFilter("all");
+                  setPmPlanFilter("all");
+                  setSearchInput("");
+                  setSearch("");
+                }}
+                className="inline-flex h-[38px] items-center gap-1 rounded-[var(--radius-md)] px-2 text-[12px] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]"
+              >
+                <X size={13} /> Reset
+              </button>
+            ) : null}
             {marketplace ? (
               <CrmViewToggle value={viewMode} onChange={changeViewMode} modes={["grid", "list"]} />
             ) : (
@@ -540,6 +580,10 @@ function PropertyListingsPageContent() {
         <CrmKanbanBoard className="min-h-[480px] rounded-2xl bg-[#f7f8f9] p-4">
           {PM_BOARD_STAGES.map((col) => {
             const cards = pmByStage.get(col.key) || [];
+            const stageTotal = col.stages.reduce(
+              (sum, stage) => sum + (stats?.byPmStage?.[stage] ?? 0),
+              0,
+            );
             return (
               <CrmKanbanColumn
                 key={col.key}
@@ -547,7 +591,8 @@ function PropertyListingsPageContent() {
                 stageKey={col.key}
                 summary={
                   <>
-                    {cards.length} case{cards.length === 1 ? "" : "s"}
+                    {cards.length} on this page
+                    {stageTotal > 0 ? ` · ${stageTotal} total` : ""}
                   </>
                 }
                 onAdd={() => router.push(newHref)}
@@ -561,7 +606,8 @@ function PropertyListingsPageContent() {
                   setDraggingId(null);
                   if (id) void movePmToStage(id, col.key);
                 }}
-                style={{ minHeight: 400 }}
+                className="overflow-hidden"
+                style={{ height: 520 }}
               >
                 {cards.map((p) => (
                   <CrmKanbanCard
@@ -785,19 +831,18 @@ function PropertyListingsPageContent() {
         </CrmTableShell>
       )}
 
-      {!pmBoardMode ? (
-        <Pagination
-          total={total}
-          page={page}
-          pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setPage(1);
-          }}
-          className="mt-3 rounded-[var(--crm-radius-ui)] border-t-0"
-        />
-      ) : null}
+      <Pagination
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        pageSizes={LISTING_PAGE_SIZES}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(Math.min(size, LISTING_PAGE_SIZE_MAX));
+          setPage(1);
+        }}
+        className="mt-3 rounded-[var(--crm-radius-ui)] border border-[#e2e8f0]"
+      />
 
       <CallLeadModal
         open={!!callProperty}

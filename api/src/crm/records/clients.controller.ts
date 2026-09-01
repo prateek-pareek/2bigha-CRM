@@ -61,6 +61,27 @@ export class ClientsController {
     }
   }
 
+  // ── 2bigha platform-user (Client) sync — Create & Fetch ──────────────────
+  // Sync-health rollup for the Settings → 2bigha Sync hub. Declared before
+  // the ':id' routes so 'twobigha' is never captured as a client id.
+  @Get('twobigha/clients-summary')
+  @Permissions('clients:read')
+  twoBighaSummary() {
+    return this.clientsService.twoBighaSummary();
+  }
+
+  @Get('clients/:id/twobigha-profile')
+  @Permissions('clients:read')
+  fetchTwoBighaProfile(@Param('id') id: string) {
+    return this.clientsService.fetchTwoBighaProfile(id);
+  }
+
+  @Post('clients/:id/twobigha-sync')
+  @Permissions('clients:write')
+  resyncTwoBigha(@Param('id') id: string, @Request() req: any) {
+    return this.clientsService.resyncTwoBigha(id, req.user);
+  }
+
   @Get('clients/:id')
   @Permissions('clients:read')
   findOne(@Param('id') id: string, @Request() req: any) {

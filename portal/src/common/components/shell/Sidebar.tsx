@@ -347,6 +347,7 @@ const crmGroups = [
                 ],
             },
             { name: 'Approval Queue', href: '/crm/property-approval', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
+            { name: 'Visit tracking', href: '/crm/visits', icon: CrmNavIcon.MapPin, permission: 'leads:read' },
         ],
     },
     {

@@ -58,7 +58,7 @@ export function CrmListToolbar({
     ) : null);
 
   return (
-    <div className={cn("mb-3 shrink-0 space-y-2.5", className)}>
+    <div className={cn("mb-2 shrink-0 space-y-2", className)}>
       <div className={cn(CRM_TOOLBAR, "justify-between gap-3")}>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
           {filterControl ? <div className="shrink-0">{filterControl}</div> : null}

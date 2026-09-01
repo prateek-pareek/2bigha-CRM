@@ -44,10 +44,10 @@ export const crmModalChrome = {
 
 /** Record detail page chrome — CRMS leads-details layout */
 export const crmRecordChrome = {
-  page: "crm-record-page mx-auto w-full max-w-[1400px] space-y-4 pb-8",
+  page: "crm-record-page mx-auto w-full max-w-[1400px] space-y-3 pb-6 md:pb-8",
   /** Ref: col-xl-4 (~360px) | fluid main */
   bodyGrid:
-    "grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start xl:gap-5",
+    "grid grid-cols-1 gap-3 lg:gap-4 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start",
   backLink:
     "inline-flex items-center gap-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--primary)]",
   panel:
@@ -95,10 +95,12 @@ export const crmRecordChrome = {
   tabs: "flex gap-0 overflow-x-auto",
   tab: "inline-flex h-11 shrink-0 items-center gap-1.5 border-b-[3px] border-transparent px-3 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-main)]",
   tabActive: "!border-[var(--primary)] !text-[var(--primary)] font-semibold",
-  tabBody: "p-4 sm:p-5",
+  tabBody: "p-4 sm:p-4",
+  sidebar:
+    "crm-record-sidebar space-y-3 lg:min-w-0 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:sticky lg:top-3 lg:pr-0.5 custom-scrollbar",
   sidebarPanel:
-    "rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-[var(--crm-shadow-card)] sm:p-[1.125rem]",
-  sectionTitle: "mb-3 text-[15px] font-semibold text-[var(--text-main)]",
+    "rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-[var(--card-bg)] p-3.5 shadow-[var(--crm-shadow-card)] sm:p-4",
+  sectionTitle: "mb-2.5 text-sm font-semibold text-[var(--text-main)]",
   infoRow:
     "flex items-start justify-between gap-3 border-b border-[var(--border-color)] py-2.5 last:border-b-0 last:pb-0 first:pt-0",
   infoLabel:
