@@ -20,6 +20,7 @@ import {
 } from "@/components/crm/ui";
 import {
   fetchApprovalQueue,
+  decidePropertyApproval,
   type ApprovalQueueBucket,
   type ApprovalQueueProperty,
 } from "@/lib/crm/property-listings/approval-queue-api";
@@ -124,9 +125,24 @@ function PropertyApprovalQueuePageContent() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [bucket]);
+  const handleDecide = async (id: string, decision: "Approved" | "Rejected") => {
+    let message: string | undefined = undefined;
+    if (decision === "Rejected") {
+      const reason = prompt("Enter rejection reason (optional):");
+      if (reason === null) return; // cancelled
+      message = reason.trim() || undefined;
+    }
+
+    try {
+      await decidePropertyApproval({ id, status: decision, message });
+      setRows((prev) => prev.filter((r) => r.property.id !== id));
+      setTotal((prev) => Math.max(0, prev - 1));
+      toast.success(`Property ${decision.toLowerCase()} successfully!`);
+      void load();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || `Failed to ${decision.toLowerCase()} property`);
+    }
+  };
 
   const bucketMeta = BUCKETS.find((b) => b.key === bucket)!;
 
@@ -137,7 +153,7 @@ function PropertyApprovalQueuePageContent() {
         title="Property Approval Queue"
         icon={<ClipboardCheck size={18} />}
         badge={<CrmCountBadge>{total}</CrmCountBadge>}
-        description="Live read-through to 2bigha's property approval queue — review only, no approve/reject action here yet."
+        description="Live moderation approval queue for 2bigha property listings — approve or reject submissions in real time."
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },
           { label: "Property Approval Queue" },
@@ -201,6 +217,7 @@ function PropertyApprovalQueuePageContent() {
                 <th className="sticky top-0 z-10">Price</th>
                 <th className="sticky top-0 z-10">Approval status</th>
                 <th className="sticky top-0 z-10">Submitted</th>
+                <th className="sticky top-0 z-10 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -241,6 +258,30 @@ function PropertyApprovalQueuePageContent() {
                     </td>
                     <td>
                       <CrmListMutedText>{formatDate(p.createdAt)}</CrmListMutedText>
+                    </td>
+                    <td className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {bucket !== "approved" && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecide(p.id, "Approved")}
+                            className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Approve
+                          </button>
+                        )}
+                        {bucket !== "rejected" && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecide(p.id, "Rejected")}
+                            className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400 transition-colors"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Reject
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

@@ -128,6 +128,96 @@ export class CreatePropertyListingDto {
   contactEmail?: string;
 
   @IsOptional()
+  @IsString()
+  district?: string;
+
+  @IsOptional()
+  @IsString()
+  khasraNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  murabbaNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  khewatNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  areaUnit?: string;
+
+  @IsOptional()
+  @IsString()
+  pricePerUnit?: string;
+
+  @IsOptional()
+  roadAccess?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  roadAccessDistance?: number;
+
+  @IsOptional()
+  @IsNumber()
+  roadAccessWidth?: number;
+
+  @IsOptional()
+  @IsString()
+  roadAccessDistanceUnit?: string;
+
+  @IsOptional()
+  highwayConn?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  waterLevel?: number;
+
+  @IsOptional()
+  @IsString()
+  soilType?: string;
+
+  @IsOptional()
+  ownershipYes?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  ownersCount?: number;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  landZoning?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  landMark?: string[];
+
+  @IsOptional()
+  landMarkName?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  listerType?: string;
+
+  @IsOptional()
+  @IsString()
+  whatsappNumber?: string;
+
+  @IsOptional()
+  mapBoundaries?: Record<string, unknown> | unknown[];
+
+  @IsOptional()
+  mapCoordinates?: Record<string, unknown> | unknown[];
+
+  @IsOptional()
+  mapLocation?: Record<string, unknown>;
+
+  @IsOptional()
   customFields?: Record<string, unknown>;
 
   @IsOptional()

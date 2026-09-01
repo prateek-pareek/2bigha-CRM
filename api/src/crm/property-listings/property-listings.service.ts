@@ -24,6 +24,8 @@ export interface PropertyListingListQuery {
   leadId?: string;
 }
 
+import { StorageService } from '../../storage/storage.service';
+
 @Injectable()
 export class PropertyListingsService {
   constructor(
@@ -32,6 +34,7 @@ export class PropertyListingsService {
     @InjectModel(Lead.name, 'crmConnection')
     private readonly leadModel: Model<LeadDocument>,
     private readonly twoBighaService: TwoBighaPropertyService,
+    private readonly storageService: StorageService,
   ) {}
 
   async create(
@@ -68,16 +71,40 @@ export class PropertyListingsService {
       title: listing.title,
       address: listing.address,
       city: listing.city,
+      district: listing.district,
       state: listing.state,
       zipCode: listing.zipCode,
       country: listing.country,
       price: listing.price,
       propertyType: listing.propertyType,
       areaSqft: listing.areaSqft,
+      areaUnit: listing.areaUnit,
+      khasraNumber: listing.khasraNumber,
+      murabbaNumber: listing.murabbaNumber,
+      khewatNumber: listing.khewatNumber,
+      pricePerUnit: listing.pricePerUnit,
+      waterLevel: listing.waterLevel,
+      landMark: listing.landMark,
+      landMarkName: listing.landMarkName,
+      category: listing.category,
+      highwayConn: listing.highwayConn,
+      landZoning: listing.landZoning,
+      ownersCount: listing.ownersCount,
+      ownershipYes: listing.ownershipYes,
+      soilType: listing.soilType,
+      roadAccess: listing.roadAccess,
+      roadAccessDistance: listing.roadAccessDistance,
+      roadAccessWidth: listing.roadAccessWidth,
+      roadAccessDistanceUnit: listing.roadAccessDistanceUnit,
       description: listing.description,
       status: listing.status,
+      listerType: listing.listerType,
       contactName: listing.contactName,
       contactPhone: listing.contactPhone,
+      whatsappNumber: listing.whatsappNumber,
+      mapBoundaries: listing.mapBoundaries,
+      mapCoordinates: listing.mapCoordinates,
+      mapLocation: listing.mapLocation,
       images: listing.images,
       twobighaPropertyId: listing.twobighaPropertyId,
     };
@@ -106,6 +133,25 @@ export class PropertyListingsService {
     return listing;
   }
 
+  /** Upload an image file buffer to Azure Blob Storage for 2Bigha and store local copy for display. */
+  async uploadImageToAzure(file: Express.Multer.File): Promise<{ blobPath: string; url: string }> {
+    let blobPath = `properties/temp/${Date.now()}_${file.originalname}`;
+    try {
+      const azureResult = await this.twoBighaService.uploadBufferToAzure(file.buffer, file.mimetype, file.originalname);
+      blobPath = azureResult.blobPath;
+    } catch (e: any) {
+      console.warn('Azure upload error, continuing with local storage:', e?.message);
+    }
+
+    // Save in local storage so the browser can immediately display it with 200 OK
+    const localUpload = await this.storageService.uploadFile(file, 'properties');
+
+    return {
+      blobPath,
+      url: localUpload.url,
+    };
+  }
+
   /**
    * Live read-through to 2bigha's `getPropertyBySlug` — "the operation to
    * use for a property-detail display screen" per the handbook. For a
@@ -114,7 +160,67 @@ export class PropertyListingsService {
    * is for the case where the CRM has a 2bigha slug from elsewhere.
    */
   async getTwoBighaDetailBySlug(slug: string): Promise<Record<string, unknown> | null> {
-    return this.twoBighaService.getPropertyDetailBySlug(slug);
+    const liveData = await this.twoBighaService.getPropertyDetailBySlug(slug);
+    const propertyId = (liveData?.property as any)?.id;
+
+    // Check if we have a locally stored/synced listing in MongoDB
+    const crmListing = await this.listingModel
+      .findOne({
+        $or: [
+          { slug },
+          ...(propertyId ? [{ twobighaPropertyId: propertyId }] : []),
+        ],
+      })
+      .exec();
+
+    if (!liveData && !crmListing) return null;
+
+    if (liveData && crmListing) {
+      const prop = (liveData.property as Record<string, unknown>) || {};
+      const crmObj = crmListing.toObject() as unknown as Record<string, unknown>;
+      return {
+        ...liveData,
+        property: {
+          ...prop,
+          images:
+            prop.images && Array.isArray(prop.images) && prop.images.length > 0
+              ? prop.images
+              : crmListing.images,
+          khasraNumber: prop.khasraNumber || crmListing.khasraNumber,
+          murabbaNumber: crmObj.murabbaNumber,
+          khewatNumber: crmObj.khewatNumber,
+          waterLevel: crmObj.waterLevel,
+          landMark: crmObj.landMark,
+          landMarkName: crmObj.landMarkName,
+          category: crmObj.category,
+          highwayConn: crmObj.highwayConn,
+          landZoning: crmObj.landZoning,
+          ownershipYes: crmObj.ownershipYes,
+          soilType: crmObj.soilType,
+          roadAccess: crmObj.roadAccess,
+          roadAccessDistance: crmObj.roadAccessDistance,
+          roadAccessWidth: crmObj.roadAccessWidth,
+          roadAccessDistanceUnit: crmObj.roadAccessDistanceUnit,
+          contactName: prop.contactName || crmListing.contactName,
+          contactPhone: prop.contactPhone || crmListing.contactPhone,
+          whatsappNumber: crmObj.whatsappNumber,
+          listerType: crmObj.listerType,
+          mapBoundaries: crmObj.mapBoundaries,
+          mapCoordinates: crmObj.mapCoordinates,
+          mapLocation: crmObj.mapLocation,
+        },
+      };
+    }
+
+    if (crmListing && !liveData) {
+      const crmObj = crmListing.toObject() as unknown as Record<string, unknown>;
+      return {
+        property: crmObj,
+        seo: { slug: (crmObj.slug as string) || slug },
+      };
+    }
+
+    return liveData;
   }
 
   /** Live read-through to 2bigha's `getFarmBySlug` — the farm-detail display operation. */
@@ -142,6 +248,13 @@ export class PropertyListingsService {
     limit?: number;
     searchTerm?: string;
     status?: string;
+    availablilityStatus?: string;
+    approvalStatus?: string;
+    sort?: {
+      priceOrder?: string;
+      newlyCreated?: boolean;
+      nearMe?: { lat: number; lng: number };
+    };
   }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
     return this.twoBighaService.listProperties(params);
   }
@@ -392,11 +505,45 @@ export class PropertyListingsService {
     return { _id: leadId, leadId, ownerName: trimmedOwner };
   }
 
+  async decideApproval(
+    id: string,
+    status: 'Approved' | 'Rejected',
+    message?: string,
+  ): Promise<any> {
+    const isMongoId = Types.ObjectId.isValid(id);
+    let listing: PropertyListingDocument | null = null;
+    if (isMongoId) {
+      listing = await this.listingModel.findById(id).exec();
+    } else {
+      listing = await this.listingModel
+        .findOne({ $or: [{ twobighaPropertyId: id }, { slug: id }] })
+        .exec();
+    }
+
+    if (listing) {
+      listing.approvalStatus = status;
+      if (message) listing.approvalMessage = message;
+      await listing.save();
+    }
+
+    const twobighaId = listing?.twobighaPropertyId || (!isMongoId ? id : undefined);
+    if (twobighaId) {
+      await this.twoBighaService.decidePropertyApproval(twobighaId, status, message);
+    }
+
+    return { success: true, id, status, message };
+  }
+
   async remove(id: string, deletedBy?: string): Promise<{ success: boolean }> {
     await this.findOne(id);
     await this.listingModel
       .findByIdAndUpdate(id, softDeleteUpdate(deletedBy))
       .exec();
     return { success: true };
+  }
+
+  /** Get pre-signed Azure Blob upload URLs for property image uploads. */
+  async getImageUploadUrls(count: number) {
+    return this.twoBighaService.getImageUploadUrls(count);
   }
 }

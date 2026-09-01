@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,8 +9,12 @@ import {
   Put,
   Query,
   Request,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { PropertyListingsService } from './property-listings.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RbacGuard } from '../crm-users/rbac.guard';
@@ -21,6 +26,16 @@ import { UpdatePropertyListingDto } from './dto/update-property-listing.dto';
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class PropertyListingsController {
   constructor(private readonly listingsService: PropertyListingsService) {}
+
+  @Post('twobigha/upload-image-proxy')
+  @Permissions('property_listings:write')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  async uploadImageProxy(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No image file provided');
+    }
+    return this.listingsService.uploadImageToAzure(file);
+  }
 
   @Get()
   @Permissions('property_listings:read')
@@ -64,12 +79,24 @@ export class PropertyListingsController {
     @Query('limit') limit?: string,
     @Query('searchTerm') searchTerm?: string,
     @Query('status') status?: string,
+    @Query('approvalStatus') approvalStatus?: string,
+    @Query('priceOrder') priceOrder?: string,
+    @Query('newlyCreated') newlyCreated?: string,
+    @Query('lat') lat?: string,
+    @Query('lng') lng?: string,
   ) {
+    const sort: Record<string, unknown> = {};
+    if (priceOrder) sort.priceOrder = priceOrder;
+    if (newlyCreated === 'true' || newlyCreated === '1') sort.newlyCreated = true;
+    if (lat && lng) sort.nearMe = { lat: Number(lat), lng: Number(lng) };
+
     return this.listingsService.listTwoBighaProperties({
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
       searchTerm,
       status,
+      approvalStatus,
+      sort: Object.keys(sort).length ? (sort as any) : undefined,
     });
   }
 
@@ -86,6 +113,14 @@ export class PropertyListingsController {
   async getTwoBighaFarmMedia(@Param('slug') slug: string) {
     const images = await this.listingsService.getTwoBighaFarmMedia(slug);
     return { images };
+  }
+
+  /** Get pre-signed Azure Blob upload URLs for property image uploads. */
+  @Get('twobigha/image-upload-urls')
+  @Permissions('property_listings:write')
+  getImageUploadUrls(@Query('count') count?: string) {
+    const num = count ? Number(count) : 1;
+    return this.listingsService.getImageUploadUrls(num);
   }
 
   /**
@@ -158,6 +193,14 @@ export class PropertyListingsController {
   @Permissions('property_listings:delete')
   remove(@Param('id') id: string, @Request() req: any) {
     return this.listingsService.remove(id, req.user?.userId);
+  }
+
+  @Post('approval-decision')
+  @Permissions('property_listings:write')
+  decideApproval(
+    @Body() body: { id: string; status: 'Approved' | 'Rejected'; message?: string },
+  ) {
+    return this.listingsService.decideApproval(body.id, body.status, body.message);
   }
 
   /** Manual retry for a listing whose last sync to 2bigha failed (or is still mock-only). */

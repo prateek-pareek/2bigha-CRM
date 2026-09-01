@@ -74,3 +74,15 @@ export async function fetchApprovalQueue(
   );
   return data;
 }
+
+export async function decidePropertyApproval(params: {
+  id: string;
+  status: "Approved" | "Rejected";
+  message?: string;
+}): Promise<{ success: boolean }> {
+  const { data } = await api.post<{ success: boolean }>(
+    "/crm/property-listings/approval-decision",
+    params,
+  );
+  return data;
+}
