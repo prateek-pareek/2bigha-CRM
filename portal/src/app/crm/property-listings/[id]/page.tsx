@@ -19,6 +19,8 @@ import { CrmPageHeader, CrmSectionCard, CrmSoftBadge, CrmStatusBadge } from "@/c
 import CrmRecordDetailSkeleton from "@/components/crm/records/detail/CrmRecordDetailSkeleton";
 import { fetchThirdPartyPropertyById, deleteThirdPartyProperty, fetchLeadSubscriptionMock, requestPropertyLegalVerification } from "@/lib/crm/property-listings/third-party-api";
 import PmWorkflowPanel from "@/components/crm/property-listings/PmWorkflowPanel";
+import ActivePropertyPlanCard from "@/components/crm/property-listings/ActivePropertyPlanCard";
+import ManagedPropertySummaryCard from "@/components/crm/property-listings/ManagedPropertySummaryCard";
 import LegalVerificationReviewPanel from "@/components/crm/property-listings/LegalVerificationReviewPanel";
 import {
   formatAddress,
@@ -76,7 +78,7 @@ export default function PropertyListingDetailPage() {
               setListing((prev) => (prev ? { ...prev, images: mediaData.images } : null));
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
 
       if (data.leadId && data.listingBucket !== "pm") {
@@ -259,12 +261,17 @@ export default function PropertyListingDetailPage() {
         )}
 
         {isPm ? (
+          <ManagedPropertySummaryCard propertyId={id} />
+        ) : null}
+
+        {isPm ? (
           <PmWorkflowPanel listing={listing} onUpdated={setListing} />
         ) : listing.propertyLegal ? (
           <LegalVerificationReviewPanel listing={listing} onUpdated={setListing} />
         ) : null}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {isPm ? <ActivePropertyPlanCard propertyId={id} /> : null}
           <CrmSectionCard title="Overview">
             {isPm ? (
               <>
