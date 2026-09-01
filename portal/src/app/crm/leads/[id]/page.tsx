@@ -17,8 +17,10 @@ import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
 import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import LeadAssociationsPanel from '@/components/crm/records/associations/LeadAssociationsPanel';
+import LeadLinkedClientPanel from '@/components/crm/records/associations/LeadLinkedClientPanel';
 import LeadPropertiesPanel from '@/components/crm/records/associations/LeadPropertiesPanel';
 import LeadPmPanel from '@/components/crm/records/associations/LeadPmPanel';
+import TwoBighaVisitTrackingPanel from '@/components/crm/visits/TwoBighaVisitTrackingPanel';
 import LeadLegalVerificationPanel from '@/components/crm/records/associations/LeadLegalVerificationPanel';
 import AddPropertyModal from '@/components/crm/records/detail/AddPropertyModal';
 import AddPmPropertyModal from '@/components/crm/records/detail/AddPmPropertyModal';
@@ -37,6 +39,7 @@ import LeadOnboardingChecklistCard from '@/components/crm/records/detail/LeadOnb
 import LeadUpdateHistoryPanel from '@/components/crm/records/detail/LeadUpdateHistoryPanel';
 import CrmRecordPipelineStatus from '@/components/crm/records/detail/CrmRecordPipelineStatus';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
+import CrmRecordSidebarGroup from '@/components/crm/records/detail/CrmRecordSidebarGroup';
 import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
 import { crmRecordChrome } from '@/lib/crm/chrome';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -755,9 +758,9 @@ export default function LeadDetailPage() {
         />
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
-          <div className={cn(crmRecordChrome.panel, 'flex min-h-[520px] flex-col')}>
+          <div className={cn(crmRecordChrome.panel, 'flex min-h-[480px] flex-col')}>
             <CrmRecordDetailTabs
               tabs={recordTabs}
               activeTab={activeTab}
@@ -850,84 +853,96 @@ export default function LeadDetailPage() {
           </div>
         </div>
 
-        <aside className="space-y-4 lg:min-w-0">
-          {entityId ? (
-            <LeadOnboardingChecklistCard
-              leadId={entityId}
-              progress={lead.checklistProgress}
-              onUpdated={() => void fetchLead()}
-            />
-          ) : null}
-          <FollowUpSequenceCard
-            entityType="Lead"
-            entityId={entityId}
-            hasEmail={hasEmail}
-            onScheduleClick={() => {
-              setFollowUpSeqInitialTab('follow-ups');
-              setIsFollowUpSeqOpen(true);
-            }}
-            refreshKey={followUpRefreshKey}
-            onRetrySuccess={() => {
-              void fetchActivities();
-              void fetchEmailTracking();
-              setFollowUpRefreshKey((k) => k + 1);
-            }}
-          />
-          <EmailEngagementPanel rows={emailTracking} />
-          <CrmRecordOwnerCard
-            ownerLabel={lead.leadOwner}
-            leadId={entityId}
-            canReassign={hasAccess('leads:write')}
-            onReassigned={() => void fetchLead()}
-          />
-          {entityId ? (
-            <LeadAssociationsPanel
-              leadId={entityId}
-              lead={lead}
-              onUpdated={() => {
-                void fetchLead();
+        <aside className={crmRecordChrome.sidebar}>
+          <CrmRecordSidebarGroup title="Overview" defaultOpen>
+            {entityId ? (
+              <LeadOnboardingChecklistCard
+                leadId={entityId}
+                progress={lead.checklistProgress}
+                onUpdated={() => void fetchLead()}
+              />
+            ) : null}
+            <FollowUpSequenceCard
+              entityType="Lead"
+              entityId={entityId}
+              hasEmail={hasEmail}
+              onScheduleClick={() => {
+                setFollowUpSeqInitialTab('follow-ups');
+                setIsFollowUpSeqOpen(true);
+              }}
+              refreshKey={followUpRefreshKey}
+              onRetrySuccess={() => {
+                void fetchActivities();
                 void fetchEmailTracking();
+                setFollowUpRefreshKey((k) => k + 1);
               }}
             />
-          ) : null}
-          {entityId ? (
-            <LeadPropertiesPanel
+            <EmailEngagementPanel rows={emailTracking} />
+            <CrmRecordOwnerCard
+              ownerLabel={lead.leadOwner}
               leadId={entityId}
-              refreshKey={propertiesRefreshKey}
-              onAddClick={() => setIsAddPropertyModalOpen(true)}
+              canReassign={hasAccess('leads:write')}
+              onReassigned={() => void fetchLead()}
             />
-          ) : null}
-          {entityId ? (
-            <LeadLegalVerificationPanel
-              leadId={entityId}
-              refreshKey={propertiesRefreshKey}
-              onRequested={() => setPropertiesRefreshKey((k) => k + 1)}
-            />
-          ) : null}
-          {entityId ? (
-            <LeadPmPanel
-              leadId={entityId}
-              refreshKey={propertiesRefreshKey}
-              onCreatePmClick={() => setIsAddPmModalOpen(true)}
-            />
-          ) : null}
-          {entityId ? (
-            <LeadWhatsAppPanel
-              leadId={entityId}
-              refreshKey={whatsappLinksRefreshKey}
-              onAttachClick={() => setIsLinkWhatsAppModalOpen(true)}
-            />
-          ) : null}
-          {entityId ? (
-            <CrmRecordSegmentsPanel
-              module="leads"
-              entityId={entityId}
-              recordLabel={displayName}
-            />
-          ) : null}
-          {entityId ? (
-            <SalesAgentRecordPanel recordType="Lead" recordId={entityId} />
-          ) : null}
+          </CrmRecordSidebarGroup>
+
+          <CrmRecordSidebarGroup title="Associations" defaultOpen>
+            {entityId ? (
+              <LeadAssociationsPanel
+                leadId={entityId}
+                lead={lead}
+                onUpdated={() => {
+                  void fetchLead();
+                  void fetchEmailTracking();
+                }}
+              />
+            ) : null}
+            {lead?.clientId ? (
+              <LeadLinkedClientPanel clientId={String((lead.clientId as any)?._id || lead.clientId)} />
+            ) : null}
+            {entityId ? (
+              <LeadPropertiesPanel
+                leadId={entityId}
+                refreshKey={propertiesRefreshKey}
+                onAddClick={() => setIsAddPropertyModalOpen(true)}
+              />
+            ) : null}
+            {entityId ? (
+              <LeadLegalVerificationPanel
+                leadId={entityId}
+                refreshKey={propertiesRefreshKey}
+                onRequested={() => setPropertiesRefreshKey((k) => k + 1)}
+              />
+            ) : null}
+            {entityId ? (
+              <LeadPmPanel
+                leadId={entityId}
+                refreshKey={propertiesRefreshKey}
+                onCreatePmClick={() => setIsAddPmModalOpen(true)}
+              />
+            ) : null}
+          </CrmRecordSidebarGroup>
+
+          <CrmRecordSidebarGroup title="Communication & tracking" defaultOpen={false}>
+            {entityId ? <TwoBighaVisitTrackingPanel leadId={entityId} /> : null}
+            {entityId ? (
+              <LeadWhatsAppPanel
+                leadId={entityId}
+                refreshKey={whatsappLinksRefreshKey}
+                onAttachClick={() => setIsLinkWhatsAppModalOpen(true)}
+              />
+            ) : null}
+            {entityId ? (
+              <CrmRecordSegmentsPanel
+                module="leads"
+                entityId={entityId}
+                recordLabel={displayName}
+              />
+            ) : null}
+            {entityId ? (
+              <SalesAgentRecordPanel recordType="Lead" recordId={entityId} />
+            ) : null}
+          </CrmRecordSidebarGroup>
         </aside>
       </div>
 

@@ -142,9 +142,40 @@ export const PROPERTY_DETAIL_FIELDS = `
   isFeatured
   approvalStatus
   approvalMessage
+  viewCount
+  saveCount
+  khasraNumber
+  ownerName
+  ownerPhone
   createdAt
   updatedAt
   publishedAt
+`;
+
+/** Envelope `images` on `properties` / `Properties` — not Property.images (that resolver NPEs). */
+const PROPERTY_ENVELOPE_IMAGE_FIELDS = `
+  images {
+    id
+    imageUrl
+    isMain
+    sortOrder
+    variants {
+      thumbnail
+      medium
+      large
+      original
+    }
+  }
+`;
+
+const GET_PROPERTY_MEDIA_QUERY = `
+  query GetPropertyMedia($propertyId: ID!) {
+    getPropertyMedia(propertyId: $propertyId) {
+      images {
+        thumbnailUrl
+      }
+    }
+  }
 `;
 
 const CREATE_PROPERTY_MUTATION = `
@@ -203,6 +234,13 @@ const GET_PROPERTY_BY_SLUG_QUERY = `
         isVerified
         verificationMessage
       }
+      user {
+        firstName
+        lastName
+        phone
+        email
+      }
+      ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
     }
   }
 `;
@@ -243,11 +281,13 @@ const GET_PROPERTIES_QUERY = `
         seo {
           slug
         }
-        images {
-          variants {
-            thumbnail
-          }
+        user {
+          firstName
+          lastName
+          phone
+          email
         }
+        ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
       }
       meta {
         page
@@ -322,6 +362,7 @@ const GET_FARMS_QUERY = `
         seo {
           slug
         }
+        ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
       }
       meta {
         page
@@ -348,6 +389,7 @@ const GET_FARM_BY_SLUG_QUERY = `
       seo {
         slug
       }
+      ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
     }
   }
 `;
@@ -437,6 +479,48 @@ const APPROVAL_QUEUE_QUERIES: Record<ApprovalQueueBucket, { query: string; field
 @Injectable()
 export class TwoBighaPropertyService {
   private readonly logger = new Logger(TwoBighaPropertyService.name);
+
+  private envelopeHasHostedImages(envelope: Record<string, unknown> | null | undefined): boolean {
+    const images = envelope?.images;
+    if (!Array.isArray(images) || images.length === 0) return false;
+    return images.some((img) => {
+      if (typeof img === 'string') return /^https?:\/\//i.test(img) || img.startsWith('//');
+      if (!img || typeof img !== 'object') return false;
+      const row = img as Record<string, unknown>;
+      const variants = (row.variants && typeof row.variants === 'object'
+        ? (row.variants as Record<string, unknown>)
+        : {}) as Record<string, unknown>;
+      return [variants.medium, variants.thumbnail, variants.original, variants.large, row.imageUrl, row.thumbnailUrl]
+        .some((u) => typeof u === 'string' && (/^https?:\/\//i.test(u) || u.startsWith('//')));
+    });
+  }
+
+  private mediaThumbnailUrls(images?: { thumbnailUrl?: string | null }[] | null): string[] {
+    return (images || [])
+      .map((img) => img?.thumbnailUrl)
+      .filter((url): url is string => typeof url === 'string' && /^https?:\/\//i.test(url.trim()));
+  }
+
+  private async hydrateEnvelopeImages(
+    config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
+    envelope: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    if (this.envelopeHasHostedImages(envelope)) return envelope;
+    const propertyId = (envelope.property as { id?: string } | undefined)?.id;
+    if (!propertyId) return envelope;
+    try {
+      const media = await twoBighaGraphqlRequest<{
+        getPropertyMedia?: { images?: { thumbnailUrl: string }[] };
+      }>(config, GET_PROPERTY_MEDIA_QUERY, { propertyId });
+      const urls = this.mediaThumbnailUrls(media?.getPropertyMedia?.images);
+      if (urls.length) {
+        envelope.images = urls;
+      }
+    } catch {
+      /* media is optional — listing still renders without photos */
+    }
+    return envelope;
+  }
 
   /**
    * `CreatePropertyInput`/`UpdatePropertyInput` share the same nested shape
@@ -831,7 +915,9 @@ export class TwoBighaPropertyService {
       const data = await twoBighaGraphqlRequest<{
         getPropertyBySlug?: Record<string, unknown> | null;
       }>(config, GET_PROPERTY_BY_SLUG_QUERY, { input: { slug } });
-      return data?.getPropertyBySlug ?? null;
+      const detail = data?.getPropertyBySlug;
+      if (!detail) return null;
+      return this.hydrateEnvelopeImages(config, detail);
     } catch (e: any) {
       this.logger.error(`2bigha getPropertyBySlug failed for slug "${slug}": ${e?.message}`);
       return null;
@@ -849,26 +935,7 @@ export class TwoBighaPropertyService {
       }>(config, GET_FARM_BY_SLUG_QUERY, { input: { slug } });
       const farm = data?.getFarmBySlug;
       if (!farm) return null;
-
-      const propertyId = (farm.property as any)?.id;
-      if (propertyId) {
-        try {
-          const media = await twoBighaGraphqlRequest<{
-            getPropertyMedia?: { images?: { thumbnailUrl: string }[] };
-          }>(config, `
-            query GetPropertyMedia($propertyId: ID!) {
-              getPropertyMedia(propertyId: $propertyId) {
-                images {
-                  thumbnailUrl
-                }
-              }
-            }
-          `, { propertyId });
-          const urls = media?.getPropertyMedia?.images?.map((img) => img.thumbnailUrl) || [];
-          (farm.property as any).images = urls;
-        } catch {}
-      }
-      return farm;
+      return this.hydrateEnvelopeImages(config, farm);
     } catch (e: any) {
       this.logger.error(`2bigha getFarmBySlug failed for slug "${slug}": ${e?.message}`);
       return null;
@@ -971,16 +1038,8 @@ export class TwoBighaPropertyService {
 
       const media = await twoBighaGraphqlRequest<{
         getPropertyMedia?: { images?: { thumbnailUrl: string }[] };
-      }>(config, `
-        query GetPropertyMedia($propertyId: ID!) {
-          getPropertyMedia(propertyId: $propertyId) {
-            images {
-              thumbnailUrl
-            }
-          }
-        }
-      `, { propertyId });
-      return media?.getPropertyMedia?.images?.map((img) => img.thumbnailUrl) || [];
+      }>(config, GET_PROPERTY_MEDIA_QUERY, { propertyId });
+      return this.mediaThumbnailUrls(media?.getPropertyMedia?.images);
     } catch (e: any) {
       this.logger.error(`2bigha getPropertyMediaBySlug failed for slug "${slug}": ${e?.message}`);
       return [];

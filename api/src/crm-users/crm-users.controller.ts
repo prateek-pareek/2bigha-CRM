@@ -6,6 +6,7 @@ import {
   Param,
   Put,
   Delete,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -172,5 +173,35 @@ export class CRMUsersController {
   @Permissions('settings:admin')
   syncToKommuno(@Param('id') id: string) {
     return this.usersService.syncAgentToKommuno(id);
+  }
+
+  // ── 2bigha admin (Agent) sync — Create & Fetch ───────────────────────────
+  /** getAllAdmins — read 2bigha's agent list to reconcile against CRM users. */
+  @Get('twobigha/admins')
+  @Permissions('settings:admin')
+  fetchTwoBighaAdmins(@Query() query: any) {
+    return this.usersService.fetchTwoBighaAdmins({
+      search: query?.search,
+      isActive:
+        query?.isActive === undefined ? undefined : query.isActive === 'true' || query.isActive === true,
+      department: query?.department,
+      roleSlug: query?.roleSlug,
+      limit: query?.limit ? Number(query.limit) : undefined,
+      offset: query?.offset ? Number(query.offset) : undefined,
+    });
+  }
+
+  /** Sync-health rollup for the Settings → 2bigha Sync hub (Agents tab). */
+  @Get('twobigha/summary')
+  @Permissions('settings:admin')
+  twoBighaSummary() {
+    return this.usersService.twoBighaSummary();
+  }
+
+  /** Manually (re)sync one agent to 2bigha (createAdmin). */
+  @Post(':id/twobigha-sync')
+  @Permissions('settings:admin')
+  syncToTwoBigha(@Param('id') id: string) {
+    return this.usersService.resyncAgentToTwoBigha(id);
   }
 }

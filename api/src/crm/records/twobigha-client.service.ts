@@ -17,6 +17,8 @@ export interface ClientSyncInput {
   address?: string;
   /** Client.role — already 'OWNER' | 'AGENT' | 'USER', matching 2bigha's PlatformUserRole values exactly. */
   role?: string;
+  /** When re-syncing, the id already stored on the CRM client — used to treat "already exists" as synced. */
+  existingTwobighaUserId?: string;
 }
 
 export interface TwoBighaClientSyncResult {
@@ -38,6 +40,66 @@ const ADMIN_CREATE_USER_MUTATION = `
     }
   }
 `;
+
+/**
+ * `getUser` — the fetch counterpart to adminCreateUser (Handbook, "Platform
+ * User (Client) — Create & Fetch"). Reads a platform user's live 2bigha
+ * profile by id. Fields per the Handbook's manually-built resolver shape.
+ */
+const GET_USER_QUERY = `
+  query GetUser($id: ID!) {
+    getUser(id: $id) {
+      id
+      email
+      firstName
+      lastName
+      role
+      isActive
+      createdAt
+      profile {
+        id
+        bio
+        phone
+        avatar
+        city
+        state
+        languages
+        experience
+        rating
+        totalReviews
+      }
+    }
+  }
+`;
+
+export interface TwoBighaPlatformUser {
+  id: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  profile?: {
+    id?: string;
+    bio?: string;
+    phone?: string;
+    avatar?: string;
+    city?: string;
+    state?: string;
+    languages?: unknown;
+    experience?: number;
+    rating?: number;
+    totalReviews?: number;
+  } | null;
+}
+
+export interface TwoBighaClientFetchResult {
+  /** 'skipped' = this CRM client has no twobighaUserId yet (never synced). */
+  status: 'fetched' | 'mock' | 'failed' | 'skipped';
+  user?: TwoBighaPlatformUser | null;
+  error?: string;
+}
 
 @Injectable()
 export class TwoBighaClientService {
@@ -90,8 +152,61 @@ export class TwoBighaClientService {
       }
       return { status: 'synced', twobighaUserId: String(id), syncedAt: new Date() };
     } catch (e: any) {
-      this.logger.error(`2bigha adminCreateUser failed for client ${client._id}: ${e?.message}`);
-      return { status: 'failed', error: e?.message || 'Unknown error', syncedAt: new Date() };
+      const message = e?.message || 'Unknown error';
+      // Email already registered on 2bigha — not a hard failure if we already hold the id.
+      if (/already exists/i.test(message)) {
+        const existingId = client.existingTwobighaUserId?.trim();
+        if (existingId) {
+          return { status: 'synced', twobighaUserId: existingId, syncedAt: new Date() };
+        }
+      }
+      this.logger.error(`2bigha adminCreateUser failed for client ${client._id}: ${message}`);
+      return { status: 'failed', error: message, syncedAt: new Date() };
+    }
+  }
+
+  /**
+   * Fetch a client's live 2bigha platform-user profile (`getUser`). Requires
+   * the client to already carry a `twobighaUserId` (set at create-sync time);
+   * returns 'skipped' otherwise. Mock fallback mirrors the create path so the
+   * "View 2bigha profile" action works locally.
+   */
+  async fetchUser(twobighaUserId?: string): Promise<TwoBighaClientFetchResult> {
+    const id = twobighaUserId?.trim();
+    if (!id) {
+      return {
+        status: 'skipped',
+        error: 'This client has no 2bigha user id yet — create/sync it to 2bigha first.',
+      };
+    }
+
+    const config = getTwoBighaConfig();
+    if (!config) {
+      return {
+        status: 'mock',
+        user: {
+          id,
+          email: 'mock.client@2bigha.example',
+          firstName: 'Mock',
+          lastName: 'Client',
+          role: 'USER',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          profile: { phone: '+910000000000', city: 'Mocktown', state: 'MockState' },
+        },
+      };
+    }
+
+    try {
+      const data = await twoBighaGraphqlRequest<{ getUser?: TwoBighaPlatformUser | null }>(
+        config,
+        GET_USER_QUERY,
+        { id },
+      );
+      return { status: 'fetched', user: data?.getUser ?? null };
+    } catch (e: any) {
+      this.logger.error(`2bigha getUser failed for user ${id}: ${e?.message}`);
+      return { status: 'failed', error: e?.message || 'Unknown error' };
     }
   }
 }

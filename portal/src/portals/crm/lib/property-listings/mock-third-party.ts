@@ -407,6 +407,7 @@ export type ThirdPartyListQuery = {
   leadId?: string;
   listingBucket?: PropertyRecordBucket | "all";
   pmStage?: string;
+  pmPlan?: string;
   /** Subscription Legal Verification status filter (doc §3). */
   legalStatus?: PropertyLegalStatus | "all" | "queued";
   /** Sort legal queue by request time. */
@@ -495,6 +496,7 @@ function matchesQuery(listing: PropertyListingRecord, q: ThirdPartyListQuery): b
   if (q.listedFor && q.listedFor !== "all" && listing.listedFor !== q.listedFor) return false;
   if (q.leadId && listing.leadId !== q.leadId) return false;
   if (q.pmStage && q.pmStage !== "all" && listing.pmStage !== q.pmStage) return false;
+  if (q.pmPlan && q.pmPlan !== "all" && listing.pmPlan !== q.pmPlan) return false;
   if (q.legalStatus && q.legalStatus !== "all") {
     if (q.legalStatus === "queued") {
       if (!listing.propertyLegal) return false;

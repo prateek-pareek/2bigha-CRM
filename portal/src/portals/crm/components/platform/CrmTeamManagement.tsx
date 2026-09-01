@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/crm/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, Shield, UserPlus, Trash2, Check, X, Mail, User as UserIcon, Lock, Search, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { Loader2, Shield, UserPlus, Trash2, Check, X, Mail, User as UserIcon, Lock, Search, ChevronDown, ChevronsUpDown, RefreshCw } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,9 @@ import {
   CRM_PM_MODULE_ACTIONS,
 } from "@/lib/permissions/registry";
 import clsx from "clsx";
+import { TwoBighaSyncStatusBadge } from "@/components/crm/platform/TwoBighaSyncStatusBadge";
+import { resyncTwoBighaAgent } from "@/lib/crm/twobigha-agent-api";
+import { toast } from "sonner";
 
 /** CRM RBAC uses read / write / edit / delete (API decorators); UI labels align with HRMS where applicable. */
 const CRM_GRANULAR_MODULE_ACTIONS = CRM_PM_MODULE_ACTIONS;
@@ -43,6 +46,10 @@ interface StaffUser {
     password?: string;
     /** Manager/Team Lead this user reports to — "my team" = self + everyone reporting to me. */
     reportsTo?: string | { _id: string; firstName?: string; lastName?: string; email?: string } | null;
+    twobighaAdminId?: string;
+    twobighaSyncStatus?: string;
+    twobighaSyncError?: string;
+    twobighaSyncedAt?: string;
 }
 
 export type CrmTeamManagementVariant = "employees" | "settings";
@@ -72,6 +79,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
     const [customRoles, setCustomRoles] = useState<Array<{ _id: string; name: string }>>([]);
     const [showAddMember, setShowAddMember] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [twobighaSyncingId, setTwobighaSyncingId] = useState<string | null>(null);
     const [newMember, setNewMember] = useState({
         firstName: "",
         lastName: "",
@@ -190,6 +198,32 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
         }
     };
 
+    const handleTwoBighaSync = async (userId: string) => {
+        setTwobighaSyncingId(userId);
+        try {
+            const result = await resyncTwoBighaAgent(userId);
+            if (result.twobighaSyncStatus === "synced" || result.twobighaSyncStatus === "mock") {
+                toast.success(
+                    result.twobighaSyncStatus === "mock"
+                        ? "Mock sync recorded (2bigha not configured)"
+                        : `Synced to 2bigha · Admin ID ${result.twobighaAdminId}`,
+                );
+            } else if (result.twobighaSyncStatus === "skipped") {
+                toast.error(
+                    result.twobighaSyncError ||
+                        "Sync skipped — set TWOBIGHA_DEFAULT_AGENT_ROLE_ID in api/.env and restart the API",
+                );
+            } else {
+                toast.error(result.twobighaSyncError || "2bigha sync failed");
+            }
+            await fetchUsers();
+        } catch {
+            toast.error("Failed to sync agent to 2bigha");
+        } finally {
+            setTwobighaSyncingId(null);
+        }
+    };
+
     useEffect(() => {
         fetchUsers();
         fetchEmailAccounts();
@@ -261,12 +295,27 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
     const handleCreateMember = async () => {
         setCreating(true);
         try {
-            await api.post("/crm-users", {
+            const { data } = await api.post("/crm-users", {
                 ...newMember,
                 permittedTools: ["CRM"],
                 permissions: [],
                 crmPermissions: ["dashboard:read", "leads:read", "contacts:read"],
             });
+            const syncStatus = data?.twobighaSyncStatus;
+            if (syncStatus === "synced" || syncStatus === "mock") {
+                toast.success(
+                    syncStatus === "mock"
+                        ? "Team member created (2bigha mock mode)"
+                        : `Team member created and synced to 2bigha`,
+                );
+            } else if (syncStatus === "skipped" || syncStatus === "failed") {
+                toast.warning(
+                    data?.twobighaSyncError ||
+                        "User created in CRM but 2bigha sync did not complete — use the sync button to retry.",
+                );
+            } else {
+                toast.success("Team member created");
+            }
             setShowAddMember(false);
             setNewMember({
                 firstName: "",
@@ -454,6 +503,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                     <th className="px-5 py-3 text-xs font-semibold text-text-muted">User</th>
                                     <th className="px-5 py-3 text-xs font-semibold text-text-muted">Role</th>
                                     <th className="px-5 py-3 text-xs font-semibold text-text-muted">CRM Permissions</th>
+                                    <th className="px-5 py-3 text-xs font-semibold text-text-muted">2bigha</th>
                                     <th className="px-5 py-3 text-xs font-semibold text-text-muted text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -490,6 +540,35 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                             ) : (
                                                 <span className="text-xs text-text-muted italic">No permissions set</span>
                                             )}
+                                        </td>
+                                        <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center gap-2">
+                                                <TwoBighaSyncStatusBadge
+                                                    status={user.twobighaSyncStatus}
+                                                    error={user.twobighaSyncError}
+                                                />
+                                                {(user.twobighaSyncStatus !== "synced" && user.twobighaSyncStatus !== "mock") && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 w-7 p-0"
+                                                        title="Sync to 2bigha"
+                                                        disabled={twobighaSyncingId === user._id}
+                                                        onClick={() => void handleTwoBighaSync(user._id)}
+                                                    >
+                                                        {twobighaSyncingId === user._id ? (
+                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                        ) : (
+                                                            <RefreshCw className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            {user.twobighaAdminId ? (
+                                                <p className="text-[10px] font-mono text-text-muted mt-1 truncate max-w-[120px]" title={user.twobighaAdminId}>
+                                                    {user.twobighaAdminId}
+                                                </p>
+                                            ) : null}
                                         </td>
                                         <td className="px-5 py-3.5 text-right">
                                             <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">

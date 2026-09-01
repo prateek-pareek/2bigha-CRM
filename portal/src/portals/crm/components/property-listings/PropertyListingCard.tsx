@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, type MouseEvent } from "react";
-import api from "@/lib/api";
+import api from "@/lib/crm/api";
 import {
   ChevronDown,
   ChevronRight,
@@ -20,6 +20,7 @@ import {
   daysOnPlatform,
   displayPropertyType,
   formatIndianLandAmount,
+  formatListingArea,
   formatRatePerBigha,
   resolveAreaBigha,
   type PropertyListingRecord,
@@ -48,7 +49,11 @@ function formatSqYd(n: number): string {
 }
 
 function locationLine(listing: PropertyListingRecord): string {
-  return [listing.address, listing.city, listing.state].filter(Boolean).join(", ") || "—";
+  return (
+    [listing.address, listing.village, listing.city, listing.district, listing.state]
+      .filter(Boolean)
+      .join(", ") || "—"
+  );
 }
 
 async function shareListing(listing: PropertyListingRecord) {
@@ -116,18 +121,21 @@ export function PropertyListingCard({
   useEffect(() => {
     if (listing.images && listing.images.length > 0) {
       setLazyImages(listing.images);
+      setImageIndex(0);
       return;
     }
-    // Load images lazily for any 2bigha listing (farm, buy, sell) that has a slug-like _id
     const isMockId = listing._id?.startsWith("tp_listing_") || listing._id?.startsWith("mock_");
     const isMongoId = /^[0-9a-fA-F]{24}$/.test(listing._id || "");
     if (!isMockId && !isMongoId && listing._id) {
       let active = true;
       setLoadingMedia(true);
-      api.get<{ images: string[] }>(`/crm/property-listings/twobigha/farms/media/${listing._id}`)
+      api
+        .get<{ images: string[] }>(
+          `/crm/property-listings/twobigha/farms/media/${encodeURIComponent(listing._id)}`,
+        )
         .then(({ data }) => {
-          if (active && data?.images) {
-            setLazyImages(data.images);
+          if (active && Array.isArray(data?.images) && data.images.length) {
+            setLazyImages(data.images.filter((url) => /^https?:\/\//i.test(url)));
           }
         })
         .catch(() => {})
@@ -172,7 +180,15 @@ export function PropertyListingCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={activeImage}
-            alt={listing.title}
+            alt=""
+            referrerPolicy="no-referrer"
+            onError={() => {
+              setLazyImages((prev) => {
+                const next = prev.filter((_, i) => i !== imageIndex);
+                setImageIndex(0);
+                return next;
+              });
+            }}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
@@ -290,26 +306,32 @@ export function PropertyListingCard({
           </span>
         </p>
 
+        <p className="min-w-0 truncate text-[13px] font-medium leading-snug text-[#0f1b2d]" title={listing.title}>
+          {listing.title}
+        </p>
+
         <p className="text-[13px] text-slate-600">
           Area:{" "}
-          {areaBigha != null ? (
-            <>
-              <span className="font-semibold text-[#1a9f4b]">
-                {Number(areaBigha.toFixed(2)).toLocaleString("en-IN")} Bigha
-              </span>
-              <ChevronDown size={12} className="ml-0.5 inline text-[#1a9f4b]" />
-              <span className="text-slate-400">
-                {" "}
-                ({formatSqYd(areaBighaToSqYd(areaBigha))} sq. yd)
-              </span>
-            </>
-          ) : typeof listing.areaSqft === "number" ? (
-            <span className="font-semibold text-[#1a9f4b]">
-              {listing.areaSqft.toLocaleString("en-IN")} sqft
-            </span>
-          ) : (
-            <span className="text-slate-400">—</span>
-          )}
+          {(() => {
+            const areaLabel = formatListingArea(listing);
+            if (areaLabel !== "—") {
+              return (
+                <>
+                  <span className="font-semibold text-[#1a9f4b]">{areaLabel}</span>
+                  {listing.areaUnit === "Bigha" && areaBigha != null ? (
+                    <>
+                      <ChevronDown size={12} className="ml-0.5 inline text-[#1a9f4b]" />
+                      <span className="text-slate-400">
+                        {" "}
+                        ({formatSqYd(areaBighaToSqYd(areaBigha))} sq. yd)
+                      </span>
+                    </>
+                  ) : null}
+                </>
+              );
+            }
+            return <span className="text-slate-400">—</span>;
+          })()}
         </p>
 
         <p className="text-[13px] text-slate-600">

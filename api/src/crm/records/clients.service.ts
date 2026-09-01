@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Client, ClientDocument } from '../schemas/client.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
@@ -143,6 +143,7 @@ export class ClientsService {
     client.twobighaSyncError =
       syncResult.status === 'failed' || syncResult.status === 'skipped' ? syncResult.error : undefined;
     client.twobighaSyncedAt = syncResult.syncedAt;
+    await this.healStaleTwoBighaClientStatus(client);
     await client.save();
 
     const populated = await this.clientModel
@@ -161,6 +162,128 @@ export class ClientsService {
       }).save();
     }
     return client;
+  }
+
+  /**
+   * If we hold a 2bigha user id but status is not 'synced' (e.g. a retry hit
+   * "User already exists" after the first create succeeded), verify with
+   * getUser and correct the stored status.
+   */
+  private async healStaleTwoBighaClientStatus(client: {
+    _id?: any;
+    twobighaUserId?: string;
+    twobighaSyncStatus?: string;
+    twobighaSyncError?: string;
+    twobighaSyncedAt?: Date;
+  }): Promise<void> {
+    if (!client.twobighaUserId?.trim()) return;
+    if (client.twobighaSyncStatus === 'synced' || client.twobighaSyncStatus === 'mock') return;
+
+    const verify = await this.twoBighaClientService.fetchUser(client.twobighaUserId);
+    if (verify.status !== 'fetched' && verify.status !== 'mock') return;
+
+    client.twobighaSyncStatus = 'synced';
+    client.twobighaSyncError = undefined;
+    client.twobighaSyncedAt = new Date();
+    if (client._id) {
+      await this.clientModel.updateOne(
+        { _id: client._id },
+        {
+          $set: { twobighaSyncStatus: 'synced', twobighaSyncedAt: client.twobighaSyncedAt },
+          $unset: { twobighaSyncError: '' },
+        },
+      );
+    }
+  }
+
+  /**
+   * Manually (re)sync a client to 2bigha as a platform user (adminCreateUser)
+   * — the UI-driven counterpart to the automatic create-time sync. Used to
+   * retry clients whose sync was 'skipped' (no email at create) or 'failed'.
+   * Persists the resulting status back onto the record, exactly like create().
+   */
+  async resyncTwoBigha(id: string, actor?: any): Promise<any> {
+    const client = await this.clientModel.findById(id).exec();
+    if (!client) throw new NotFoundException('Client not found');
+
+    // Already linked — verify with getUser instead of calling adminCreateUser again
+    // (a duplicate create returns "User already exists" even though sync succeeded).
+    if (client.twobighaUserId) {
+      await this.healStaleTwoBighaClientStatus(client);
+      if (client.twobighaSyncStatus === 'synced' || client.twobighaSyncStatus === 'mock') {
+        await client.save();
+        return {
+          _id: String(client._id),
+          twobighaUserId: client.twobighaUserId,
+          twobighaSyncStatus: client.twobighaSyncStatus,
+          twobighaSyncError: client.twobighaSyncError,
+          twobighaSyncedAt: client.twobighaSyncedAt,
+        };
+      }
+    }
+
+    const syncResult = await this.twoBighaClientService.syncClientCreate({
+      _id: String(client._id),
+      name: client.name,
+      email: client.email,
+      phone: client.phone,
+      whatsappNumber: client.whatsappNumber,
+      address: client.address,
+      role: client.role,
+      existingTwobighaUserId: client.twobighaUserId,
+    });
+    client.twobighaUserId = syncResult.twobighaUserId ?? client.twobighaUserId;
+    client.twobighaSyncStatus = syncResult.status;
+    client.twobighaSyncError =
+      syncResult.status === 'failed' || syncResult.status === 'skipped' ? syncResult.error : undefined;
+    client.twobighaSyncedAt = syncResult.syncedAt;
+    await this.healStaleTwoBighaClientStatus(client);
+    await client.save();
+
+    return {
+      _id: String(client._id),
+      twobighaUserId: client.twobighaUserId,
+      twobighaSyncStatus: client.twobighaSyncStatus,
+      twobighaSyncError: client.twobighaSyncError,
+      twobighaSyncedAt: client.twobighaSyncedAt,
+    };
+  }
+
+  /** Read a client's live 2bigha platform-user profile (getUser). */
+  async fetchTwoBighaProfile(id: string): Promise<any> {
+    const client = await this.clientModel.findById(id).exec();
+    if (!client) throw new NotFoundException('Client not found');
+    return this.twoBighaClientService.fetchUser(client.twobighaUserId);
+  }
+
+  /**
+   * Sync-health rollup for the Settings → 2bigha Sync hub: per-status counts
+   * plus the client rows (trimmed to sync-relevant fields).
+   */
+  async twoBighaSummary(): Promise<any> {
+    const rows = await this.clientModel
+      .find({}, 'name email role twobighaUserId twobighaSyncStatus twobighaSyncError twobighaSyncedAt')
+      .sort({ updatedAt: -1 })
+      .limit(500)
+      .lean()
+      .exec();
+
+    for (const row of rows) {
+      await this.healStaleTwoBighaClientStatus(row as any);
+    }
+
+    const counts: Record<string, number> = {
+      synced: 0,
+      mock: 0,
+      failed: 0,
+      skipped: 0,
+      not_synced: 0,
+    };
+    for (const r of rows) {
+      const status = (r as any).twobighaSyncStatus || 'not_synced';
+      counts[status] = (counts[status] || 0) + 1;
+    }
+    return { counts, total: rows.length, items: rows };
   }
 
   async findAll(query: any = {}, actor?: any): Promise<any> {
@@ -231,6 +354,7 @@ export class ClientsService {
       .populate('associatedContacts', 'firstName lastName email stage')
       .exec();
     if (!doc) return null;
+    await this.healStaleTwoBighaClientStatus(doc);
     if (this.canManageAllClients(actor)) return doc;
     const actorId = this.getActorId(actor);
     if (!actorId) return null;

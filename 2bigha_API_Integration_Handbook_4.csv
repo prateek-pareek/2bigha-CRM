@@ -1,0 +1,1088 @@
+2bigha API Integration Handbook ,
+2bigha API Integration Handbook ,
+Purpose of this document ,
+"The CRM is being built as its own product, with its own database and its own UI for managing leads, agents, and",
+"day-to-day sales workflow. 2bigha is the source of record for properties, and for the subscription/legal-",
+verification data that lives on the 2bigha side. This handbook documents exactly the slice of 2bigha’s GraphQL,
+API the CRM needs to stay in sync with 2bigha — nothing more. ,
+"Concretely, the CRM needs to: create a property in 2bigha when one is added from the CRM,",create and read
+"agent records so the two systems’ agent/staff lists stay in sync, create leads and keep the underlying",
+"client/customer record in sync, and read property/agent/lead data back — including the property metadata and",
+subscription metadata already denormalized onto a lead — so the CRM can display it without maintaining a,
+separate copy of 2bigha’s business logic. ,
+Everything 2bigha does that the CRM is not asking it to do — running its own subscription-plan/coupon/discount,
+"catalog, agent performance analytics, team management, or update/export history — is out of scope here on",
+purpose: the CRM builds and owns those capabilities itself. This handbook is deliberately narrower than the full,
+2bigha API surface for that reason. ,
+"For every operation it documents: what the operation does, the exact request payload it expects, the exact",
+"response shape it returns, and any business-logic notes (side effects, defaults, known inconsistencies) that",
+matter for a correct integration. ,
+"A note on stacks. 2bigha’s backend is Node.js/Express with Apollo Server (GraphQL), Postgres, and Drizzle ORM.",
+The CRM is built on Next.js/NestJS/MongoDB and speaks REST internally. This is not a problem — GraphQL is,
+"consumed over plain HTTP POST with a JSON body, so the CRM’s NestJS backend can call 2bigha’s GraphQL API",
+"exactly the way it would call any third-party REST/JSON API: build a request object, POST it, parse the JSON",
+"response. No GraphQL client library is required (though using one, such as graphql-request or urql, is a",
+"convenience, not a requirement). ",
+Base URL & transport ,
+All operations in this handbook — Queries and Mutations alike — are served from a single endpoint: ,
+POST https:///graphql ,
+Content-Type: application/json ,
+A request body always has the shape: ,
+{ ,
+"""query"": ""query GetAllLead($page: Int, $limit: Int) { getAllLead(page: $page, limit: $limit) { result",
+"{ Id clientName } totalCount } }"", ",
+"""variables"": { ""page"": 1, ""limit"": 20 } ",
+} ,
+"Mutations use the same shape, with mutation { ... } in place of query { ... }. The response is always a single",
+JSON object: ,
+{ ,
+"""data"": { ""getAllLead"": { ""result"": [...], ""totalCount"": 42 } }, ",
+"""errors"": [ { ""message"": ""..."", ""extensions"": { ""code"": ""UNAUTHENTICATED"" } } ] ",
+} ,
+errors is present only when something went wrong (per-field or whole-request); data may still be partially,
+populated alongside errors for field-level failures. GraphQL always returns HTTP 200 even on business-logic,
+errors — the CRM team should not rely on HTTP status codes to detect failure and must check for a populated,
+errors array on every response. ,
+File uploads (a small number of mutations across this API use them — flagged individually in each section) use,
+the graphql-upload multipart request convention (multipart/form-data with an operations/map/file-part,
+structure) rather than plain JSON — these are called out explicitly wherever they appear. ,
+How this differs from a typical REST call — read this before writing any client code ,
+"A common source of confusion: the CRM team’s own APIs (and most third-party APIs, e.g. a",
+"WhatsApp/notification provider) tend to look like this — one URL per action, an API-key-style Authorization:",
+"Basic  header, and a flat JSON body whose top-level fields are the parameters: ",
+curl --location 'https://provider.example.com/send-message' \ ,
+--header 'Authorization: Basic {{YOUR_API_KEY}}' \ ,
+--header 'Content-Type: application/json' \ ,
+--data '{ ,
+"""userId"": """", ",
+"""fullPhoneNumber"": ""PHONE_NUMBER"", ",
+"""callbackData"": ""some_callback_data"", ",
+"""type"": ""Text"", ",
+"""data"": { ""message"": ""This msg is sent via API"" } ",
+}' ,
+"2bigha’s API cannot be called in that shape, for three concrete reasons — every one of them applies to every ",
+"operation in this handbook, not just the examples below: ",
+1,There is only ever one URL. You never point at /create-lead or /get-properties — every operation
+,documented in this handbook is a POST to the same https:///graphql. Which
+,"operation runs is decided by the text you put inside the request body (the query string), not by the URL"
+,path. 
+2,"Auth is a Key/Secret pair sent as headers on every request, not a session you log into. There is no login"
+,call and no token to refresh — you send a fixed X-API-Key / X-API-Secret pair (issued once by 2bigha) on
+,every single request. See Authentication below. 
+3,The body always has exactly two top-level keys: query and variables. Your actual parameters (what
+,"would be userId, fullPhoneNumber, type, data in the example above) never sit at the top level of the"
+,"JSON body— they always go inside variables, and variables is passed as the second argument"
+,alongside a query string that names the operation and lists which fields you want back. 
+"Below are two complete, copy-paste-adaptable examples in exactly the curl --location / --header / --data style",
+"above, so the shape is unambiguous. ",
+1. Call a Query (read data) — list leads: ,
+curl --location 'https:///graphql' \ ,
+--header 'X-API-Key: 2b_key_live_9f3a1c2e8b7d4f56' \ ,
+--header 'X-API-Secret: 2b_secret_live_7a2f9e1b4c8d0a3f6e5b2c1d9a8f7e6b' \ ,
+--header 'Content-Type: application/json' \ ,
+--data '{ ,
+"""query"": ""query GetAllLead($page: Int, $limit: Int, $filter: LeadFilterInput) { getAllLead(page:",
+"$page, limit: $limit, filter: $filter) { result { Id clientName phone email callStatus } totalCount",
+"message STATUS_CODES } }"", ",
+"""variables"": { ",
+,"""page"": 1, "
+,"""limit"": 20, "
+,"""filter"": { ""search"": """" } "
+} ,
+}' ,
+2. Call a Mutation (write data) — create a lead: ,
+curl --location 'https:///graphql' \ ,
+--header 'X-API-Key: 2b_key_live_9f3a1c2e8b7d4f56' \ ,
+--header 'X-API-Secret: 2b_secret_live_7a2f9e1b4c8d0a3f6e5b2c1d9a8f7e6b' \ ,
+--header 'Content-Type: application/json' \ ,
+--data '{ ,
+"""query"": ""mutation CreateLead($input: CreateLeadInput!) { createLead(input: $input) { result { Id",
+"clientName } message STATUS_CODES } }"", ",
+"""variables"": { ",
+,"""input"": { "
+,"""clientId"": ""118"", "
+,"""leadSource"": ""Meta Ads"", "
+,"""note"": ""Interested in a 2-acre plot near Sohna"" "
+,} 
+} ,
+}' ,
+"Every other operation in this handbook is called the exact same way: same URL, same { ""query"": ""..."",",
+"""variables"": {...} } body shape, same two auth headers on every call — only the text of query and the",
+contents of variables change. The “Input” and “Response” fields documented for every operation in the,
+sections below tell you exactly what to put inside variables and what fields you can ask for inside the query ,
+"string’s selection set, respectively. ",
+Authentication ,
+"Every operation in this handbook (aside from a small number of genuinely public/anonymous queries, called out",
+individually where they occur) requires an authenticated identity. The CRM integration authenticates with a,
+"single Key/Secret pair, sent as two headers on every request — there is no login call, no session token, and no",
+refresh cycle to manage: ,
+X-API-Key: “X-API-Key” ,
+X-API-Secret: “X-API-Secret” ,
+"2bigha issues the CRM a long-lived Key ID (a public identifier, safe to appear in logs) and a Secret Key (shown",
+"once at creation time, treated like a password from then on), scoped to a dedicated “CRM Integration” service",
+account rather than to any individual human admin. The CRM sends both headers on every single request,
+"instead of a session token — there is no login step, no session expiry, and nothing to refresh. ",
+Note: We will provide you the Authentication document separately. ,
+Error handling conventions ,
+• ,"Always check errors in the response body, not just data. "
+• ,"Most error objects carry a machine-readable extensions.code (e.g. UNAUTHENTICATED, FORBIDDEN,"
+,BAD_USER_INPUT) in addition to a human-readable message — prefer branching on code where present. 
+• ,Many response types in this API also carry their own application-level status envelope in addition to the
+,transport-level GraphQL response — most commonly a message: String and a STATUS_CODES field (typed
+,inconsistently across modules as either Int or String — this inconsistency is called out again in each
+,"section’s Shared Types & Enums subsection). Treat STATUS_CODES as a secondary, business-level status",
+,signal layered on top of (not a replacement for) the standard GraphQL errors array — check both. ,
+• ,"Pagination is not fully uniform across the API: most list queries accept some combination of page, limit,",
+,"and/or offset, and return a totalCount alongside result. The exact accepted combination is",
+,documented per-operation since it varies module to module. ,
+How this handbook is organized ,,
+4,"Core CRM API — Leads, the Lead 360 view (properties/agent/lead/usage/status), Notes, Groups,",
+,Property Management. This is the heart of the schema and almost certainly where CRM integration,
+,work should start: it’s the single richest source of the “lead with property metadata and subscription,
+,metadata” view the CRM needs to display. ,
+5,Client & Agent Sync — the two operations that keep an identity in sync between the two systems:,
+,creating the underlying client/customer record a lead needs (adminCreateUser) and creating/reading,
+,agent accounts (createAdmin and friends) so 2bigha and the CRM agree on who the agents are. ,
+6,"Property API — creating and reading properties: the “create the property in 2bigha from the CRM” flow,",
+,plus the read/search operations the CRM needs to display property data and keep it current. ,
+7,Property Management (PM) Service API — the separate B2C paid property-management subscription,
+,product; scoped here to what a CRM agent needs to look up a lead’s PM plan/visit/verification/ticket,
+,"status, with a short inventory of the many internal PM operations that fall outside the CRM’s integration",
+,scope. ,
+8,Known Gaps & Notes for the 2bigha Backend Team — a consolidated appendix of the SDL/resolver,
+,"inconsistencies, unimplemented operations, and ambiguities discovered while compiling this handbook,",
+,so both teams have a shared punch list to resolve before/during integration. ,
+Deliberately out of scope. 2bigha’s full GraphQL API also covers subscription-plan/coupon/discount,,
+"management and billing, legal verification status, social media, IVR call campaigns, WhatsApp messaging, agent",,
+"performance analytics, team management, and update/export history. None of that is documented here: the",,
+"CRM builds and manages all of those capabilities itself, and does not need to call 2bigha for them. The one",,
+"exception is subscription metadata already denormalized onto a lead (plan name, status, expiry) — that comes",,
+"back as part of the Core CRM lead queries in Section 1, with no separate subscription-management API required. ",,
+The details and status of lead-subscription-based API is documented. ,,
+Property API ,,
+This section covers exactly what the CRM needs on the property side: creating a property in 2bigha when one is,,
+"added from the CRM, updating it, and reading property data back for display. ",,
+1. Property CRUD ,,
+createProperty (Mutation) ,,
+• ,Purpose: Create a new property listing — the “create the property in 2bigha from the CRM” operation.,
+,"Persisted immediately with status: ""published"". ",
+• ,Input: CreatePropertyInput! ,
+,– ,"location: LocationInput — state, district, city, pincode, address, name, placeId (all String, all"
+,optional) ,
+,– ,propertyDetailsSchema: PropertyDetailsSchemaInput — all fields optional: propertyType:
+,"String, khasraNumber: String, murabbaNumber: String, khewatNumber: String, area: String ",
+,"(note: numeric-as-string, not Float), areaUnit: String, totalPrice: String (numeric-as-string),",
+,"pricePerUnit: String, waterLevel: Int, landMark: [String], category: String, highwayConn:",
+,"Boolean, landZoning: String, ownersCount: Int, ownershipYes: Boolean, soilType: String,",
+,"roadAccess: Boolean, roadAccessDistance: Int, description: String, landMarkName: JSON,",
+,"roadAccessWidth: Int, roadAccessDistanceUnit: String ",
+,– ,"contactDetails: ContactDetailsInput — listerType: String, ownerName: String, phoneNumber:"
+,"String, whatsappNumber: String, ownerId: String (all optional) ",
+,– ,"images: [String!] — plain blob-path strings, not a GraphQL Upload. See the upload flow note"
+,below. ,
+,– ,"map: MapInput — boundaries: JSON, coordinates: JSON, location: JSON (free-form JSON blobs) "
+• ,"Response: Property! — full shape: id: ID!, uuid: String, propertyName: String, title: String!,",
+,"description: String, propertyType: PropertyType!, status: String!, price: Float!, pricePerUnit:",
+,"Float, area: Float!, areaUnit: AreaUnit!, khasraNumber: String, murabbaNumber: String, khewatNumber:",
+,"String, address: String, city: String, district: String, state: String, country: String, pinCode:",
+,"String, latLng: String, location: location (name, address, coordinates: {lat, lng}), boundary: JSON,",
+,"calculatedArea: Float, geoJson: JSON, createdByType: CreatedByType!, images: [Image!]! (url, alt),",
+,"videos: String, listingAs: ListingAs!, ownerName: String, ownerPhone: String, ownerId: String,",
+,"ownerWhatsapp: String, isFeatured: Boolean, isVerified: Boolean!, legalVerificationRequestedAt:",
+,"String, isActive: Boolean!, isHighlighted: Boolean, viewCount: Int!, inquiryCount: Int!, createdAt:",
+,"Date, updatedAt: Date!, publishedAt: String, createdByAdminId: ID, createdByUserId: ID,",
+,"approvalStatus: ApprovalStatus!, approvalMessage: String, approvedBy: ID, approvedAt: Date,",
+,"rejectionReason: String, rejectedBy: ID, rejectedAt: String, adminNotes: String, lastReviewedBy:",
+,"ID, lastReviewedAt: String, lastViewedAt: String, listingId: Int, availablilityStatus: landStatus! ",
+,"(note the misspelling — availablilityStatus, not availabilityStatus; it is spelled this way consistently",
+,"everywhere in the schema, so send it exactly like this), waterLevel: Int, category: String, highwayConn:",
+,"Boolean, landZoning: String, ownersCount: Int, ownershipYes: Boolean, soilType: String, roadAccess:",
+,"Boolean, roadAccessDistance: Int, landMark: String, landMarkName: String, roadAccessWidth: Int,",
+,"roadAccessDistanceUnit: String, listingType: ListingType, isPriceNegotiable: Boolean,",
+,"hasGatedCommunity: Boolean, multipleSizeOptions: Boolean, nearestMajorCity: NearestMajorCity ",
+,"(city, distance, unit), nearbyActivities: [String], scenicFeatures: [String], amenities: [String],",
+,"propertySold: Boolean, agentListingFollowupStatus: String, agentFollowupAt: Date. ",
+• ,Auth: Any authenticated caller. No permission-string or role check. ,
+• ,Notes / gotchas: ,
+,– ,Upload flow: images are uploaded out-of-band — call getPropertyImageUploadUrls(count) first
+,"to get pre-signed Azure Blob upload URLs, PUT the file bytes directly to uploadUrl, then pass the",
+,returned blobPath values in images: [String!] on create (or later via addPropertyImages). ,
+,– ,khasraNumber/murabbaNumber/khewatNumber/totalPrice/pricePerUnit/area inside
+,"propertyDetailsSchema are typed as String, not numeric GraphQL scalars — the service",
+,presumably parses them server-side. Send numeric values as strings. ,
+updateProperty (Mutation) ,,
+• ,Purpose: Edit an existing property — e.g. to push a change made in the CRM back to 2bigha. ,
+• ,"Input: id: ID!, input: UpdatePropertyInput! ",
+,– ,"UpdatePropertyInput: location: LocationInput, map: MapInput, contactDetails:"
+,"ContactDetailsInput, propertyDetailsSchema: PropertyDetailsSchemaInput (all as defined",
+,"above), images: [String!], deleteImageIds: [ID!], markers: [MarkerInput!] (lat, lng),",
+,"boundaries: [BoundaryInput!] (type, shapeId: Float, coordinates: [CoordinateInput!], area:",
+,"Float; CoordinateInput = lat, lng, index: Int, shapeId: Float, type: String), coordinates:",
+,"[CoordinateInput!], isHighlighted: Boolean. ",
+• ,Response: Property (nullable — unlike createProperty’s Property!). ,
+• ,Auth: Any authenticated caller. ,
+• ,Notes / gotchas: ,
+,– ,"Two parallel geometry channels, unclear precedence. UpdatePropertyInput accepts"
+,map/boundary geometry via map: MapInput (raw JSON blobs) and via the separately-typed,
+,markers/boundaries/coordinates array fields. Which one the service actually persists (or,
+,whether it merges both) cannot be determined from the resolver/SDL alone — clarify with the,
+,backend team before relying on one path. ,
+,– ,Ownership/permission check is present in source but currently NOT enforced. The resolver
+,computes isOwnProperty and canEditStaffProperty but the actual authorization gate is,
+,"commented out — as deployed, any authenticated caller can update any property, regardless",
+,of who created it. ,
+updatePropertySoldStatus (Mutation) ,,
+• ,Purpose: Mark a property as sold/unsold (the “Mark as Sold” toggle). ,
+• ,"Input: UpdatePropertySoldInput! — id: ID!, propertySoldStatus: Boolean!. ",
+• ,"Response: PropertySoldStatusResponse! — id: ID!, message: String!. ",
+• ,Auth: Any authenticated caller. ,
+getPropertyImageUploadUrls (Query) ,,
+• ,Purpose: Step 1 of the property image-upload flow — get pre-signed Azure Blob upload URLs. ,
+• ,Input: count: Int!. ,
+• ,"Response: [PropertyImageUploadUrl!]! — uploadUrl: String!, blobPath: String!. ",
+• ,Auth: Any authenticated caller. ,
+• ,"Gotcha: count is silently clamped server-side to the range [1, 10] (Math.min(Math.max(count, 1), 10))",
+,— requesting 50 URLs returns exactly 10; requesting 0 or a negative number returns 1. ,
+addPropertyImages (Mutation) ,,
+• ,"Input: propertyId: ID!, blobPaths: [String!]! (bare args, not wrapped in an input object). ",
+• ,Response: Boolean!. ,
+• ,Auth: Any authenticated caller (adminId-truthy check only — no ownership check). ,
+removePropertyImage (Mutation) ,,
+• ,"Input: propertyId: ID!, imageId: ID!. ",
+• ,Response: Boolean!. ,
+• ,Auth: Any authenticated caller. ,
+updatePropertyMap (Mutation) ,,
+• ,"Input: propertyId: ID!, map: MapInput! (same shape as CreatePropertyInput.map). ",
+• ,Response: Boolean!. ,
+• ,Auth: Any authenticated caller. ,
+getPropertyMedia (Query) ,,
+• ,Purpose: Preview a property’s images + map state. ,
+• ,Input: propertyId: ID!. ,
+• ,"Response: PropertyMediaPreview! — images: [PropertyMediaImage!]! (id: ID!, thumbnailUrl: String,",
+,"isMain: Boolean!, sortOrder: Int!), hasMap: Boolean!, location: JSON, coordinates: JSON, boundaries:",
+,JSON. ,
+• ,Auth: Any authenticated caller. ,
+2. Reading Properties for Display ,,
+properties (Query) ,,
+• ,Purpose: The main property search/listing query — the primary way for the CRM to pull property data,
+,to display. ,
+• ,"Input: GetPropertiesInput! — page: Int!, limit: Int!, searchTerm: String, approvalstatus:",
+,"ApprovalStatus (lower-case s, legacy), approvalStatus: ApprovalStatus (camelCase — neither is",
+,"actually forwarded to the service, see gotcha below), availablilityStatus: landStatus, sort:",
+,"PropertySortInput (priceOrder: String, newlyCreated: Boolean, nearMe: NearMeInput — lat: Float!,",
+,lng: Float!). ,
+• ,"Response: PaginatedProperties — data: [properties!]!, meta: PaginationMeta (page, limit, total,",
+,"totalPages, all nullable Int). ",
+,– ,"properties (lower-case type name — a per-item composite envelope, distinct from Property):"
+,"seo: Seo, verification: Verification (id: ID!, propertyId: ID!, isVerified: Boolean!,",
+,"verificationMessage: String!, verificationNotes: String, verifiedBy: ID, verifiedAt:",
+,"String), property: Property, images: [PropertyImage] (id: ID!, variants:",
+,"PropertyImageVariants → thumbnail, medium, large, original), user: propertyUser (firstName,",
+,"lastName, email, role, phone), createdByUser: createdByUser (firstName, lastName), plus",
+,"priceAnalytics/analytics: PropertyPriceAnalytics, monthlyPriceTrend:",
+,"MonthlyPriceTrendResult, relistRequestedByName, relistRequestedAt, approvedByName,",
+,rejectedByName. ,
+,– ,"priceAnalytics/analytics/monthlyPriceTrend are computed field resolvers, evaluated per-item"
+,only if selected — expect extra latency if requested across a large paginated list. ,
+• ,Auth: None — no context auth check in the resolver at all. Public. ,
+• ,Gotcha: Neither approvalStatus nor approvalstatus from the input is actually forwarded to the service,
+,"(PropertyService.getProperties(page, limit, searchTerm, sort)) — sending an approval-status filter",
+,on this query has no effect. ,
+getPropertyBySlug (Query) ,,
+• ,Input: inputGetPropertyBySlug! — slug: String!. ,
+• ,"Response: properties (the same composite envelope described above, singular) — the operation to use",
+,for a property-detail display screen. ,
+• ,Auth: None. Public. ,
+getPropertiesPostedByAdmin (Query) ,,
+• ,Purpose: List properties created by the calling credential — useful for the CRM to reconcile “everything,
+,I’ve created in 2bigha.” ,
+• ,"Input: GetPropertiesInput! (uses page, limit, input.approvalStatus ?? input.approvalstatus,",
+,searchTerm). ,
+• ,Response: PaginatedProperties. ,
+• ,Auth: Any authenticated caller. Scoped server-side to context.admin.adminId (your own properties,
+,only). ,
+3. Approval & Status Queues ,
+These queries let the CRM read a property’s moderation-approval status and legal-verification status for display,
+— the same “pending / approved / rejected” and “pending verification / verified” queues 2bigha’s own admin UI,
+uses. Read the closing note in this section before building anything that assumes these statuses can be,
+changed through this API. ,
+getPendingApprovalProperties (Query) ,
+• ,Purpose: List properties awaiting moderation approval. 
+• ,"Input: GetPropertiesInput! — page, limit, searchTerm, availablilityStatus: landStatus (optionally"
+,"further filter by land status, reusing the same field — and its consistent misspelling — used elsewhere in"
+,this schema). 
+• ,"Response: PaginatedProperties (same shape as properties, above). "
+• ,"Auth: None. The resolver takes no context argument at all — this runs as a fully public, unauthenticated"
+,query. 
+getRejectedProperties (Query) ,
+• ,"Same input/response shape as getPendingApprovalProperties, filtered to rejected properties. "
+• ,"Auth: None — public, same as above. "
+getApprovedProperties (Query) ,
+• ,"Same input/response shape, filtered to approved properties. "
+• ,Auth: None — public. 
+getPendingVerificationProperties (Query) ,
+• ,Purpose: List properties pending legal verification — a separate status track from moderation approval
+,"(see Property.isVerified / the Verification object on the properties envelope, distinct from"
+,approvalStatus). 
+• ,Input: same GetPropertiesInput! shape as above. 
+• ,Response: PaginatedProperties. 
+• ,"Auth: requirePermission(context, LEGAL_VERIFICATION_PERMISSIONS.VIEW) — this one is genuinely"
+,"permission-gated, unlike its three approval-queue siblings above. The CRM’s credential will need this"
+,permission granted to call it. 
+getVerifiedProperties (Query) ,
+• ,Purpose: List legally-verified properties. 
+• ,Input: same shape. 
+• ,Auth: Same LEGAL_VERIFICATION_PERMISSIONS.VIEW permission check as
+,getPendingVerificationProperties. 
+• ,"Gotcha: despite the GraphQL field being named getVerifiedProperties, the resolver internally calls "
+,PropertyService.getApprovedLegalVerificationProperties(...) — a naming mismatch between the
+,"schema field and the underlying service method. Not a functional bug, but worth flagging to the"
+,backend team as a source of confusion when searching the codebase. 
+Shared Types & Enums ,
+Read this section before writing any client-side type definitions. property.types declares some of the same,
+enum names more than once in the file with different value sets — static source review cannot tell you with,
+certainty which definition is authoritative in the live schema. Get the real values by introspecting the running,
+schema before hard-coding enum values. ,
+PropertyType — declared twice in the same file with different value sets ,
+1,"First declaration: COMMERCIAL, RESIDENTIAL, AGRICULTURAL, INDUSTRIAL "
+2,"Second declaration: AGRICULTURAL, COMMERCIAL, RESIDENTIAL, INDUSTRIAL, VILLA, APARTMENT, PLOT,"
+,"FARMHOUSE, WAREHOUSE, OFFICE, OTHER "
+• ,A single SDL string literally defining enum PropertyType twice with different members is not valid
+,GraphQL as written. Don’t assume the smaller set is exhaustive — the larger set is far more likely to be
+,"what’s actually accepted, but confirm via introspection. "
+AreaUnit — declared twice in the same file ,
+1,"First: SQYRD, KANAL, MARLA, ACRE, BIGHAS, SQUARE_FEET, HECTARE "
+2,"Second: SQYRD, SQFT, SQM, ACRE, HECTARE, BIGHA, KATHA, MARLA, KANAL, GUNTA, CENT "
+• ,"Note BIGHAS/SQUARE_FEET (set 1) vs BIGHA/SQFT (set 2) look like the same concept renamed, not additive."
+,Confirm which set is live before sending either spelling. 
+ListingAs — declared three times with two different value sets ,
+1,"Declared twice identically: OWNER, AGENT, BUILDER, COMPANY "
+2,"A third declaration with completely different values: PROPERTY_OWNER, REAL_ESTATE_AGENT,"
+,"PROPERTY_DEALER, BUILDER "
+• ,"Property.listingAs: ListingAs! — you genuinely cannot tell from source whether to send ""OWNER"" or"
+,"""PROPERTY_OWNER"". Confirm via introspection before building any “list as” selector. "
+landStatus ,
+• ,"property.types.ts: AVAILABLE, SOLD, MANAGED. Note the consistent misspelling availablilityStatus (not"
+,“availability”) on every input/type that uses it — reproduce the misspelling exactly when building
+,requests. 
+Auth/permission strings observed in this section ,
+• ,"Role checks: super_admin, bdm (both referenced only in updateProperty’s currently-dead ownership-check"
+,"code, not actively enforced). "
+• ,No permission-string (requirePermission) checks apply to any operation kept in this section — the ones
+,"that exist elsewhere in 2bigha’s property schema (bulk-upload:*, image-library:*,"
+,LEGAL_VERIFICATION_PERMISSIONS.VIEW) all belong to operations this handbook deliberately excludes. 
+Farm API ,
+"Farms are a parallel listing type to Property, with their own top-level Query/Mutation fields, a separate",
+"Property/Properties type pair, and a substantially different SEO/media model — see the Shared Types & Enums ",
+section below for how this diverges from the Property API. Source: src/graphql/types/farms.types.ts /,
+src/graphql/resolvers/farm.resolver.ts. ,
+"As with the Property API, this section covers creating and reading farms for the CRM — not farm approval-queue",
+"management, discovery/recommendation queries, or map/location search, none of which the CRM needs. ",
+1. Farm Create & Update ,,
+createFarmByAdmin (Mutation) ,,
+• ,Purpose: Create a new farm listing — the farm equivalent of createProperty. ,
+• ,Input: CreateFarmsInput! ,
+,– ,"location: LocationInput — farm’s LocationInput only has state, district, city, address (no"
+,"pincode/name/placeId, unlike the property version). ",
+,– ,"farmDetailsSchema: FarmDetailsSchemaInput — propertyName: String, listingAs: String,"
+,"propertyType: String, area: String, areaUnit: String, price: Float (note: Float here,",
+,"vs. property’s totalPrice: String), source: String, pricePerUnit: Float, waterLevel: Int,",
+,"landMark: [String], category: String, highwayConn: Boolean, roadAccess: Boolean,",
+,"roadAccessDistance: Int, description: String, roadAccessWidth: Int,",
+,"roadAccessDistanceUnit: String, listingType: String, isPriceNegotiable: Boolean,",
+,"hasGatedCommunity: Boolean, multipleSizeOptions: Boolean, nearestMajorCity:",
+,"NearestMajorCityInput (city, distance, unit), nearbyActivities: [String], scenicFeatures:",
+,"[String], amenities: [String]. ",
+,– ,contactDetails: ContactDetailsInput — farm’s shape differs from property’s: listingAs:
+,"String, ownerName: String, phoneNumber: String, alternativePhone: String (property’s",
+,equivalent uses listerType/whatsappNumber/ownerId instead of listingAs/alternativePhone). ,
+,– ,"images: [Upload!] — a GraphQL Upload scalar list (multipart upload), not blob-path strings. "
+,This is a materially different upload mechanism from createProperty’s pre-signed-URL flow — if,
+,"the CRM creates both properties and farms, it needs two separate upload strategies. ",
+,– ,"map: MapInput — same {boundaries, coordinates, location}: JSON shape as property’s. "
+• ,"Response: Properties! (capital-P — the farm-listing composite envelope, distinct from lower-case",
+,"properties used by the Property domain): seo: Seo, verification: Verification, property: Property ",
+,(farm’s own Property type — see Shared Types below for how it differs from the property-domain,
+,"Property), images: [PropertyImage] (farm’s PropertyImage = id, imageUrl, variants — a different shape",
+,"from the property-domain PropertyImage), user: propertyUser (farm’s version has more fields than",
+,"property’s: id, firstName, lastName, email, role, phone, avatar, isVerified, isAdminVerified,",
+,"whatsappNumber), createdByUser: createdByUser, saved: Boolean. ",
+• ,Auth: Any authenticated caller. ,
+updateFarmSeo (Mutation) ,,
+• ,"Purpose: Set/update a farm’s SEO slug, title, description, keywords. ",
+• ,"Input: UpdateSeoInput! (same shape as property’s, minus createdAt/updatedAt on the response). ",
+• ,"Response: Seo! — farm’s Seo type omits createdAt/updatedAt (present on property’s Seo): id: ID!,",
+,"propertyId: ID!, slug: String!, seoTitle: String!, seoDescription: String!, seoKeywords: String!. ",
+• ,Auth: Any authenticated caller. ,
+• ,"⚠ Notes: there is no updateFarms/deleteFarms mutation live — both are commented out in the SDL,",
+,"even though a fully-fleshed-out UpdateFarmInput type exists in the schema (title, description,",
+,"propertyType, price, area, bedrooms/bathrooms/floors/parking,",
+,listing/owner/SEO/media/amenity/status fields — dozens of fields). That input type is dead — nothing,
+,"in the schema currently accepts it. As deployed, a farm can be created and have its SEO patched, but",
+,"not otherwise edited or deleted via GraphQL. If the CRM needs to edit or delete a farm after creation,",
+,that’s a real gap to raise with the 2bigha backend team. ,
+2. Reading Farms for Display ,
+getFarms (Query) ,
+• ,Purpose: Farm search/listing — the primary way for the CRM to pull farm data to display. 
+• ,"Input: GetFarmsInput! — userId: String, page: Int, limit: Int, searchTerm: String, approvalstatus:"
+,"ApprovalStatus (only the lower-case-s spelling exists here — no camelCase alternative, unlike the"
+,property domain’s GetPropertiesInput). 
+• ,"Response: PaginatedFarms — data: [Properties]!, meta: PaginationMeta. "
+• ,Auth: None — public. Note the resolver only forwards page/limit/searchTerm — userId and
+,approvalstatus are accepted by the schema but not read by this resolver. 
+getFarmBySlug (Query) ,
+• ,Purpose: Fetch a single farm by slug — the farm-detail display operation. 
+• ,"Input: inputGetFarmBySlug — slug: String!, but note the outer input argument itself is not marked"
+,non-null in the SDL (no !). Passing input: null (or omitting it) will reach input.slug inside the resolver
+,and throw a runtime error rather than a clean GraphQL validation error — always pass input. 
+• ,Response: Properties. 
+• ,"Auth: None. Cached, with a normalizeForCache step that stringifies all Date fields so cache-hit and cache-"
+,miss responses are shape-identical. 
+getFarmsPostedByAdmin (Query) ,
+• ,Purpose: List farms created by the calling credential — useful for the CRM to reconcile “everything I’ve
+,created in 2bigha.” 
+• ,Input: GetFarmsInput!. 
+• ,Response: PaginatedFarms. 
+• ,Auth: Any authenticated caller (throws UNAUTHENTICATED otherwise). Scoped to caller’s own adminId. 
+3. Approval & Status Queue ,
+Farms have a plain moderation approvalStatus (PENDING/APPROVED/REJECTED). ,
+getPendingApprovalFarms (Query) ,
+• ,Purpose: List farms awaiting moderation approval. 
+• ,"Input: GetFarmsInput! — userId: String, page: Int, limit: Int, searchTerm: String, approvalstatus:"
+,ApprovalStatus. Gotcha: the resolver signature only actually reads page/limit/searchTerm — userId and
+,"approvalstatus are accepted by the schema but ignored, exactly like getFarms. "
+• ,Response: PaginatedFarms. 
+• ,"Auth: None. The resolver takes no context argument — fully public, unauthenticated. "
+getRejectedFarms (Query) ,
+• ,"Same input/response shape and same ignored-field behavior as above, filtered to rejected farms. "
+• ,Auth: None — public. 
+getApprovedFarms (Query) ,
+• ,"Same input/response shape, filtered to approved farms. "
+• ,Auth: None — public. 
+Shared Types & Enums ,
+"Because property.types.ts and farms.types.ts are separate SDL strings merged into one schema, and several",
+"type/enum names are declared in both with different shapes, static source review cannot tell you with",
+certainty which definition is authoritative in the live schema. Introspect the running schema before hard-,
+coding enum values or field lists. ,
+• ,PropertyType — farm’s declaration adds FARMLAND on top of the property-domain’s larger set
+,"(AGRICULTURAL, COMMERCIAL, RESIDENTIAL, INDUSTRIAL, VILLA, APARTMENT, PLOT, FARMHOUSE, WAREHOUSE,"
+,"OFFICE, OTHER, FARMLAND). "
+• ,AreaUnit — identical between the two files’ “second” declarations (see the Property API’s Shared Types
+,section for the full value set and the collision with that file’s own first declaration). 
+• ,ListingAs — farm’s declaration matches property’s OWNER/AGENT/BUILDER/COMPANY set (not the conflicting
+,PROPERTY_OWNER/REAL_ESTATE_AGENT/PROPERTY_DEALER set that also appears in property.types.ts) — but
+,"confirm via introspection which set is actually live for both domains, since GraphQL enum names are"
+,shared globally once merged. 
+• ,"landStatus — farm’s declaration is AVAILABLE, SOLD only (no MANAGED, unlike the property domain)."
+,Property.availablilityStatus is non-null in the property domain and nullable in the farm domain’s
+,Property type. 
+• ,Property (type) — farm’s declaration reuses the same type name as the property domain’s but makes
+,"nearly everything nullable, adds source: String, and drops pinCode, viewCount, inquiryCount, and the"
+,khasra/murabba/khewat land-record fields entirely. Because both live in typeDefs merged into one
+,"schema, the effective field list/nullability of Property in the live schema is whichever one the"
+,"merge/registration order resolves to — confirm via introspection, since it affects every operation on this"
+,page that returns a Property/Properties envelope. 
+• ,Other identically-or-near-identically-named types duplicated between the two files: Seo (farm’s drops
+,"createdAt/updatedAt), Verification, Image, PropertyImageVariants, PropertyImage (shapes differ:"
+,"property’s is {id!, variants}, farm’s is {id, imageUrl, variants}), location/NearestMajorCity (farm’s"
+,"location drops coordinates), createdByUser, propertyUser (farm’s has 6 extra fields), LocationInput "
+,"(farm’s is a subset of property’s), ContactDetailsInput (shapes differ — see §1 above), MapInput,"
+,UpdateSeoInput. 
+Admin (Agent) Accounts — Create & Fetch ,
+2bigha’s internal staff/agent accounts are called admins in the schema. This section documents exactly the,
+create/fetch operations the CRM needs to keep its own agent records in sync with 2bigha’s copy — “admin,
+create-fetch.” ,
+Agent Create & Fetch ,
+Mutation: createAdmin ,
+• ,Purpose: Provision a new 2bigha agent/staff account. 
+• ,"Input — CreateAdminInput!: { email: String!, firstName: String!, lastName: String!, password:"
+,"String!, department: String, employeeId: String, phone: String, roleId: ID!, bio: String } — "
+,"exactly one roleId (a single role, from 2bigha’s own role catalog) is assignable at creation time; the CRM"
+,"only needs to pass a role id 2bigha has told it to use for synced agents, not manage the role catalog"
+,itself. 
+• ,"Response: AdminUserWithRBAC! — id: ID!, email: String!, firstName: String, lastName: String,"
+,"department: String, employeeId: String, phone: String, avatar: String, bio: String, isActive:"
+,"Boolean!, isVerified: Boolean!, lastLoginAt: Date, createdAt: Date!, updatedAt: Date!, roles:"
+,"[Role!]!, permissions: [Permission!]!, directPermissions: [Permission!]!. "
+• ,Notes: the fine-grained admins:create permission check that would normally gate this is present in the
+,"source only as a comment (see Known Gaps) — as deployed, any authenticated caller can create admin"
+,accounts. Store the returned id as the 2bigha-side identifier for this agent so it can be kept in sync going
+,forward. 
+Mutation: updateAdmin ,
+• ,Purpose: Update an existing agent’s profile fields. 
+• ,"Input: id: ID!, input: UpdateAdminInput! where UpdateAdminInput = { firstName: String, lastName:"
+,"String, department: String, employeeId: String, phone: String, avatar: String, bio: String,"
+,"isActive: Boolean, password: String, email: String, roleId: ID! }. Note: roleId is marked"
+,required (ID!) inside an otherwise fully-optional “update” input — this is very likely an SDL authoring
+,"mistake (probably meant to be optional), but as declared, every updateAdmin call must supply a roleId,"
+,even to change only e.g. a phone number. Confirm with the 2bigha backend team before assuming it
+,can be omitted. 
+• ,Response: AdminUserWithRBAC!. 
+Mutation: disableAdmin / enableAdmin ,
+• ,Purpose: Deactivate/reactivate an agent’s 2bigha access (e.g. when the CRM offboards an agent). 
+• ,Input: id: ID!. 
+• ,Response: AdminUserWithRBAC!. 
+• ,Notes: disableAdmin has one actively-enforced rule: a caller cannot disable its own account (if
+,"(admin.adminId === id) throw ... ""Cannot disable your own account"") — not relevant for a service"
+,"credential disabling a human agent’s account, but worth knowing if the CRM’s own integration"
+,credential is ever represented as an “admin” row. 
+Query: getAllAdmins ,
+• ,Purpose: List 2bigha agent/staff accounts — useful for reconciling the two systems’ agent lists. 
+• ,"Input: filter: AdminFilterInput ({ isActive: Boolean, department: String, roleSlug: String,"
+,"search: String }), sort: SortInput ({ field: String!, direction: SortDirection! }), limit: Int ="
+,"20, offset: Int = 0. "
+• ,"Response — AdminListResponse!: { admins: [AdminUserWithRBAC!]!, total: Int!, hasMore: Boolean!"
+,}. 
+• ,"⚠ Auth gap to flag: as currently written, this query’s entire auth check is commented out in"
+,"rbac.resolvers.ts — it runs as a fully public, unauthenticated query today, returning every internal"
+,agent’s email/phone/department/permissions to any caller who can reach the endpoint. This is very
+,likely unintentional on 2bigha’s side and should be confirmed/fixed before go-live; it doesn’t change
+,"how the CRM calls it, but the CRM team should not assume the response is otherwise access-controlled. "
+Shared Types & Enums referenced in this section ,
+Platform User (Client) — Create & Fetch ,
+"2bigha’s end-customers — property owners, agents, and regular users on the platform — are called platform",
+users in the schema. This is the “sync the client/customer record” side of the integration — creating and reading,
+the platform-user record a CRM contact corresponds to in 2bigha. ,
+Create ,,
+Mutation: adminCreateUser ,,
+• ,Purpose: Create a platform user (client/customer) account in 2bigha. ,
+• ,Input — PlatformUserInput!: | Field | Type | Required | |—|—|—| | email | String! | yes | | password ,
+,| String | no | | firstName | String | no | | lastName | String | no | | role | PlatformUserRole | no — ,
+,"enum: OWNER, AGENT, USER, COMPANY | | profile | PlatformUserProfileInput | no — nested, see below | ",
+,PlatformUserProfileInput: | Field | Type | |—|—| | bio | String | | avatar | Upload | | phone | String ,
+,| | whatsappNumber | String | | address | String | | city | String | | state | String | | country | String ,
+,| | pincode | String | | languages | JSON | | experience | Int | | rating | Int | | totalReviews | Int | ,
+• ,Response — PlatformAuthResponse!: | Field | Type | |—|—| | success | Boolean! | | message | String! ,
+,| | token | String | | refreshToken | String | | user | PlatformUser | | requiresEmailVerification |,
+,Boolean | | requiresPhoneVerification | Boolean | ,
+,"PlatformUser: id: ID!, email: String, firstName: String, lastName: String, role: PlatformUserRole!,",
+,"isActive: Boolean!, isVerified: Boolean!, emailVerifiedAt: String, lastLoginAt: String,",
+,"twoFactorEnabled: Boolean!, createdAt: String!, updatedAt: String!, profile: PlatformUserProfile,",
+,password: String. ,
+• ,Business-logic / gotchas: ,
+,– ,"Of all the PlatformUserProfileInput fields, only phone, whatsappNumber, avatar (mapped to"
+,"profileImage), and address are actually forwarded to PlatformUserService.createUser(...).",
+,"city, state, country, pincode, languages, experience, rating, totalReviews, bio are accepted by",
+,the schema and silently dropped by this resolver — do not build a UI that promises these get,
+,saved via this call. ,
+,– ,avatar is typed Upload — this field requires the GraphQL multipart request spec 
+,"(multipart/form-data with an operations/map/file-part structure), not plain JSON. Omit avatar if",
+,the CRM’s client is JSON-only. ,
+,– ,token/refreshToken are never populated by this resolver (left undefined → null) — creating a
+,"client here does not log anyone in, which is expected for this integration since the CRM never",
+,needs a session for this identity. ,
+,– ,id on the returned user is the value to store as the 2bigha-side identifier for this client going
+,forward. ,
+Mutation: UpdatePlatformUserStatus ,,
+• ,Purpose: Activate/deactivate a client account (e.g. if the CRM needs to suspend a client’s 2bigha-side,
+,access). ,
+• ,"Input: userId: ID!, isActive: Boolean! (plain args, not wrapped in an input type). ",
+• ,"Response — PlatformUserStatus!: { id: ID!, isActive: Boolean! }. ",
+• ,"Notes: thin passthrough to PlatformUserService.updateUserStatus(userId, admin.adminId, isActive). ",
+Fetch ,,
+Query: getUser ,,
+• ,Purpose: Fetch a platform user’s profile by id — the fetch counterpart to adminCreateUser. ,
+• ,Input: id: ID!. ,
+• ,"Response: PlatformUser — built manually in the resolver as: id, email, firstName, lastName, role,",
+,"isActive, createdAt (ISO string), profile (nullable object: id, bio, phone, avatar, city, state,",
+,"specializations, serviceAreas, languages, experience, rating, totalReviews) or null. ",
+• ,Auth: None — public. Throws NotFoundError if the user id doesn’t exist. ,
+• ,"Notes: this query is declared in property.types.ts rather than auth.types.ts, but is the platform-user-",
+,fetch operation to use — there is no separate getPlatformUser-named query in the reviewed schema. ,
+Shared Types & Enums ,,
+Enum ,Values ,Used by 
+PlatformUserRole ,"OWNER, AGENT, USER, COMPANY ","PlatformUserInput.role, PlatformUser.role "
+Scalar ,Notes ,
+Upload ,Used by PlatformUserProfileInput.avatar. Requires a GraphQL-multipart-request-spec capable HTTP,
+,client — a plain JSON POST will not populate this field. ,
+Platform User Subscription & Plan Details ,,
+"This section covers the “get subscription” side of the integration — reading a platform user’s subscription plan,",,
+"status, and feature-usage quotas. ",,
+Plan Catalog ,,
+Query: subscriptionPlans ,,
+• ,"Purpose: The plan catalog — every subscription tier 2bigha sells, with pricing and features. ",
+• ,Input: none. ,
+• ,Response: [SubscriptionPlan!]! — ,
+,– ,"SubscriptionPlan: id: Int!, name: String!, tier: Int!, displayLabel: String, isPopular:"
+,"Boolean!, isActive: Boolean!, pricing: [PlanPricing!]!, features: [PlanFeature!]! ",
+,– ,"PlanPricing: id: Int!, billingCycle: String! (one of the BillingCycle enum values, but typed"
+,"as plain String in this response — see Shared Types), basePrice: Float!, originalPrice: Float ",
+,"(pre-discount “strike-through” price, nullable), gstPercent: Float!, isBlur: Boolean!,",
+,"features: [PlanFeature!]!, isCurrentPlan: Boolean!, isExpiredPlan: Boolean!, isDisabled:",
+,Boolean! ,
+,– ,"PlanFeature: id: Int!, featureKey: String!, featureValue: String!, displayText: String,"
+,sortOrder: Int ,
+• ,Auth: None enforced — this is the one query in this section that works unauthenticated (anonymous,
+,callers get generic/no-subscription state for isCurrentPlan/isExpiredPlan/isDisabled; a valid end-user,
+,token personalizes those three booleans). ,
+"Property Management (PM) Service — Subscription, Visit & Verification",,
+Status Lookups ,,
+This section covers the PROPERTY_MANAGEMENT GraphQL domain. ,,
+1. Overview ,,
+"What PM is. Property Management (PM) is a large, separate B2C subscription product bolted onto the 2bigha",,
+"platform: a user pays up front for a plan, and in exchange 2bigha’s own operations staff — Regional Managers",,
+"(RM) and Field Agents, working under Super Admins — physically visit the property, verify legal documents,",,
+"produce inspection reports, and run a support-ticket desk for the life of the subscription. The commercial model",,
+"is prepaid and unbound-first: a pm_user_subscriptions row goes ACTIVE the moment Razorpay payment clears,",,
+with no property attached yet (an “unbound” subscription/credit). Only when the user (or an admin) submits a,,
+property via createManagedPropertyByUser / pmAdminCreateManagedPropertyOrder does the subscription bind to,,
+"that property, start its plan clock (startDate/endDate), and seed its visit quota (pm_visit_tracking). From there, a",,
+"long internal workflow runs: Super Admin assigns an RM → RM assigns a Field Agent (and, separately, a Legal",,
+Manager) → visits get requested/scheduled/executed with GPS check-in/out → the agent submits a report →,,
+the RM reviews it section-by-section → legal/pre-verification steps complete → the property is APPROVED.,,
+"Along the way the RM can upsell paid add-ons via a feasibility-check-then-quote flow, and either side can raise",,
+support tickets. ,,
+Why most of PM is out of scope for this CRM integration. PM has on the order of 100+ Query/Mutation,,
+"operations across 15 type-def files, and the large majority of them exist to run 2bigha’s",,own internal PM
+"operations tooling — the field-agent mobile/web app (check-in/out, report authoring), the RM console",,
+"(assignment, report review, legal checklist, feasibility scheduling), and billing-admin/plan-catalog-admin screens",,
+"(invoice ledgers, payment reconciliation, plan/pricing/feature CRUD, addon catalog CRUD, offline-sale recording,",,
+notifications). None of that is something the CRM’s Calling Agents or Team Leads need to drive or replicate — it,,
+"belongs entirely to 2bigha’s PM staff, and integrating it would mean rebuilding 2bigha’s internal ops console",,
+"inside the CRM, which is explicitly not the goal. ",,
+"What the CRM actually needs. A CRM Calling Agent or Team Lead, looking at a lead who is also (or might",,
+"become) a PM customer, needs to answer a narrow set of questions during or around a call:",,Did this person buy
+"a PM plan, and which one? Is it bound to a property yet, or still an unbound credit waiting to be attached?",,
+What’s the visit quota and visit history look like? - that answer those questions. Everything else is listed only as a,,
+one-line inventory in §5 so the CRM team knows it exists without needing to integrate against it. ,,
+2. Subscription & Plan Status Lookup ,,
+"These answer “what did this lead buy, and is it active?” — before or independent of any property being",,
+attached. ,,
+getUnboundSubscriptionsByUserId (Query) ,,
+• ,File: property-management.types.ts ,
+• ,Purpose: The primary CRM entry point for a newly-purchased PM plan. Returns every subscription this,
+,user has paid for that is ACTIVE but not yet bound to a property (i.e. no pm_user_property_subscriptions ,
+,row references it). ,
+• ,Input: userId: String! ,
+• ,Response: [UnboundSubscription!]! ,
+,type UnboundSubscription { ,
+,subscriptionId: Int! ,
+,planName: String! ,
+,price: Float! ,
+,durationMonths: Int! ,
+,visitsPerCycle: Int! ,
+,purchasedAt: Date! ,
+,} ,
+• ,Auth / Role notes: Explicitly admin-facing per the SDL comment (“Admin: fetch unbound subscriptions,
+,for a specific user (for the Tag modal)”). This is the one clean “look up by arbitrary userId” query in the,
+,whole subscription surface — use this as the anchor point for a lead who has paid but not yet added a,
+,property. ,
+• ,"Business logic notes: Per pm-schema-doc.md §1/§3.2, a subscription is “unbound” purely by the absence ",
+,of a binding row — there’s no separate boolean flag. It only shows here once pm_payments.status =,
+,SUCCESS has flipped the subscription to ACTIVE (via verifyAndActivatePM or the Razorpay webhook’s,
+,"markPmPaymentCaptured). If the customer dismissed the Razorpay modal, the subscription is still",
+,PENDING_PAYMENT and will not appear here or anywhere else — from the CRM’s perspective that,
+,purchase attempt is invisible until payment succeeds. An empty array is expected and normal for a user,
+,"with no unbound credits (either they never bought a plan, or every plan they bought is already bound to",
+,a property — check §3 next). ,
+• ,CRM use case: Lead calls in right after paying but before submitting property details — agent runs this,
+,to confirm the payment actually went through and see which plan is waiting to be attached. ,
+getMyUnboundSubscriptions (Query) ,,
+• ,File: property-management.types.ts ,
+• ,"Purpose: Same data and same UnboundSubscription shape as above, but self-scoped to the calling user’s",
+,"own JWT (this is what the /dashboard/add-property page guards on, per pm-schema-doc.md §1). No",
+,userId argument exists. ,
+• ,Auth / Role notes: PM end-user token only. Not usable by a CRM agent for another user’s data — ,
+,documented here only so the CRM team recognizes it’s the “my own” counterpart to,
+,getUnboundSubscriptionsByUserId and doesn’t confuse the two. ,
+getActivePropertyPlan (Query) ,,
+• ,File: property-management.types.ts ,
+• ,"Purpose: Once a plan is bound, this is the single-call answer to “what plan is running on this property",
+,"right now, and what’s left on it (visits, days)?” ",
+• ,Input: propertyId: String! ,
+• ,Response: ActivePropertyPlan ,
+,type ActivePropertyPlan { ,
+,userPropertyId: String! ,
+,propertyId: String! ,
+,planVariantId: Int! ,
+,planName: String! ,
+,billingCycle: String! ,
+,price: Int! ,
+,startDate: Date ,
+,endDate: Date ,
+,visitsRemaining: Int ,
+,visitsUsed: Int ,
+,status: String!,"# plain String, not a GraphQL enum — see §8 "
+,orderId: String ,
+,} ,
+• ,Auth / Role notes: Listed under “PM Payment Queries” with no explicit role note in the SDL comments,
+,(unlike the sibling admin-by-userId query above). Confirm with backend team whether this resolves via,
+,property ownership on the caller’s own JWT (i.e. only works for the customer’s own session) or is open,
+,to admin/RM/service callers by propertyId alone. ,
+• ,Business logic notes: status mirrors the pm_user_property_subscriptions.status state machine,
+,"documented in pm-schema-doc.md §3.3: PENDING_PAYMENT → ACTIVE → EXPIRING → EXPIRED, with side",
+,branches to CANCELLED/OFFBOARDED/SUSPENDED. startDate/endDate are set by startSubscriptionClock at,
+,"binding time, not at payment time — so a subscription can be ACTIVE under",
+,getUnboundSubscriptionsByUserId for a while with no clock running yet. visitsRemaining/visitsUsed ,
+,"come from pm_visit_tracking, seeded from the pricing variant’s visits_per_cycle at binding. ",
+• ,CRM use case: Lead calls asking “how many visits do I have left / when does my plan expire” — this is,
+,the one query that answers both in a single round trip. ,
+getPropertyPlanHistory (Query) ,,
+• ,File: property-management.types.ts ,
+• ,"Purpose: All plan activations for a property, not just the current one — useful when a lead has",
+,"upgraded, renewed, or churned and come back. ",
+• ,Input: propertyId: String! ,
+• ,Response: [PropertyPlanHistoryItem!]! — identical field shape to ActivePropertyPlan (see above). Per,
+,"the inline SDL comment: “One entry per plan activation — active plan has status ACTIVE, past plans are",
+,EXPIRED/INACTIVE.” ,
+• ,Auth / Role notes: Same ambiguity as getActivePropertyPlan — confirm scope with backend team. ,
+• ,"CRM use case: Explaining plan-change history to a customer disputing a charge, or a Team Lead auditing",
+,why a subscription shows a given status. ,
+getPMOrderStatus (Query) ,,
+• ,File: property-management.types.ts ,
+• ,"Purpose: Poll a specific Razorpay checkout attempt to see whether payment succeeded, failed, or is still",
+,pending. ,
+• ,Input: orderId: String! ,
+• ,Response: PMOrderStatus ,
+,type PMOrderStatus { ,
+,orderId: String! ,
+,status: String!,"# plain String; SDL comment says poll ""until COMPLETED"" "
+,userPropertyId: String ,
+,} ,
+• ,Auth / Role notes: Not explicitly scoped in the SDL. This is normally called by the customer’s own,
+,"checkout flow (per pm-schema-doc.md §1: the /subscription/pending page polls this every 3s), so a CRM",
+,agent would only use it if the CRM already has the orderId on file from some other integration point,
+,"(e.g. a webhook 2bigha forwards, or the order ID captured at time of purchase). Confirm with backend",
+,"team whether a CRM-facing way to resolve “the last order for user X” exists — as written,",
+,getPMOrderStatus requires already knowing the order ID. ,
+• ,Business logic notes: Note the naming mismatch worth flagging to backend: the field-level comment,
+,"says poll “until status is COMPLETED,” but pm-schema-doc.md §3.1 documents the underlying",
+,pm_payments.status enum as INITIATED → PROCESSING → SUCCESS → FAILED/REFUNDED — there is no,
+,COMPLETED value in that enum. Either PMOrderStatus.status is a derived/composite string distinct from,
+,"the raw payment status (most likely, since it also folds in binding progress via userPropertyId), or the",
+,comment is stale. Confirm the exact string values this field can return with backend team before,
+,building any CRM logic that branches on it. ,
+• ,CRM use case: Support call where the customer says “I paid but nothing happened” and the CRM,
+,already has the order ID from a payment gateway notification. ,
+"3. Managed Property, Binding & Assignment Status ",,
+"Once a plan is bound to a property, these answer “which property, who’s assigned to it, and how far along is the",,
+assignment workflow?” ,,
+getManagedPropertyDetail (Query) ,,
+• ,File: property-management.types.ts ,
+• ,"Purpose: The richest single-call property status view — subscription state, assignment state, visit quota,",
+,"every assigned staff member, legal-check status, embedded visits, and embedded tickets, all in one",
+,response. This is the best “give me everything about this lead’s PM property” query. ,
+• ,"Input: propertyId: String, userPropertyId: String (either identifier works, per the SDL comment:",
+,"“Single property detail (super_admin, regional_manager, field_agent)”) ",
+• ,Response: ManagedPropertyDetail ,
+,type ManagedPropertyDetail { ,
+,userPropertyId: ID ,
+,subscriptionStatus: String ,
+,assignmentStatus: AssignmentStatus ,
+,visitsIncluded: Int ,
+,visitsRemaining: Int ,
+,visitsUsed: Int ,
+,subscriptionStartDate: Date ,
+,subscriptionEndDate: Date ,
+,managerAssignedAt: Date ,
+,agentAssignedAt: Date ,
+,legalManagerAssignedAt: Date ,
+,managerAssignedBy: String ,
+,agentAssignedBy: String ,
+,preVerificationDone: Boolean ,
+,subscriptionCreatedAt: Date ,
+,subscriptionUpdatedAt: Date ,
+,legalCheckStatus: String ,
+,legalCheckNote: String ,
+,legalCheckStartedAt: Date ,
+,legalCheckCompletedAt: Date ,
+,user: userdata,"# userId, firstName, lastName, phone, email, role "
+,property: ManagedProperty,"# full property record — location, khasra, area, etc. "
+,images: [PropertyImage] ,
+,planDetails: PMPlanDetails,"# planId, planName, billingCycle, durationDays,"
+,"visitsAllowed, price ",
+,assignedManager: AdminMini,# the RM 
+,assignedAgent: AdminMini,# the field agent 
+,assignedLegalManager: AdminMini ,
+,visits: JSON,"# embedded visit data, shape not typed in SDL "
+,tickets: [PropertyTicket],# see §6 
+,} ,
+• ,"Auth / Role notes: super_admin, regional_manager, field_agent per the SDL comment. Confirm with",
+,backend team whether a CRM service token can be granted one of these roles (most likely,
+,regional_manager-equivalent or a dedicated CRM role) — this query is far too useful to leave,
+,unintegrated if a role can be arranged. ,
+• ,Business logic notes: assignmentStatus is the AssignmentStatus enum (§8) tracking the RM → Field,
+,Agent → verification → approval chain described in pm-schema-doc.md §3.4.,
+,legalCheckStatus/legalCheckStartedAt/legalCheckCompletedAt are populated by the legal-verification,
+,"mutations (startLegalCheck/completeLegalCheck, §6). visits and tickets being embedded here means",
+,a single call can answer “does this property have any open issues” without a second round trip — but,
+,"note visits is untyped JSON, so its exact shape should be confirmed with backend before relying on",
+,specific fields. ,
+• ,CRM use case: The single best query to pull up when a Team Lead needs a full picture of one property,
+,mid-call. ,
+getLegalPropertyDetail (Query) ,,
+• ,File: property-management.types.ts ,
+• ,"Purpose: Same ManagedPropertyDetail shape as above, but scoped for the legal-verification workflow",
+,specifically. ,
+• ,Input: userPropertyId: ID! ,
+• ,Response: ManagedPropertyDetail (see above) ,
+• ,Auth / Role notes: SDL comment: “Legal-manager-scoped detail by userPropertyId.” Likely restricted to,
+,"the legal_manager role — if the CRM needs this, confirm whether it’s realistic to grant a CRM service",
+,"account that role, or whether getManagedPropertyDetail (which already includes the legal-check fields)",
+,is sufficient instead. ,
+getPropertyAssignmentDetails (Query) ,,
+• ,File: property-management.types.ts ,
+• ,"Purpose: A narrower, assignment-focused view — who is the RM, who is the field agent, and when were",
+,they assigned — without the full property/ticket payload of getManagedPropertyDetail. ,
+• ,Input: userPropertyId: String! ,
+• ,Response: AssignmentDetails ,
+,type AssignmentDetails { ,
+,userPropertyId: ID! ,
+,property: Property,"# note: the *shared* Property type, not ManagedProperty "
+,user: userdata ,
+,agent: AdminUser ,
+,assignedBy: AdminUser ,
+,agentAssignedAt: Date ,
+,managerAssignedAt: Date ,
+,subscriptionStartDate: Date ,
+,subscriptionEndDate: Date ,
+,} ,
+• ,Auth / Role notes: Not explicitly scoped in the SDL — appears alongside other admin-facing property,
+,queries. Confirm with backend team. ,
+• ,CRM use case: Quick “who do I tell the customer to expect a call from” lookup — lighter-weight than,
+,the full detail query. ,
+getAllManagedPropertiesByRole (Query) ,,
+• ,File: property-management.types.ts ,
+• ,"Purpose: A paginated, filterable listing of managed properties, potentially usable as a search-by-",
+,name/phone workaround if the CRM doesn’t already have a userPropertyId/propertyId on hand for a,
+,lead. ,
+• ,"Input: page: Int, limit: Int, searchTerm: String, billingCycle: String, planName: String, status:",
+,"String, assignmentFilter: String, legalStatus: String ",
+• ,"Response: ManagedPropertyListResult { meta: meta!, data: [ManagedPropertyItem!]! } — ",
+,"ManagedPropertyItem carries essentially the same fields as ManagedPropertyDetail minus tickets/visits,",
+,plus a recentVisit: RecentVisitSummary snippet. ,
+• ,Auth / Role notes: SDL comment: “super_admin sees all; regional_manager sees only their assigned,
+,properties.” This means the result set a CRM service token would see depends entirely on which role it’s,
+,granted — confirm with backend team both the role grant and exactly what fields searchTerm matches,
+,against (name? phone? email? property title? not specified in the SDL). ,
+• ,Business logic notes: Because there is no direct “list all managed properties for a given userId” query ,
+,"anywhere in this schema, this listing endpoint’s searchTerm is the closest thing to a reverse lookup by",
+,"customer identity that exists today, assuming it matches on name/phone/email. If it doesn’t, there is a",
+,genuine integration gap: the CRM has no way to go from “lead’s userId/phone” to “their bound PM,
+,properties” other than the unbound-subscription lookup in §2. Flag this gap to the backend team,
+,explicitly — it may need a new admin query (e.g. getManagedPropertiesByUserId(userId)) to fully satisfy,
+,the CRM’s “look up a lead’s PM status” requirement. ,
+4. Visit Tracking & History ,,
+"These cover the three related concepts in the visit lifecycle: visit requests (someone asked for a visit), field visits ",,
+"(a visit was scheduled/executed), and visit reports (the agent’s write-up after the visit). ",,
+getFieldVisitByUserId (Query) ,,
+• ,File: pm-visits.types.ts ,
+• ,Purpose: The primary CRM entry point for visit history — every field visit across every property owned,
+,"by a given user, in one paginated call. ",
+• ,"Input: userId: String!, page: Int, limit: Int ",
+• ,Response: FieldVisitListResult ,
+,type FieldVisitListResult { ,
+,meta: VisitRequestMeta!,"# page, limit, total, totalPages "
+,stats: FieldVisitStatusCounts,#
+,total/scheduled/agentOnWay/inProgress/completed/missed/cancelled — nullable ,
+,rows: [FieldVisit!]! ,
+,} ,
+,type FieldVisit { ,
+,id: ID! ,
+,visitRequestId: Int ,
+,userPropertyId: String ,
+,agentId: String ,
+,visitCategory: String,# PRE_VERIFICATION | REGULAR | MAINTENANCE | EMERGENCY 
+,status: FieldVisitStatus,# see §8 
+,countsTowardLimit: Boolean,# whether this visit consumed a quota unit 
+,scheduledAt: Date ,
+,checkInAt: Date ,
+,checkInLat: String ,
+,checkInLng: String ,
+,checkOutAt: Date ,
+,checkOutLat: String ,
+,checkOutLng: String ,
+,durationMinutes: Int ,
+,notes: String ,
+,locationMatchCheck: String ,
+,propertyAccessible: Boolean ,
+,createdAt: Date ,
+,updatedAt: Date ,
+,owner: userdata ,
+,property: VisitRequestProperty ,
+,report: FieldVisitReportSummary,"# reportId, status, submittedAt, reviewedAt "
+,agentAssigned: FieldVisitAgentAssigned ,
+,} ,
+• ,Auth / Role notes: Takes userId directly with no self-scoping caveat in the comments — this is an,
+,"admin/RM-facing listing query, matching the pattern of getUnboundSubscriptionsByUserId. Note per the",
+,SDL comment on the sibling FieldVisitStatusCounts field: stats is documented as null for “per-property,
+,"/ per-user list queries” — so do not rely on stats being populated here, only on rows/meta. ",
+• ,Business logic notes: status follows pm_field_visits.status (pm-schema-doc.md §3.8): SCHEDULED →,
+,"AGENT_ON_WAY → IN_PROGRESS → COMPLETED, with MISSED/CANCELLED side branches. Only visits with",
+,countsTowardLimit = true decrement the pm_visit_tracking quota on completion. report is a summary,
+,only — use getVisitReportDetailsByReportId (below) for the full report. ,
+• ,CRM use case: “Has anyone actually come out to see my property yet?” — the standard visit-status,
+,question during a call. ,
+getFieldVisitByPropertyId (Query) ,,
+• ,File: pm-visits.types.ts ,
+• ,"Purpose: Same FieldVisitListResult shape, scoped to one property instead of one user — useful once",
+,the CRM has already resolved a specific userPropertyId from §3. ,
+• ,"Input: managePropertyId: String!, page: Int, limit: Int ",
+• ,Auth / Role notes: Same pattern as getFieldVisitByUserId; stats also nullable here per the same SDL,
+,comment. ,
+getAllFieldVisits (Query) ,,
+• ,File: pm-visits.types.ts ,
+• ,"Purpose: Global admin listing of field visits with a broader filter set (status, agent, property, category,",
+,"date range) — the one that does populate stats, per the SDL comment (“Null for per-property/per-user",
+,list queries that don’t compute it” implies the unfiltered/admin listing does compute them). ,
+• ,"Input: page, limit, status: String, agentId: String, userPropertyId: String, visitCategory: String,",
+,"startDate: Date, endDate: Date ",
+• ,Response: FieldVisitListResult (see above) ,
+• ,Auth / Role notes: Admin-facing listing; confirm with backend team exact role gate. Useful mainly if the,
+,"CRM needs a status-counts dashboard rather than a single lead’s history — for a single lead, prefer",
+,getFieldVisitByUserId. ,
+getFieldVisitsDetailed (Query) ,,
+• ,File: pm-visits.types.ts ,
+• ,Purpose: Full joined detail for one specific field visit — visit + assigned agent + property + owner +,
+,"assigning manager + the originating request + the resulting report, all in one call. ",
+• ,Input: fieldVisitId: Int! ,
+• ,"Response: FieldVisitDetailed { fieldVisit: FieldVisit!, agent: AdminMini, property: JSON,",
+,"owner: userdata, manager: AdminMini, request: JSON, report: JSON } — note property, request, and",
+,report are untyped JSON here; confirm exact shape with backend team before parsing. ,
+• ,CRM use case: Drilling into one specific visit a customer is asking about by ID. ,
+getVisitReports (Query) ,,
+• ,File: pm-visits.types.ts ,
+• ,Purpose: Per-property list of visits paired with their nested report (if any) — a lighter-weight alternative,
+,to the report-specific queries below when the CRM just needs “visit + report status” together. ,
+• ,"Input: userPropertyId: String, reportStatus: VisitReportStatus, purpose: String ",
+• ,Response: [VisitReport!] ,
+,type VisitReport { ,
+,visitId: ID! ,
+,scheduledAt: Date ,
+,checkInAt: Date ,
+,checkOutAt: Date ,
+,durationMinutes: Int ,
+,visitCategory: String ,
+,fieldVisitStatus: String ,
+,notes: String ,
+,agent: AdminMini ,
+,createdAt: Date ,
+,updatedAt: Date ,
+,report: VisitReportDetail,"# reportId, conditionRating, observations, issuesFound,"
+,"recommendations, ",
+,"# checklistResponses, reportStatus, submittedAt, reviewedAt,",
+,"rejectionReason, ",
+,"# reviewedBy, aiReport, sectionReviews, resubmissionCount ",
+,} ,
+getAllVisitReportsByPropertyId (Query) ,,
+• ,File: pm-visits.types.ts ,
+• ,"Purpose: All visit reports for one property, paginated — the property-scoped counterpart to",
+,"getVisitReports, with the fuller VisitReportItem shape (includes checklist detail, media, legal-check",
+,summary). ,
+• ,"Input: propertyId: String!, page: Int, limit: Int ",
+• ,"Response: VisitReportListResult! { meta: VisitRequestMeta!, rows: [VisitReportItem!]! } ",
+getVisitReportDetailsByReportId (Query) ,,
+• ,File: pm-visits.types.ts ,
+• ,"Purpose: The single most detailed report view — condition rating, observations, issues found,",
+,"recommendations, AI-generated report JSON, per-section RM verdicts, property/owner context, media,",
+,"geo-tagged photos, and legal-check summary all in one payload. ",
+• ,Input: reportId: Int! ,
+• ,Response: VisitReportItem ,
+,type VisitReportItem { ,
+,id: ID! ,
+,fieldVisitId: Int! ,
+,agentId: String ,
+,conditionRating: Int ,
+,observations: String ,
+,issuesFound: JSON ,
+,recommendations: String ,
+,recommendedAddons: JSON ,
+,checklistResponses: JSON ,
+,aiReport: JSON ,
+,localAreaMapUrl: String ,
+,status: VisitReportStatus,# see §8 
+,submittedAt: Date ,
+,reviewedAt: Date ,
+,rejectionReason: String ,
+,sectionReviews: JSON,# per-section RM verdicts 
+,resubmissionCount: Int ,
+,reviewSections: JSON ,
+,createdAt: Date ,
+,updatedAt: Date ,
+,agent: AdminMini ,
+,fieldVisit: FieldVisit ,
+,property: VisitReportProperty ,
+,owner: VisitReportOwner ,
+,media: [VisitReportMedia!] ,
+,caseNumber: String ,
+,legalCheckSummary: String ,
+,legalDisclaimer: String ,
+,geoTaggedPhotos: [VisitReportGeoPhoto!] ,
+,checklistDetails: JSON ,
+,} ,
+• ,"Business logic notes: status follows VisitReportStatus (§8), which is a superset of the DB-documented",
+,pm_report_status enum — it adds CHANGES_REQUESTED for the per-section review flow,
+,(reviewReportSections mutation) that isn’t in pm-schema-doc.md’s state diagram. resubmissionCount ,
+,tracks how many times the field agent has had to redo sections after RM rejection. ,
+• ,CRM use case: A customer disputing “why hasn’t my report been approved” — this shows exactly which,
+,"sections were rejected and why (via sectionReviews/reviewSections), without needing agent- or RM-",
+,side tooling. ,
+getAllVisitRequests (Query) ,,
+• ,File: pm-visits.types.ts ,
+• ,"Purpose: Paginated listing of visit requests (the ask, before a visit is scheduled), filterable by userId ",
+,directly. ,
+• ,"Input: page, limit, subscriptionStatus: String, status: String (PENDING | APPROVED | REJECTED |",
+,"CLOSED | SCHEDULED), purpose: String, propertyId: String, searchTerm: String, managerId: String,",
+,"agentId: String, userId: String ",
+• ,"Response: VisitRequestListResult { meta: VisitRequestMeta!, stats: VisitRequestStatusCounts,",
+,rows: [VisitRequest!]! } ,
+,type VisitRequest { ,
+,id: ID! ,
+,visitRequestStatus: VisitRequestStatus ,
+,visitCategory: String ,
+,description: String ,
+,preferredDate: Date ,
+,preferredTimeSlot: String ,
+,statusReason: String ,
+,createdAt: Date! ,
+,updatedAt: Date! ,
+,agentAssignedAt: Date ,
+,requestedBy: userdata ,
+,owner: userdata ,
+,property: VisitRequestProperty ,
+,assignedAgent: JSON ,
+,} ,
+• ,"Auth / Role notes: Admin-scoped listing (takes managerId/agentId/userId filters, consistent with an",
+,RM/admin console) — matches the “look up by user” pattern the CRM needs. ,
+• ,CRM use case: “I asked for a visit three days ago and no one’s called me back” — check whether the,
+,request is still PENDING or has moved to SCHEDULED/REJECTED. ,
+getVisitRequestById / getVisitRequestByPropertyId (Query) ,
+• ,File: pm-visits.types.ts 
+• ,Purpose: Single-request lookup (visitRequestId: String! → VisitRequest) and per-property paginated
+,"listing (managePropertyId: String!, page, limit → VisitRequestListResult), same shapes as above."
+,Documented together here for brevity since they’re narrower views of getAllVisitRequests. 
+5. Full Operation Inventory ,
+"Everything not documented in §2–4, one line per operation, grouped by file/domain. Q = Query, M = Mutation. ",
+property-management (core / admin) ,
+• ,getAllPropertiesPostedbyadmin — Q — properties created by admin/RM on a user’s behalf 
+• ,getAssignedProperties — Q — field agent’s assigned properties (legacy/duplicate surface) 
+• ,getAssignedPropertyDetails — Q — single assigned property detail for a field agent 
+• ,getPropertyVisit — Q — paginated visit history for a property (agent-facing legacy) 
+• ,getVisitMedia — Q — media uploaded during a specific field visit (legacy surface) 
+• ,getAgentDashboardStats — Q — field agent’s own dashboard counters 
+• ,getPMPlans — Q — list PM plan catalog with pricing variants 
+• ,getPMPlanVariant — Q — single pricing variant with its features 
+• ,getProrationPreview — Q — preview cost/credit for a mid-cycle plan upgrade 
+• ,getPmPropertyById — Q — raw property fields for the admin edit form 
+• ,getAllFieldAgentManagers — Q — list RMs with per-property task/ticket stats 
+• ,getAllFieldAgents — Q — list field agents with per-property task/ticket stats 
+• ,getAllLegalManagers — Q — list legal managers with property counts 
+• ,"createManagedPropertyByUser — M — user submits property, binds oldest unbound subscription "
+• ,tagSubscriptionToProperty — M — admin binds an existing paid subscription to a property 
+• ,updatePmProperty — M — admin edits raw PM property fields 
+• ,updateManagedPropertyByUser — M — owner edits their own managed property 
+• ,markPropertyVisit — M — record a property visit (legacy agent flow) 
+• ,uploadVisitMedia — M — upload media for a legacy property visit 
+• ,createPMOrder — M — create Razorpay order for a new PM plan purchase 
+• ,createPMUpgradeOrder — M — create prorated upgrade order for an existing plan 
+• ,"verifyPMPayment — M — verify Razorpay signature, activate subscription (client fallback) "
+• ,cancelPMPlan — M — cancel an active PM plan for a property 
+• ,assignPropertyToManager / reAssignPropertyToManager / unAssignPropertyToManager — M — RM
+,assignment lifecycle 
+• ,assignPropertyToFieldAgent / reAssignPropertyToFieldAgent / unAssignPropertyToFieldAgent — M — 
+,field agent assignment lifecycle 
+• ,assignPropertyToLegalManager / reAssignPropertyToLegalManager / unAssignPropertyToLegalManager — 
+,M— legal manager assignment lifecycle 
+Note: you can visit and see all the queries and mutations of 2 Bigha for your reference. It is a Apollo GraphQL 
+Full Documentation. 
+Link: https://admin-staging.2bigha.net/graphql 

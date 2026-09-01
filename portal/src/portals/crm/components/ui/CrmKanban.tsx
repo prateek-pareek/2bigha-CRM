@@ -131,7 +131,7 @@ export function CrmKanbanColumn({
           {headerExtra}
         </div>
       </div>
-      <div className="crm-kanban-column-body flex min-h-[8rem] flex-1 flex-col overflow-y-auto">
+      <div className="crm-kanban-column-body flex min-h-0 flex-1 flex-col overflow-y-auto">
         {children}
       </div>
     </div>

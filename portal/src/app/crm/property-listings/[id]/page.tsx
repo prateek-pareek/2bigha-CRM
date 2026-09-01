@@ -8,7 +8,6 @@ import {
   Loader2,
   Mail,
   Phone,
-  Ruler,
   Trash2,
   User,
   MapPin,
@@ -19,19 +18,14 @@ import {
   ShieldCheck,
   Building,
   CheckCircle2,
-  ExternalLink,
-  MessageSquare,
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   ImageIcon,
-  Sparkles,
-  AlertCircle,
   Tag,
-  Share2,
+  ArrowLeft,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CRM_PANEL } from "@/lib/crm/ui";
 import { cn } from "@/lib/utils";
 import {
   CrmPageHeader,
@@ -47,6 +41,7 @@ import {
   requestPropertyLegalVerification,
 } from "@/lib/crm/property-listings/third-party-api";
 import PmWorkflowPanel from "@/components/crm/property-listings/PmWorkflowPanel";
+import PropertyVisitHistoryPanel from "@/components/crm/property-listings/PropertyVisitHistoryPanel";
 import ActivePropertyPlanCard from "@/components/crm/property-listings/ActivePropertyPlanCard";
 import ManagedPropertySummaryCard from "@/components/crm/property-listings/ManagedPropertySummaryCard";
 import LegalVerificationReviewPanel from "@/components/crm/property-listings/LegalVerificationReviewPanel";
@@ -58,7 +53,6 @@ import {
   formatListingArea,
   formatPrice,
   legalStatusBadgeTone,
-  resolveAreaBigha,
   statusBadgeTone,
   approvalStatusBadgeTone,
   LISTING_BUCKETS,
@@ -114,13 +108,18 @@ export default function PropertyListingDetailPage() {
 
       const isMockId = id.startsWith("tp_listing_") || id.startsWith("mock_");
       const isMongoId = /^[0-9a-fA-F]{24}$/.test(id);
-      if (!isMockId && !isMongoId && (!data.images || data.images.length === 0)) {
+      if (!isMockId && !isMongoId && !(data.images && data.images.length)) {
         api
-          .get<{ images: string[] }>(`/crm/property-listings/twobigha/farms/media/${id}`)
+          .get<{ images: string[] }>(
+            `/crm/property-listings/twobigha/farms/media/${encodeURIComponent(id)}`,
+          )
           .then(({ data: mediaData }) => {
-            if (mediaData?.images?.length) {
-              setListing((prev) => (prev ? { ...prev, images: mediaData.images } : null));
-            }
+            const urls = (mediaData?.images || []).filter((url) => /^https?:\/\//i.test(url));
+            if (!urls.length) return;
+            setListing((prev) => {
+              if (!prev || prev.images?.length) return prev;
+              return { ...prev, images: urls };
+            });
           })
           .catch(() => { });
       }
@@ -325,6 +324,7 @@ export default function PropertyListingDetailPage() {
               <img
                 src={resolveUploadedImageUrl(images[activeImage])}
                 alt={listing.title}
+                referrerPolicy="no-referrer"
                 className="h-full w-full object-cover transition-all duration-300"
               />
               <div className="absolute bottom-3 right-3 rounded-md bg-black/70 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
@@ -366,7 +366,7 @@ export default function PropertyListingDetailPage() {
                     )}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={resolveUploadedImageUrl(src)} alt="" className="h-full w-full object-cover" />
+                    <img src={resolveUploadedImageUrl(src)} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -381,11 +381,19 @@ export default function PropertyListingDetailPage() {
         )}
 
         {isPm ? (
-          <ManagedPropertySummaryCard propertyId={id} />
-        ) : null}
-
-        {isPm ? (
-          <PmWorkflowPanel listing={listing} onUpdated={setListing} />
+          <>
+            <ManagedPropertySummaryCard propertyId={id} />
+            <PmWorkflowPanel listing={listing} onUpdated={setListing} />
+            <PropertyVisitHistoryPanel
+              managePropertyId={
+                listing.userPropertyId ||
+                listing.twobighaPropertyId ||
+                (id.startsWith("tp_") || id.startsWith("mock_") || /^[0-9a-fA-F]{24}$/.test(id)
+                  ? undefined
+                  : id)
+              }
+            />
+          </>
         ) : listing.propertyLegal ? (
           <LegalVerificationReviewPanel listing={listing} onUpdated={setListing} />
         ) : null}
@@ -466,6 +474,10 @@ export default function PropertyListingDetailPage() {
                     </span>
                   ) : listing.highwayConn === false ? "No" : undefined}
                   icon={<Compass size={15} className="text-[var(--text-muted)]" />}
+                />
+                <DetailRow
+                  label="Listed on"
+                  value={listing.listedDate ? new Date(listing.listedDate).toLocaleDateString() : undefined}
                 />
               </div>
             </CrmSectionCard>

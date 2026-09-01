@@ -23,6 +23,7 @@ import {
 } from "@/components/crm/records/forms/crm-form-primitives";
 import { CrmButton } from "@/components/crm/ui";
 import { usePermissions } from "@/hooks/usePermissions";
+import { twobighaClientSyncToastMessage } from "@/lib/crm/twobigha-client-api";
 
 const LBL = CRM_HS_LABEL_CLASS;
 const INP = CRM_HS_CONTROL_CLASS;
@@ -210,8 +211,13 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       });
 
       if (res.ok) {
+        const saved = await res.json().catch(() => ({}));
         invalidateCrmForEntityType("client");
-        toast.success(client ? "Client updated" : "Client created");
+        if (client) {
+          toast.success("Client updated");
+        } else {
+          toast.success(twobighaClientSyncToastMessage(saved?.twobighaSyncStatus));
+        }
         if (saveAndAddAnother && !client) {
           // Reset form for next entry
           setFormData({

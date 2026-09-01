@@ -84,6 +84,7 @@ import { cn } from '@/lib/utils';
 import { BulkEmailToolbarButton } from '@/components/crm/email/composer/BulkEmailToolbarButton';
 import LeadStageRulesPanel from '@/components/crm/records/detail/LeadStageRulesPanel';
 import { buildBulkEmailRecipients } from '@/lib/crm/bulk-email';
+import CrmEmailEngagementIcons from '@/components/crm/email/engagement/CrmEmailEngagementIcons';
 
 /** Hover/focus hint for icon-only CRM toolbar filters (native title is slow; this matches CustomFieldModal-style tips). */
 const CRM_ICON_FILTER_TIP =
@@ -114,6 +115,7 @@ import {
   CrmListPersonCell,
   CrmListOwnerCell,
   CrmListStatusBadge,
+  CrmListMutedText,
   CrmSoftBadge,
   CrmTableCheck,
   CrmTableActionMenu,
@@ -127,6 +129,9 @@ import {
   CrmKanbanCardFooter,
   CrmKanbanAvatar,
   crmKanbanAvatarTone,
+  CrmRecordCardGrid,
+  CrmRecordCard,
+  CrmRecordCardSkeleton,
 } from '@/components/crm/ui';
 import { CrmIcon, CrmNavIcon } from '@/lib/crm/shared/icons';
 import { CRM_LIST_PAGE, CRM_MENU_ITEM, CRM_TOOLBAR_SELECT, CRM_TOOLBAR_ICON_GROUP, CRM_TOOLBAR_ICON_BTN, CRM_TOOLBAR_ICON_BTN_ACTIVE, CRM_TOOLBAR_CHIP, CRM_TOOLBAR_CHIP_ACTIVE, CRM_BTN_MANAGE_COLUMNS } from '@/lib/crm/ui';
@@ -252,9 +257,13 @@ function resolveBoardStageName(
 
 export default function LeadsPage() {
   const router = useRouter();
-  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'calendar'>(() => {
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'grid' | 'calendar'>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem(VIEW_MODE_KEY) as any) || 'kanban';
+      const saved = localStorage.getItem(VIEW_MODE_KEY);
+      if (saved === 'kanban' || saved === 'list' || saved === 'grid' || saved === 'calendar') {
+        return saved;
+      }
+      return 'kanban';
     }
     return 'kanban';
   });
@@ -491,7 +500,7 @@ export default function LeadsPage() {
     [filters, dateRange, activeLeadCategory, activeLeadVertical],
   );
 
-  const needsClientFullList = viewMode !== 'list';
+  const needsClientFullList = viewMode !== 'list' && viewMode !== 'grid';
 
   const emailEngagement = useMemo(
     () => ({
@@ -514,6 +523,7 @@ export default function LeadsPage() {
     () =>
       viewMode === 'kanban' ||
       viewMode === 'list' ||
+      viewMode === 'grid' ||
       listShowsLastEmailColumn,
     [viewMode, listShowsLastEmailColumn],
   );
@@ -1424,7 +1434,7 @@ export default function LeadsPage() {
       }
       return ids;
     }
-    if (viewMode === 'list' && !needsClientFullList) {
+    if ((viewMode === 'list' || viewMode === 'grid') && !needsClientFullList) {
       return paginated.map((l) => l._id);
     }
     return leads.map((l) => l._id);
@@ -1440,7 +1450,9 @@ export default function LeadsPage() {
   ]);
 
   const mergePartialEmailStats = useMemo(
-    () => viewMode === 'kanban' || (viewMode === 'list' && !needsClientFullList),
+    () =>
+      viewMode === 'kanban' ||
+      ((viewMode === 'list' || viewMode === 'grid') && !needsClientFullList),
     [viewMode, needsClientFullList],
   );
 
@@ -1550,8 +1562,8 @@ export default function LeadsPage() {
           />
         );
       }
-      case 'email': return <span className="text-sm text-[#707070]">{lead.email || '—'}</span>;
-      case 'phone': return <span className="text-sm text-[#707070]">{lead.mobileNo || lead.phone || '—'}</span>;
+      case 'email': return <CrmListMutedText className="crm-cell-wrap block">{lead.email || '—'}</CrmListMutedText>;
+      case 'phone': return <CrmListMutedText className="crm-cell-wrap block">{lead.mobileNo || lead.phone || '—'}</CrmListMutedText>;
       case 'priority': return <span className="text-sm text-[#707070]">{lead.priority || '—'}</span>;
       case 'leadOwner': return <CrmListOwnerCell name={lead.leadOwner || ''} />;
       case 'pipeline': {
@@ -1605,9 +1617,8 @@ export default function LeadsPage() {
 
   return (
     <div className={CRM_LIST_PAGE}>
-      <div className="flex flex-1 h-full relative min-w-0">
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0">
+      <div className="crm-list-content">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <CrmPageHeader
             bordered={false}
             title="Leads"
@@ -1955,10 +1966,10 @@ export default function LeadsPage() {
                 <CrmViewToggle
                   value={viewMode}
                   onChange={(mode) => {
-                    if (mode === 'grid') return;
                     setViewMode(mode);
+                    setPage(1);
                   }}
-                  modes={['list', 'kanban', 'calendar']}
+                  modes={['list', 'grid', 'kanban', 'calendar']}
                 />
                 {hasAccess('leads:write') && (
                   <CrmButton
@@ -1974,7 +1985,7 @@ export default function LeadsPage() {
           />
 
           <div
-            className="flex items-center gap-1 overflow-x-auto px-4 pt-2.5 shrink-0"
+            className="crm-list-subtabs shrink-0"
             role="tablist"
             aria-label="Lead vertical"
           >
@@ -1997,7 +2008,6 @@ export default function LeadsPage() {
                     setPage(1);
                   }}
                   className={cn(
-                    'shrink-0 rounded-[var(--radius-md)] px-3 py-1.5 text-sm font-semibold transition-colors',
                     isActive
                       ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
                       : 'text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
@@ -2011,7 +2021,7 @@ export default function LeadsPage() {
 
           {leadCategoryTabs.length > 0 && (
             <div
-              className="flex items-center gap-1 overflow-x-auto px-4 pt-2.5 pb-1 shrink-0"
+              className="crm-list-subtabs shrink-0"
               role="tablist"
               aria-label="Lead type"
             >
@@ -2042,10 +2052,11 @@ export default function LeadsPage() {
             </div>
           )}
 
-          <div className="flex-1 overflow-auto custom-scrollbar">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {loading ? (
-              <div className="w-full h-64 flex items-center justify-center"><Loader2 size={40} className="animate-spin text-text-muted" /></div>
+              <div className="flex h-64 w-full items-center justify-center"><Loader2 size={40} className="animate-spin text-text-muted" /></div>
             ) : viewMode === 'kanban' ? (
+              <div className="h-full overflow-auto custom-scrollbar">
               <CrmKanbanBoard
                 ref={kanbanBoardRef}
                 onDragOver={handleKanbanDragOver}
@@ -2251,9 +2262,103 @@ export default function LeadsPage() {
                   );
                 })}
               </CrmKanbanBoard>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-1 custom-scrollbar">
+                {loading ? (
+                  <CrmRecordCardSkeleton />
+                ) : paginated.length === 0 ? (
+                  <div className="rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white py-20 text-center text-sm font-medium text-[#707070]">
+                    No leads found
+                  </div>
+                ) : (
+                  <CrmRecordCardGrid>
+                    {paginated.map((lead) => {
+                      const fullName = `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Unnamed lead';
+                      const initials =
+                        `${lead.firstName?.[0] || ''}${lead.lastName?.[0] || ''}`.trim() || fullName[0] || '?';
+                      const stageLabel = lead.stage || lead.status || '—';
+                      const pipelineName = lead.pipeline
+                        ? pipelineNameById.get(String(lead.pipeline))
+                        : undefined;
+                      return (
+                        <CrmRecordCard
+                          key={lead._id}
+                          initials={initials}
+                          toneSeed={`${fullName}${lead._id}`}
+                          title={fullName}
+                          subtitle={pipelineName || lead.leadCategory || undefined}
+                          selectable
+                          selected={selectedIds.has(lead._id)}
+                          onSelectedChange={() => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(lead._id)) next.delete(lead._id);
+                              else next.add(lead._id);
+                              return next;
+                            });
+                          }}
+                          onClick={() => router.push(`/crm/leads/${lead._id}`)}
+                          actions={
+                            <CrmTableActionMenu
+                              onEdit={() => router.push(`/crm/leads/${lead._id}?edit=1`)}
+                              onEmail={lead.email ? () => setEmailLead(lead) : undefined}
+                              onCall={
+                                (lead.mobileNo || lead.phone)
+                                  ? () => setCallLead(lead)
+                                  : undefined
+                              }
+                              onWhatsApp={
+                                contactWhatsappUrl(lead)
+                                  ? () => openLeadWhatsApp(lead)
+                                  : undefined
+                              }
+                              onDelete={
+                                hasAccess('leads:delete')
+                                  ? () => handleDelete(lead._id)
+                                  : undefined
+                              }
+                            />
+                          }
+                          headTrailing={<CrmListStatusBadge label={stageLabel} />}
+                          meta={[
+                            { key: 'email', icon: <CrmIcon.Mail size={15} />, label: lead.email || '—' },
+                            {
+                              key: 'phone',
+                              icon: <CrmIcon.Phone size={15} />,
+                              label: lead.mobileNo || lead.phone || '—',
+                            },
+                          ]}
+                          footerLeft={
+                            lead.group ? (
+                              <CrmSoftBadge label={lead.group} tone={groupBadgeTone(lead.group)} />
+                            ) : lead.leadOwner ? (
+                              <CrmListMutedText className="text-xs">{lead.leadOwner}</CrmListMutedText>
+                            ) : null
+                          }
+                          footerRight={
+                            <CrmEmailEngagementIcons
+                              stats={leadEmailStatsById[lead._id]}
+                              className="shrink-0"
+                            />
+                          }
+                        />
+                      );
+                    })}
+                  </CrmRecordCardGrid>
+                )}
+                <Pagination
+                  total={displayedTotal}
+                  page={page}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                />
+              </div>
             ) : viewMode === 'list' ? (
+              <div className="crm-view-panel min-h-0 flex flex-1 flex-col">
               <>
-              <CrmTableShell>
+              <CrmTableShell scrollClassName="custom-scrollbar overflow-x-auto">
                   <CrmTable>
                     <thead>
                       <tr>
@@ -2433,8 +2538,11 @@ export default function LeadsPage() {
               </CrmTableShell>
                 <Pagination total={displayedTotal} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
               </>
+              </div>
             ) : (
-              <CRMCalendarView items={filteredLeads} onItemClick={(item) => router.push(`/crm/leads/${item._id}`)} />
+              <div className="crm-view-panel min-h-0 flex-1 overflow-auto custom-scrollbar">
+                <CRMCalendarView items={filteredLeads} onItemClick={(item) => router.push(`/crm/leads/${item._id}`)} />
+              </div>
             )}
           </div>
         </div>
