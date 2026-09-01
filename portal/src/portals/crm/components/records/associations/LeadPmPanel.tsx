@@ -4,13 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardList, Loader2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  fetchLeadSubscriptionMock,
-  fetchThirdPartyPropertyListings,
-} from "@/lib/crm/property-listings/third-party-api";
+import { fetchUnboundSubscriptions } from "../../../lib/subscriptions/backend-api";
+import type { UnboundSubscription } from "../../../lib/subscriptions/types";
+import { fetchThirdPartyPropertyListings } from "@/lib/crm/property-listings/third-party-api";
 import {
   formatAddress,
-  type LeadSubscriptionMock,
   type PropertyListingRecord,
 } from "@/lib/crm/property-listings/types";
 import { pmStageBadgeTone } from "@/lib/crm/property-management/types";
@@ -29,7 +27,7 @@ export default function LeadPmPanel({
   onCreatePmClick: () => void;
 }) {
   const [pmProps, setPmProps] = useState<PropertyListingRecord[]>([]);
-  const [sub, setSub] = useState<LeadSubscriptionMock | null>(null);
+  const [unboundSubs, setUnboundSubs] = useState<UnboundSubscription[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,17 +36,17 @@ export default function LeadPmPanel({
     setLoading(true);
     Promise.all([
       fetchThirdPartyPropertyListings({ leadId, listingBucket: "pm", pageSize: 50 }),
-      fetchLeadSubscriptionMock(leadId),
+      fetchUnboundSubscriptions(leadId),
     ])
-      .then(([list, subscription]) => {
+      .then(([list, subs]) => {
         if (cancelled) return;
         setPmProps(list.data || []);
-        setSub(subscription);
+        setUnboundSubs(subs || []);
       })
       .catch(() => {
         if (!cancelled) {
           setPmProps([]);
-          setSub(null);
+          setUnboundSubs([]);
         }
       })
       .finally(() => {
@@ -71,49 +69,38 @@ export default function LeadPmPanel({
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <Loader2 size={14} className="animate-spin" /> Loading…
           </div>
-        ) : sub ? (
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-text-muted">Plan</span>
-              <span className="font-semibold text-text-main">{sub.plan}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-text-muted">Expires</span>
-              <span className="font-medium text-text-main">
-                {new Date(sub.expiryDate).toLocaleDateString()}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-text-muted">Featured used</span>
-              <span className="font-medium text-text-main">
-                {sub.featuredUsed} / {sub.featuredAllowance}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-text-muted">Legal verification</span>
-              <span className="font-medium text-text-main">
-                {sub.includesLegalVerification
-                  ? `${sub.legalVerificationUsed}${
-                      sub.legalVerificationAllowance == null
-                        ? " / ∞"
-                        : ` / ${sub.legalVerificationAllowance}`
-                    }`
-                  : "Not included"}
-              </span>
-            </div>
-            {sub.invoices[0] ? (
-              <div className="mt-2 rounded-md border border-border bg-surface-dim px-2.5 py-2 text-xs">
-                <p className="font-semibold text-text-main">{sub.invoices[0].label}</p>
-                <p className="text-text-muted">
-                  ₹{sub.invoices[0].amount.toLocaleString("en-IN")} · {sub.invoices[0].status} ·{" "}
-                  {new Date(sub.invoices[0].date).toLocaleDateString()}
-                </p>
+        ) : unboundSubs.length > 0 ? (
+          <div className="space-y-3">
+            {unboundSubs.map((sub) => (
+              <div key={sub.subscriptionId} className="space-y-1.5 text-sm rounded-md border border-border bg-surface-dim px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-text-main">{sub.planName}</span>
+                  <span className="text-xs font-medium text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">ACTIVE</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-text-muted">Purchased</span>
+                  <span className="font-medium text-text-main">
+                    {new Date(sub.purchasedAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-text-muted">Duration</span>
+                  <span className="font-medium text-text-main">{sub.durationMonths} Months</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-text-muted">Visits Included</span>
+                  <span className="font-medium text-text-main">{sub.visitsPerCycle}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-text-muted">Price Paid</span>
+                  <span className="font-medium text-text-main">₹{sub.price.toLocaleString("en-IN")}</span>
+                </div>
               </div>
-            ) : null}
+            ))}
           </div>
         ) : (
           <p className="text-xs italic text-text-muted">
-            No subscription yet — create a PM property to bind a plan.
+            No unbound subscriptions found for this user.
           </p>
         )}
       </div>

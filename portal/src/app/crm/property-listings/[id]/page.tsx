@@ -47,6 +47,8 @@ import {
   requestPropertyLegalVerification,
 } from "@/lib/crm/property-listings/third-party-api";
 import PmWorkflowPanel from "@/components/crm/property-listings/PmWorkflowPanel";
+import ActivePropertyPlanCard from "@/components/crm/property-listings/ActivePropertyPlanCard";
+import ManagedPropertySummaryCard from "@/components/crm/property-listings/ManagedPropertySummaryCard";
 import LegalVerificationReviewPanel from "@/components/crm/property-listings/LegalVerificationReviewPanel";
 import PropertyDetailMapView from "@/portals/crm/components/property-listings/PropertyDetailMapView";
 import { resolveUploadedImageUrl } from "@/lib/media/upload-image";
@@ -120,7 +122,7 @@ export default function PropertyListingDetailPage() {
               setListing((prev) => (prev ? { ...prev, images: mediaData.images } : null));
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
 
       if (data.leadId && data.listingBucket !== "pm") {
@@ -208,12 +210,21 @@ export default function PropertyListingDetailPage() {
         badge={
           <div className="flex flex-wrap items-center gap-1.5">
             <CrmSoftBadge label={bucketLabel} tone="secondary" />
-            <CrmStatusBadge tone={statusBadgeTone(listing.status)}>
-              {listing.status || "Available"}
-            </CrmStatusBadge>
-            <CrmStatusBadge tone={approvalStatusBadgeTone(listing.approvalStatus)}>
-              {listing.approvalStatus || "Pending"}
-            </CrmStatusBadge>
+            {isPm && listing.pmStage ? (
+              <CrmStatusBadge tone={pmStageBadgeTone(listing.pmStage)}>
+                {listing.pmStage}
+              </CrmStatusBadge>
+            ) : (
+              <>
+                <CrmStatusBadge tone={statusBadgeTone(listing.status)}>
+                  {listing.status || "Available"}
+                </CrmStatusBadge>
+                <CrmStatusBadge tone={approvalStatusBadgeTone(listing.approvalStatus)}>
+                  {listing.approvalStatus || "Pending"}
+                </CrmStatusBadge>
+              </>
+            )}
+            {listing.pmPlan ? <CrmSoftBadge label={`Plan: ${listing.pmPlan}`} tone="secondary" /> : null}
             {listing.verified ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
                 <CheckCircle2 size={12} /> Verified
@@ -370,6 +381,10 @@ export default function PropertyListingDetailPage() {
         )}
 
         {isPm ? (
+          <ManagedPropertySummaryCard propertyId={id} />
+        ) : null}
+
+        {isPm ? (
           <PmWorkflowPanel listing={listing} onUpdated={setListing} />
         ) : listing.propertyLegal ? (
           <LegalVerificationReviewPanel listing={listing} onUpdated={setListing} />
@@ -379,9 +394,25 @@ export default function PropertyListingDetailPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left Column (2 Cols) */}
           <div className="space-y-6 lg:col-span-2">
+            {isPm ? <ActivePropertyPlanCard propertyId={id} /> : null}
+
             {/* Land & Regulatory Details */}
             <CrmSectionCard title="Land & Regulatory Specifications">
               <div className="divide-y divide-[var(--border-color)]">
+                {isPm ? (
+                  <>
+                    <DetailRow
+                      label="PM Plan"
+                      value={listing.pmPlan || "None"}
+                      icon={<ShieldCheck size={15} className="text-[var(--primary)]" />}
+                    />
+                    <DetailRow
+                      label="PM Stage"
+                      value={listing.pmStage || "Pending"}
+                      icon={<Tag size={15} className="text-[var(--primary)]" />}
+                    />
+                  </>
+                ) : null}
                 <DetailRow
                   label="Property Type"
                   value={listing.propertyType || "Plot"}
