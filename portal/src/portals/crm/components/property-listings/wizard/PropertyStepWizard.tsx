@@ -14,7 +14,10 @@ import { Step2UploadImages } from "./Step2UploadImages";
 import { Step3ContactDetails } from "./Step3ContactDetails";
 import { Step4MapLocation } from "./Step4MapLocation";
 import { Step5ReviewSubmit } from "./Step5ReviewSubmit";
-import { createBackendPropertyListing } from "@/lib/crm/property-listings/backend-api";
+import {
+  createBackendPropertyListing,
+  updateBackendPropertyListing,
+} from "@/lib/crm/property-listings/backend-api";
 import api from "@/lib/crm/api";
 
 const STEPS = [
@@ -31,6 +34,9 @@ interface PropertyStepWizardProps {
   initialOwnerName?: string;
   initialOwnerPhone?: string;
   initialOwnerEmail?: string;
+  editMode?: boolean;
+  editId?: string;
+  initialDraft?: Partial<PropertyListingWizardDraft>;
 }
 
 export function PropertyStepWizard({
@@ -39,14 +45,30 @@ export function PropertyStepWizard({
   initialOwnerName,
   initialOwnerPhone,
   initialOwnerEmail,
+  editMode = false,
+  editId,
+  initialDraft,
 }: PropertyStepWizardProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
-  const [draft, setDraft] = useState<PropertyListingWizardDraft>(INITIAL_PROPERTY_WIZARD_DRAFT);
+  const [draft, setDraft] = useState<PropertyListingWizardDraft>(() => ({
+    ...INITIAL_PROPERTY_WIZARD_DRAFT,
+    ...(initialDraft || {}),
+  }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [leadData, setLeadData] = useState<{ name?: string; phone?: string } | null>(null);
+
+  // Sync initialDraft updates if loaded asynchronously
+  useEffect(() => {
+    if (initialDraft && Object.keys(initialDraft).length > 0) {
+      setDraft((prev) => ({
+        ...prev,
+        ...initialDraft,
+      }));
+    }
+  }, [initialDraft]);
 
   // If initial owner info is passed via search params, prefill contact
   useEffect(() => {
@@ -366,12 +388,19 @@ export function PropertyStepWizard({
         leadId: leadId || undefined,
       };
 
-      const created = await createBackendPropertyListing(payload);
-      toast.success("Property listing created successfully!");
-      router.push(`/crm/property-listings/${created._id}`);
+      let resultId = editId;
+      if (editMode && editId) {
+        await updateBackendPropertyListing(editId, payload);
+        toast.success("Property listing updated successfully!");
+      } else {
+        const created = await createBackendPropertyListing(payload);
+        resultId = created._id;
+        toast.success("Property listing created successfully!");
+      }
+      router.push(`/crm/property-listings/${resultId}`);
     } catch (err: any) {
       console.error("Submission failed:", err);
-      toast.error(err?.response?.data?.message || err?.message || "Failed to create property listing");
+      toast.error(err?.response?.data?.message || err?.message || "Failed to save property listing");
     } finally {
       setSubmitting(false);
     }
@@ -384,12 +413,16 @@ export function PropertyStepWizard({
       {/* Top Header */}
       <CrmPageHeader
         icon={<Home size={20} />}
-        title="Add New Property"
-        description="Fill in the details to list your property with validation and free-form boundary drawing"
+        title={editMode ? "Edit Property Listing" : "Add New Property"}
+        description={
+          editMode
+            ? "Update property details, images, map location, and contacts with live 2Bigha GraphQL sync."
+            : "Fill in the details to list your property with validation and free-form boundary drawing"
+        }
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },
           { label: "My Properties", href: `/crm/property-listings?bucket=${bucket}` },
-          { label: "Add Property" },
+          { label: editMode ? "Edit Property" : "Add Property" },
         ]}
         className="mb-6"
       />
@@ -522,7 +555,7 @@ export function PropertyStepWizard({
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-6 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Submit Property Listing
+              {editMode ? "Update Property Listing" : "Submit Property Listing"}
             </button>
           )}
         </div>

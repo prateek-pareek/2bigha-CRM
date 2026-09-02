@@ -243,8 +243,35 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
   return window.initGoogleMapsPromise;
 }
 
+export function normalizeIndianState(raw?: string): string {
+  if (!raw) return "Rajasthan";
+  const clean = raw.trim().toLowerCase().replace(/[-_]+/g, " ");
+  for (const state of Object.keys(INDIAN_STATES_DISTRICTS)) {
+    const sClean = state.toLowerCase().replace(/[-_&]+/g, " ");
+    if (sClean === clean || clean === sClean.replace(/&/g, "and") || clean.includes(sClean) || sClean.includes(clean)) {
+      return state;
+    }
+  }
+  return raw;
+}
+
+export function normalizeIndianDistrict(state: string, raw?: string): string {
+  if (!raw) return "";
+  const validState = normalizeIndianState(state);
+  const districts = INDIAN_STATES_DISTRICTS[validState] || [];
+  const clean = raw.trim().toLowerCase().replace(/[-_]+/g, " ");
+  for (const d of districts) {
+    const dClean = d.toLowerCase().replace(/[-_]+/g, " ");
+    if (dClean === clean || clean.includes(dClean) || dClean.includes(clean)) {
+      return d;
+    }
+  }
+  return raw.trim().charAt(0).toUpperCase() + raw.trim().slice(1);
+}
+
 function findBestDistrictMatch(state: string, rawCandidates: string[]): string {
-  const options = INDIAN_STATES_DISTRICTS[state] || [];
+  const normState = normalizeIndianState(state);
+  const options = INDIAN_STATES_DISTRICTS[normState] || [];
   if (!options.length || !rawCandidates.length) return "";
 
   for (const raw of rawCandidates) {
@@ -290,13 +317,22 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
   const mapInstanceRef = useRef<any>(null);
   const markerInstanceRef = useRef<any>(null);
 
+  const normalizedState = useMemo(() => normalizeIndianState(draft.state), [draft.state]);
+
   const districtOptions = useMemo(() => {
-    const base = draft.state && INDIAN_STATES_DISTRICTS[draft.state] ? [...INDIAN_STATES_DISTRICTS[draft.state]] : [];
-    if (draft.district && !base.includes(draft.district)) {
-      return [draft.district, ...base];
+    const base = normalizedState && INDIAN_STATES_DISTRICTS[normalizedState]
+      ? [...INDIAN_STATES_DISTRICTS[normalizedState]]
+      : [];
+
+    if (draft.district) {
+      const normD = normalizeIndianDistrict(normalizedState, draft.district);
+      const exists = base.some((d) => d.toLowerCase() === normD.toLowerCase());
+      if (!exists) {
+        return [normD, ...base];
+      }
     }
     return base;
-  }, [draft.state, draft.district]);
+  }, [normalizedState, draft.district]);
 
   // Reverse geocode via Google Geocoder across all results for full accuracy
   const reverseGeocodeGoogle = async (lat: number, lng: number) => {
@@ -692,7 +728,7 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
             <CrmLabel htmlFor="state">State / Union Territory *</CrmLabel>
             <CrmSelect
               id="state"
-              value={draft.state}
+              value={normalizedState}
               onChange={(e) => {
                 onChange("state", e.target.value);
                 onChange("district", "");
@@ -713,7 +749,7 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
             <CrmLabel htmlFor="district">District *</CrmLabel>
             <CrmSelect
               id="district"
-              value={draft.district}
+              value={districtOptions.find((d) => d.toLowerCase() === (draft.district || "").toLowerCase()) || draft.district}
               onChange={(e) => onChange("district", e.target.value)}
               disabled={!draft.state}
               className={errors.district ? "border-rose-500" : ""}
@@ -929,7 +965,7 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
               <CrmLabel htmlFor="landType">Land Type *</CrmLabel>
               <CrmSelect
                 id="landType"
-                value={draft.landType}
+                value={LAND_TYPES_OPTIONS.find((lt) => lt.toLowerCase() === (draft.landType || "").toLowerCase()) || draft.landType || "Agricultural"}
                 onChange={(e) => onChange("landType", e.target.value)}
               >
                 {LAND_TYPES_OPTIONS.map((lt) => (
@@ -944,7 +980,7 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
               <CrmLabel htmlFor="soilType">Soil Type</CrmLabel>
               <CrmSelect
                 id="soilType"
-                value={draft.soilType}
+                value={SOIL_TYPES_OPTIONS.find((st) => st.toLowerCase() === (draft.soilType || "").toLowerCase()) || draft.soilType}
                 onChange={(e) => onChange("soilType", e.target.value)}
               >
                 {SOIL_TYPES_OPTIONS.map((st) => (
@@ -959,7 +995,7 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
               <CrmLabel htmlFor="category">Category</CrmLabel>
               <CrmSelect
                 id="category"
-                value={draft.category}
+                value={OWNERSHIP_CATEGORIES_OPTIONS.find((cat) => cat.toLowerCase() === (draft.category || "").toLowerCase()) || draft.category || "None"}
                 onChange={(e) => onChange("category", e.target.value)}
               >
                 {OWNERSHIP_CATEGORIES_OPTIONS.map((cat) => (

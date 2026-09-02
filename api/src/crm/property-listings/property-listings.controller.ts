@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -208,5 +209,15 @@ export class PropertyListingsController {
   @Permissions('property_listings:write')
   retrySync(@Param('id') id: string) {
     return this.listingsService.retrySync(id);
+  }
+
+  /** Update sold status and sync directly to 2bigha updatePropertySoldStatus mutation. */
+  @Patch(':id/sold-status')
+  @Permissions('property_listings:write')
+  updateSoldStatus(
+    @Param('id') id: string,
+    @Body() body: { isSold: boolean },
+  ) {
+    return this.listingsService.updateSoldStatus(id, Boolean(body.isSold));
   }
 }

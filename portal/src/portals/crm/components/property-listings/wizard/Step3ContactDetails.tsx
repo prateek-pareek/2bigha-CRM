@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UserCheck, User, Phone, MessageSquare } from "lucide-react";
 import {
   CrmInput,
@@ -47,6 +47,15 @@ export function Step3ContactDetails({
   const isFromLead = Boolean(leadName || leadPhone || draft.isLeadContact);
   const [phoneExt, setPhoneExt] = useState("+91");
 
+  useEffect(() => {
+    if (draft.phoneNumber) {
+      const match = draft.phoneNumber.trim().match(/^(\+\d{1,3})/);
+      if (match) {
+        setPhoneExt(match[1]);
+      }
+    }
+  }, [draft.phoneNumber]);
+
   const handlePhoneChange = (val: string, ext: string) => {
     const rawNumber = val.replace(/[^\d]/g, "");
     const formatted = rawNumber ? `${ext} ${rawNumber}` : "";
@@ -54,8 +63,15 @@ export function Step3ContactDetails({
     onChange("whatsappNumber", formatted);
   };
 
-  const getPhoneDigits = (fullVal: string) => {
-    return fullVal.replace(/^\+\d+\s*/, "");
+  const getPhoneDigits = (fullVal?: string) => {
+    if (!fullVal) return "";
+    const clean = fullVal.trim();
+    const match = clean.match(/^\+(\d{1,3})\s*(.*)$/);
+    if (match && match[2]) {
+      return match[2].replace(/[^\d]/g, "");
+    }
+    const digits = clean.replace(/[^\d]/g, "");
+    return digits.length > 10 ? digits.slice(-10) : digits;
   };
 
   return (
@@ -102,7 +118,11 @@ export function Step3ContactDetails({
               <CrmLabel htmlFor="listerType">Lister Type *</CrmLabel>
               <CrmSelect
                 id="listerType"
-                value={draft.listerType}
+                value={
+                  ["OWNER", "AGENT", "BUILDER", "COMPANY"].find(
+                    (v) => v.toLowerCase() === (draft.listerType || "").toLowerCase()
+                  ) || "OWNER"
+                }
                 onChange={(e) => onChange("listerType", e.target.value)}
               >
                 <option value="OWNER">Owner</option>

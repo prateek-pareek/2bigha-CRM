@@ -109,10 +109,38 @@ export async function fetchTwoBighaImageUploadUrls(
   return data || [];
 }
 
-/** Uploads an image file to Azure Blob Storage via backend proxy (avoiding browser CORS). */
+/** Uploads an image file directly to Microsoft Azure Blob Storage using 2Bigha pre-signed URLs (with proxy fallback). */
 export async function uploadPropertyImageToAzure(
   file: File,
 ): Promise<{ blobPath: string; url: string }> {
+  // Step 1: Request pre-signed Azure upload URL from 2Bigha GraphQL
+  try {
+    const slots = await fetchTwoBighaImageUploadUrls(1);
+    const slot = slots?.[0];
+    if (slot?.uploadUrl && slot?.blobPath) {
+      // Step 2: Direct browser PUT to Microsoft Azure Blob Storage
+      const azureRes = await fetch(slot.uploadUrl, {
+        method: "PUT",
+        headers: {
+          "x-ms-blob-type": "BlockBlob",
+          "Content-Type": file.type || "image/jpeg",
+        },
+        body: file,
+      });
+
+      if (azureRes.ok) {
+        const publicUrl = slot.uploadUrl.split("?")[0];
+        return {
+          blobPath: slot.blobPath,
+          url: publicUrl,
+        };
+      }
+    }
+  } catch (directErr) {
+    console.warn("Direct Azure PUT failed or blocked by CORS, using server proxy fallback:", directErr);
+  }
+
+  // Fallback: Upload via backend proxy
   const formData = new FormData();
   formData.append("file", file);
   const { data } = await api.post<{ blobPath: string; url: string }>(
@@ -129,6 +157,22 @@ export async function createBackendPropertyListing(
   input: CreateBackendPropertyListingInput,
 ): Promise<BackendPropertyListing> {
   const { data } = await api.post<BackendPropertyListing>("/crm/property-listings", input);
+  return data;
+}
+
+export async function updateBackendPropertyListing(
+  id: string,
+  input: Partial<CreateBackendPropertyListingInput>,
+): Promise<BackendPropertyListing> {
+  const { data } = await api.put<BackendPropertyListing>(`/crm/property-listings/${id}`, input);
+  return data;
+}
+
+export async function updateBackendPropertySoldStatus(
+  id: string,
+  isSold: boolean,
+): Promise<BackendPropertyListing> {
+  const { data } = await api.patch<BackendPropertyListing>(`/crm/property-listings/${id}/sold-status`, { isSold });
   return data;
 }
 
@@ -187,6 +231,22 @@ export async function fetchTwoBighaFarms(params: {
     data?: TwoBighaFarmRaw[];
     meta?: { total?: number };
   } | null>("/crm/property-listings/twobigha/farms", {
+    params: { page: params.page, limit: params.limit, searchTerm: params.searchTerm },
+  });
+  const rows = data?.data || [];
+  return { data: rows, total: data?.meta?.total ?? rows.length };
+}
+
+/** Live read-through to 2bigha's properties query — real property marketplace data from GraphQL. */
+export async function fetchTwoBighaProperties(params: {
+  page?: number;
+  limit?: number;
+  searchTerm?: string;
+}): Promise<{ data: any[]; total: number }> {
+  const { data } = await api.get<{
+    data?: any[];
+    meta?: { total?: number };
+  } | null>("/crm/property-listings/twobigha/properties", {
     params: { page: params.page, limit: params.limit, searchTerm: params.searchTerm },
   });
   const rows = data?.data || [];

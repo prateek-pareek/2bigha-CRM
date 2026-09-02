@@ -45,6 +45,7 @@ type VoiceConfig = {
       enabled?: boolean;
       apiKey?: string;
       apiUrl?: string;
+      smeId?: string;
       callerId?: string;
       agentPhone?: string;
     };
@@ -78,7 +79,7 @@ const PROVIDERS: {
   {
     id: "kommuno",
     name: "Kommuno",
-    blurb: "Indian cloud telephony / click-to-call integration.",
+    blurb: "Indian cloud telephony, agent sync, and click-to-call integration.",
     docs: "https://kommuno.in",
   },
 ];
@@ -99,7 +100,7 @@ const emptyConfig = (): VoiceConfig => ({
       authHeaderName: "Authorization",
     },
     elevenlabs: { enabled: false, apiKey: "", agentId: "", agentPhoneNumberId: "" },
-    kommuno: { enabled: false, apiKey: "", apiUrl: "", callerId: "", agentPhone: "" },
+    kommuno: { enabled: false, apiKey: "", apiUrl: "", smeId: "", callerId: "", agentPhone: "" },
   },
 });
 
@@ -598,24 +599,43 @@ export default function VoiceCallingIntegrationPage() {
                   placeholder="https://…"
                 />
               </div>
-              <div>
-                <label className={LBL}>API key / token</label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={LBL}>API key / token</label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                      type="password"
+                      className={cn(INP, "pl-9")}
+                      value={config.providers.kommuno.apiKey || ""}
+                      onChange={(e) =>
+                        setConfig((c) => ({
+                          ...c,
+                          providers: {
+                            ...c.providers,
+                            kommuno: { ...c.providers.kommuno, apiKey: e.target.value },
+                          },
+                        }))
+                      }
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={LBL}>SME ID (Account Identifier)</label>
                   <input
-                    type="password"
-                    className={cn(INP, "pl-9")}
-                    value={config.providers.kommuno.apiKey || ""}
+                    className={INP}
+                    value={config.providers.kommuno.smeId || ""}
                     onChange={(e) =>
                       setConfig((c) => ({
                         ...c,
                         providers: {
                           ...c.providers,
-                          kommuno: { ...c.providers.kommuno, apiKey: e.target.value },
+                          kommuno: { ...c.providers.kommuno, smeId: e.target.value },
                         },
                       }))
                     }
-                    placeholder="••••••••"
+                    placeholder="e.g. 100234 or your SME ID"
                   />
                 </div>
               </div>
@@ -634,7 +654,7 @@ export default function VoiceCallingIntegrationPage() {
                         },
                       }))
                     }
-                    placeholder="+9198…"
+                    placeholder="+916744123220"
                   />
                 </div>
                 <div>

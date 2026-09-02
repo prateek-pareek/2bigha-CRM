@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -28,6 +28,8 @@ import { StorageService } from '../../storage/storage.service';
 
 @Injectable()
 export class PropertyListingsService {
+  private readonly logger = new Logger(PropertyListingsService.name);
+
   constructor(
     @InjectModel(PropertyListing.name, 'crmConnection')
     private readonly listingModel: Model<PropertyListingDocument>,
@@ -133,19 +135,27 @@ export class PropertyListingsService {
     return listing;
   }
 
-  /** Upload an image file buffer to Azure Blob Storage for 2Bigha and store local copy for display. */
+  /** Upload an image file buffer to Azure Blob Storage for 2Bigha and store clean Azure URL. */
   async uploadImageToAzure(file: Express.Multer.File): Promise<{ blobPath: string; url: string }> {
     let blobPath = `properties/temp/${Date.now()}_${file.originalname}`;
+    let azureUrl = '';
     try {
       const azureResult = await this.twoBighaService.uploadBufferToAzure(file.buffer, file.mimetype, file.originalname);
       blobPath = azureResult.blobPath;
+      azureUrl = azureResult.url;
     } catch (e: any) {
-      console.warn('Azure upload error, continuing with local storage:', e?.message);
+      console.warn('Azure upload error, falling back to local storage:', e?.message);
     }
 
-    // Save in local storage so the browser can immediately display it with 200 OK
-    const localUpload = await this.storageService.uploadFile(file, 'properties');
+    if (azureUrl) {
+      return {
+        blobPath,
+        url: azureUrl,
+      };
+    }
 
+    // Fallback if Azure service is temporarily unavailable
+    const localUpload = await this.storageService.uploadFile(file, 'properties');
     return {
       blobPath,
       url: localUpload.url,
@@ -178,36 +188,42 @@ export class PropertyListingsService {
     if (liveData && crmListing) {
       const prop = (liveData.property as Record<string, unknown>) || {};
       const crmObj = crmListing.toObject() as unknown as Record<string, unknown>;
+      const mergedImages =
+        crmListing.images && crmListing.images.length > 0
+          ? crmListing.images
+          : (prop.images as any) || (liveData.images as any) || [];
+
       return {
         ...liveData,
+        images: mergedImages,
         property: {
           ...prop,
-          images:
-            prop.images && Array.isArray(prop.images) && prop.images.length > 0
-              ? prop.images
-              : crmListing.images,
-          khasraNumber: prop.khasraNumber || crmListing.khasraNumber,
-          murabbaNumber: crmObj.murabbaNumber,
-          khewatNumber: crmObj.khewatNumber,
-          waterLevel: crmObj.waterLevel,
-          landMark: crmObj.landMark,
-          landMarkName: crmObj.landMarkName,
-          category: crmObj.category,
-          highwayConn: crmObj.highwayConn,
-          landZoning: crmObj.landZoning,
-          ownershipYes: crmObj.ownershipYes,
-          soilType: crmObj.soilType,
-          roadAccess: crmObj.roadAccess,
-          roadAccessDistance: crmObj.roadAccessDistance,
-          roadAccessWidth: crmObj.roadAccessWidth,
-          roadAccessDistanceUnit: crmObj.roadAccessDistanceUnit,
-          contactName: prop.contactName || crmListing.contactName,
-          contactPhone: prop.contactPhone || crmListing.contactPhone,
-          whatsappNumber: crmObj.whatsappNumber,
-          listerType: crmObj.listerType,
-          mapBoundaries: crmObj.mapBoundaries,
-          mapCoordinates: crmObj.mapCoordinates,
-          mapLocation: crmObj.mapLocation,
+          title: crmListing.title || prop.title,
+          price: crmListing.price ?? prop.price,
+          area: crmListing.areaSqft ?? prop.area,
+          images: mergedImages,
+          khasraNumber: crmListing.khasraNumber || prop.khasraNumber,
+          murabbaNumber: crmObj.murabbaNumber || prop.murabbaNumber,
+          khewatNumber: crmObj.khewatNumber || prop.khewatNumber,
+          waterLevel: crmObj.waterLevel ?? prop.waterLevel,
+          landMark: crmObj.landMark || prop.landMark,
+          landMarkName: crmObj.landMarkName || prop.landMarkName,
+          category: crmObj.category || prop.category,
+          highwayConn: crmObj.highwayConn ?? prop.highwayConn,
+          landZoning: crmObj.landZoning || prop.landZoning,
+          ownershipYes: crmObj.ownershipYes ?? prop.ownershipYes,
+          soilType: crmObj.soilType || prop.soilType,
+          roadAccess: crmObj.roadAccess ?? prop.roadAccess,
+          roadAccessDistance: crmObj.roadAccessDistance ?? prop.roadAccessDistance,
+          roadAccessWidth: crmObj.roadAccessWidth ?? prop.roadAccessWidth,
+          roadAccessDistanceUnit: crmObj.roadAccessDistanceUnit || prop.roadAccessDistanceUnit,
+          contactName: crmListing.contactName || prop.contactName,
+          contactPhone: crmListing.contactPhone || prop.contactPhone,
+          whatsappNumber: crmObj.whatsappNumber || prop.whatsappNumber,
+          listerType: crmObj.listerType || prop.listerType,
+          mapBoundaries: crmObj.mapBoundaries || prop.mapBoundaries || prop.boundary,
+          mapCoordinates: crmObj.mapCoordinates || prop.mapCoordinates,
+          mapLocation: crmObj.mapLocation || prop.mapLocation || prop.location,
         },
       };
     }
@@ -417,24 +433,85 @@ export class PropertyListingsService {
   }
 
   async findOne(id: string): Promise<PropertyListingDocument> {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException('Property listing not found');
+    let listing: PropertyListingDocument | null = null;
+    if (Types.ObjectId.isValid(id)) {
+      listing = await this.listingModel.findById(id).exec();
     }
-    const listing = await this.listingModel.findById(id).exec();
-    if (!listing) throw new NotFoundException('Property listing not found');
-    return listing;
+    if (!listing) {
+      listing = await this.listingModel
+        .findOne({ $or: [{ twobighaPropertyId: id }, { slug: id }] })
+        .exec();
+    }
+    if (listing) return listing;
+
+    throw new NotFoundException("Property listing not found");
   }
 
   async update(
     id: string,
     dto: UpdatePropertyListingDto,
   ): Promise<PropertyListingDocument> {
-    const listing = await this.findOne(id);
+    let listing: PropertyListingDocument | null = null;
+    if (Types.ObjectId.isValid(id)) {
+      listing = await this.listingModel.findById(id).exec();
+    }
+    if (!listing) {
+      listing = await this.listingModel
+        .findOne({ $or: [{ twobighaPropertyId: id }, { slug: id }] })
+        .exec();
+    }
+
+    if (!listing) {
+      // Upsert a local record for this 2Bigha listing to track edits locally
+      const cleanSlug = (dto as any).slug || id;
+      listing = new this.listingModel({
+        twobighaPropertyId: id,
+        slug: cleanSlug,
+        title: dto.title || "Untitled Property",
+        propertyType: dto.propertyType || "Residential",
+        price: dto.price ?? 0,
+        currency: dto.currency || "INR",
+        listedFor: dto.listedFor || "Sale",
+        status: dto.status || "Available",
+      });
+    }
+
     Object.assign(listing, dto, {
+      twobighaPropertyId: id,
       listedDate: dto.listedDate ? new Date(dto.listedDate) : listing.listedDate,
     });
     await listing.save();
-    await this.syncToTwoBigha(listing);
+
+    // Push changes to 2Bigha
+    try {
+      await this.syncToTwoBigha(listing);
+    } catch (syncErr: any) {
+      this.logger.warn(`2Bigha sync warning on update: ${syncErr?.message}`);
+    }
+
+    return listing;
+  }
+
+  /** Mark property sold or available and sync sold status directly to 2bigha via updatePropertySoldStatus mutation. */
+  async updateSoldStatus(
+    id: string,
+    isSold: boolean,
+  ): Promise<PropertyListingDocument> {
+    const listing = await this.findOne(id);
+    listing.status = isSold ? 'Sold' : 'Available';
+    await listing.save();
+
+    if (listing.twobighaPropertyId) {
+      const result = await this.twoBighaService.syncPropertySoldStatus(
+        listing.twobighaPropertyId,
+        isSold,
+      );
+      if (!result.success) {
+        this.logger.warn(
+          `Failed to sync sold status to 2bigha for listing ${listing._id}: ${result.error}`,
+        );
+      }
+    }
     return listing;
   }
 
