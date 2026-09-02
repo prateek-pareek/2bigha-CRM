@@ -57,6 +57,10 @@ function NewPropertyListingPageContent() {
     setPmDraft((d) => ({ ...d, [key]: value }));
 
   const savePm = async () => {
+    if (!leadId) {
+      toast.error("Open Create PM Property from a lead so it is recorded on that client’s 2bigha account");
+      return;
+    }
     const error = validatePmPropertyDraft(pmDraft);
     if (error) {
       toast.error(error);
@@ -67,10 +71,21 @@ function NewPropertyListingPageContent() {
       const created = await createThirdPartyProperty(
         pmDraftToCreateInput(pmDraft, { leadId }),
       );
-      toast.success("PM property submitted");
-      router.push(`/crm/property-listings/${created._id}`);
-    } catch {
-      toast.error("Failed to submit PM property");
+      if (created.userPropertyId) {
+        toast.success("PM property bound on 2bigha");
+        router.push(`/crm/property-listings/${created._id}`);
+      } else if (created.twobighaSyncStatus === "failed") {
+        toast.error(
+          created.twobighaSyncError ||
+            "Saved locally, but 2bigha did not create a userPropertyId",
+        );
+        router.push(`/crm/property-listings/${created._id}`);
+      } else {
+        toast.success("PM property submitted");
+        router.push(`/crm/property-listings/${created._id}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit PM property");
     } finally {
       setSaving(false);
     }
@@ -83,7 +98,7 @@ function NewPropertyListingPageContent() {
         <CrmPageHeader
           icon={<ClipboardList size={18} />}
           title="Create PM property"
-          description="Subscription Property Management case — verification pipeline."
+          description="Subscription Property Management case — recorded on the linked lead’s 2bigha user, not as a marketplace listing."
           breadcrumbs={[
             { label: "Home", href: "/crm/workspace/summary" },
             {
@@ -95,6 +110,11 @@ function NewPropertyListingPageContent() {
           className="mb-4"
         />
 
+        { !leadId ? (
+          <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Open this form from a lead (Create PM Property) so the case is recorded on that client’s 2bigha account. Submit is disabled until a lead is linked.
+          </p>
+        ) : null}
         <CrmSectionCard title="PM property details">
           <PmPropertyFormFields draft={pmDraft} onChange={setPm} />
         </CrmSectionCard>
@@ -108,7 +128,7 @@ function NewPropertyListingPageContent() {
           </CrmButton>
           <CrmButton
             variant="primary"
-            disabled={saving}
+            disabled={saving || !leadId}
             onClick={() => void savePm()}
             className="gap-2 bg-emerald-600 hover:bg-emerald-700"
           >

@@ -1,42 +1,21 @@
 /**
- * HTTP adapter for the PM pipeline — same base URL/auth and `request()`
- * helper as @/lib/crm/property-listings/third-party-http, PM-only paths.
- *
- * Expected REST surface (relative to NEXT_PUBLIC_2BIGHA_LISTINGS_API_URL):
- *   POST  /v1/properties/:id/assign-rm
- *   POST  /v1/properties/:id/assign-legal
- *   POST  /v1/properties/:id/legal/start
- *   PUT   /v1/properties/:id/legal/checklist
- *   POST  /v1/properties/:id/legal/complete
- *   POST  /v1/properties/:id/assign-field
- *   POST  /v1/properties/:id/visit/status
- *   POST  /v1/properties/:id/visit/report
- *   POST  /v1/properties/:id/visit/report/review
+ * PM workflow HTTP adapter — Nest CRM API (legal, field visit, report review).
+ * Assignment actions live in assignment-api.ts.
  */
 
+import api from "@/lib/crm/api";
 import type { PropertyListingRecord } from "@/lib/crm/property-listings/types";
-import { request } from "@/lib/crm/property-listings/third-party-http";
 import type { PmChecklistItem, PmVisitStatus } from "./types";
 
-export async function httpAssignRm(id: string, rmName: string) {
-  return request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}/assign-rm`, {
-    method: "POST",
-    body: JSON.stringify({ rmName }),
-  });
-}
-
-export async function httpAssignLegal(id: string, legalName: string) {
-  return request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}/assign-legal`, {
-    method: "POST",
-    body: JSON.stringify({ legalName }),
-  });
+function listingPath(id: string, suffix: string) {
+  return `/crm/property-listings/${encodeURIComponent(id)}/pm/${suffix}`;
 }
 
 export async function httpStartLegal(id: string, summary?: string) {
-  return request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}/legal/start`, {
-    method: "POST",
-    body: JSON.stringify({ summary }),
+  const { data } = await api.post<PropertyListingRecord>(listingPath(id, "legal/start"), {
+    summary,
   });
+  return { ...data, _id: String(data?._id || id), listingBucket: data?.listingBucket || "pm" };
 }
 
 export async function httpUpdateLegalChecklist(
@@ -44,38 +23,45 @@ export async function httpUpdateLegalChecklist(
   checklist: PmChecklistItem[],
   summary?: string,
 ) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/legal/checklist`,
-    { method: "PUT", body: JSON.stringify({ checklist, summary }) },
-  );
+  const { data } = await api.put<PropertyListingRecord>(listingPath(id, "legal/checklist"), {
+    checklist,
+    summary,
+  });
+  return { ...data, _id: String(data?._id || id), listingBucket: data?.listingBucket || "pm" };
 }
 
 export async function httpCompleteLegal(id: string, summary?: string) {
-  return request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}/legal/complete`, {
-    method: "POST",
-    body: JSON.stringify({ summary }),
+  const { data } = await api.post<PropertyListingRecord>(listingPath(id, "legal/complete"), {
+    summary,
   });
+  return { ...data, _id: String(data?._id || id), listingBucket: data?.listingBucket || "pm" };
 }
 
-export async function httpAssignField(id: string, fieldName: string, scheduledAt?: string) {
-  return request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}/assign-field`, {
-    method: "POST",
-    body: JSON.stringify({ fieldName, scheduledAt }),
+export async function httpScheduleVisit(
+  id: string,
+  agentId: string,
+  scheduledAt: string,
+  notes?: string,
+) {
+  const { data } = await api.post<PropertyListingRecord>(listingPath(id, "visit/schedule"), {
+    agentId,
+    scheduledAt,
+    notes,
   });
+  return { ...data, _id: String(data?._id || id), listingBucket: data?.listingBucket || "pm" };
 }
 
 export async function httpVisitStatus(id: string, status: PmVisitStatus, notes?: string) {
-  return request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}/visit/status`, {
-    method: "POST",
-    body: JSON.stringify({ status, notes }),
+  const { data } = await api.post<PropertyListingRecord>(listingPath(id, "visit/status"), {
+    status,
+    notes,
   });
+  return { ...data, _id: String(data?._id || id), listingBucket: data?.listingBucket || "pm" };
 }
 
 export async function httpSubmitVisitReport(id: string) {
-  return request<PropertyListingRecord>(`/v1/properties/${encodeURIComponent(id)}/visit/report`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
+  const { data } = await api.post<PropertyListingRecord>(listingPath(id, "visit/report/submit"));
+  return { ...data, _id: String(data?._id || id), listingBucket: data?.listingBucket || "pm" };
 }
 
 export async function httpReviewVisitReport(
@@ -84,8 +70,10 @@ export async function httpReviewVisitReport(
   rejectionReason?: string,
   sections?: PmChecklistItem[],
 ) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(id)}/visit/report/review`,
-    { method: "POST", body: JSON.stringify({ decision, rejectionReason, sections }) },
-  );
+  const { data } = await api.post<PropertyListingRecord>(listingPath(id, "visit/report/review"), {
+    decision,
+    rejectionReason,
+    sections,
+  });
+  return { ...data, _id: String(data?._id || id), listingBucket: data?.listingBucket || "pm" };
 }

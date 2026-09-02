@@ -61,8 +61,13 @@ export async function fetchTwoBighaAdmins(params: {
   roleSlug?: string;
   limit?: number;
   offset?: number;
+  /** Fetch every page from 2bigha (recommended for Settings agent list). */
+  all?: boolean;
 } = {}): Promise<TwoBighaAgentFetchResult> {
-  const { data } = await api.get<TwoBighaAgentFetchResult>("/crm-users/twobigha/admins", { params });
+  const { all, ...rest } = params;
+  const { data } = await api.get<TwoBighaAgentFetchResult>("/crm-users/twobigha/admins", {
+    params: { ...rest, all: all ? "true" : undefined },
+  });
   return data;
 }
 

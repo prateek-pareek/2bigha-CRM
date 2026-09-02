@@ -60,6 +60,57 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+function mapLocalListing(item: any): PropertyListingRecord {
+  return {
+    _id: String(item._id),
+    listingBucket: item.listingBucket || (item.propertyType === "Farm" ? "farm" : "properties"),
+    title: item.title,
+    address: item.address,
+    city: item.city,
+    state: item.state,
+    district: item.district,
+    village: item.village,
+    tehsil: item.tehsil,
+    country: item.country || "India",
+    zipCode: item.zipCode,
+    price: item.price || 0,
+    currency: item.currency || "INR",
+    propertyType: item.propertyType || "Plot",
+    listedFor: item.listedFor || "Sale",
+    areaSqft: item.areaSqft,
+    areaValue: item.areaValue,
+    areaUnit: item.areaUnit,
+    status: item.status || "Available",
+    approvalStatus: item.approvalStatus || "Approved",
+    verified: Boolean(item.userPropertyId || item.twobighaPropertyId),
+    images: Array.isArray(item.images) ? item.images : [],
+    amenities: item.amenities || [],
+    description: item.description,
+    khasraNumber: item.khasraNumber,
+    googleMapsLink: item.googleMapsLink,
+    contactName: item.contactName,
+    contactPhone: item.contactPhone,
+    contactEmail: item.contactEmail,
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+    twobighaPropertyId: item.twobighaPropertyId,
+    twobighaSyncStatus: item.twobighaSyncStatus,
+    twobighaSyncError: item.twobighaSyncError,
+    userPropertyId: item.userPropertyId,
+    leadId: item.leadId ? String(item.leadId) : undefined,
+    pmPlan: item.pmPlan,
+    pmStage: item.pmStage,
+    rmAssigneeId: item.rmAssigneeId,
+    rmAssigneeName: item.rmAssigneeName,
+    legalAssigneeId: item.legalAssigneeId,
+    legalAssigneeName: item.legalAssigneeName,
+    fieldAssigneeId: item.fieldAssigneeId,
+    fieldAssigneeName: item.fieldAssigneeName,
+    pmAssignmentSyncStatus: item.pmAssignmentSyncStatus,
+    pmAssignmentSyncError: item.pmAssignmentSyncError,
+  };
+}
+
 function toQuery(params: Record<string, string | number | undefined>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -73,6 +124,64 @@ function toQuery(params: Record<string, string | number | undefined>): string {
 export async function httpFetchListings(query: ThirdPartyListQuery = {}) {
   let mapped: PropertyListingRecord[] = [];
   let total = 0;
+  const bucket = query.listingBucket;
+
+  if (bucket === "pm") {
+    try {
+      const { data } = await api.get<{
+        data?: any[];
+        total?: number;
+        page?: number;
+        pageSize?: number;
+      }>("/crm/property-listings/twobigha/managed-properties", {
+        params: {
+          page: query.page,
+          limit: query.pageSize,
+          searchTerm: query.search,
+          planName: query.pmPlan && query.pmPlan !== "all" ? query.pmPlan : undefined,
+          pmStage: query.pmStage && query.pmStage !== "all" ? query.pmStage : undefined,
+        },
+      });
+      mapped = (data?.data || []).map(mapLocalListing);
+      total = data?.total ?? mapped.length;
+    } catch (err) {
+      console.warn("2bigha managed properties fetch error:", err);
+    }
+
+    try {
+      const { data: localRes } = await api.get<{ data: any[]; total: number }>(
+        "/crm/property-listings",
+        {
+          params: {
+            page: 1,
+            pageSize: 50,
+            search: query.search,
+            listingBucket: "pm",
+            pmStage: query.pmStage,
+          },
+        },
+      );
+      const liveKeys = new Set(
+        mapped.flatMap((row) => [row._id, row.userPropertyId, row.twobighaPropertyId].filter(Boolean)),
+      );
+      for (const loc of (localRes?.data || []).map(mapLocalListing)) {
+        if (liveKeys.has(loc._id) || (loc.userPropertyId && liveKeys.has(loc.userPropertyId))) {
+          continue;
+        }
+        mapped.unshift(loc);
+        total += 1;
+      }
+    } catch (localErr) {
+      console.warn("CRM PM listings fetch error:", localErr);
+    }
+
+    return {
+      data: mapped,
+      total,
+      page: Number(query.page || 1),
+      pageSize: Number(query.pageSize || 25),
+    };
+  }
 
   try {
     const { data } = await api.get<{
@@ -110,35 +219,14 @@ export async function httpFetchListings(query: ThirdPartyListQuery = {}) {
         pageSize: query.pageSize,
         search: query.search,
         status: query.status !== "all" ? query.status : undefined,
+        listingBucket: bucket && bucket !== "all" ? bucket : undefined,
+        leadId: query.leadId,
+        pmStage: query.pmStage,
       },
     });
 
     if (localRes?.data && localRes.data.length > 0) {
-      const localMapped: PropertyListingRecord[] = localRes.data.map((item: any) => ({
-        _id: item._id,
-        listingBucket: "properties",
-        title: item.title,
-        address: item.address,
-        city: item.city,
-        state: item.state,
-        district: item.district,
-        country: item.country || "India",
-        price: item.price || 0,
-        currency: item.currency || "INR",
-        propertyType: item.propertyType || "Plot",
-        listedFor: item.listedFor || "Sale",
-        areaSqft: item.areaSqft,
-        status: item.status || "Available",
-        approvalStatus: item.approvalStatus || "Approved",
-        verified: Boolean(item.twobighaPropertyId),
-        images: Array.isArray(item.images) ? item.images : [],
-        amenities: item.amenities || [],
-        createdAt: item.createdAt || new Date().toISOString(),
-        updatedAt: item.updatedAt || new Date().toISOString(),
-        twobighaPropertyId: item.twobighaPropertyId,
-        twobighaSyncStatus: item.twobighaSyncStatus,
-      }));
-
+      const localMapped: PropertyListingRecord[] = localRes.data.map(mapLocalListing);
       const existingIds = new Set(mapped.map((m) => m._id));
       for (const loc of localMapped) {
         if (!existingIds.has(loc._id) && (!loc.twobighaPropertyId || !existingIds.has(loc.twobighaPropertyId))) {
@@ -160,9 +248,19 @@ export async function httpFetchListings(query: ThirdPartyListQuery = {}) {
 }
 
 export async function httpFetchById(id: string): Promise<PropertyListingRecord | null> {
+  if (id.startsWith("pm_")) {
+    try {
+      const { data } = await api.get<any>(
+        `/crm/property-listings/twobigha/managed-properties/${encodeURIComponent(id)}`,
+      );
+      return data ? mapLocalListing(data) : null;
+    } catch {
+      return null;
+    }
+  }
   try {
-    const { data } = await api.get<PropertyListingRecord>(`/crm/property-listings/${id}`);
-    return data;
+    const { data } = await api.get<any>(`/crm/property-listings/${id}`);
+    return data ? mapLocalListing(data) : null;
   } catch {
     return null;
   }
@@ -176,13 +274,13 @@ export async function httpFetchStats(listingBucket?: string) {
 }
 
 export async function httpCreate(input: CreateThirdPartyPropertyInput) {
-  const { data } = await api.post<PropertyListingRecord>("/crm/property-listings", input);
-  return data;
+  const { data } = await api.post<any>("/crm/property-listings", input);
+  return mapLocalListing(data);
 }
 
 export async function httpUpdate(id: string, input: UpdateThirdPartyPropertyInput) {
-  const { data } = await api.put<PropertyListingRecord>(`/crm/property-listings/${id}`, input);
-  return data;
+  const { data } = await api.put<any>(`/crm/property-listings/${id}`, input);
+  return mapLocalListing(data);
 }
 
 export async function httpDelete(id: string): Promise<void> {

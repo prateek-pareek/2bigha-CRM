@@ -13,7 +13,14 @@ export type PropertyListingType =
   | 'Office'
   | 'Warehouse'
   | 'Farm'
+  | 'Agricultural'
+  | 'Residential'
+  | 'Industrial'
+  | 'Farmhouse'
+  | 'Farmland'
   | 'Other';
+
+export type PropertyListingBucket = 'properties' | 'farm' | 'pm';
 
 export type PropertyListingStatus =
   | 'Available'
@@ -82,12 +89,25 @@ export class PropertyListing {
       'Office',
       'Warehouse',
       'Farm',
+      'Agricultural',
+      'Residential',
+      'Industrial',
+      'Farmhouse',
+      'Farmland',
       'Other',
     ],
     default: 'Apartment',
     index: true,
   })
   propertyType: PropertyListingType;
+
+  /** Marketplace vs Property Management case. */
+  @Prop({
+    enum: ['properties', 'farm', 'pm'],
+    default: 'properties',
+    index: true,
+  })
+  listingBucket?: PropertyListingBucket;
 
   @Prop({ enum: ['Sale', 'Rent'], default: 'Sale', index: true })
   listedFor: PropertyListingFor;
@@ -157,6 +177,12 @@ export class PropertyListing {
   @Prop({ trim: true })
   areaUnit?: string;
 
+  @Prop()
+  areaValue?: number;
+
+  @Prop()
+  areaBigha?: number;
+
   @Prop({ trim: true })
   pricePerUnit?: string;
 
@@ -224,6 +250,70 @@ export class PropertyListing {
   @Prop({ trim: true, index: true })
   twobighaPropertyId?: string;
 
+  /** PM managed-property id (`userPropertyId` / managePropertyId) when known. */
+  @Prop({ trim: true, index: true })
+  userPropertyId?: string;
+
+  @Prop({ trim: true, index: true })
+  pmStage?: string;
+
+  @Prop({ trim: true })
+  pmPlan?: string;
+
+  @Prop({ trim: true })
+  village?: string;
+
+  @Prop({ trim: true })
+  tehsil?: string;
+
+  @Prop({ trim: true })
+  googleMapsLink?: string;
+
+  @Prop({ trim: true })
+  rmAssigneeId?: string;
+
+  @Prop({ trim: true })
+  rmAssigneeName?: string;
+
+  @Prop({ trim: true })
+  legalAssigneeId?: string;
+
+  @Prop({ trim: true })
+  legalAssigneeName?: string;
+
+  @Prop({ trim: true })
+  fieldAssigneeId?: string;
+
+  @Prop({ trim: true })
+  fieldAssigneeName?: string;
+
+  @Prop({
+    enum: ['not_synced', 'synced', 'mock', 'failed', 'skipped'],
+    default: 'not_synced',
+  })
+  pmAssignmentSyncStatus?: 'not_synced' | 'synced' | 'mock' | 'failed' | 'skipped';
+
+  @Prop({ trim: true })
+  pmAssignmentSyncError?: string;
+
+  /** PM pipeline state mirrored from 2bigha / CRM workflow UI. */
+  @Prop({ type: Object })
+  legalVerification?: Record<string, unknown>;
+
+  @Prop({ type: Object })
+  fieldVisit?: Record<string, unknown>;
+
+  @Prop({ type: Object })
+  visitReport?: Record<string, unknown>;
+
+  /** 2bigha ids needed for visit/report mutations. */
+  @Prop({ type: Object })
+  pmWorkflowIds?: {
+    fieldVisitId?: number;
+    visitRequestId?: number;
+    reportId?: number;
+  };
+
   @Prop({
     enum: ['not_synced', 'synced', 'mock', 'failed', 'unsupported'],
     default: 'not_synced',
@@ -266,6 +356,7 @@ export const PropertyListingSchema =
   SchemaFactory.createForClass(PropertyListing);
 applyCrmSoftDeletePlugin(PropertyListingSchema);
 
+PropertyListingSchema.index({ listingBucket: 1, pmStage: 1, createdAt: -1 });
 PropertyListingSchema.index({ isDeleted: 1, createdAt: -1 });
 PropertyListingSchema.index({ status: 1, createdAt: -1 });
 PropertyListingSchema.index({ approvalStatus: 1, createdAt: -1 });

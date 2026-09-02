@@ -1,23 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { CrmButton, CrmInput, CrmLabel, CrmSelect, CrmStatusBadge, CrmTextarea } from "@/components/crm/ui";
+import { CrmButton, CrmInput, CrmLabel, CrmStatusBadge, CrmTextarea } from "@/components/crm/ui";
 import {
-  PM_FIELD_POOL,
-  PM_LEGAL_POOL,
-  PM_RM_POOL,
   assignPmToFieldAgent,
   assignPmToLegal,
   assignPmToRm,
   completePmLegalVerification,
+  fetchPmAssignmentStaff,
   reviewPmVisitReport,
   setPmFieldVisitStatus,
   startPmLegalVerification,
   submitPmVisitReport,
+  unassignPmStaff,
   updatePmLegalChecklist,
+  type PmAssignPick,
+  type PmAssignmentStaffResponse,
 } from "@/lib/crm/property-management/pm-api";
 import {
   PM_STAGE_RAIL,
@@ -25,10 +27,17 @@ import {
   type PmChecklistItem,
 } from "@/lib/crm/property-management/types";
 import type { PropertyListingRecord } from "@/lib/crm/property-listings/types";
+import PmAssigneeSelect from "./PmAssigneeSelect";
 
 type Props = {
   listing: PropertyListingRecord;
   onUpdated: (next: PropertyListingRecord) => void;
+};
+
+const EMPTY_STAFF: PmAssignmentStaffResponse = {
+  manager: { twobigha: [], crm: [] },
+  legal: { twobigha: [], crm: [] },
+  field: { twobigha: [], crm: [] },
 };
 
 function StageRail({ stage }: { stage?: string }) {
@@ -106,24 +115,62 @@ function ChecklistEditor({
   );
 }
 
-/** RM → Legal → Field Agent workflow actions (doc §§5–8), mock third-party. */
+/** RM → Legal → Field Agent assignment (process-flow + handbook assign/reAssign). */
 export default function PmWorkflowPanel({ listing, onUpdated }: Props) {
   const [busy, setBusy] = useState(false);
-  const [rmPick, setRmPick] = useState(PM_RM_POOL[0]);
-  const [legalPick, setLegalPick] = useState(PM_LEGAL_POOL[0]);
-  const [fieldPick, setFieldPick] = useState(PM_FIELD_POOL[0]);
+  const [staff, setStaff] = useState<PmAssignmentStaffResponse>(EMPTY_STAFF);
+  const [staffLoading, setStaffLoading] = useState(true);
+  const [rmValue, setRmValue] = useState("");
+  const [legalValue, setLegalValue] = useState("");
+  const [fieldValue, setFieldValue] = useState("");
+  const [rmPick, setRmPick] = useState<PmAssignPick | null>(null);
+  const [legalPick, setLegalPick] = useState<PmAssignPick | null>(null);
+  const [fieldPick, setFieldPick] = useState<PmAssignPick | null>(null);
   const [legalSummary, setLegalSummary] = useState(listing.legalVerification?.summary || "");
   const [visitNotes, setVisitNotes] = useState(listing.fieldVisit?.notes || "");
   const [rejectReason, setRejectReason] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setStaffLoading(true);
+    fetchPmAssignmentStaff()
+      .then((data) => {
+        if (!cancelled) setStaff(data);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Could not load 2bigha / CRM staff lists");
+      })
+      .finally(() => {
+        if (!cancelled) setStaffLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const run = async (fn: () => Promise<PropertyListingRecord>, okMsg: string) => {
     setBusy(true);
     try {
       const next = await fn();
       onUpdated(next);
-      toast.success(okMsg);
-    } catch {
-      toast.error("Action failed");
+      if (next.pmAssignmentSyncStatus === "failed") {
+        toast.error(next.pmAssignmentSyncError || "2bigha assignment did not sync");
+      } else if (next.pmAssignmentSyncStatus === "skipped") {
+        toast.message(next.pmAssignmentSyncError || "Saved in CRM — 2bigha managed-property id not set yet");
+      } else {
+        toast.success(okMsg);
+      }
+    } catch (e) {
+      const ax = e as { response?: { data?: { message?: string | string[] } } };
+      const fromApi = ax?.response?.data?.message;
+      const message = Array.isArray(fromApi)
+        ? fromApi.join(", ")
+        : typeof fromApi === "string" && fromApi
+          ? fromApi
+          : e instanceof Error
+            ? e.message
+            : "Action failed";
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -133,6 +180,7 @@ export default function PmWorkflowPanel({ listing, onUpdated }: Props) {
   const legal = listing.legalVerification;
   const visit = listing.fieldVisit;
   const report = listing.visitReport;
+  const hasRm = Boolean(listing.rmAssigneeName);
 
   return (
     <div className="space-y-4 rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white p-4 shadow-sm">
@@ -140,7 +188,8 @@ export default function PmWorkflowPanel({ listing, onUpdated }: Props) {
         <div>
           <h3 className="text-sm font-semibold text-[var(--text-main)]">PM pipeline</h3>
           <p className="text-xs text-[var(--text-muted)]">
-            Current stage tasks — mock third-party workflow
+            Assign the Regional Manager, then Legal Manager and Field Agent. Same RM stays on the case (
+            <code className="text-[10px]">reAssignPropertyToManager</code> for hand-offs).
           </p>
         </div>
         {listing.pmStage ? (
@@ -165,77 +214,155 @@ export default function PmWorkflowPanel({ listing, onUpdated }: Props) {
         </p>
       </div>
 
-      {busy ? (
+      {listing.pmAssignmentSyncError ? (
+        <p className="text-[11px] text-amber-800">
+          2bigha: {listing.pmAssignmentSyncStatus || "skipped"} — {listing.pmAssignmentSyncError}{" "}
+          <Link href="/crm/settings/twobigha-sync" className="underline">
+            Reconcile agents
+          </Link>
+        </p>
+      ) : (
+        <p className="text-[11px] text-[var(--text-muted)]">
+          Staff lists: 2bigha PM roster + CRM team.{" "}
+          <Link href="/crm/settings/twobigha-sync" className="underline">
+            Settings → 2bigha Sync
+          </Link>
+        </p>
+      )}
+
+      {busy || staffLoading ? (
         <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-          <Loader2 size={14} className="animate-spin" /> Working…
+          <Loader2 size={14} className="animate-spin" /> {staffLoading ? "Loading staff…" : "Working…"}
         </div>
       ) : null}
 
-      {/* §5 RM: take ownership */}
-      {(stage === "Property Submitted" || !listing.rmAssigneeName) && (
-        <section className="space-y-2 rounded-lg border border-dashed border-[var(--border-color)] p-3">
-          <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
-            RM — take ownership
-          </h4>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[180px] flex-1">
-              <CrmLabel>Regional Manager</CrmLabel>
-              <CrmSelect value={rmPick} onChange={(e) => setRmPick(e.target.value)} className="mt-1">
-                {PM_RM_POOL.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </CrmSelect>
-            </div>
+      <section className="space-y-2 rounded-lg border border-dashed border-[var(--border-color)] p-3">
+        <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
+          {listing.rmAssigneeName ? "Reassign Regional Manager" : "Assign Regional Manager"}
+        </h4>
+        <div className="flex flex-wrap items-end gap-2">
+          <PmAssigneeSelect
+            label="Regional Manager"
+            pool={staff.manager}
+            value={rmValue}
+            onChange={(pick, raw) => {
+              setRmPick(pick);
+              setRmValue(raw);
+            }}
+          />
+          <CrmButton
+            disabled={busy || staffLoading || !rmPick}
+            onClick={() =>
+              rmPick &&
+              void run(
+                () => assignPmToRm(listing._id, rmPick),
+                listing.rmAssigneeName ? "RM reassigned" : "Assigned to RM",
+              )
+            }
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            {listing.rmAssigneeName ? "Reassign RM" : "Assign RM"}
+          </CrmButton>
+          {listing.rmAssigneeName ? (
             <CrmButton
               disabled={busy}
+              variant="secondary"
               onClick={() =>
-                void run(() => assignPmToRm(listing._id, rmPick), "Assigned to RM")
+                void run(() => unassignPmStaff(listing._id, "manager").then((r) => r.listing), "RM unassigned")
               }
-              className="bg-emerald-600 hover:bg-emerald-700"
             >
-              Assign RM
+              Unassign
             </CrmButton>
-          </div>
-        </section>
-      )}
+          ) : null}
+        </div>
+      </section>
 
-      {/* §5 RM: assign legal */}
-      {stage === "Assigned to RM" && (
-        <section className="space-y-2 rounded-lg border border-dashed border-[var(--border-color)] p-3">
-          <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
-            RM — assign Legal Manager
-          </h4>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[180px] flex-1">
-              <CrmLabel>Legal Manager</CrmLabel>
-              <CrmSelect
-                value={legalPick}
-                onChange={(e) => setLegalPick(e.target.value)}
-                className="mt-1"
-              >
-                {PM_LEGAL_POOL.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </CrmSelect>
-            </div>
+      <section className="space-y-2 rounded-lg border border-dashed border-[var(--border-color)] p-3">
+        <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
+          {listing.legalAssigneeName ? "Reassign Legal Manager" : "Assign Legal Manager"}
+        </h4>
+        <div className="flex flex-wrap items-end gap-2">
+          <PmAssigneeSelect
+            label="Legal Manager"
+            pool={staff.legal}
+            value={legalValue}
+            onChange={(pick, raw) => {
+              setLegalPick(pick);
+              setLegalValue(raw);
+            }}
+          />
+          <CrmButton
+            disabled={busy || staffLoading || !legalPick || !hasRm}
+            onClick={() =>
+              legalPick &&
+              void run(
+                () => assignPmToLegal(listing._id, legalPick),
+                listing.legalAssigneeName ? "Legal reassigned" : "Assigned to Legal",
+              )
+            }
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            {listing.legalAssigneeName ? "Reassign Legal" : "Assign Legal"}
+          </CrmButton>
+          {listing.legalAssigneeName ? (
             <CrmButton
               disabled={busy}
+              variant="secondary"
               onClick={() =>
-                void run(() => assignPmToLegal(listing._id, legalPick), "Assigned to Legal")
+                void run(() => unassignPmStaff(listing._id, "legal").then((r) => r.listing), "Legal unassigned")
               }
-              className="bg-emerald-600 hover:bg-emerald-700"
             >
-              Assign Legal
+              Unassign
             </CrmButton>
-          </div>
-        </section>
-      )}
+          ) : null}
+        </div>
+        {!hasRm ? (
+          <p className="text-[11px] text-[var(--text-muted)]">Assign an RM first — the same RM owns legal hand-off.</p>
+        ) : null}
+      </section>
 
-      {/* §6 Legal verification */}
+      <section className="space-y-2 rounded-lg border border-dashed border-[var(--border-color)] p-3">
+        <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
+          {listing.fieldAssigneeName ? "Reassign Field Agent" : "Assign Field Agent"}
+        </h4>
+        <div className="flex flex-wrap items-end gap-2">
+          <PmAssigneeSelect
+            label="Field Agent"
+            pool={staff.field}
+            value={fieldValue}
+            onChange={(pick, raw) => {
+              setFieldPick(pick);
+              setFieldValue(raw);
+            }}
+          />
+          <CrmButton
+            disabled={busy || staffLoading || !fieldPick || !hasRm}
+            onClick={() =>
+              fieldPick &&
+              void run(
+                () => assignPmToFieldAgent(listing._id, fieldPick),
+                listing.fieldAssigneeName ? "Field agent reassigned" : "Assigned to Field Agent",
+              )
+            }
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            {listing.fieldAssigneeName ? "Reassign Field Agent" : "Assign Field Agent"}
+          </CrmButton>
+          {listing.fieldAssigneeName ? (
+            <CrmButton
+              disabled={busy}
+              variant="secondary"
+              onClick={() =>
+                void run(() => unassignPmStaff(listing._id, "field").then((r) => r.listing), "Field agent unassigned")
+              }
+            >
+              Unassign
+            </CrmButton>
+          ) : null}
+        </div>
+      </section>
+
+      {/* Legal verification stays stage-gated; assignment pickers above are always available. */}
       {stage === "Assigned to Legal" && (
         <section className="space-y-3 rounded-lg border border-dashed border-[var(--border-color)] p-3">
           <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
@@ -305,37 +432,6 @@ export default function PmWorkflowPanel({ listing, onUpdated }: Props) {
               </CrmButton>
             ) : null}
           </div>
-
-          {legal?.status === "Completed" && (
-            <div className="flex flex-wrap items-end gap-2 border-t border-[var(--border-color)] pt-3">
-              <div className="min-w-[180px] flex-1">
-                <CrmLabel>Field Agent</CrmLabel>
-                <CrmSelect
-                  value={fieldPick}
-                  onChange={(e) => setFieldPick(e.target.value)}
-                  className="mt-1"
-                >
-                  {PM_FIELD_POOL.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </CrmSelect>
-              </div>
-              <CrmButton
-                disabled={busy}
-                className="bg-emerald-600 hover:bg-emerald-700"
-                onClick={() =>
-                  void run(
-                    () => assignPmToFieldAgent(listing._id, fieldPick),
-                    "Assigned to Field Agent",
-                  )
-                }
-              >
-                Assign Field Agent
-              </CrmButton>
-            </div>
-          )}
         </section>
       )}
 

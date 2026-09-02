@@ -142,6 +142,13 @@ type Props = {
 export function PmPropertyFormFields({ draft, onChange }: Props) {
   return (
     <div className="space-y-4">
+      <p className="rounded-md border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-900">
+        Submit records this as a <strong>managed PM property</strong> on the linked lead’s
+        2bigha user (<code>createManagedPropertyByUser</code>), then binds the oldest unpaid
+        credit if one exists (<code>tagSubscriptionToProperty</code>). Buy/sell{" "}
+        <code>createProperty</code> is not used. The lead’s client must already be synced
+        to 2bigha.
+      </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <CrmLabel required>PM plan</CrmLabel>
