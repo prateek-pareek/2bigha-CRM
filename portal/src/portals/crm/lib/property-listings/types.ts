@@ -192,8 +192,13 @@ export interface PropertyListingRecord {
   googleMapsLink?: string;
   pmStage?: PmPipelineStage;
   rmAssigneeName?: string;
+  rmAssigneeId?: string;
   legalAssigneeName?: string;
+  legalAssigneeId?: string;
   fieldAssigneeName?: string;
+  fieldAssigneeId?: string;
+  pmAssignmentSyncStatus?: string;
+  pmAssignmentSyncError?: string;
   legalVerification?: PmLegalVerification;
   fieldVisit?: PmFieldVisit;
   visitReport?: PmVisitReport;
@@ -205,6 +210,7 @@ export interface PropertyListingRecord {
   /** Supporting docs for legal review (name + url). */
   documents?: { name: string; url: string; uploadedAt?: string }[];
   twobighaSyncStatus?: string;
+  twobighaSyncError?: string;
   // Detailed land & property fields
   murabbaNumber?: string;
   khewatNumber?: string;

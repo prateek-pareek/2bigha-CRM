@@ -188,6 +188,7 @@ export class CRMUsersController {
       roleSlug: query?.roleSlug,
       limit: query?.limit ? Number(query.limit) : undefined,
       offset: query?.offset ? Number(query.offset) : undefined,
+      fetchAll: query?.all === 'true' || query?.all === true,
     });
   }
 

@@ -21,6 +21,14 @@ import { RbacGuard } from '../crm-users/rbac.guard';
 import { Permissions } from '../crm-users/permissions.decorator';
 import { CreatePropertyListingDto } from './dto/create-property-listing.dto';
 import { UpdatePropertyListingDto } from './dto/update-property-listing.dto';
+import { AssignPmStaffDto, UnassignPmStaffDto } from './dto/assign-pm-staff.dto';
+import {
+  PmLegalActionDto,
+  PmLegalChecklistDto,
+  PmReviewReportDto,
+  PmScheduleVisitDto,
+  PmVisitStatusDto,
+} from './dto/pm-workflow.dto';
 
 @Controller('crm/property-listings')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -43,10 +51,22 @@ export class PropertyListingsController {
     return this.listingsService.findAll(query);
   }
 
+  @Get('pm/assignment-staff')
+  @Permissions('property_listings:read', 'leads:read')
+  listPmAssignmentStaff(@Query('search') search?: string) {
+    return this.listingsService.listPmAssignmentStaff(search);
+  }
+
+  @Get('pm/lead-overview/:leadId')
+  @Permissions('property_listings:read', 'leads:read')
+  getLeadPmOverview(@Param('leadId') leadId: string) {
+    return this.listingsService.getLeadPmOverview(leadId);
+  }
+
   @Get('stats')
   @Permissions('property_listings:read')
-  stats() {
-    return this.listingsService.stats();
+  stats(@Query('listingBucket') listingBucket?: string) {
+    return this.listingsService.stats(listingBucket);
   }
 
   /** Live read-through to 2bigha's getPropertyBySlug — the property-detail display screen operation per the Integration Handbook. */
@@ -98,6 +118,31 @@ export class PropertyListingsController {
       approvalStatus,
       sort: Object.keys(sort).length ? (sort as any) : undefined,
     });
+  }
+
+  /** Live read-through to 2bigha's getAllManagedPropertiesByRole — PM pipeline list. */
+  @Get('twobigha/managed-properties')
+  @Permissions('property_listings:read')
+  listTwoBighaManagedProperties(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('searchTerm') searchTerm?: string,
+    @Query('planName') planName?: string,
+    @Query('pmStage') pmStage?: string,
+  ) {
+    return this.listingsService.listTwoBighaManagedProperties({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      searchTerm,
+      planName,
+      pmStage,
+    });
+  }
+
+  @Get('twobigha/managed-properties/:id')
+  @Permissions('property_listings:read')
+  getTwoBighaManagedProperty(@Param('id') id: string) {
+    return this.listingsService.getTwoBighaManagedProperty(id);
   }
 
   /** Live read-through to 2bigha's getFarmBySlug — the farm-detail display operation. */
@@ -208,5 +253,64 @@ export class PropertyListingsController {
   @Permissions('property_listings:write')
   retrySync(@Param('id') id: string) {
     return this.listingsService.retrySync(id);
+  }
+
+  @Post(':id/pm/assign')
+  @Permissions('property_listings:write', 'leads:write')
+  assignPmStaff(@Param('id') id: string, @Body() body: AssignPmStaffDto) {
+    return this.listingsService.assignPmStaff(id, {
+      role: body.role,
+      source: body.source,
+      id: body.id,
+      name: body.name,
+    });
+  }
+
+  @Post(':id/pm/unassign')
+  @Permissions('property_listings:write', 'leads:write')
+  unassignPmStaff(@Param('id') id: string, @Body() body: UnassignPmStaffDto) {
+    return this.listingsService.unassignPmStaff(id, body.role);
+  }
+
+  @Post(':id/pm/legal/start')
+  @Permissions('property_listings:write', 'leads:write')
+  startPmLegal(@Param('id') id: string, @Body() body: PmLegalActionDto) {
+    return this.listingsService.startPmLegalVerification(id, body);
+  }
+
+  @Put(':id/pm/legal/checklist')
+  @Permissions('property_listings:write', 'leads:write')
+  updatePmLegalChecklist(@Param('id') id: string, @Body() body: PmLegalChecklistDto) {
+    return this.listingsService.updatePmLegalChecklist(id, body);
+  }
+
+  @Post(':id/pm/legal/complete')
+  @Permissions('property_listings:write', 'leads:write')
+  completePmLegal(@Param('id') id: string, @Body() body: PmLegalActionDto) {
+    return this.listingsService.completePmLegalVerification(id, body);
+  }
+
+  @Post(':id/pm/visit/schedule')
+  @Permissions('property_listings:write', 'leads:write')
+  schedulePmVisit(@Param('id') id: string, @Body() body: PmScheduleVisitDto) {
+    return this.listingsService.schedulePmFieldVisit(id, body);
+  }
+
+  @Post(':id/pm/visit/status')
+  @Permissions('property_listings:write', 'leads:write')
+  setPmVisitStatus(@Param('id') id: string, @Body() body: PmVisitStatusDto) {
+    return this.listingsService.setPmFieldVisitStatus(id, body);
+  }
+
+  @Post(':id/pm/visit/report/submit')
+  @Permissions('property_listings:write', 'leads:write')
+  submitPmVisitReport(@Param('id') id: string) {
+    return this.listingsService.submitPmVisitReport(id);
+  }
+
+  @Post(':id/pm/visit/report/review')
+  @Permissions('property_listings:write', 'leads:write')
+  reviewPmVisitReport(@Param('id') id: string, @Body() body: PmReviewReportDto) {
+    return this.listingsService.reviewPmVisitReport(id, body);
   }
 }

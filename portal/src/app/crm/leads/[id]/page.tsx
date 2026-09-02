@@ -905,6 +905,7 @@ export default function LeadDetailPage() {
                 leadId={entityId}
                 refreshKey={propertiesRefreshKey}
                 onAddClick={() => setIsAddPropertyModalOpen(true)}
+                onRefresh={() => setPropertiesRefreshKey((k) => k + 1)}
               />
             ) : null}
             {entityId ? (

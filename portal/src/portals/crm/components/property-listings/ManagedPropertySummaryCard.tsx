@@ -58,6 +58,11 @@ export default function ManagedPropertySummaryCard({ propertyId }: { propertyId:
     return 0;
   };
 
+  const owner = detail.user;
+  const ownerName = [owner?.firstName, owner?.lastName].filter(Boolean).join(" ").trim() || "Unknown owner";
+  const ownerRole = owner?.role ? owner.role.toLowerCase() : null;
+  const assignmentStatus = detail.assignmentStatus || "UNASSIGNED";
+
   return (
     <div className="space-y-4 mb-4">
       <h2 className="text-lg font-semibold tracking-tight text-[var(--text-main)] flex items-center gap-2">
@@ -73,20 +78,22 @@ export default function ManagedPropertySummaryCard({ propertyId }: { propertyId:
             </div>
             <div>
               <p className="font-semibold text-[var(--text-main)] text-sm">
-                {detail.user.firstName} {detail.user.lastName}
+                {ownerName}
               </p>
-              <p className="text-xs text-[var(--text-muted)] capitalize">{detail.user.role.toLowerCase()}</p>
+              {ownerRole ? (
+                <p className="text-xs text-[var(--text-muted)] capitalize">{ownerRole}</p>
+              ) : null}
             </div>
           </div>
           <div className="space-y-2 pt-1 text-sm">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2 text-[var(--text-muted)]"><Phone size={14} /> Phone</span>
-              <span className="font-medium text-[var(--text-main)]">{detail.user.phone}</span>
+              <span className="font-medium text-[var(--text-main)]">{owner?.phone || "—"}</span>
             </div>
-            {detail.user.email && (
+            {owner?.email && (
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-[var(--text-muted)]"><Mail size={14} /> Email</span>
-                <span className="font-medium text-[var(--text-main)]">{detail.user.email}</span>
+                <span className="font-medium text-[var(--text-main)]">{owner.email}</span>
               </div>
             )}
           </div>
@@ -96,8 +103,8 @@ export default function ManagedPropertySummaryCard({ propertyId }: { propertyId:
         <CrmSectionCard title="Assignment Pipeline" bodyClassName="p-4 space-y-4 h-full">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Current Stage</span>
-            <CrmStatusBadge tone={getWorkflowTone(detail.assignmentStatus)}>
-              {detail.assignmentStatus.replace(/_/g, " ")}
+            <CrmStatusBadge tone={getWorkflowTone(assignmentStatus)}>
+              {assignmentStatus.replace(/_/g, " ")}
             </CrmStatusBadge>
           </div>
           

@@ -43,6 +43,10 @@ import {
 import PmWorkflowPanel from "@/components/crm/property-listings/PmWorkflowPanel";
 import PropertyVisitHistoryPanel from "@/components/crm/property-listings/PropertyVisitHistoryPanel";
 import ActivePropertyPlanCard from "@/components/crm/property-listings/ActivePropertyPlanCard";
+import PmPaymentHistorySection from "@/components/crm/subscriptions/PmPaymentHistorySection";
+import PmActivityLogSection from "@/components/crm/subscriptions/PmActivityLogSection";
+import { fetchPmPayments } from "@/lib/crm/subscriptions/backend-api";
+import type { PmPaymentRecord } from "@/lib/crm/subscriptions/types";
 import ManagedPropertySummaryCard from "@/components/crm/property-listings/ManagedPropertySummaryCard";
 import LegalVerificationReviewPanel from "@/components/crm/property-listings/LegalVerificationReviewPanel";
 import PropertyDetailMapView from "@/portals/crm/components/property-listings/PropertyDetailMapView";
@@ -94,6 +98,7 @@ export default function PropertyListingDetailPage() {
   const [activeImage, setActiveImage] = useState(0);
   const [sub, setSub] = useState<LeadSubscriptionMock | null>(null);
   const [requestBusy, setRequestBusy] = useState(false);
+  const [pmPayments, setPmPayments] = useState<PmPaymentRecord[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,8 +132,13 @@ export default function PropertyListingDetailPage() {
       if (data.leadId && data.listingBucket !== "pm") {
         const subscription = await fetchLeadSubscriptionMock(data.leadId);
         setSub(subscription);
+        setPmPayments([]);
+      } else if (data.leadId && data.listingBucket === "pm") {
+        setSub(null);
+        fetchPmPayments(data.leadId).then(setPmPayments).catch(() => setPmPayments([]));
       } else {
         setSub(null);
+        setPmPayments([]);
       }
     } catch {
       toast.error("Failed to load property listing");
@@ -174,6 +184,7 @@ export default function PropertyListingDetailPage() {
   }
 
   const isPm = listing.listingBucket === "pm";
+  const isLivePm = String(id).startsWith("pm_");
   const bucketLabel =
     LISTING_BUCKETS.find((b) => b.key === listing.listingBucket)?.label || listing.listingBucket;
   const canRequestLegal =
@@ -250,20 +261,24 @@ export default function PropertyListingDetailPage() {
                 Request Legal Verification
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => router.push(`/crm/property-listings/${id}/edit`)}
-              className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3.5 text-xs font-semibold text-[var(--text-main)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--surface-dim)]"
-            >
-              Edit Listing
-            </button>
-            <button
-              type="button"
-              onClick={() => void remove()}
-              className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 shadow-[var(--crm-shadow-input)] transition-colors hover:bg-rose-100"
-            >
-              <Trash2 size={14} /> Delete
-            </button>
+            {!isLivePm ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/crm/property-listings/${id}/edit`)}
+                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3.5 text-xs font-semibold text-[var(--text-main)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--surface-dim)]"
+              >
+                Edit Listing
+              </button>
+            ) : null}
+            {!isLivePm ? (
+              <button
+                type="button"
+                onClick={() => void remove()}
+                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 shadow-[var(--crm-shadow-input)] transition-colors hover:bg-rose-100"
+              >
+                <Trash2 size={14} /> Delete
+              </button>
+            ) : null}
           </div>
         }
         className="mb-5"
@@ -382,7 +397,9 @@ export default function PropertyListingDetailPage() {
 
         {isPm ? (
           <>
-            <ManagedPropertySummaryCard propertyId={id} />
+            <ManagedPropertySummaryCard
+              propertyId={listing.userPropertyId || listing.twobighaPropertyId || id}
+            />
             <PmWorkflowPanel listing={listing} onUpdated={setListing} />
             <PropertyVisitHistoryPanel
               managePropertyId={
@@ -402,7 +419,24 @@ export default function PropertyListingDetailPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left Column (2 Cols) */}
           <div className="space-y-6 lg:col-span-2">
-            {isPm ? <ActivePropertyPlanCard propertyId={id} /> : null}
+            {isPm ? (
+              <ActivePropertyPlanCard
+                propertyId={listing.twobighaPropertyId || listing.userPropertyId || id}
+              />
+            ) : null}
+            {isPm && listing.leadId ? (
+              <CrmSectionCard title="PM payment history">
+                <PmPaymentHistorySection payments={pmPayments} compact />
+              </CrmSectionCard>
+            ) : null}
+            {isPm ? (
+              <CrmSectionCard title="PM activity log">
+                <PmActivityLogSection
+                  leadId={listing.leadId}
+                  propertyListingId={id}
+                />
+              </CrmSectionCard>
+            ) : null}
 
             {/* Land & Regulatory Details */}
             <CrmSectionCard title="Land & Regulatory Specifications">

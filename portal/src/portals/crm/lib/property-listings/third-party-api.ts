@@ -43,6 +43,11 @@ export async function fetchThirdPartyPropertyListings(query: ThirdPartyListQuery
 export async function fetchThirdPartyPropertyById(id: string) {
   const isMongoId = /^[0-9a-fA-F]{24}$/.test(id);
   const isMockId = id.startsWith("tp_listing_") || id.startsWith("mock_");
+  const isLivePmId = id.startsWith("pm_");
+
+  if (isLivePmId) {
+    return http.httpFetchById(id);
+  }
 
   if (!isMongoId && !isMockId) {
     try {

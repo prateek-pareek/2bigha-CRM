@@ -345,8 +345,9 @@ function PropertyListingsPageContent() {
     router.push(`/crm/property-listings/${id}`);
   };
   const isLive2bigha = bucket === "farm" || bucket === "properties";
+  const isLiveRow = (id: string) => isLive2bigha || id.startsWith("pm_");
   const editListing = (id: string) => {
-    if (isLive2bigha) {
+    if (isLiveRow(id)) {
       toast.error("Editing a live 2bigha listing isn't available here yet");
       return;
     }
@@ -354,7 +355,7 @@ function PropertyListingsPageContent() {
   };
 
   const removeListing = async (id: string) => {
-    if (isLive2bigha) {
+    if (isLiveRow(id)) {
       toast.error("Deleting a live 2bigha listing isn't available here yet");
       return;
     }
@@ -374,6 +375,10 @@ function PropertyListingsPageContent() {
     const nextStage = stageForBoardColumn(columnKey);
     const prev = listings.find((l) => l._id === id);
     if (!prev || prev.pmStage === nextStage) return;
+    if (id.startsWith("pm_")) {
+      toast.error("Stage follows 2bigha assignment — assign RM, Legal, or Field on the property.");
+      return;
+    }
     // Optimistic
     setListings((list) =>
       list.map((l) => (l._id === id ? { ...l, pmStage: nextStage } : l)),

@@ -4,6 +4,9 @@ import { PropertyListingsController } from './property-listings.controller';
 import { PropertyShareController } from './property-share.controller';
 import { PropertyListingsService } from './property-listings.service';
 import { TwoBighaPropertyService } from './twobigha-property.service';
+import { TwoBighaPmAssignmentService } from './twobigha-pm-assignment.service';
+import { TwoBighaPmCreateService } from './twobigha-pm-create.service';
+import { VisitsModule } from '../visits/visits.module';
 import { PropertyShareService } from './property-share-pdf.service';
 import {
   PropertyListing,
@@ -19,13 +22,20 @@ import { CRMModule } from '../crm.module';
     // It also exports WhatsAppService, which PropertyShareController needs
     // to send the generated PDF once it's built.
     CRMModule,
+    VisitsModule,
     MongooseModule.forFeature(
       [{ name: PropertyListing.name, schema: PropertyListingSchema }],
       'crmConnection',
     ),
   ],
   controllers: [PropertyListingsController, PropertyShareController],
-  providers: [PropertyListingsService, TwoBighaPropertyService, PropertyShareService],
+  providers: [
+    PropertyListingsService,
+    TwoBighaPropertyService,
+    TwoBighaPmAssignmentService,
+    TwoBighaPmCreateService,
+    PropertyShareService,
+  ],
   exports: [PropertyListingsService],
 })
 export class PropertyListingsModule {}
