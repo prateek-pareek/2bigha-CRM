@@ -68,7 +68,7 @@ export class WhatsAppLinksService {
     waId: string;
     leadId: string;
     leadName: string;
-    assignee?: { _id: string; name: string; email?: string };
+    assignee?: { _id: string; name: string; email?: string; accessType?: 'read' | 'read_write' };
     temporaryGrants?: any[];
   } | null> {
     const normWa = normalizeWaId(waId);
@@ -93,17 +93,29 @@ export class WhatsAppLinksService {
           _id: String(ass._id),
           name: `${ass.firstName || ''} ${ass.lastName || ''}`.trim() || ass.email,
           email: ass.email,
+          accessType: link.assigneeAccessType || 'read_write',
         } : undefined,
-        temporaryGrants: (link.temporaryGrants || []).map((g: any) => {
-          const u = g.userId as any;
-          return {
-            userId: u?._id ? String(u._id) : String(g.userId),
-            userEmail: u?.email || '',
-            userName: u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email : '',
-            accessType: g.accessType,
-            expiresAt: g.expiresAt,
-          };
-        }),
+        temporaryGrants: await Promise.all(
+          (link.temporaryGrants || []).map(async (g: any) => {
+            let u = g.userId as any;
+            if (!u || typeof u === 'string' || u instanceof Types.ObjectId || !u.email) {
+              const uid = u?._id ? String(u._id) : String(u || g.userId);
+              if (Types.ObjectId.isValid(uid)) {
+                u = await this.crmUserModel.findById(uid).select('firstName lastName email').lean().exec();
+                if (!u) {
+                  u = await this.userModel.findById(uid).select('firstName lastName email').lean().exec();
+                }
+              }
+            }
+            return {
+              userId: u?._id ? String(u._id) : String(g.userId),
+              userEmail: u?.email || '',
+              userName: u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email : '',
+              accessType: g.accessType,
+              expiresAt: g.expiresAt,
+            };
+          }),
+        ),
       };
     }
 
@@ -170,6 +182,7 @@ export class WhatsAppLinksService {
     waId: string,
     assigneeId: string,
     actorId?: string,
+    accessType?: 'read' | 'read_write',
   ): Promise<WhatsAppLeadLinkDocument> {
     const normalizedWaId = normalizeWaId(waId);
     if (normalizedWaId.length < 10) {
@@ -186,6 +199,7 @@ export class WhatsAppLinksService {
           $set: {
             waId: normalizedWaId,
             assignee: new Types.ObjectId(resolvedId),
+            assigneeAccessType: accessType || 'read_write',
             assignedBy: actorId ? new Types.ObjectId(actorId) : undefined,
           },
         },
@@ -198,7 +212,7 @@ export class WhatsAppLinksService {
     await this.linkModel
       .updateOne(
         { waId: normalizeWaId(waId) },
-        { $unset: { assignee: 1, assignedBy: 1 } },
+        { $unset: { assignee: 1, assignedBy: 1, assigneeAccessType: 1 } },
       )
       .exec();
     return { success: true };

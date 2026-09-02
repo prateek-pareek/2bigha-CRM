@@ -44,6 +44,9 @@ function NewPropertyListingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const leadId = searchParams.get("leadId") || undefined;
+  const ownerName = searchParams.get("ownerName") || searchParams.get("name") || undefined;
+  const ownerPhone = searchParams.get("ownerPhone") || searchParams.get("phone") || searchParams.get("mobileNo") || undefined;
+  const ownerEmail = searchParams.get("ownerEmail") || searchParams.get("email") || undefined;
   const bucket = parseBucket(searchParams.get("bucket") || searchParams.get("mode"));
   const isPm = bucket === "pm";
 
@@ -117,6 +120,14 @@ function NewPropertyListingPageContent() {
     );
   }
 
-  // Otherwise render the 5-step Property Creation Wizard
-  return <PropertyStepWizard leadId={leadId} bucket={bucket} />;
+  // Otherwise render the 5-step Property Creation Wizard with prefilled params
+  return (
+    <PropertyStepWizard
+      leadId={leadId}
+      bucket={bucket}
+      initialOwnerName={ownerName}
+      initialOwnerPhone={ownerPhone}
+      initialOwnerEmail={ownerEmail}
+    />
+  );
 }

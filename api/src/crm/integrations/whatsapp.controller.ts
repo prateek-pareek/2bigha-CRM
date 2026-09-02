@@ -107,6 +107,11 @@ export class WhatsAppController {
       entityId?: string;
       mediaUrl?: string;
       mediaFilename?: string;
+      attachDocumentAfter?: {
+        url: string;
+        filename?: string;
+        title?: string;
+      };
     },
   ) {
     return this.whatsappService.sendTemplateMessage({
@@ -120,6 +125,7 @@ export class WhatsAppController {
       entityId: body.entityId,
       mediaUrl: body.mediaUrl,
       mediaFilename: body.mediaFilename,
+      attachDocumentAfter: body.attachDocumentAfter,
     });
   }
 
@@ -145,6 +151,26 @@ export class WhatsAppController {
       body.accessType,
       body.durationMinutes,
       actor?.userId,
+    );
+  }
+
+  @Post('revoke-temporary-access')
+  @Permissions('leads:write', 'contacts:write')
+  async revokeTemporaryAccess(
+    @Request() req: any,
+    @Body()
+    body: {
+      waId: string;
+      targetUserId: string;
+    },
+  ) {
+    const actor = req.user;
+    if (!hasCrmFullDataAccess(actor)) {
+      throw new ForbiddenException('Only administrators can revoke temporary access');
+    }
+    return this.whatsappService.revokeTemporaryAccess(
+      body.waId,
+      body.targetUserId,
     );
   }
 }

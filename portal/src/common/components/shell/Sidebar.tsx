@@ -341,8 +341,7 @@ const crmGroups = [
                 icon: CrmNavIcon.Home,
                 permission: 'property_listings:read',
                 children: [
-                    { name: 'Buy', href: '/crm/property-listings?bucket=buy', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
-                    { name: 'Sell', href: '/crm/property-listings?bucket=sell', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
+                    { name: 'Properties', href: '/crm/property-listings?bucket=properties', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
                     { name: 'Farms', href: '/crm/property-listings?bucket=farm', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
                     { name: 'Property Management', href: '/crm/property-listings?bucket=pm', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
                 ],

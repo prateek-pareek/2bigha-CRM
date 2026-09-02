@@ -53,6 +53,8 @@ type Props = {
   defaultPropertyType?: string;
 };
 
+import { useRouter } from "next/navigation";
+
 /** Create a property/farm listing in the CRM (linked to a lead when provided) — synced to 2bigha via TwoBighaPropertyService. */
 export default function AddPropertyModal({
   open,
@@ -62,6 +64,7 @@ export default function AddPropertyModal({
   onSuccess,
   defaultPropertyType = "Apartment",
 }: Props) {
+  const router = useRouter();
   const isFarm =
     defaultPropertyType === "Farm" || defaultPropertyType === "Agricultural";
   const [draft, setDraft] = useState<PropertyListingDraft>(EMPTY_PROPERTY_LISTING_DRAFT);
@@ -69,11 +72,12 @@ export default function AddPropertyModal({
 
   useEffect(() => {
     if (!open) return;
-    setDraft({
-      ...EMPTY_PROPERTY_LISTING_DRAFT,
-      propertyType: isFarm ? "Agricultural" : defaultPropertyType,
-    });
-  }, [open, defaultPropertyType, isFarm]);
+    const params = new URLSearchParams();
+    if (leadId) params.set("leadId", leadId);
+    if (leadName) params.set("ownerName", leadName);
+    router.push(`/crm/property-listings/new?${params.toString()}`);
+    onClose();
+  }, [open, leadId, leadName, router, onClose]);
 
   if (!open) return null;
 

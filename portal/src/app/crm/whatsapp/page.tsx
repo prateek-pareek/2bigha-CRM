@@ -140,9 +140,11 @@ export default function WhatsAppChatsPage() {
   const [linkedLead, setLinkedLead] = useState<{
     leadId?: string;
     leadName?: string;
-    assignee?: { _id: string; name: string; email?: string };
+    assignee?: { _id: string; name: string; email?: string; accessType?: "read" | "read_write" };
     temporaryGrants?: Array<{
       userId: string;
+      userName?: string;
+      userEmail?: string;
       accessType: "read" | "read_write";
       expiresAt: string;
     }>;
@@ -186,7 +188,7 @@ export default function WhatsAppChatsPage() {
     const userEmail = String(currentUser.email || '').trim().toLowerCase();
     if (!userId && !userEmail) return false;
 
-    // If there is an active temporary grant for this user, check its type
+    // 1. If there is an active temporary grant for this user, check its type
     if (linkedLead.temporaryGrants) {
       const activeGrant = linkedLead.temporaryGrants.find(
         (g: any) =>
@@ -198,16 +200,33 @@ export default function WhatsAppChatsPage() {
       }
     }
 
-    // If assigned to someone else and no active temporary grant exists for this user, make it read-only
+    // 2. If assigned to current user, check permanent assignee accessType
     if (linkedLead.assignee) {
-      const assigneeEmail = String(linkedLead.assignee.email || linkedLead.assignee || '').trim().toLowerCase();
-      if (assigneeEmail !== userEmail) {
-        return true;
+      const assigneeEmail = String(linkedLead.assignee.email || '').trim().toLowerCase();
+      const assigneeId = String(linkedLead.assignee._id || linkedLead.assignee);
+      if (assigneeId === String(userId) || (assigneeEmail && assigneeEmail === userEmail)) {
+        return linkedLead.assignee.accessType === "read";
       }
+      // If assigned to someone else and no active temporary grant exists for this user, make it read-only
+      return true;
     }
 
     return false;
   }, [currentUser, isAdminUser, linkedLead]);
+
+  const currentAgentActiveGrant = useMemo(() => {
+    if (!currentUser || !linkedLead?.temporaryGrants) return null;
+    const userId = currentUser._id || currentUser.userId;
+    const userEmail = String(currentUser.email || '').trim().toLowerCase();
+    return (
+      linkedLead.temporaryGrants.find(
+        (g: any) =>
+          (String(g.userId) === String(userId) ||
+            (g.userEmail && String(g.userEmail).toLowerCase() === userEmail)) &&
+          new Date(g.expiresAt) > new Date()
+      ) || null
+    );
+  }, [currentUser, linkedLead]);
 
   const loadContacts = useCallback(async (page = 1, assigneeFilter = filterAssigneeId) => {
     if (page === 1) {
@@ -714,6 +733,12 @@ export default function WhatsAppChatsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {currentAgentActiveGrant && (
+                    <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-1 text-[10px] font-semibold text-amber-200 border border-amber-300/30">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Temporary Access ({currentAgentActiveGrant.accessType === "read_write" ? "Read & Send" : "Read Only"})
+                    </span>
+                  )}
                   <CrmButton
                     variant="secondary"
                     disabled={isReadOnly}
@@ -726,7 +751,16 @@ export default function WhatsAppChatsPage() {
                   <CrmButton
                     variant="secondary"
                     disabled={isReadOnly}
-                    onClick={() => setAddPropertyModalOpen(true)}
+                    onClick={() => {
+                      const leadIdVal = linkedLead?.leadId || "";
+                      const name = linkedLead?.leadName || "";
+                      const phone = selectedWaId || "";
+                      const params = new URLSearchParams();
+                      if (leadIdVal) params.set("leadId", leadIdVal);
+                      if (name) params.set("ownerName", name);
+                      if (phone) params.set("ownerPhone", phone);
+                      router.push(`/crm/property-listings/new?${params.toString()}`);
+                    }}
                     className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25 disabled:opacity-45"
                     title="Add property"
                   >
@@ -1008,6 +1042,8 @@ export default function WhatsAppChatsPage() {
       <WhatsAppTemplatePicker
         open={templatePickerOpen}
         to={selectedWaId || ""}
+        leadId={linkedLead?.leadId}
+        leadName={linkedLead?.leadName}
         onClose={() => setTemplatePickerOpen(false)}
         onSent={() => {
           if (selectedWaId) void loadThread(selectedWaId);
@@ -1072,6 +1108,7 @@ export default function WhatsAppChatsPage() {
           onClose={() => setGrantAccessModalOpen(false)}
           waId={selectedWaId}
           currentAssignee={linkedLead?.assignee}
+          temporaryGrants={linkedLead?.temporaryGrants}
           onSuccess={() => {
             if (selectedWaId) {
               const token = localStorage.getItem("token");
@@ -1164,10 +1201,24 @@ interface GrantAccessModalProps {
   onClose: () => void;
   waId: string;
   onSuccess: () => void;
-  currentAssignee?: { _id: string; name: string };
+  currentAssignee?: { _id: string; name: string; email?: string; accessType?: "read" | "read_write" };
+  temporaryGrants?: Array<{
+    userId: string;
+    userName?: string;
+    userEmail?: string;
+    accessType: "read" | "read_write";
+    expiresAt: string;
+  }>;
 }
 
-function GrantAccessModal({ isOpen, onClose, waId, onSuccess, currentAssignee }: GrantAccessModalProps) {
+function GrantAccessModal({
+  isOpen,
+  onClose,
+  waId,
+  onSuccess,
+  currentAssignee,
+  temporaryGrants = [],
+}: GrantAccessModalProps) {
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [grantType, setGrantType] = useState<"temporary" | "permanent">("temporary");
@@ -1217,6 +1268,36 @@ function GrantAccessModal({ isOpen, onClose, waId, onSuccess, currentAssignee }:
     }
   };
 
+  const handleRevokeGrant = async (targetUserId: string) => {
+    if (!confirm("Are you sure you want to revoke this temporary access grant?")) return;
+    setLoading(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/whatsapp/revoke-temporary-access`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          waId,
+          targetUserId,
+        }),
+      });
+      if (res.ok) {
+        toast.success("Temporary access revoked successfully");
+        onSuccess();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Failed to revoke access");
+      }
+    } catch {
+      toast.error("Failed to revoke access");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUserId) {
@@ -1248,7 +1329,10 @@ function GrantAccessModal({ isOpen, onClose, waId, onSuccess, currentAssignee }:
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ assigneeId: selectedUserId }),
+          body: JSON.stringify({
+            assigneeId: selectedUserId,
+            accessType,
+          }),
         });
       }
 
@@ -1273,12 +1357,16 @@ function GrantAccessModal({ isOpen, onClose, waId, onSuccess, currentAssignee }:
 
   if (!isOpen) return null;
 
+  const activeGrants = (temporaryGrants || []).filter(
+    (g) => new Date(g.expiresAt).getTime() > Date.now()
+  );
+
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-[var(--radius-md)] border border-border bg-white p-5 shadow-2xl">
         <h3 className="text-sm font-bold text-text-main">Manage Access & Assignment</h3>
         <p className="mt-1 text-xs text-text-muted">
-          Configure temporary access grants or set the permanent assigned agent.
+          Configure temporary access grants or set the permanent assigned agent with permissions.
         </p>
 
         {currentAssignee && (
@@ -1286,6 +1374,9 @@ function GrantAccessModal({ isOpen, onClose, waId, onSuccess, currentAssignee }:
             <div>
               <span className="font-semibold text-text-muted">Current Assignee:</span>{" "}
               <span className="font-bold text-emerald-600">{currentAssignee.name}</span>
+              <span className="ml-1.5 text-[10px] font-medium text-emerald-700 bg-emerald-100/60 px-1.5 py-0.5 rounded">
+                {currentAssignee.accessType === "read" ? "Read Only" : "Read & Send"}
+              </span>
             </div>
             <button
               type="button"
@@ -1295,6 +1386,58 @@ function GrantAccessModal({ isOpen, onClose, waId, onSuccess, currentAssignee }:
             >
               Remove
             </button>
+          </div>
+        )}
+
+        {activeGrants.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted">
+              Active Temporary Grants ({activeGrants.length})
+            </label>
+            <div className="space-y-1.5 max-h-36 overflow-y-auto">
+              {activeGrants.map((g) => {
+                const remainingMinutes = Math.max(
+                  0,
+                  Math.round((new Date(g.expiresAt).getTime() - Date.now()) / 60000)
+                );
+                const remainingText =
+                  remainingMinutes > 60
+                    ? `${Math.floor(remainingMinutes / 60)}h ${remainingMinutes % 60}m`
+                    : `${remainingMinutes}m`;
+                return (
+                  <div
+                    key={g.userId}
+                    className="flex items-center justify-between rounded-md bg-amber-50/70 border border-amber-200/60 p-2 text-xs"
+                  >
+                    <div>
+                      <div className="font-semibold text-text-main">
+                        {g.userName || g.userEmail || "Agent"}
+                        {g.userEmail && g.userName && (
+                          <span className="ml-1 text-[10px] text-text-muted font-normal">
+                            ({g.userEmail})
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-amber-800 flex items-center gap-1.5 mt-0.5">
+                        <span className="inline-block px-1.5 py-0.2 rounded bg-amber-100 font-medium">
+                          {g.accessType === "read_write" ? "Read & Send" : "Read Only"}
+                        </span>
+                        <span>•</span>
+                        <span>Expires in {remainingText}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeGrant(g.userId)}
+                      disabled={loading}
+                      className="text-[10px] font-semibold text-rose-600 hover:text-rose-700 hover:underline disabled:opacity-50 ml-2"
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -1345,34 +1488,32 @@ function GrantAccessModal({ isOpen, onClose, waId, onSuccess, currentAssignee }:
             </select>
           </div>
 
-          {grantType === "temporary" && (
-            <>
-              <div>
-                <label className="block text-xs font-semibold text-text-main mb-1">Access Type</label>
-                <select
-                  value={accessType}
-                  onChange={(e) => setAccessType(e.target.value as any)}
-                  className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs outline-none focus:border-primary text-text-main"
-                >
-                  <option value="read">Read Only</option>
-                  <option value="read_write">Read and Send</option>
-                </select>
-              </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-main mb-1">Access Type</label>
+            <select
+              value={accessType}
+              onChange={(e) => setAccessType(e.target.value as any)}
+              className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs outline-none focus:border-primary text-text-main"
+            >
+              <option value="read">Read Only</option>
+              <option value="read_write">Read and Send</option>
+            </select>
+          </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-text-main mb-1">Duration</label>
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs outline-none focus:border-primary text-text-main"
-                >
-                  <option value="60">1 Hour</option>
-                  <option value="240">4 Hours</option>
-                  <option value="1440">24 Hours</option>
-                  <option value="10080">7 Days</option>
-                </select>
-              </div>
-            </>
+          {grantType === "temporary" && (
+            <div>
+              <label className="block text-xs font-semibold text-text-main mb-1">Duration</label>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs outline-none focus:border-primary text-text-main"
+              >
+                <option value="60">1 Hour</option>
+                <option value="240">4 Hours</option>
+                <option value="1440">24 Hours</option>
+                <option value="10080">7 Days</option>
+              </select>
+            </div>
           )}
 
           <div className="flex justify-end gap-2 pt-2">

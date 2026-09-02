@@ -235,6 +235,13 @@ export class PropertyListing {
   @Prop({ trim: true })
   twobighaSyncError?: string;
 
+  /** Persisted Azure / public URL of the auto-generated 2Bigha PDF brochure. */
+  @Prop({ trim: true })
+  brochurePdfUrl?: string;
+
+  @Prop()
+  brochurePdfGeneratedAt?: Date;
+
   @Prop()
   twobighaSyncedAt?: Date;
 

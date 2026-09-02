@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Loader2, Plus, Search, User, X } from "lucide-react";
+import { ChevronLeft, Loader2, Plus, Search, User, X, Building2, ExternalLink, RefreshCw, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { CrmButton } from "@/components/crm/ui";
 import WhatsAppNavTabs from "@/components/crm/whatsapp/WhatsAppNavTabs";
 import type { WhatsAppTemplateRecord } from "@/components/crm/whatsapp/types";
 import { extractSlots } from "@/lib/crm/whatsapp/template-variables";
+import { generatePropertyBrochurePdf } from "@/lib/crm/whatsapp/property-share-api";
+import PropertySearchDropdown from "@/portals/crm/components/inbox/PropertySearchDropdown";
 
 interface LeadSearchResult {
   _id: string;
@@ -47,6 +49,15 @@ export default function NewWhatsAppCampaignPage() {
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaFilename, setMediaFilename] = useState("");
 
+  // Brochure Attachment States
+  const [attachBrochure, setAttachBrochure] = useState(false);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+  const [loadingProperties, setLoadingProperties] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [brochurePdfUrl, setBrochurePdfUrl] = useState<string>("");
+  const [brochurePdfFilename, setBrochurePdfFilename] = useState<string>("");
+
   const selectedTemplate = useMemo(
     () => templates.find((t) => t._id === templateId) || null,
     [templates, templateId],
@@ -73,6 +84,66 @@ export default function NewWhatsAppCampaignPage() {
     );
     return header ? ["IMAGE", "VIDEO", "DOCUMENT"].includes(String(header.format).toUpperCase()) : false;
   }, [selectedTemplate]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch(`${CRM_API_URL}/crm/whatsapp-templates`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: WhatsAppTemplateRecord[]) => {
+        const mapped = Array.isArray(data) ? data.filter((t) => !!t.aisensyCampaignName) : [];
+        setTemplates(mapped);
+        if (mapped.length) setTemplateId(mapped[0]._id);
+      })
+      .catch(() => toast.error("Failed to load templates"))
+      .finally(() => setLoadingTemplates(false));
+
+    // Load active property listings
+    setLoadingProperties(true);
+    fetch(`${CRM_API_URL}/crm/property-listings?pageSize=200`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => {
+        const allProps = Array.isArray(data) ? data : (data.data || []);
+        setProperties(allProps);
+        if (allProps.length > 0) {
+          setSelectedPropertyId(allProps[0]._id || allProps[0].id);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProperties(false));
+  }, []);
+
+  const generateBrochure = async (propId: string, forceRegenerate = false) => {
+    if (!propId) return null;
+    setGeneratingPdf(true);
+    try {
+      const result = await generatePropertyBrochurePdf({ propertyId: propId, forceRegenerate });
+      if (result?.url) {
+        setBrochurePdfUrl(result.url);
+        setBrochurePdfFilename(result.filename || "2Bigha-Property-Brochure.pdf");
+        setMediaUrl(result.url);
+        setMediaFilename(result.filename || "2Bigha-Property-Brochure.pdf");
+        if (result.cached) {
+          toast.success("Loaded saved Azure brochure PDF (0ms)");
+        } else {
+          toast.success("2Bigha Project Brochure PDF generated & saved on Azure!");
+        }
+        return result;
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to generate brochure PDF");
+    } finally {
+      setGeneratingPdf(false);
+    }
+    return null;
+  };
+
+  const selectedProperty = useMemo(() => {
+    return properties.find((p) => (p._id || p.id) === selectedPropertyId);
+  }, [properties, selectedPropertyId]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -303,7 +374,123 @@ export default function NewWhatsAppCampaignPage() {
             </select>
           )}
 
-          {hasMediaHeader && (
+          {/* Attach Project Brochure PDF Section */}
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={attachBrochure}
+                  onChange={(e) => {
+                    const val = e.target.checked;
+                    setAttachBrochure(val);
+                    if (val && selectedPropertyId && !brochurePdfUrl) {
+                      void generateBrochure(selectedPropertyId);
+                    }
+                  }}
+                  className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                />
+                <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                  <Building2 size={14} className="text-emerald-600" />
+                  Attach Project Brochure PDF (Auto-Generate)
+                </span>
+              </label>
+              <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                2Bigha PDF
+              </span>
+            </div>
+
+            {attachBrochure && (
+              <div className="space-y-3 pt-2 border-t border-emerald-200/50">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                    Select Property / Project
+                  </span>
+                  {loadingProperties ? (
+                    <div className="flex items-center gap-2 text-xs text-slate-400 py-1">
+                      <Loader2 size={13} className="animate-spin" /> Loading properties...
+                    </div>
+                  ) : properties.length === 0 ? (
+                    <p className="text-xs text-slate-400">No properties available to attach.</p>
+                  ) : (
+                    <PropertySearchDropdown
+                      properties={properties}
+                      selectedPropertyId={selectedPropertyId}
+                      onSelect={(propId, prop) => {
+                        setSelectedPropertyId(propId);
+                        if (prop?.brochurePdfUrl) {
+                          setBrochurePdfUrl(prop.brochurePdfUrl);
+                          setBrochurePdfFilename(`${prop.title || '2Bigha-Brochure'}.pdf`);
+                          setMediaUrl(prop.brochurePdfUrl);
+                          setMediaFilename(`${prop.title || '2Bigha-Brochure'}.pdf`);
+                        } else {
+                          setBrochurePdfUrl("");
+                          setBrochurePdfFilename("");
+                          if (propId) {
+                            void generateBrochure(propId, false);
+                          }
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Selected Property Preview Summary Card */}
+                {selectedProperty && (
+                  <div className="rounded-lg bg-white p-3 border border-emerald-200/60 shadow-xs space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">
+                          {selectedProperty.title || "Selected Property"}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {[selectedProperty.city, selectedProperty.district, selectedProperty.state].filter(Boolean).join(", ") || selectedProperty.address || "Location on Request"}
+                        </p>
+                      </div>
+                      {selectedProperty.price && (
+                        <span className="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          ₹{Number(selectedProperty.price).toLocaleString("en-IN")}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <CrmButton
+                        type="button"
+                        variant="secondary"
+                        disabled={generatingPdf || !selectedPropertyId}
+                        onClick={() => void generateBrochure(selectedPropertyId, !!brochurePdfUrl)}
+                        className="h-7 px-2.5 text-[11px] font-semibold bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                      >
+                        {generatingPdf ? (
+                          <>
+                            <Loader2 size={11} className="animate-spin" /> Generating...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw size={11} /> {brochurePdfUrl ? "Regenerate PDF" : "Generate Brochure PDF"}
+                          </>
+                        )}
+                      </CrmButton>
+
+                      {brochurePdfUrl && (
+                        <a
+                          href={brochurePdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:underline px-2 py-1 rounded bg-white border border-slate-200"
+                        >
+                          <ExternalLink size={11} /> Preview PDF
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {hasMediaHeader && !attachBrochure && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">

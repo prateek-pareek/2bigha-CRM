@@ -56,8 +56,17 @@ export class WhatsAppLinksController {
 
   @Post(':waId/assign')
   @Permissions('inbox:write', 'leads:write')
-  assign(@Request() req: any, @Param('waId') waId: string, @Body('assigneeId') assigneeId: string) {
-    return this.linksService.assign(waId, assigneeId, req.user?.userId);
+  assign(
+    @Request() req: any,
+    @Param('waId') waId: string,
+    @Body() body: { assigneeId: string; accessType?: 'read' | 'read_write' },
+  ) {
+    return this.linksService.assign(
+      waId,
+      body.assigneeId,
+      req.user?.userId,
+      body.accessType,
+    );
   }
 
   @Delete(':waId/assign')
