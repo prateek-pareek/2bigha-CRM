@@ -1,4 +1,12 @@
 import api from "@/lib/crm/api";
+import { API_HOST_URL } from "@/lib/api/config";
+
+export function resolveBrochurePdfUrl(url?: string): string {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = API_HOST_URL || (typeof window !== "undefined" ? window.location.origin : "");
+  return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
+}
 
 /** Mirrors `PropertyShareInput` in api/src/crm/property-listings/property-share-pdf.service.ts. */
 export type PropertyShareFields = {
@@ -24,10 +32,24 @@ export type SendPropertyShareResult = {
   error?: string;
 };
 
+/** Generates or fetches cached property brochure PDF — POST /crm/property-share/generate. */
+export async function generatePropertyBrochurePdf(params: {
+  propertyId?: string;
+  fields?: Partial<PropertyShareFields>;
+  forceRegenerate?: boolean;
+}): Promise<{ url: string; filename: string; cached?: boolean }> {
+  const { data } = await api.post<{ url: string; filename: string; cached?: boolean }>("/crm/property-share/generate", params);
+  return {
+    ...data,
+    url: resolveBrochurePdfUrl(data.url),
+  };
+}
+
 /** Generates the property PDF and sends it to `waId` as a WhatsApp document — POST /crm/property-share/send. */
 export async function sendPropertyShare(params: {
   waId: string;
-  fields: PropertyShareFields;
+  fields?: PropertyShareFields;
+  propertyId?: string;
   module?: string;
   entityId?: string;
 }): Promise<SendPropertyShareResult> {

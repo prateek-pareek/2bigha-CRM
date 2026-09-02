@@ -1,7 +1,6 @@
-"use client";
-
-import { useMemo } from "react";
-import { Plane, Navigation, Landmark, Check } from "lucide-react";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { Plane, Navigation, Landmark, Check, Search, Loader2, MapPin, Sparkles, Plus, Edit2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   CrmInput,
   CrmLabel,
@@ -10,33 +9,42 @@ import {
 } from "@/components/crm/ui";
 
 export const INDIAN_STATES_DISTRICTS: Record<string, string[]> = {
-  "Andhra Pradesh": ["Anantapur", "Chittoor", "East Godavari", "Guntur", "Krishna", "Kurnool", "Prakasam", "Srikakulam", "Visakhapatnam", "Vizianagaram", "West Godavari", "YSR Kadapa"],
-  "Arunachal Pradesh": ["Changlang", "Dibang Valley", "East Kameng", "East Siang", "Papum Pare", "Tawang", "Tirap", "Upper Siang", "West Kameng", "West Siang"],
-  "Assam": ["Baksa", "Barpeta", "Cachar", "Darrang", "Dhubri", "Dibrugarh", "Goalpara", "Golaghat", "Guwahati", "Jorhat", "Kamrup", "Nagaon", "Silchar", "Sonitpur", "Tinsukia"],
-  "Bihar": ["Araria", "Aurangabad", "Banka", "Begusarai", "Bhagalpur", "Bhojpur", "Buxar", "Darbhanga", "Gaya", "Muzaffarpur", "Patna", "Purnia", "Rohtas", "Samastipur", "Vaishali"],
-  "Chhattisgarh": ["Bastar", "Bilaspur", "Durg", "Korba", "Raigarh", "Raipur", "Rajnandgaon", "Surguja"],
+  "Andhra Pradesh": ["Alluri Sitharama Raju", "Anakapalli", "Ananthapuramu", "Annamayya", "Bapatla", "Chittoor", "Dr. B.R. Ambedkar Konaseema", "East Godavari", "Eluru", "Guntur", "Kakinada", "Krishna", "Kurnool", "Nandyal", "NTR", "Palnadu", "Parvathipuram Manyam", "Prakasam", "Sri Potti Sriramulu Nellore", "Sri Sathya Sai", "Srikakulam", "Tirupati", "Visakhapatnam", "Vizianagaram", "West Godavari", "YSR Kadapa"],
+  "Arunachal Pradesh": ["Anjaw", "Changlang", "Dibang Valley", "East Kameng", "East Siang", "Itanagar Capital Complex", "Kamle", "Kra Daadi", "Kurung Kumey", "Lepa Rada", "Lohit", "Longding", "Lower Dibang Valley", "Lower Siang", "Lower Subansiri", "Namsai", "Pakke Kessang", "Papum Pare", "Shi Yomi", "Siang", "Tawang", "Tirap", "Upper Siang", "Upper Subansiri", "West Kameng", "West Siang"],
+  "Assam": ["Baksa", "Barpeta", "Biswanath", "Bongaigaon", "Cachar", "Charaideo", "Chirang", "Darrang", "Dhemaji", "Dhubri", "Dibrugarh", "Dima Hasao", "Goalpara", "Golaghat", "Hailakandi", "Hojai", "Jorhat", "Kamrup", "Kamrup Metropolitan", "Karbi Anglong", "Karimganj", "Kokrajhar", "Lakhimpur", "Majuli", "Morigaon", "Nagaon", "Nalbari", "Sivasagar", "Sonitpur", "South Salmara-Mankachar", "Tinsukia", "Udalguri", "West Karbi Anglong"],
+  "Bihar": ["Araria", "Arwal", "Aurangabad", "Banka", "Begusarai", "Bhagalpur", "Bhojpur", "Buxar", "Darbhanga", "East Champaran", "Gaya", "Gopalganj", "Jamui", "Jehanabad", "Kaimur", "Katihar", "Khagaria", "Kishanganj", "Lakhisarai", "Madhepura", "Madhubani", "Munger", "Muzaffarpur", "Nalanda", "Nawada", "Patna", "Purnia", "Rohtas", "Saharsa", "Samastipur", "Saran", "Sheikhpura", "Sheohar", "Sitamarhi", "Siwan", "Supaul", "Vaishali", "West Champaran"],
+  "Chhattisgarh": ["Balod", "Baloda Bazar", "Balrampur", "Bastar", "Bemetara", "Bijapur", "Bilaspur", "Dantewada", "Dhamtari", "Durg", "Gariaband", "Gaurela-Pendra-Marwahi", "Janjgir-Champa", "Jashpur", "Kabirdham", "Kanker", "Kondagaon", "Korba", "Koriya", "Mahasamund", "Manendragarh-Chirmiri-Bharatpur", "Mohla-Manpur-Ambagarh Chowki", "Mungeli", "Narayanpur", "Raigarh", "Raipur", "Rajnandgaon", "Sarangarh-Bilaigarh", "Sakti", "Sukma", "Surajpur", "Surguja"],
   "Delhi": ["Central Delhi", "East Delhi", "New Delhi", "North Delhi", "North East Delhi", "North West Delhi", "Shahdara", "South Delhi", "South East Delhi", "South West Delhi", "West Delhi"],
   "Goa": ["North Goa", "South Goa"],
-  "Gujarat": ["Ahmedabad", "Amreli", "Anand", "Bharuch", "Bhavnagar", "Gandhinagar", "Jamnagar", "Junagadh", "Kutch", "Mehsana", "Rajkot", "Surat", "Vadodara", "Valsad"],
-  "Haryana": ["Ambala", "Faridabad", "Gurugram", "Hisar", "Jhajjar", "Karnal", "Kurukshetra", "Panipat", "Panchkula", "Rewari", "Rohtak", "Sirsa", "Sonipat", "Yamunanagar"],
-  "Himachal Pradesh": ["Bilaspur", "Chamba", "Hamirpur", "Kangra", "Kinnaur", "Kullu", "Mandi", "Shimla", "Sirmaur", "Solan", "Una"],
-  "Jammu & Kashmir": ["Anantnag", "Baramulla", "Budgam", "Doda", "Jammu", "Kathua", "Pulwama", "Srinagar", "Udhampur"],
-  "Jharkhand": ["Bokaro", "Deoghar", "Dhanbad", "Dumka", "Hazaribagh", "Jamshedpur", "Ranchi"],
-  "Karnataka": ["Bangalore Rural", "Bangalore Urban", "Belgaum", "Bellary", "Bidar", "Dakshina Kannada", "Dharwad", "Gulbarga", "Hassan", "Hubli", "Mangalore", "Mysore", "Shimoga", "Tumkur", "Udupi"],
+  "Gujarat": ["Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha", "Bharuch", "Bhavnagar", "Botad", "Chhota Udaipur", "Dahod", "Dang", "Devbhumi Dwarka", "Gandhinagar", "Gir Somnath", "Jamnagar", "Junagadh", "Kheda", "Kutch", "Mahisagar", "Mehsana", "Morbi", "Narmada", "Navsari", "Panchmahal", "Patan", "Porbandar", "Rajkot", "Sabarkantha", "Surat", "Surendranagar", "Tapi", "Vadodara", "Valsad"],
+  "Haryana": ["Ambala", "Bhiwani", "Charkhi Dadri", "Faridabad", "Fatehabad", "Gurugram", "Hisar", "Jhajjar", "Jind", "Kaithal", "Karnal", "Kurukshetra", "Mahendragarh", "Nuh", "Palwal", "Panchkula", "Panipat", "Rewari", "Rohtak", "Sirsa", "Sonipat", "Yamunanagar"],
+  "Himachal Pradesh": ["Bilaspur", "Chamba", "Hamirpur", "Kangra", "Kinnaur", "Kullu", "Lahaul and Spiti", "Mandi", "Shimla", "Sirmaur", "Solan", "Una"],
+  "Jammu & Kashmir": ["Anantnag", "Bandipora", "Baramulla", "Budgam", "Doda", "Ganderbal", "Jammu", "Kathua", "Kishtwar", "Kulgam", "Kupwara", "Poonch", "Pulwama", "Rajouri", "Ramban", "Reasi", "Samba", "Shopian", "Srinagar", "Udhampur"],
+  "Jharkhand": ["Bokaro", "Chatra", "Deoghar", "Dhanbad", "Dumka", "East Singhbhum", "Garhwa", "Giridih", "Godda", "Gumla", "Hazaribagh", "Jamtara", "Khunti", "Koderma", "Latehar", "Lohardaga", "Pakur", "Palamu", "Ramgarh", "Ranchi", "Sahebganj", "Saraikela Kharsawan", "Simdega", "West Singhbhum"],
+  "Karnataka": ["Bagalkot", "Ballari", "Belagavi", "Bengaluru Rural", "Bengaluru Urban", "Bidar", "Chamarajanagar", "Chikkaballapur", "Chikkamagaluru", "Chitradurga", "Dakshina Kannada", "Davanagere", "Dharwad", "Gadag", "Hassan", "Haveri", "Kalaburagi", "Kodagu", "Kolar", "Koppal", "Mandya", "Mysuru", "Raichur", "Ramanagara", "Shivamogga", "Tumakuru", "Udupi", "Uttara Kannada", "Vijayanagara", "Vijayapura", "Yadgir"],
   "Kerala": ["Alappuzha", "Ernakulam", "Idukki", "Kannur", "Kasaragod", "Kollam", "Kottayam", "Kozhikode", "Malappuram", "Palakkad", "Pathanamthitta", "Thiruvananthapuram", "Thrissur", "Wayanad"],
-  "Madhya Pradesh": ["Bhopal", "Gwalior", "Indore", "Jabalpur", "Khandwa", "Rewa", "Sagar", "Satna", "Ujjain"],
-  "Maharashtra": ["Ahmednagar", "Akola", "Amravati", "Aurangabad", "Kolhapur", "Mumbai City", "Mumbai Suburban", "Nagpur", "Nashik", "Navi Mumbai", "Pune", "Solapur", "Thane"],
-  "Odisha": ["Balasore", "Berhampur", "Bhadrak", "Bhubaneswar", "Cuttack", "Ganjam", "Puri", "Rourkela", "Sambalpur"],
-  "Punjab": ["Amritsar", "Bathinda", "Faridkot", "Firozpur", "Gurdaspur", "Hoshiarpur", "Jalandhar", "Ludhiana", "Mohali", "Pathankot", "Patiala"],
-  "Rajasthan": ["Ajmer", "Alwar", "Banswara", "Barmer", "Bharatpur", "Bhilwara", "Bikaner", "Chittorgarh", "Jaipur", "Jaisalmer", "Jodhpur", "Kota", "Sikar", "Udaipur"],
-  "Tamil Nadu": ["Chennai", "Coimbatore", "Cuddalore", "Dindigul", "Erode", "Kanchipuram", "Madurai", "Salem", "Thanjavur", "Tiruchirappalli", "Tirunelveli", "Vellore"],
-  "Telangana": ["Hyderabad", "Karimnagar", "Khammam", "Mahbubnagar", "Medak", "Nalgonda", "Nizamabad", "Rangareddy", "Warangal"],
-  "Uttar Pradesh": ["Agra", "Aligarh", "Ayodhya", "Bareilly", "Ghaziabad", "Gorakhpur", "Jhansi", "Kanpur", "Lucknow", "Mathura", "Meerut", "Moradabad", "Noida", "Prayagraj", "Varanasi"],
-  "Uttarakhand": ["Dehradun", "Haridwar", "Nainital", "Pauri Garhwal", "Rishikesh", "Roorkee", "Rudrapur", "Udham Singh Nagar"],
-  "West Bengal": ["Asansol", "Darjeeling", "Durgapur", "Hooghly", "Howrah", "Kolkata", "Murshidabad", "North 24 Parganas", "Siliguri", "South 24 Parganas"],
+  "Madhya Pradesh": ["Agar Malwa", "Alirajpur", "Anuppur", "Ashoknagar", "Balaghat", "Barwani", "Betul", "Bhind", "Bhopal", "Burhanpur", "Chhatarpur", "Chhindwara", "Damoh", "Datia", "Dewas", "Dhar", "Dindori", "Guna", "Gwalior", "Harda", "Narmadapuram", "Indore", "Jabalpur", "Jhabua", "Katni", "Khandwa", "Khargone", "Mandla", "Mandsaur", "Mauganj", "Maihar", "Morena", "Narsinghpur", "Neemuch", "Niwari", "Panna", "Pandhurna", "Raisen", "Rajgarh", "Ratlam", "Rewa", "Sagar", "Satna", "Sehore", "Seoni", "Shahdol", "Shajapur", "Sheopur", "Shivpuri", "Sidhi", "Singrauli", "Tikamgarh", "Ujjain", "Umaria", "Vidisha"],
+  "Maharashtra": ["Ahmednagar", "Akola", "Amravati", "Chhatrapati Sambhajinagar", "Beed", "Bhandara", "Buldhana", "Chandrapur", "Dhule", "Gadchiroli", "Gondia", "Hingoli", "Jalgaon", "Jalna", "Kolhapur", "Latur", "Mumbai City", "Mumbai Suburban", "Nagpur", "Nanded", "Nandurbar", "Nashik", "Dharashiv", "Palghar", "Parbhani", "Pune", "Raigad", "Ratnagiri", "Sangli", "Satara", "Sindhudurg", "Solapur", "Thane", "Wardha", "Washim", "Yavatmal"],
+  "Manipur": ["Bishnupur", "Chandel", "Churachandpur", "Imphal East", "Imphal West", "Jiribam", "Kakching", "Kamjong", "Kangpokpi", "Noney", "Pherzawl", "Senapati", "Tamenglong", "Tengnoupal", "Ukhrul"],
+  "Meghalaya": ["East Garo Hills", "East Jaintia Hills", "East Khasi Hills", "Eastern West Khasi Hills", "North Garo Hills", "Ri Bhoi", "South Garo Hills", "South West Garo Hills", "South West Khasi Hills", "West Garo Hills", "West Jaintia Hills", "West Khasi Hills"],
+  "Mizoram": ["Aizawl", "Champhai", "Hnahthial", "Khawzawl", "Kolasib", "Lawngtlai", "Lunglei", "Mamit", "Saiha", "Saitual", "Serchhip"],
+  "Nagaland": ["Chümoukedima", "Dimapur", "Kiphire", "Kohima", "Longleng", "Mokokchung", "Mon", "Niuland", "Noklak", "Peren", "Phek", "Shamator", "Tseminyu", "Tuensang", "Wokha", "Zunheboto"],
+  "Odisha": ["Angul", "Balangir", "Balasore", "Bargarh", "Bhadrak", "Boudh", "Cuttack", "Deogarh", "Dhenkanal", "Gajapati", "Ganjam", "Jagatsinghpur", "Jajpur", "Jharsuguda", "Kalahandi", "Kandhamal", "Kendrapara", "Kendujhar", "Khordha", "Koraput", "Malkangiri", "Mayurbhanj", "Nabarangpur", "Nayagarh", "Nuapada", "Puri", "Rayagada", "Sambalpur", "Subarnapur", "Sundargarh"],
+  "Punjab": ["Amritsar", "Barnala", "Bathinda", "Faridkot", "Fatehgarh Sahib", "Fazilka", "Firozpur", "Gurdaspur", "Hoshiarpur", "Jalandhar", "Kapurthala", "Ludhiana", "Malerkotla", "Mansa", "Moga", "Muktsar", "Pathankot", "Patiala", "Rupnagar", "Sahibzada Ajit Singh Nagar", "Sangrur", "Shaheed Bhagat Singh Nagar", "Tarn Taran"],
+  "Rajasthan": ["Ajmer", "Alwar", "Anupgarh", "Balotra", "Banswara", "Baran", "Barmer", "Beawer", "Bharatpur", "Bhilwara", "Bikaner", "Bundi", "Chittorgarh", "Churu", "Dausa", "Deeg", "Dholpur", "Didwana-Kuchaman", "Dudu", "Dungarpur", "Gangapur City", "Hanumangarh", "Jaipur", "Jaipur Rural", "Jaisalmer", "Jalore", "Jhalawar", "Jhunjhunu", "Jodhpur", "Jodhpur Rural", "Karauli", "Kekri", "Khairthal-Tijara", "Kota", "Kotputli-Behror", "Nagaur", "Neem Ka Thana", "Pali", "Phalodi", "Pratapgarh", "Rajsamand", "Salumbar", "Sanchore", "Sawai Madhopur", "Shahpura", "Sikar", "Sirohi", "Sri Ganganagar", "Tonk", "Udaipur"],
+  "Sikkim": ["Gangtok", "Gyalsshing", "Pakyong", "Soreng", "Mangan", "Namchi"],
+  "Tamil Nadu": ["Ariyalur", "Chengalpattu", "Chennai", "Coimbatore", "Cuddalore", "Dharmapuri", "Dindigul", "Erode", "Kanchipuram", "Kanyakumari", "Karur", "Krishnagiri", "Madurai", "Mayiladuthurai", "Nagapattinam", "Namakkal", "Nilgiris", "Perambalur", "Pudukkottai", "Ramanathapuram", "Ranipet", "Salem", "Sivaganga", "Tenkasi", "Thanjavur", "Theni", "Thoothukudi", "Tiruchirappalli", "Tirunelveli", "Tirupathur", "Tiruppur", "Tiruvallur", "Tiruvannamalai", "Tiruvarur", "Vellore", "Viluppuram", "Virudhunagar"],
+  "Telangana": ["Adilabad", "Bhadradri Kothagudem", "Hanamkonda", "Hyderabad", "Jagtial", "Jangaon", "Jayashankar Bhupalpally", "Jogulamba Gadwal", "Kamareddy", "Karimnagar", "Khammam", "Kumuram Bheem Asifabad", "Mahabubabad", "Mahbubnagar", "Mancherial", "Medak", "Medchal-Malkajgiri", "Mulugu", "Nagarkurnool", "Nalgonda", "Narayanpet", "Nirmal", "Nizamabad", "Peddapalli", "Rajanna Sircilla", "Rangareddy", "Sangareddy", "Siddipet", "Suryapet", "Vikarabad", "Wanaparthy", "Warangal", "Yadadri Bhuvanagiri"],
+  "Tripura": ["Dhalai", "Gomati", "Khowai", "North Tripura", "Sepahijala", "South Tripura", "Unakoti", "West Tripura"],
+  "Uttar Pradesh": ["Agra", "Aligarh", "Ambedkar Nagar", "Amethi", "Amroha", "Auraiya", "Ayodhya", "Azamgarh", "Baghpat", "Bahraich", "Ballia", "Balrampur", "Banda", "Barabanki", "Bareilly", "Basti", "Bhadohi", "Bijnor", "Budaun", "Bulandshahr", "Chandauli", "Chitrakoot", "Deoria", "Etah", "Etawah", "Farrukhabad", "Fatehpur", "Firozabad", "Gautam Buddha Nagar", "Ghaziabad", "Ghazipur", "Gonda", "Gorakhpur", "Hamirpur", "Hapur", "Hardoi", "Hathras", "Jalaun", "Jaunpur", "Jhansi", "Kannauj", "Kanpur Dehat", "Kanpur Nagar", "Kasganj", "Kaushambi", "Kheri", "Kushinagar", "Lalitpur", "Lucknow", "Maharajganj", "Mahoba", "Mainpuri", "Mathura", "Mau", "Meerut", "Mirzapur", "Moradabad", "Muzaffarnagar", "Pilibhit", "Pratapgarh", "Prayagraj", "Raebareli", "Rampur", "Saharanpur", "Sambhal", "Sant Kabir Nagar", "Shahjahanpur", "Shamli", "Shravasti", "Siddharthnagar", "Sitapur", "Sonbhadra", "Sultanpur", "Unnao", "Varanasi"],
+  "Uttarakhand": ["Almora", "Bageshwar", "Chamoli", "Champawat", "Dehradun", "Haridwar", "Nainital", "Pauri Garhwal", "Pithoragarh", "Rudraprayag", "Tehri Garhwal", "Udham Singh Nagar", "Uttarkashi"],
+  "West Bengal": ["Alipurduar", "Bankura", "Birbhum", "Cooch Behar", "Dakshin Dinajpur", "Darjeeling", "Hooghly", "Howrah", "Jalpaiguri", "Jhargram", "Kalimpong", "Kolkata", "Malda", "Murshidabad", "Nadia", "North 24 Parganas", "Paschim Bardhaman", "Paschim Medinipur", "Purba Bardhaman", "Purba Medinipur", "Purulia", "South 24 Parganas", "Uttar Dinajpur"],
+  "Andaman & Nicobar": ["Nicobar", "North and Middle Andaman", "South Andaman"],
   "Chandigarh": ["Chandigarh"],
-  "Puducherry": ["Puducherry", "Karaikal", "Mahe", "Yanam"],
-  "Ladakh": ["Leh", "Kargil"],
+  "Dadra & Nagar Haveli and Daman & Diu": ["Daman", "Diu", "Dadra and Nagar Haveli"],
+  "Lakshadweep": ["Lakshadweep"],
+  "Puducherry": ["Karaikal", "Mahe", "Puducherry", "Yanam"],
+  "Ladakh": ["Kargil", "Leh"],
 };
 
 export const AREA_UNITS_OPTIONS = [
@@ -126,6 +134,7 @@ export interface PropertyListingWizardDraft {
   ownerName: string;
   phoneNumber: string;
   whatsappNumber: string;
+  email?: string;
   ownerId?: string;
   isLeadContact?: boolean;
 
@@ -194,11 +203,373 @@ interface Step1LandDetailsProps {
   errors?: Record<string, string>;
 }
 
+declare global {
+  interface Window {
+    google?: any;
+    initGoogleMapsPromise?: Promise<void>;
+  }
+}
+
+function loadGoogleMapsScript(apiKey: string): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (window.google?.maps) return Promise.resolve();
+
+  if (window.initGoogleMapsPromise) return window.initGoogleMapsPromise;
+
+  window.initGoogleMapsPromise = new Promise((resolve) => {
+    const existingScript = document.getElementById("google-maps-script");
+    if (existingScript) {
+      if (window.google?.maps) {
+        resolve();
+      } else {
+        existingScript.addEventListener("load", () => resolve());
+      }
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "google-maps-script";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      console.warn("Failed to load Google Maps script.");
+      resolve();
+    };
+    document.head.appendChild(script);
+  });
+
+  return window.initGoogleMapsPromise;
+}
+
+function findBestDistrictMatch(state: string, rawCandidates: string[]): string {
+  const options = INDIAN_STATES_DISTRICTS[state] || [];
+  if (!options.length || !rawCandidates.length) return "";
+
+  for (const raw of rawCandidates) {
+    if (!raw) continue;
+
+    // Clean up raw candidate string
+    const cleanRaw = raw
+      .replace(/district|dist|division|tehsil|zila/gi, "")
+      .trim()
+      .toLowerCase();
+
+    if (!cleanRaw) continue;
+
+    // 1. Exact case-insensitive match
+    const exact = options.find((o) => o.toLowerCase() === cleanRaw);
+    if (exact) return exact;
+
+    // 2. Includes match
+    const inc = options.find((o) => {
+      const oLower = o.toLowerCase();
+      return oLower.includes(cleanRaw) || cleanRaw.includes(oLower);
+    });
+    if (inc) return inc;
+
+    // 3. Match by first word
+    const firstWord = cleanRaw.split(/\s+/)[0];
+    if (firstWord.length >= 3) {
+      const wordMatch = options.find((o) => o.toLowerCase().startsWith(firstWord));
+      if (wordMatch) return wordMatch;
+    }
+  }
+
+  return "";
+}
+
 export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDetailsProps) {
+  const [isPincodeLoading, setIsPincodeLoading] = useState(false);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [isSearchingMap, setIsSearchingMap] = useState(false);
+  const [mapSearchQuery, setMapSearchQuery] = useState("");
+
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerInstanceRef = useRef<any>(null);
+
   const districtOptions = useMemo(() => {
-    if (!draft.state || !INDIAN_STATES_DISTRICTS[draft.state]) return [];
-    return INDIAN_STATES_DISTRICTS[draft.state];
-  }, [draft.state]);
+    const base = draft.state && INDIAN_STATES_DISTRICTS[draft.state] ? [...INDIAN_STATES_DISTRICTS[draft.state]] : [];
+    if (draft.district && !base.includes(draft.district)) {
+      return [draft.district, ...base];
+    }
+    return base;
+  }, [draft.state, draft.district]);
+
+  // Reverse geocode via Google Geocoder across all results for full accuracy
+  const reverseGeocodeGoogle = async (lat: number, lng: number) => {
+    if (!window.google?.maps?.Geocoder) return;
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
+      if (status === "OK" && results && results.length > 0) {
+        let state = "";
+        let rawDistrictCandidates: string[] = [];
+        let city = "";
+        let pincode = "";
+
+        for (const res of results) {
+          for (const comp of res.address_components || []) {
+            const types = comp.types || [];
+            if (types.includes("administrative_area_level_1") && !state) {
+              state = comp.long_name;
+            }
+            if (types.includes("administrative_area_level_2")) {
+              if (!rawDistrictCandidates.includes(comp.long_name)) {
+                rawDistrictCandidates.push(comp.long_name);
+              }
+            }
+            if (types.includes("administrative_area_level_3") || types.includes("sublocality_level_1")) {
+              if (!rawDistrictCandidates.includes(comp.long_name)) {
+                rawDistrictCandidates.push(comp.long_name);
+              }
+            }
+            if (
+              (types.includes("locality") ||
+                types.includes("sublocality_level_1") ||
+                types.includes("neighborhood") ||
+                types.includes("administrative_area_level_3")) &&
+              !city
+            ) {
+              city = comp.long_name;
+            }
+            if (types.includes("postal_code") && !pincode) {
+              pincode = comp.long_name;
+            }
+          }
+        }
+
+        let matchedState = Object.keys(INDIAN_STATES_DISTRICTS).find(
+          (s) => s.toLowerCase() === state.toLowerCase()
+        ) || state;
+
+        const matchedDistrict =
+          findBestDistrictMatch(matchedState, rawDistrictCandidates) ||
+          rawDistrictCandidates[0] ||
+          "";
+
+        if (matchedState) onChange("state", matchedState);
+        if (matchedDistrict) onChange("district", matchedDistrict);
+        if (city) onChange("city", city);
+        if (pincode) {
+          const cleanPin = pincode.replace(/\D/g, "").slice(0, 6);
+          onChange("pincode", cleanPin);
+        }
+
+        const addressStr = results[0]?.formatted_address || "";
+        setMapSearchQuery(addressStr);
+        onChange("mapLocation", {
+          address: addressStr,
+          lat,
+          lng,
+        });
+
+        toast.success(`Location set: ${matchedDistrict || city || "Pointed on Map"}`);
+      }
+    });
+  };
+
+  // Initialize Google Map
+  useEffect(() => {
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+    const apiKey =
+      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+      process.env.GOOGLE_MAPS_API_KEY ||
+      "";
+
+    loadGoogleMapsScript(apiKey).then(() => {
+      if (!window.google?.maps || !mapContainerRef.current || mapInstanceRef.current) return;
+
+      const initialLat = draft.mapLocation?.lat || 20.5937;
+      const initialLng = draft.mapLocation?.lng || 78.9629;
+      const initialZoom = draft.mapLocation?.lat ? 14 : 5;
+
+      const map = new window.google.maps.Map(mapContainerRef.current, {
+        center: { lat: initialLat, lng: initialLng },
+        zoom: initialZoom,
+        mapTypeId: window.google.maps.MapTypeId.HYBRID,
+        streetViewControl: false,
+        fullscreenControl: true,
+        zoomControl: true,
+      });
+
+      mapInstanceRef.current = map;
+      setIsMapLoaded(true);
+
+      // Create initial marker if set
+      if (draft.mapLocation?.lat && draft.mapLocation?.lng) {
+        const marker = new window.google.maps.Marker({
+          position: { lat: draft.mapLocation.lat, lng: draft.mapLocation.lng },
+          map,
+          draggable: true,
+          animation: window.google.maps.Animation.DROP,
+        });
+        markerInstanceRef.current = marker;
+
+        marker.addListener("dragend", () => {
+          const pos = marker.getPosition();
+          if (pos) {
+            void reverseGeocodeGoogle(pos.lat(), pos.lng());
+          }
+        });
+      }
+
+      // Map click listener
+      map.addListener("click", (e: any) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+
+        if (markerInstanceRef.current) {
+          markerInstanceRef.current.setPosition({ lat, lng });
+        } else {
+          const marker = new window.google.maps.Marker({
+            position: { lat, lng },
+            map: mapInstanceRef.current,
+            draggable: true,
+            animation: window.google.maps.Animation.DROP,
+          });
+          markerInstanceRef.current = marker;
+          marker.addListener("dragend", () => {
+            const pos = marker.getPosition();
+            if (pos) {
+              void reverseGeocodeGoogle(pos.lat(), pos.lng());
+            }
+          });
+        }
+        void reverseGeocodeGoogle(lat, lng);
+      });
+    });
+  }, []);
+
+  // Search location on Google Map via Geocoder
+  const handleMapSearch = async () => {
+    if (!mapSearchQuery.trim() || !window.google?.maps?.Geocoder) return;
+    setIsSearchingMap(true);
+
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode(
+      { address: mapSearchQuery, componentRestrictions: { country: "IN" } },
+      (results: any, status: any) => {
+        setIsSearchingMap(false);
+        if (status === "OK" && results && results[0]) {
+          const place = results[0];
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.setCenter({ lat, lng });
+            mapInstanceRef.current.setZoom(14);
+          }
+
+          if (markerInstanceRef.current) {
+            markerInstanceRef.current.setPosition({ lat, lng });
+          } else if (mapInstanceRef.current) {
+            const marker = new window.google.maps.Marker({
+              position: { lat, lng },
+              map: mapInstanceRef.current,
+              draggable: true,
+              animation: window.google.maps.Animation.DROP,
+            });
+            markerInstanceRef.current = marker;
+            marker.addListener("dragend", () => {
+              const pos = marker.getPosition();
+              if (pos) {
+                void reverseGeocodeGoogle(pos.lat(), pos.lng());
+              }
+            });
+          }
+          void reverseGeocodeGoogle(lat, lng);
+        } else {
+          toast.error("Location not found on Google Maps");
+        }
+      }
+    );
+  };
+
+  // Handle live Postal PIN Code lookup & Map location sync
+  const handlePincodeChange = async (pincodeVal: string) => {
+    const cleanPin = pincodeVal.replace(/\D/g, "").slice(0, 6);
+    onChange("pincode", cleanPin);
+
+    if (cleanPin.length === 6) {
+      setIsPincodeLoading(true);
+      try {
+        const res = await fetch(`https://api.postalpincode.in/pincode/${cleanPin}`);
+        const data = await res.json().catch(() => null);
+        if (data && data[0] && data[0].Status === "Success" && data[0].PostOffice?.length) {
+          const po = data[0].PostOffice[0];
+          const detectedState = po.State;
+          const detectedDistrict = po.District;
+          const detectedCity = po.Name || po.Block || po.Division;
+
+          let matchedState = Object.keys(INDIAN_STATES_DISTRICTS).find(
+            (s) => s.toLowerCase() === detectedState.toLowerCase()
+          ) || detectedState;
+
+          const matchedDistrict =
+            findBestDistrictMatch(matchedState, [detectedDistrict]) || detectedDistrict || "";
+
+          if (matchedState) onChange("state", matchedState);
+          if (matchedDistrict) onChange("district", matchedDistrict);
+          if (detectedCity) onChange("city", detectedCity);
+
+          toast.success(`Resolved pincode ${cleanPin}: ${matchedDistrict || detectedDistrict}, ${matchedState}`);
+        }
+
+        // Sync Google Map pin to the manually entered PIN code
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode(
+            { address: `${cleanPin}, India`, componentRestrictions: { country: "IN" } },
+            (results: any, status: any) => {
+              if (status === "OK" && results && results[0]) {
+                const place = results[0];
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+
+                if (mapInstanceRef.current) {
+                  mapInstanceRef.current.setCenter({ lat, lng });
+                  mapInstanceRef.current.setZoom(13);
+                }
+
+                if (markerInstanceRef.current) {
+                  markerInstanceRef.current.setPosition({ lat, lng });
+                } else if (mapInstanceRef.current) {
+                  const marker = new window.google.maps.Marker({
+                    position: { lat, lng },
+                    map: mapInstanceRef.current,
+                    draggable: true,
+                    animation: window.google.maps.Animation.DROP,
+                  });
+                  markerInstanceRef.current = marker;
+                  marker.addListener("dragend", () => {
+                    const pos = marker.getPosition();
+                    if (pos) {
+                      void reverseGeocodeGoogle(pos.lat(), pos.lng());
+                    }
+                  });
+                }
+
+                const addr = place.formatted_address || `${cleanPin}, India`;
+                setMapSearchQuery(addr);
+                onChange("mapLocation", {
+                  address: addr,
+                  lat,
+                  lng,
+                });
+              }
+            }
+          );
+        }
+      } catch (e) {
+        console.error("PIN code lookup failed", e);
+      } finally {
+        setIsPincodeLoading(false);
+      }
+    }
+  };
 
   const handlePriceOrAreaChange = (field: "totalPrice" | "area", val: string) => {
     onChange(field, val);
@@ -247,11 +618,73 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* 1. Land Details Section */}
       <div className="rounded-xl border border-[var(--border-color)] bg-[var(--surface)] p-6 shadow-sm">
-        <div className="mb-5 flex items-center gap-2 border-b border-[var(--border-color)] pb-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-sm">
-            1
+        <div className="mb-5 flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-sm">
+              1
+            </span>
+            <h2 className="text-base font-semibold text-[var(--foreground)]">Land Details</h2>
+          </div>
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200/60">
+            <Sparkles size={13} /> Live Location & Postal Resolution
           </span>
-          <h2 className="text-base font-semibold text-[var(--foreground)]">Land Details</h2>
+        </div>
+
+        {/* Interactive Pin Location Map */}
+        <div className="mb-6 rounded-xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent p-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div>
+              <label className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <MapPin size={15} className="text-emerald-600" /> Point Location on Map (Click or Drag Pin)
+              </label>
+              <p className="text-[11px] text-text-muted mt-0.5">
+                Click anywhere on map to set property location & auto-fill address details.
+              </p>
+            </div>
+            {draft.mapLocation?.lat != null && draft.mapLocation?.lng != null && (
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 dark:bg-emerald-950/60 px-2.5 py-1 rounded-md border border-emerald-300/50 flex items-center gap-1">
+                <Check size={12} /> Pin Set: {draft.mapLocation.lat.toFixed(4)}, {draft.mapLocation.lng.toFixed(4)}
+              </span>
+            )}
+          </div>
+
+          {/* Map Search & Pointed Address Input */}
+          <div className="flex gap-2 mb-3">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={mapSearchQuery}
+                onChange={(e) => setMapSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleMapSearch();
+                  }
+                }}
+                placeholder="Search village, city, district or landmark on map..."
+                className="w-full rounded-lg border border-emerald-300/70 bg-white dark:bg-slate-900 px-3 py-2 pl-9 text-xs outline-none focus:border-emerald-500 shadow-sm text-[var(--foreground)]"
+              />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleMapSearch()}
+              disabled={isSearchingMap}
+              className="text-xs font-semibold py-1.5 px-3 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {isSearchingMap ? <Loader2 size={13} className="animate-spin" /> : "Search Location"}
+            </button>
+          </div>
+
+          {/* Map Container */}
+          <div className="relative h-64 w-full rounded-lg border border-emerald-200 dark:border-emerald-900/40 overflow-hidden shadow-inner bg-slate-100 dark:bg-slate-900">
+            <div ref={mapContainerRef} className="h-full w-full z-0" />
+            {!isMapLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-900 text-xs text-text-muted gap-2">
+                <Loader2 size={16} className="animate-spin text-emerald-600" /> Loading interactive map...
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -301,20 +734,27 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
               id="city"
               value={draft.city}
               onChange={(e) => onChange("city", e.target.value)}
-              placeholder="Enter city/village name"
+              placeholder="Enter city/tehsil/village name"
               className={errors.city ? "border-rose-500" : ""}
             />
             {errors.city && <p className="mt-1 text-xs text-rose-500">{errors.city}</p>}
           </div>
 
           <div>
-            <CrmLabel htmlFor="pincode">Pin Code</CrmLabel>
+            <div className="flex items-center justify-between">
+              <CrmLabel htmlFor="pincode">Pin Code</CrmLabel>
+              {isPincodeLoading && (
+                <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium animate-pulse">
+                  <Loader2 size={11} className="animate-spin" /> Resolving PIN...
+                </span>
+              )}
+            </div>
             <CrmInput
               id="pincode"
               value={draft.pincode}
               maxLength={6}
-              onChange={(e) => onChange("pincode", e.target.value.replace(/\D/g, ""))}
-              placeholder="Enter 6-digit pin code"
+              onChange={(e) => handlePincodeChange(e.target.value)}
+              placeholder="Enter 6-digit pin code (Auto-fetches details)"
             />
           </div>
 

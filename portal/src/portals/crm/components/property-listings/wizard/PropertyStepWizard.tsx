@@ -28,9 +28,18 @@ const STEPS = [
 interface PropertyStepWizardProps {
   leadId?: string;
   bucket?: string;
+  initialOwnerName?: string;
+  initialOwnerPhone?: string;
+  initialOwnerEmail?: string;
 }
 
-export function PropertyStepWizard({ leadId, bucket = "properties" }: PropertyStepWizardProps) {
+export function PropertyStepWizard({
+  leadId,
+  bucket = "properties",
+  initialOwnerName,
+  initialOwnerPhone,
+  initialOwnerEmail,
+}: PropertyStepWizardProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [draft, setDraft] = useState<PropertyListingWizardDraft>(INITIAL_PROPERTY_WIZARD_DRAFT);
@@ -39,21 +48,50 @@ export function PropertyStepWizard({ leadId, bucket = "properties" }: PropertySt
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [leadData, setLeadData] = useState<{ name?: string; phone?: string } | null>(null);
 
+  // If initial owner info is passed via search params, prefill contact
+  useEffect(() => {
+    if (initialOwnerName || initialOwnerPhone || initialOwnerEmail) {
+      setDraft((prev) => ({
+        ...prev,
+        ownerName: prev.ownerName || initialOwnerName || "",
+        phoneNumber:
+          prev.phoneNumber ||
+          (initialOwnerPhone
+            ? initialOwnerPhone.startsWith("+")
+              ? initialOwnerPhone
+              : `+91 ${initialOwnerPhone.replace(/[^\d]/g, "")}`
+            : ""),
+        email: prev.email || initialOwnerEmail || "",
+        isLeadContact: true,
+      }));
+    }
+  }, [initialOwnerName, initialOwnerPhone, initialOwnerEmail]);
+
   // If leadId is passed, fetch lead info to prefill contact
   useEffect(() => {
     if (!leadId) return;
     let active = true;
     (async () => {
       try {
-        const { data } = await api.get<{ name?: string; phone?: string; leadOwner?: string }>(
-          `/crm/leads/${leadId}`
-        );
+        const { data } = await api.get<any>(`/crm/leads/${leadId}`);
         if (active && data) {
-          setLeadData({ name: data.name, phone: data.phone });
+          const resolvedName =
+            data.fullName || data.name || [data.firstName, data.lastName].filter(Boolean).join(" ");
+          const resolvedPhone = data.mobileNo || data.phone || "";
+          const resolvedEmail = data.email || "";
+
+          setLeadData({ name: resolvedName, phone: resolvedPhone });
           setDraft((prev) => ({
             ...prev,
-            ownerName: prev.ownerName || data.name || "",
-            phoneNumber: prev.phoneNumber || (data.phone ? `+91 ${data.phone.replace(/[^\d]/g, "")}` : ""),
+            ownerName: prev.ownerName || resolvedName || "",
+            phoneNumber:
+              prev.phoneNumber ||
+              (resolvedPhone
+                ? resolvedPhone.startsWith("+")
+                  ? resolvedPhone
+                  : `+91 ${resolvedPhone.replace(/[^\d]/g, "")}`
+                : ""),
+            email: prev.email || resolvedEmail || "",
             isLeadContact: true,
           }));
         }
@@ -120,18 +158,11 @@ export function PropertyStepWizard({ leadId, bucket = "properties" }: PropertySt
       if (!draft.ownerName?.trim() || draft.ownerName.trim().length < 2) {
         newErrors.ownerName = "Owner name is required (min 2 characters)";
       }
-      const rawPhone = (draft.phoneNumber || "").replace(/[^\d]/g, "");
-      if (!rawPhone) {
+      const allDigits = (draft.phoneNumber || "").replace(/\D/g, "");
+      if (!allDigits) {
         newErrors.phoneNumber = "Phone number is required";
-      } else if (rawPhone.length < 7 || rawPhone.length > 15) {
+      } else if (allDigits.length < 7 || allDigits.length > 15) {
         newErrors.phoneNumber = "Enter a valid phone number (7-15 digits)";
-      }
-
-      if (draft.whatsappNumber?.trim()) {
-        const rawWa = draft.whatsappNumber.replace(/[^\d]/g, "");
-        if (rawWa.length < 7 || rawWa.length > 15) {
-          newErrors.whatsappNumber = "Enter a valid WhatsApp number (7-15 digits)";
-        }
       }
     } else if (stepNumber === 4) {
       // Step 4: Valid if mapLocation is chosen OR if boundary coordinates are drawn
@@ -208,8 +239,9 @@ export function PropertyStepWizard({ leadId, bucket = "properties" }: PropertySt
       if (!draft.phoneNumber?.trim()) {
         newErrors.phoneNumber = "Phone number is required";
       } else {
-        const isIndia = draft.phoneNumber.startsWith("+91") || !draft.phoneNumber.startsWith("+");
-        const digitsOnly = draft.phoneNumber.replace(/^\+\d+\s*/, "").replace(/[^\d]/g, "");
+        const allDigits = draft.phoneNumber.replace(/\D/g, "");
+        const digitsOnly = allDigits.length === 12 && allDigits.startsWith("91") ? allDigits.slice(2) : allDigits;
+        const isIndia = draft.phoneNumber.startsWith("+91") || allDigits.length === 10 || (allDigits.length === 12 && allDigits.startsWith("91"));
 
         if (isIndia) {
           if (!/^[6-9]\d{9}$/.test(digitsOnly)) {
@@ -218,21 +250,6 @@ export function PropertyStepWizard({ leadId, bucket = "properties" }: PropertySt
         } else {
           if (digitsOnly.length < 7 || digitsOnly.length > 15) {
             newErrors.phoneNumber = "Enter a valid international phone number (7-15 digits)";
-          }
-        }
-      }
-
-      if (draft.whatsappNumber?.trim()) {
-        const isIndiaWa = draft.whatsappNumber.startsWith("+91") || !draft.whatsappNumber.startsWith("+");
-        const waDigits = draft.whatsappNumber.replace(/^\+\d+\s*/, "").replace(/[^\d]/g, "");
-
-        if (isIndiaWa) {
-          if (!/^[6-9]\d{9}$/.test(waDigits)) {
-            newErrors.whatsappNumber = "Enter a valid 10-digit Indian WhatsApp number starting with 6, 7, 8, or 9";
-          }
-        } else {
-          if (waDigits.length < 7 || waDigits.length > 15) {
-            newErrors.whatsappNumber = "Enter a valid international WhatsApp number (7-15 digits)";
           }
         }
       }

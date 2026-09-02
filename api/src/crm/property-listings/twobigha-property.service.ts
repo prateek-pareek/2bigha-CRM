@@ -721,9 +721,10 @@ export class TwoBighaPropertyService {
       throw new Error(`Azure Blob upload failed with HTTP status ${res.status}`);
     }
 
+    const publicUrl = slot.uploadUrl.split('?')[0];
     return {
       blobPath: slot.blobPath,
-      url: slot.uploadUrl,
+      url: publicUrl,
     };
   }
 

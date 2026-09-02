@@ -48,6 +48,9 @@ export class WhatsAppLeadLink {
   @Prop({ type: Types.ObjectId, ref: 'CRMUser', index: true })
   assignee?: Types.ObjectId;
 
+  @Prop({ type: String, enum: ['read', 'read_write'], default: 'read_write' })
+  assigneeAccessType?: 'read' | 'read_write';
+
   @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   assignedBy?: Types.ObjectId;
 

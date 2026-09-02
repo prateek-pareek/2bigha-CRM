@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Search, X, FileText, RefreshCw, CheckCheck } from "lucide-react";
+import { Loader2, Search, X, FileText, RefreshCw, CheckCheck, ExternalLink, Building2, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,9 @@ import {
   type WhatsAppCachedTemplate,
   type WhatsAppTemplateComponent,
 } from "@/lib/crm/whatsapp/template-variables";
+import { generatePropertyBrochurePdf } from "@/lib/crm/whatsapp/property-share-api";
+import { fetchBackendPropertyListingsByLead } from "@/lib/crm/property-listings/backend-api";
+import PropertySearchDropdown from "./PropertySearchDropdown";
 
 export type { WhatsAppCachedTemplate, WhatsAppTemplateComponent };
 
@@ -21,6 +24,8 @@ type Props = {
   to: string;
   onClose: () => void;
   onSent: () => void;
+  leadId?: string;
+  leadName?: string;
 };
 
 export default function WhatsAppTemplatePicker({
@@ -28,6 +33,8 @@ export default function WhatsAppTemplatePicker({
   to,
   onClose,
   onSent,
+  leadId,
+  leadName,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -53,6 +60,15 @@ export default function WhatsAppTemplatePicker({
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaFilename, setMediaFilename] = useState("");
   const [linking, setLinking] = useState(false);
+
+  // Brochure Attachment States
+  const [attachBrochure, setAttachBrochure] = useState(false);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+  const [loadingProperties, setLoadingProperties] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [brochurePdfUrl, setBrochurePdfUrl] = useState<string>("");
+  const [brochurePdfFilename, setBrochurePdfFilename] = useState<string>("");
 
   const slots = useMemo(
     () => (selected ? extractSlots(selected) : []),
@@ -235,22 +251,137 @@ export default function WhatsAppTemplatePicker({
     }
   };
 
-  const handleSend = async () => {
-    if (!selected || !to) return;
-    if (hasMediaHeader && !mediaUrl.trim()) {
-      toast.error("Header Media URL is required for this template type");
+  // Load properties on open
+  useEffect(() => {
+    if (!open) {
+      setAttachBrochure(false);
+      setSelectedPropertyId("");
+      setBrochurePdfUrl("");
+      setBrochurePdfFilename("");
       return;
     }
+    const token = localStorage.getItem("token");
+    setLoadingProperties(true);
+
+    const loadProps = async () => {
+      try {
+        let list: any[] = [];
+        if (leadId) {
+          try {
+            const leadProps = await fetchBackendPropertyListingsByLead(leadId);
+            if (Array.isArray(leadProps)) {
+              list.push(...leadProps);
+            }
+          } catch {
+            // ignore
+          }
+        }
+        const res = await fetch(`${CRM_API_URL}/crm/property-listings?pageSize=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        const allProps = Array.isArray(data) ? data : (data.data || []);
+        const existingIds = new Set(list.map((p) => p._id || p.id));
+        for (const p of allProps) {
+          if (!existingIds.has(p._id || p.id)) {
+            list.push(p);
+          }
+        }
+        setProperties(list);
+        if (list.length > 0 && !selectedPropertyId) {
+          setSelectedPropertyId(list[0]._id || list[0].id);
+        }
+      } catch (e) {
+        console.error("Failed to load property listings:", e);
+      } finally {
+        setLoadingProperties(false);
+      }
+    };
+    void loadProps();
+  }, [open, leadId]);
+
+  const generateBrochure = async (propId: string, forceRegenerate = false) => {
+    if (!propId) return null;
+    setGeneratingPdf(true);
+    try {
+      const result = await generatePropertyBrochurePdf({ propertyId: propId, forceRegenerate });
+      if (result?.url) {
+        setBrochurePdfUrl(result.url);
+        setBrochurePdfFilename(result.filename || "2Bigha-Property-Brochure.pdf");
+        if (hasMediaHeader) {
+          setMediaUrl(result.url);
+          setMediaFilename(result.filename || "2Bigha-Property-Brochure.pdf");
+        }
+        if (result.cached) {
+          toast.success("Loaded saved Azure brochure PDF (0ms)");
+        } else {
+          toast.success("2Bigha Project Brochure PDF generated & saved on Azure!");
+        }
+        return result;
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to generate brochure PDF");
+    } finally {
+      setGeneratingPdf(false);
+    }
+    return null;
+  };
+
+  const handleSend = async () => {
+    if (!selected || !to) return;
     for (const slot of slots) {
       if (!values[slot.key]?.trim()) {
         toast.error(`Fill ${slot.label}`);
         return;
       }
     }
+
+    let finalBrochureUrl = brochurePdfUrl;
+    let finalBrochureFilename = brochurePdfFilename;
+
+    if (attachBrochure && selectedPropertyId && !finalBrochureUrl) {
+      const gen = await generateBrochure(selectedPropertyId, false);
+      if (gen?.url) {
+        finalBrochureUrl = gen.url;
+        finalBrochureFilename = gen.filename;
+      }
+    }
+
+    if (hasMediaHeader && !mediaUrl.trim() && !finalBrochureUrl) {
+      toast.error("Header Media URL is required for this template type");
+      return;
+    }
+
     setSending(true);
     const token = localStorage.getItem("token");
     try {
       const components = buildComponents(slots, values);
+      const headerComp = selected.components?.find(
+        (c: any) => String(c.type).toUpperCase() === "HEADER"
+      );
+      const headerFormatType = headerComp ? String(headerComp.format || "").toUpperCase() : null;
+      const isDocumentHeader = headerFormatType === "DOCUMENT" || headerFormatType === "FILE";
+      const isImageHeader = headerFormatType === "IMAGE";
+      const isVideoHeader = headerFormatType === "VIDEO";
+
+      let templateMediaUrl: string | undefined = undefined;
+      let templateMediaFilename: string | undefined = undefined;
+      let templateMediaType: "image" | "document" | "video" | "audio" | undefined = undefined;
+
+      if (isDocumentHeader) {
+        templateMediaUrl = finalBrochureUrl || mediaUrl.trim() || undefined;
+        templateMediaFilename = finalBrochureFilename || mediaFilename.trim() || "Property-Brochure.pdf";
+        templateMediaType = "document";
+      } else if (isImageHeader) {
+        templateMediaUrl = mediaUrl.trim() || (selectedProperty?.images?.[0] || selectedProperty?.photos?.[0]) || "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800";
+        templateMediaFilename = mediaFilename.trim() || "header.jpg";
+        templateMediaType = "image";
+      } else if (isVideoHeader) {
+        templateMediaUrl = mediaUrl.trim() || undefined;
+        templateMediaFilename = mediaFilename.trim() || "video.mp4";
+        templateMediaType = "video";
+      }
+
       const res = await fetch(`${CRM_API_URL}/crm/whatsapp/send-template`, {
         method: "POST",
         headers: {
@@ -263,13 +394,26 @@ export default function WhatsAppTemplatePicker({
           language: selected.language,
           components,
           bodyPreview: bodyPreview(selected, values),
-          mediaUrl: hasMediaHeader ? mediaUrl.trim() : undefined,
-          mediaFilename: hasMediaHeader ? mediaFilename.trim() : undefined,
+          mediaUrl: templateMediaUrl,
+          mediaFilename: templateMediaFilename,
+          mediaType: templateMediaType,
+          attachDocumentAfter:
+            attachBrochure && finalBrochureUrl && !isDocumentHeader
+              ? {
+                  url: finalBrochureUrl,
+                  filename: finalBrochureFilename || "2Bigha-Property-Brochure.pdf",
+                  title: "2Bigha Project Brochure",
+                }
+              : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (data.success) {
-        toast.success("Template sent");
+        toast.success(
+          attachBrochure
+            ? "Template sent with 2Bigha Project Brochure attached!"
+            : "Template sent",
+        );
         onSent();
         onClose();
       } else {
@@ -282,101 +426,119 @@ export default function WhatsAppTemplatePicker({
     }
   };
 
+  const selectedProperty = useMemo(() => {
+    return properties.find((p) => (p._id || p.id) === selectedPropertyId);
+  }, [properties, selectedPropertyId]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm px-6 py-4">
-          <div>
-            <h2 className="text-sm font-bold text-slate-800">WhatsApp templates</h2>
-            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-              Send an approved Meta template to {to ? `+${to.replace(/\D/g, "")}` : "recipient"}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 shadow-sm">
+              <FileText size={20} />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-800">
+                Send WhatsApp Template
+              </h2>
+              <p className="text-xs text-slate-500">
+                Recipient: <span className="font-semibold text-slate-700">{to}</span>
+                {leadName && ` (${leadName})`}
+              </p>
+            </div>
           </div>
           <button
-            type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 transition"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-3 bg-slate-50/30">
-          <div className="relative flex-1">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search approved templates…"
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
-            />
-          </div>
-          <CrmButton
-            variant="secondary"
-            disabled={syncing}
-            onClick={() => void syncTemplates()}
-            className="h-10 gap-2 border-slate-200"
-          >
-            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Sync
-          </CrmButton>
-        </div>
-
-        <div className="grid min-h-[450px] flex-1 grid-cols-1 md:grid-cols-2">
-          <div className="min-h-0 overflow-y-auto border-b border-slate-100 md:border-b-0 md:border-r custom-scrollbar">
-            {loading ? (
-              <div className="flex items-center justify-center gap-2 p-10 text-xs text-slate-400">
-                <Loader2 size={16} className="animate-spin text-emerald-600" /> Loading…
+        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100 overflow-y-auto max-h-[calc(90vh-130px)]">
+          {/* Left: Template Search & Selector */}
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="relative flex-1">
+                <Search
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search templates..."
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-xs outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20"
+                />
               </div>
-            ) : filtered.length === 0 ? (
-              <div className="p-12 text-center">
-                <FileText className="mx-auto mb-3 text-slate-300" size={32} />
-                <p className="text-xs font-bold text-slate-700">No approved templates</p>
-                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                  Sync from Meta, or create templates in Business Manager first.
-                </p>
-              </div>
-            ) : (
-              filtered.map((t) => {
-                const active =
-                  selected?.name === t.name && selected?.language === t.language;
-                return (
-                  <button
-                    key={`${t.name}:${t.language}:${t.id || ""}`}
-                    type="button"
-                    onClick={() => setSelected(t)}
-                    className={cn(
-                      "relative flex w-full flex-col gap-1.5 border-b border-slate-100/60 px-5 py-3.5 text-left transition",
-                      active ? "bg-emerald-50/70" : "hover:bg-slate-50/50",
-                    )}
-                  >
-                    {active && <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-600 rounded-r" />}
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-bold text-slate-800 truncate">{t.name}</span>
-                      {getCategoryBadge(t.category)}
-                    </div>
-                    <span className="text-[10px] font-semibold text-slate-400">
-                      {t.language}
-                    </span>
-                  </button>
-                );
-              })
-            )}
+              <CrmButton
+                variant="secondary"
+                disabled={syncing}
+                onClick={() => void syncTemplates()}
+                className="h-10 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-semibold shrink-0"
+                title="Sync from Meta"
+              >
+                <RefreshCw size={13} className={cn(syncing && "animate-spin")} />
+              </CrmButton>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto max-h-[440px] pr-1">
+              {loading ? (
+                <div className="flex h-40 items-center justify-center">
+                  <Loader2 size={24} className="animate-spin text-slate-400" />
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  No approved templates found.
+                </div>
+              ) : (
+                filtered.map((t) => {
+                  const isSelected = selected?.id === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setSelected(t)}
+                      className={cn(
+                        "w-full rounded-xl p-3.5 text-left transition border",
+                        isSelected
+                          ? "border-emerald-500 bg-emerald-50/40 shadow-sm"
+                          : "border-slate-100 hover:border-slate-200 hover:bg-slate-50/70",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-800 break-all">
+                          {t.name}
+                        </span>
+                        {getCategoryBadge(t.category)}
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+                        <span>Language: {t.language}</span>
+                        {t.components?.some(
+                          (c: any) => String(c.type).toUpperCase() === "HEADER",
+                        ) && (
+                          <span className="font-semibold text-emerald-600">
+                            + Media Header
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          <div className="min-h-0 overflow-y-auto p-6 custom-scrollbar bg-slate-50/20">
+          {/* Right: Variable Fill, Brochure Attachment, Preview & Send */}
+          <div className="p-6 bg-slate-50/30 overflow-y-auto">
             {!selected ? (
-              <div className="flex h-full flex-col items-center justify-center text-center p-6 bg-slate-50/30 rounded-xl border border-dashed border-slate-200">
-                <FileText className="h-10 w-10 text-slate-300 mb-3 animate-pulse" />
-                <h4 className="text-xs font-bold text-slate-700">No Template Selected</h4>
-                <p className="mt-1.5 text-[11px] text-slate-400 max-w-[200px] leading-relaxed">
-                  Choose an approved template from the list on the left to customize variables and send.
-                </p>
+              <div className="flex h-full min-h-[300px] flex-col items-center justify-center text-center text-xs text-slate-400">
+                <FileText size={36} className="mb-2 text-slate-300 stroke-1" />
+                Select a template to configure variables and brochure attachment
               </div>
             ) : (
               <div className="space-y-5">
@@ -407,12 +569,138 @@ export default function WhatsAppTemplatePicker({
                       style={{ backgroundColor: "#d9fdd3" }}
                     >
                       {bodyPreview(selected, values)}
+                      {attachBrochure && (
+                        <div className="mt-2 flex items-center gap-2 rounded-md bg-emerald-600/10 p-1.5 text-[10px] font-semibold text-emerald-800 border border-emerald-500/20">
+                          <Paperclip size={12} className="text-emerald-700 shrink-0" />
+                          <span className="truncate">
+                            {brochurePdfFilename || "2Bigha-Property-Brochure.pdf"}
+                          </span>
+                        </div>
+                      )}
                       <div className="mt-1 flex items-center justify-end gap-1 text-[9px] text-[#667781] select-none">
                         <span>Preview</span>
                         <CheckCheck size={11} style={{ color: "#53bdeb" }} />
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Attach Project Brochure PDF Section */}
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/30 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={attachBrochure}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setAttachBrochure(val);
+                          if (val && selectedPropertyId && !brochurePdfUrl) {
+                            void generateBrochure(selectedPropertyId, false);
+                          }
+                        }}
+                        className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                        <Building2 size={14} className="text-emerald-600" />
+                        Attach Project Brochure PDF (Auto-Generate)
+                      </span>
+                    </label>
+                    <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                      2Bigha PDF
+                    </span>
+                  </div>
+
+                  {attachBrochure && (
+                    <div className="space-y-3 pt-2 border-t border-emerald-200/50">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                          Select Property / Project
+                        </span>
+                        {loadingProperties ? (
+                          <div className="flex items-center gap-2 text-xs text-slate-400 py-1">
+                            <Loader2 size={13} className="animate-spin" /> Loading properties...
+                          </div>
+                        ) : properties.length === 0 ? (
+                          <p className="text-xs text-slate-400">No properties available to attach.</p>
+                        ) : (
+                          <PropertySearchDropdown
+                            properties={properties}
+                            selectedPropertyId={selectedPropertyId}
+                            onSelect={(propId, prop) => {
+                              setSelectedPropertyId(propId);
+                              if (prop?.brochurePdfUrl) {
+                                setBrochurePdfUrl(prop.brochurePdfUrl);
+                                setBrochurePdfFilename(`${prop.title || '2Bigha-Brochure'}.pdf`);
+                                if (hasMediaHeader) {
+                                  setMediaUrl(prop.brochurePdfUrl);
+                                  setMediaFilename(`${prop.title || '2Bigha-Brochure'}.pdf`);
+                                }
+                              } else {
+                                setBrochurePdfUrl("");
+                                setBrochurePdfFilename("");
+                                if (propId) {
+                                  void generateBrochure(propId, false);
+                                }
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Selected Property Preview Summary Card */}
+                      {selectedProperty && (
+                        <div className="rounded-lg bg-white p-3 border border-emerald-200/60 shadow-xs space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">
+                                {selectedProperty.title || "Selected Property"}
+                              </p>
+                              <p className="text-[11px] text-slate-500">
+                                {[selectedProperty.city, selectedProperty.district, selectedProperty.state].filter(Boolean).join(", ") || selectedProperty.address || "Location on Request"}
+                              </p>
+                            </div>
+                            {selectedProperty.price && (
+                              <span className="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                ₹{Number(selectedProperty.price).toLocaleString("en-IN")}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <CrmButton
+                              type="button"
+                              variant="secondary"
+                              disabled={generatingPdf || !selectedPropertyId}
+                              onClick={() => void generateBrochure(selectedPropertyId, !!brochurePdfUrl)}
+                              className="h-7 px-2.5 text-[11px] font-semibold bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                            >
+                              {generatingPdf ? (
+                                <>
+                                  <Loader2 size={11} className="animate-spin" /> Generating...
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw size={11} /> {brochurePdfUrl ? "Regenerate PDF" : "Generate Brochure PDF"}
+                                </>
+                              )}
+                            </CrmButton>
+
+                            {brochurePdfUrl && (
+                              <a
+                                href={brochurePdfUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:underline px-2 py-1 rounded bg-white border border-slate-200"
+                              >
+                                <ExternalLink size={11} /> Preview PDF
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Live Campaign selector */}
@@ -461,7 +749,7 @@ export default function WhatsAppTemplatePicker({
                   )}
                 </div>
 
-                {hasMediaHeader && (
+                {hasMediaHeader && !attachBrochure && (
                   <div className="space-y-3 pt-3 border-t border-slate-100">
                     <label className="block space-y-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -513,6 +801,7 @@ export default function WhatsAppTemplatePicker({
                     ))}
                   </div>
                 )}
+
                 <CrmButton
                   variant="primary"
                   disabled={sending}

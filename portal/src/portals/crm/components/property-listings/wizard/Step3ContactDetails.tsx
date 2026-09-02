@@ -46,16 +46,12 @@ export function Step3ContactDetails({
 }: Step3ContactDetailsProps) {
   const isFromLead = Boolean(leadName || leadPhone || draft.isLeadContact);
   const [phoneExt, setPhoneExt] = useState("+91");
-  const [whatsappExt, setWhatsappExt] = useState("+91");
 
   const handlePhoneChange = (val: string, ext: string) => {
     const rawNumber = val.replace(/[^\d]/g, "");
-    onChange("phoneNumber", rawNumber ? `${ext} ${rawNumber}` : "");
-  };
-
-  const handleWhatsappChange = (val: string, ext: string) => {
-    const rawNumber = val.replace(/[^\d]/g, "");
-    onChange("whatsappNumber", rawNumber ? `${ext} ${rawNumber}` : "");
+    const formatted = rawNumber ? `${ext} ${rawNumber}` : "";
+    onChange("phoneNumber", formatted);
+    onChange("whatsappNumber", formatted);
   };
 
   const getPhoneDigits = (fullVal: string) => {
@@ -75,61 +71,29 @@ export function Step3ContactDetails({
           </div>
         </div>
 
-        {/* If lead is linked, display the stylized Contact from Lead card as in the PDF */}
+        {/* If lead is linked, display the stylized Contact from Lead card */}
         {isFromLead ? (
-          <div className="space-y-5">
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-950/10 p-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                Contact (from Lead)
-              </p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3.5">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 shadow-sm">
-                    <UserCheck className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-[var(--foreground)]">
-                      {draft.ownerName || leadName || "Lead Contact"}
-                    </h3>
-                    <p className="text-xs font-mono text-[var(--text-muted)]">
-                      {draft.phoneNumber || leadPhone || "No phone recorded"}
-                    </p>
-                  </div>
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-950/10 p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              Contact (from Lead)
+            </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 shadow-sm">
+                  <UserCheck className="h-6 w-6" />
                 </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-                  Pre-filled from lead
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <CrmLabel htmlFor="whatsappNumber">WhatsApp Number (Optional)</CrmLabel>
-              <div className="flex gap-2">
-                <CrmSelect
-                  value={whatsappExt}
-                  onChange={(e) => {
-                    setWhatsappExt(e.target.value);
-                    handleWhatsappChange(getPhoneDigits(draft.whatsappNumber), e.target.value);
-                  }}
-                  className="w-36 shrink-0"
-                >
-                  {COUNTRY_PHONE_CODES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.flag} {c.code}
-                    </option>
-                  ))}
-                </CrmSelect>
-                <div className="relative flex-1">
-                  <CrmInput
-                    id="whatsappNumber"
-                    value={getPhoneDigits(draft.whatsappNumber)}
-                    onChange={(e) => handleWhatsappChange(e.target.value, whatsappExt)}
-                    placeholder="WhatsApp number (e.g. 9876543210)"
-                    className="pl-9"
-                  />
-                  <MessageSquare className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--foreground)]">
+                    {draft.ownerName || leadName || "Lead Contact"}
+                  </h3>
+                  <p className="text-xs font-mono text-[var(--text-muted)]">
+                    {draft.phoneNumber || leadPhone || "No phone recorded"}
+                  </p>
                 </div>
               </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                Pre-filled from lead
+              </span>
             </div>
           </div>
         ) : (
@@ -192,37 +156,6 @@ export function Step3ContactDetails({
                 </div>
               </div>
               {errors.phoneNumber && <p className="mt-1 text-xs text-rose-500">{errors.phoneNumber}</p>}
-            </div>
-
-            <div>
-              <CrmLabel htmlFor="whatsappNumber">WhatsApp Number</CrmLabel>
-              <div className="flex gap-2">
-                <CrmSelect
-                  value={whatsappExt}
-                  onChange={(e) => {
-                    setWhatsappExt(e.target.value);
-                    handleWhatsappChange(getPhoneDigits(draft.whatsappNumber), e.target.value);
-                  }}
-                  className="w-36 shrink-0"
-                >
-                  {COUNTRY_PHONE_CODES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.flag} {c.code}
-                    </option>
-                  ))}
-                </CrmSelect>
-                <div className="relative flex-1">
-                  <CrmInput
-                    id="whatsappNumber"
-                    value={getPhoneDigits(draft.whatsappNumber)}
-                    onChange={(e) => handleWhatsappChange(e.target.value, whatsappExt)}
-                    placeholder="Enter WhatsApp number (optional)"
-                    className={`pl-9 ${errors.whatsappNumber ? "border-rose-500" : ""}`}
-                  />
-                  <MessageSquare className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
-                </div>
-              </div>
-              {errors.whatsappNumber && <p className="mt-1 text-xs text-rose-500">{errors.whatsappNumber}</p>}
             </div>
           </div>
         )}

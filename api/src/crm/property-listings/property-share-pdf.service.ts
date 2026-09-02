@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import puppeteer from 'puppeteer';
 import { StorageService } from '../../storage/storage.service';
 import { resolvePublicMediaUrl } from '../../storage/media-url.util';
+import { TwoBighaPropertyService } from './twobigha-property.service';
 
 export type PropertyShareInput = {
   title: string;
@@ -168,7 +169,49 @@ function buildPropertyShareHtml(input: PropertyShareInput): string {
 
 @Injectable()
 export class PropertyShareService {
-  constructor(private readonly storageService: StorageService) {}
+  constructor(
+    private readonly storageService: StorageService,
+    private readonly twoBighaService: TwoBighaPropertyService,
+  ) {}
+
+  mapListingToShareInput(
+    listing: any,
+    overrides?: Partial<PropertyShareInput>,
+  ): PropertyShareInput {
+    const rawListing = listing && typeof listing.toObject === 'function' ? listing.toObject() : listing || {};
+    const title = overrides?.title || rawListing.title || (rawListing.propertyType ? `${rawListing.propertyType} Land` : 'Agricultural Land');
+    const locationParts = [rawListing.city, rawListing.district, rawListing.state].filter(Boolean);
+    const location = overrides?.location || (locationParts.length ? locationParts.join(', ') : rawListing.address) || 'Location on Request';
+    const area = overrides?.area || (rawListing.areaSqft ? String(rawListing.areaSqft) : '');
+    const areaUnit = overrides?.areaUnit || rawListing.areaUnit || 'Acre';
+    const pricePerUnit = overrides?.pricePerUnit || rawListing.pricePerUnit || (rawListing.price && rawListing.areaSqft ? `₹ ${Math.round(rawListing.price / rawListing.areaSqft)} / ${rawListing.areaUnit || 'unit'}` : '');
+    const totalPrice = overrides?.totalPrice || (rawListing.price ? `₹ ${Number(rawListing.price).toLocaleString('en-IN')}` : '');
+    const landType = overrides?.landType || rawListing.propertyType || 'Agricultural';
+    const roadAccess = overrides?.roadAccess || (rawListing.roadAccess ? (rawListing.roadAccessWidth ? `${rawListing.roadAccessWidth} ft wide road` : 'Yes (Direct Access)') : (rawListing.roadAccessDistance ? `${rawListing.roadAccessDistance} ${rawListing.roadAccessDistanceUnit || 'm'} away` : 'No direct road'));
+    const waterLevel = overrides?.waterLevel || (rawListing.waterLevel ? `${rawListing.waterLevel} ft` : '');
+    const highway = overrides?.highway || (rawListing.highwayConn ? 'Direct Highway Connectivity' : '');
+    const contactName = overrides?.contactName || rawListing.contactName || '2Bigha Realty';
+    const contactPhone = overrides?.contactPhone || rawListing.contactPhone || '+91 918374876308';
+    const link = overrides?.link || (rawListing._id ? `https://2bigha.com/property/${rawListing._id}` : 'https://2bigha.com');
+    const images = overrides?.images && overrides.images.length ? overrides.images : (rawListing.images && rawListing.images.length ? rawListing.images : []);
+
+    return {
+      title,
+      location,
+      area,
+      areaUnit,
+      pricePerUnit,
+      totalPrice,
+      landType,
+      roadAccess,
+      waterLevel,
+      highway,
+      contactName,
+      contactPhone,
+      link,
+      images,
+    };
+  }
 
   async pdfBuffer(input: PropertyShareInput): Promise<{ buffer: Buffer; filename: string }> {
     const html = buildPropertyShareHtml(input);
@@ -191,11 +234,31 @@ export class PropertyShareService {
 
   async generateAndUpload(input: PropertyShareInput): Promise<{ url: string; filename: string }> {
     const { buffer, filename } = await this.pdfBuffer(input);
+
+    // 1. Upload to 2Bigha Azure Blob Storage
+    try {
+      const azure = await this.twoBighaService.uploadBufferToAzure(
+        buffer,
+        'application/pdf',
+        filename,
+      );
+      if (azure?.url) {
+        return {
+          url: azure.url,
+          filename: filename,
+        };
+      }
+    } catch (e: any) {
+      console.warn('Azure upload fallback:', e?.message);
+    }
+
+    // 2. Fallback to storage service if Azure is unavailable
     const uploaded = await this.storageService.uploadDocumentBuffer(
       buffer,
       filename,
       'application/pdf',
     );
-    return { url: uploaded.url, filename: uploaded.originalName || filename };
+    const fullUrl = resolvePublicMediaUrl(uploaded.url) || uploaded.url;
+    return { url: fullUrl, filename: uploaded.originalName || filename };
   }
 }

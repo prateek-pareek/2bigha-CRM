@@ -42,6 +42,15 @@ const nextConfig: NextConfig = {
     ];
     return config;
   },
+  async rewrites() {
+    const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    return [
+      {
+        source: "/uploads/:path*",
+        destination: `${apiHost}/uploads/:path*`,
+      },
+    ];
+  },
   async redirects() {
     return [
       {

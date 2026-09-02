@@ -142,41 +142,79 @@ export class WhatsAppService {
     return out;
   }
 
+  private async resolveCrmUserId(userIdStr: string): Promise<string> {
+    if (!Types.ObjectId.isValid(userIdStr)) return userIdStr;
+    const dbUser = await this.crmUserModel.findById(userIdStr).lean().exec();
+    if (dbUser) {
+      return String(dbUser._id);
+    }
+    const suiteUser = await this.userModel.findById(userIdStr).lean().exec();
+    if (suiteUser && (suiteUser as any).email) {
+      const crmUser = await this.crmUserModel.findOne({ email: (suiteUser as any).email }).lean().exec();
+      if (crmUser) {
+        return String(crmUser._id);
+      }
+    }
+    return userIdStr;
+  }
+
   private async validateSendAccess(waId: string, userIdStr?: string): Promise<void> {
     if (!userIdStr) return; // System processes or cron jobs can send
     let dbUser = await this.crmUserModel.findById(userIdStr).populate('roleId').lean().exec();
+    let suiteUser: any = null;
     if (!dbUser) {
-      const suiteUser = await this.userModel.findById(userIdStr).lean().exec();
+      suiteUser = await this.userModel.findById(userIdStr).lean().exec();
       if (suiteUser && (suiteUser as any).email) {
         dbUser = await this.crmUserModel.findOne({ email: (suiteUser as any).email }).populate('roleId').lean().exec();
       }
+    } else {
+      suiteUser = await this.userModel.findOne({ email: dbUser.email }).lean().exec();
     }
-    if (!dbUser) return;
+    if (!dbUser && !suiteUser) return;
 
-    if (hasCrmFullDataAccess(dbUser)) {
+    if (hasCrmFullDataAccess(dbUser || suiteUser)) {
       return; // Admins can always send
     }
 
-    const userId = dbUser._id;
-    if (!userId) return;
+    const userObjIds = [
+      dbUser?._id ? new Types.ObjectId(dbUser._id) : null,
+      suiteUser?._id ? new Types.ObjectId(suiteUser._id) : null,
+      Types.ObjectId.isValid(userIdStr) ? new Types.ObjectId(userIdStr) : null,
+    ].filter(Boolean) as Types.ObjectId[];
+
+    const userStrIds = userObjIds.map((id) => String(id));
 
     // Check if they are forbidden to access the chat completely first
-    const forbidden = await this.getUserForbiddenWaIds(dbUser);
+    const forbidden = await this.getUserForbiddenWaIds(dbUser || suiteUser || { email: (dbUser || suiteUser)?.email });
     if (forbidden && forbidden.includes(waId)) {
       throw new ForbiddenException('You do not have access to this chat');
     }
 
-    // Check if the chat has a temporary grant for this user, and what type it is
+    // Check if the chat has permanent assignment or temporary grant restrictions for this user
     const normalizedWaId = String(waId || '').replace(/\D/g, '');
     const link = await this.linkModel.findOne({ waId: normalizedWaId }).lean().exec();
-    if (link && link.temporaryGrants) {
-      const activeGrant = link.temporaryGrants.find(
+    if (link) {
+      const isPermanentAssignee =
+        link.assignee && userStrIds.includes(String(link.assignee));
+
+      const activeGrant = link.temporaryGrants?.find(
         (g: any) =>
-          String(g.userId) === String(userId) &&
+          userStrIds.includes(String(g.userId)) &&
           new Date(g.expiresAt) > new Date()
       );
+
+      // Check if permanently assigned with read-only access
+      if (isPermanentAssignee && link.assigneeAccessType === 'read') {
+        if (!activeGrant || activeGrant.accessType !== 'read_write') {
+          throw new ForbiddenException('You only have read-only access to this assigned chat');
+        }
+      }
+
+      // Check if granted temporary read-only access (and not permanently assigned with write access)
       if (activeGrant && activeGrant.accessType === 'read') {
-        throw new ForbiddenException('You only have read-only temporary access to this chat');
+        if (!isPermanentAssignee || link.assigneeAccessType === 'read') {
+          throw new ForbiddenException('You only have read-only temporary access to this chat');
+        }
       }
     }
   }
@@ -303,6 +341,12 @@ export class WhatsAppService {
     mediaFilename?: string;
     /** Media recorded against the chat when this template has a header attachment. */
     mediaType?: 'image' | 'document' | 'video' | 'audio';
+    /** Optional brochure/document to attach and send alongside the template if template has no document header. */
+    attachDocumentAfter?: {
+      url: string;
+      filename?: string;
+      title?: string;
+    };
   }): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const config = await this.getConfig();
     if (!config)
@@ -325,11 +369,16 @@ export class WhatsAppService {
       // Campaign name this template maps to (WhatsAppTemplate.aisensyCampaignName)
       // — see AiSensyClient's doc comment for why there's no template-id
       // lookup here.
-      const client = new AiSensyClient(config.apiKey);
+      const client = new AiSensyClient(config.apiKey, {
+        projectId: config.aisensyProjectId || '',
+        projectApiPassword: config.aisensyProjectApiPassword || '',
+      });
       const result = await client.sendCampaignMessage({
         destination: phone,
         campaignName: templateName,
+        language,
         source: config.sourceLabel,
+        components: params.components,
         templateParams: this.flattenParamsForAiSensy(params.components),
         media: params.mediaUrl ? {
           url: params.mediaUrl,
@@ -371,6 +420,23 @@ export class WhatsAppService {
         },
       });
       this.emitWhatsAppEvent(phone, saved);
+
+      if (params.attachDocumentAfter?.url) {
+        try {
+          await this.sendDocumentMessage(
+            phone,
+            params.attachDocumentAfter.url,
+            params.attachDocumentAfter.filename || 'Property-Brochure.pdf',
+            params.attachDocumentAfter.title || 'Project Brochure',
+            params.userId,
+            params.module,
+            params.entityId,
+          );
+        } catch (err: any) {
+          this.logger.error(`Failed to dispatch attached brochure document: ${err?.message}`);
+        }
+      }
+
       return { success: true, messageId: msgId };
     }
 
@@ -437,6 +503,22 @@ export class WhatsAppService {
         },
       });
       this.emitWhatsAppEvent(phone, saved);
+
+      if (params.attachDocumentAfter?.url) {
+        try {
+          await this.sendDocumentMessage(
+            phone,
+            params.attachDocumentAfter.url,
+            params.attachDocumentAfter.filename || 'Property-Brochure.pdf',
+            params.attachDocumentAfter.title || 'Project Brochure',
+            params.userId,
+            params.module,
+            params.entityId,
+          );
+        } catch (err: any) {
+          this.logger.error(`Failed to dispatch attached brochure document: ${err?.message}`);
+        }
+      }
 
       return { success: true, messageId: msgId };
     } catch (e: any) {
@@ -782,21 +864,37 @@ export class WhatsAppService {
     const email = user.email;
     if (!email) return [];
 
-    const dbUser = await this.crmUserModel.findOne({ email }).lean().exec();
-    if (!dbUser) return [];
+    let dbUser = await this.crmUserModel.findOne({ email }).lean().exec();
+    let suiteUser: any = null;
+    if (!dbUser) {
+      suiteUser = await this.userModel.findOne({ email }).lean().exec();
+      if (suiteUser) {
+        dbUser = await this.crmUserModel.findOne({ email: suiteUser.email }).lean().exec();
+      }
+    } else {
+      suiteUser = await this.userModel.findOne({ email: dbUser.email }).lean().exec();
+    }
 
-    const userId = dbUser._id;
-    const ownerName = this.repOwnerLabelFromUser(dbUser).trim();
+    if (!dbUser && !suiteUser && !user.userId && !user._id) return [];
+
+    const userIdSet = new Set<string>();
+    if (dbUser?._id) userIdSet.add(String(dbUser._id));
+    if (suiteUser?._id) userIdSet.add(String(suiteUser._id));
+    if (user.userId && Types.ObjectId.isValid(user.userId)) userIdSet.add(String(user.userId));
+    if (user._id && Types.ObjectId.isValid(user._id)) userIdSet.add(String(user._id));
+
+    const userIds = Array.from(userIdSet).map((id) => new Types.ObjectId(id));
+    const ownerName = dbUser ? this.repOwnerLabelFromUser(dbUser).trim() : '';
 
     // 1. Find all Lead IDs that this user owns/has access to (explicit permissions)
     const leadFilters: any[] = [];
     if (ownerName) {
       leadFilters.push({ leadOwner: ownerName });
     }
-    if (userId) {
-      leadFilters.push({ createdBy: userId });
-      leadFilters.push({ sharedWith: userId });
-      leadFilters.push({ leadOwner: String(userId) });
+    for (const uid of userIds) {
+      leadFilters.push({ createdBy: uid });
+      leadFilters.push({ sharedWith: uid });
+      leadFilters.push({ leadOwner: String(uid) });
     }
 
     let allowedLeadIds: Types.ObjectId[] = [];
@@ -812,12 +910,12 @@ export class WhatsAppService {
     // 2. Query all links that have active temporary grants for this user.
     // These chats should NOT be forbidden for this user.
     let activeGrantWaIds: string[] = [];
-    if (userId) {
+    if (userIds.length > 0) {
       const linksWithGrants = await this.linkModel
         .find({
           temporaryGrants: {
             $elemMatch: {
-              userId,
+              userId: { $in: userIds },
               expiresAt: { $gt: new Date() },
             },
           },
@@ -835,8 +933,8 @@ export class WhatsAppService {
     if (allowedLeadIds.length > 0) {
       forbiddenLinksQuery.leadId = { $nin: allowedLeadIds };
     }
-    if (userId) {
-      forbiddenLinksQuery.assignee = { $ne: userId };
+    if (userIds.length > 0) {
+      forbiddenLinksQuery.assignee = { $nin: userIds };
     }
     if (activeGrantWaIds.length > 0) {
       forbiddenLinksQuery.waId = { $nin: activeGrantWaIds };
@@ -878,17 +976,28 @@ export class WhatsAppService {
       throw new BadRequestException('A valid phone number is required');
     }
 
+    const resolvedUserId = await this.resolveCrmUserId(targetUserId);
+
     // Push the new grant to temporaryGrants array
     const grant = {
-      userId: new Types.ObjectId(targetUserId),
+      userId: new Types.ObjectId(resolvedUserId),
       accessType,
       expiresAt,
     };
 
+    const targetUserObjId = new Types.ObjectId(targetUserId);
+    const resolvedUserObjId = new Types.ObjectId(resolvedUserId);
+
     // First remove any existing temporary grants for this user in this chat to avoid duplicates
     await this.linkModel.updateOne(
       { waId: normalizedWaId },
-      { $pull: { temporaryGrants: { userId: grant.userId } } }
+      {
+        $pull: {
+          temporaryGrants: {
+            userId: { $in: [targetUserObjId, resolvedUserObjId] },
+          },
+        },
+      }
     ).exec();
 
     const link = await this.linkModel.findOneAndUpdate(
@@ -898,6 +1007,37 @@ export class WhatsAppService {
         $push: { temporaryGrants: grant },
       },
       { upsert: true, new: true }
+    ).exec();
+
+    return link;
+  }
+
+  async revokeTemporaryAccess(
+    waId: string,
+    targetUserId: string,
+  ): Promise<any> {
+    if (!Types.ObjectId.isValid(targetUserId)) {
+      throw new BadRequestException('A valid target user is required');
+    }
+    const normalizedWaId = String(waId || '').replace(/\D/g, '');
+    if (normalizedWaId.length < 10) {
+      throw new BadRequestException('A valid phone number is required');
+    }
+
+    const resolvedUserId = await this.resolveCrmUserId(targetUserId);
+    const targetUserObjId = new Types.ObjectId(targetUserId);
+    const resolvedUserObjId = new Types.ObjectId(resolvedUserId);
+
+    const link = await this.linkModel.findOneAndUpdate(
+      { waId: normalizedWaId },
+      {
+        $pull: {
+          temporaryGrants: {
+            userId: { $in: [targetUserObjId, resolvedUserObjId] },
+          },
+        },
+      },
+      { new: true }
     ).exec();
 
     return link;
@@ -973,8 +1113,26 @@ export class WhatsAppService {
 
     let assignedWaIds: string[] | null = null;
     if (resolvedAssigneeId) {
+      const allResolvedIds = [
+        new Types.ObjectId(resolvedAssigneeId),
+        ...(options.assigneeId && Types.ObjectId.isValid(options.assigneeId)
+          ? [new Types.ObjectId(options.assigneeId)]
+          : []),
+      ];
       const links = await this.linkModel
-        .find({ assignee: new Types.ObjectId(resolvedAssigneeId) })
+        .find({
+          $or: [
+            { assignee: { $in: allResolvedIds } },
+            {
+              temporaryGrants: {
+                $elemMatch: {
+                  userId: { $in: allResolvedIds },
+                  expiresAt: { $gt: new Date() },
+                },
+              },
+            },
+          ],
+        })
         .select('waId')
         .lean()
         .exec();
@@ -1243,6 +1401,45 @@ export class WhatsAppService {
     const absoluteUrl = resolvePublicMediaUrl(mediaUrl) || mediaUrl;
 
     if (config.provider === 'aisensy') {
+      if (config.aisensyProjectId && config.aisensyProjectApiPassword) {
+        const client = new AiSensyClient(config.apiKey, {
+          projectId: config.aisensyProjectId,
+          projectApiPassword: config.aisensyProjectApiPassword,
+        });
+        const result = await client.sendDocumentMessage({
+          destination: phone,
+          url: absoluteUrl,
+          filename,
+          caption,
+        });
+        if (!result.success) {
+          this.logger.error(`AiSensy document send failed: ${result.error}`);
+          return { success: false, error: result.error || 'Document send failed' };
+        }
+        const msgId = result.raw?.messages?.[0]?.id || result.raw?.messageId
+          ? String(result.raw?.messages?.[0]?.id || result.raw?.messageId)
+          : undefined;
+        const saved = await this.messageModel.create({
+          waId: phone,
+          direction: 'outbound',
+          body: caption || filename || 'Document attachment',
+          messageId: msgId,
+          sentBy: userId ? new Types.ObjectId(userId) : undefined,
+          module,
+          entityId: entityId ? new Types.ObjectId(entityId) : undefined,
+          status: 'sent',
+          isRead: true,
+          attachment: {
+            type: 'document',
+            url: absoluteUrl,
+            filename,
+          },
+          meta: { ...result.raw, provider: 'aisensy' },
+        });
+        this.emitWhatsAppEvent(phone, saved);
+        return { success: true, messageId: msgId };
+      }
+
       if (!config.aisensyPropertyShareCampaign) {
         return {
           success: false,
