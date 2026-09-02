@@ -53,11 +53,20 @@ export default function AddPmPropertyModal({
       const created = await createThirdPartyProperty(
         pmDraftToCreateInput(draft, { leadId }),
       );
-      toast.success("PM property submitted — now in Property Submitted stage");
+      if (created.userPropertyId) {
+        toast.success("PM property bound on 2bigha — assignment can use this case");
+      } else if (created.twobighaSyncStatus === "failed") {
+        toast.error(
+          created.twobighaSyncError ||
+            "Saved locally, but 2bigha did not create a userPropertyId",
+        );
+      } else {
+        toast.success("PM property submitted — now in Property Submitted stage");
+      }
       onSuccess?.(created);
       onClose();
-    } catch {
-      toast.error("Failed to submit PM property");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit PM property");
     } finally {
       setSaving(false);
     }
@@ -77,8 +86,8 @@ export default function AddPmPropertyModal({
               </h3>
               <p className="text-xs text-[var(--text-muted)]">
                 {leadName
-                  ? `Linked to ${leadName} · subscription + verification pipeline`
-                  : "Property Management · third-party API (mock)"}
+                  ? `Linked to ${leadName} · recorded on that client’s 2bigha user`
+                  : "Link a lead first — PM create needs the client’s twobighaUserId"}
               </p>
             </div>
           </div>
@@ -101,7 +110,7 @@ export default function AddPmPropertyModal({
           </CrmButton>
           <CrmButton
             type="button"
-            disabled={saving}
+            disabled={saving || !leadId}
             onClick={() => void save()}
             className="gap-2 bg-emerald-600 hover:bg-emerald-700"
           >

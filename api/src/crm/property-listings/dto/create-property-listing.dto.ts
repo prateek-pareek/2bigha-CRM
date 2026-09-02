@@ -21,6 +21,11 @@ const PROPERTY_TYPES = [
   // silently rejected every "Add Farm" create call. Farm-typed listings sync
   // to 2bigha's separate Farm API (createFarmByAdmin) instead of Property.
   'Farm',
+  'Agricultural',
+  'Residential',
+  'Industrial',
+  'Farmhouse',
+  'Farmland',
   'Other',
 ] as const;
 
@@ -147,6 +152,17 @@ export class CreatePropertyListingDto {
   @IsString()
   areaUnit?: string;
 
+  /** Native area for PM createManagedPropertyInput.Area (stripped by whitelist if omitted). */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  areaValue?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  areaBigha?: number;
+
   @IsOptional()
   @IsString()
   pricePerUnit?: string;
@@ -223,4 +239,56 @@ export class CreatePropertyListingDto {
   @IsOptional()
   @IsMongoId()
   leadId?: string;
+
+  @IsOptional()
+  @IsIn(['properties', 'farm', 'pm'])
+  listingBucket?: 'properties' | 'farm' | 'pm';
+
+  @IsOptional()
+  @IsString()
+  userPropertyId?: string;
+
+  @IsOptional()
+  @IsString()
+  pmStage?: string;
+
+  @IsOptional()
+  @IsString()
+  pmPlan?: string;
+
+  @IsOptional()
+  @IsString()
+  village?: string;
+
+  @IsOptional()
+  @IsString()
+  tehsil?: string;
+
+  @IsOptional()
+  @IsString()
+  googleMapsLink?: string;
+
+  @IsOptional()
+  @IsString()
+  rmAssigneeId?: string;
+
+  @IsOptional()
+  @IsString()
+  rmAssigneeName?: string;
+
+  @IsOptional()
+  @IsString()
+  legalAssigneeId?: string;
+
+  @IsOptional()
+  @IsString()
+  legalAssigneeName?: string;
+
+  @IsOptional()
+  @IsString()
+  fieldAssigneeId?: string;
+
+  @IsOptional()
+  @IsString()
+  fieldAssigneeName?: string;
 }

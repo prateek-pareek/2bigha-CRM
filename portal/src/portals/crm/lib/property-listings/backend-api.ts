@@ -43,6 +43,9 @@ export interface BackendPropertyListing {
   contactPhone?: string;
   contactEmail?: string;
   leadId?: string;
+  listingBucket?: string;
+  pmStage?: string;
+  userPropertyId?: string;
   twobighaPropertyId?: string;
   twobighaSyncStatus?: TwoBighaSyncStatus;
   twobighaSyncError?: string;

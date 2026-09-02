@@ -266,8 +266,10 @@ import {
   CustomObjectTypesController,
   CustomObjectRecordsController,
 } from './custom-objects/custom-objects.controller';
+import { TwoBighaPmWorkflowService } from './property-listings/twobigha-pm-workflow.service';
 import { SubscriptionsController } from './subscriptions/subscriptions.controller';
 import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscriptions.service';
+import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
 
 @Module({
   imports: [
@@ -466,6 +468,8 @@ import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscript
     AssociationsService,
     CustomObjectsService,
     TwoBighaSubscriptionsService,
+    PmActivityLogService,
+    TwoBighaPmWorkflowService,
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditLogInterceptor,
@@ -495,10 +499,9 @@ import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscript
     CustomObjectsService,
     CRMUsersModule,
     WhatsAppService,
-    // Re-exported so sibling modules (e.g. WhatsAppTemplatesModule) can
-    // inject already-registered models (Integration, etc.) on
-    // 'crmConnection' without re-registering them via their own
-    // MongooseModule.forFeature(), which would throw OverwriteModelError.
+    TwoBighaSubscriptionsService,
+    PmActivityLogService,
+    TwoBighaPmWorkflowService,
     MongooseModule,
   ],
 })

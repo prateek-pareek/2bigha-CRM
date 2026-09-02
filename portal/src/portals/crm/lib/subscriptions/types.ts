@@ -115,3 +115,110 @@ export interface ManagedPropertyDetail {
   visits: any;
   tickets: any[];
 }
+
+export interface PMPlanVariant {
+  id: number;
+  planId: number;
+  planName: string;
+  billingCycle: string;
+  durationDays?: number;
+  durationMonths?: number;
+  visitsAllowed?: number;
+  visitsPerCycle?: number;
+  price: number;
+  originalPrice?: number;
+  discountPercentage?: number;
+  gstApplicable?: boolean;
+  gstRate?: number;
+}
+
+export interface PMPlanCatalogItem {
+  planId: number;
+  planName: string;
+  slug: string;
+  description?: string;
+  basePrice: number;
+  sortOrder: number;
+  variants: PMPlanVariant[];
+}
+
+export interface RazorpayOrderPayload {
+  orderId: string;
+  amount: number;
+  currency?: string;
+  keyId?: string;
+  discount?: number;
+  netAmount?: number;
+  gstAmount?: number;
+  totalAmount?: number;
+  razorpayOrderId?: string;
+}
+
+export interface PmPaymentVerifyResult {
+  success: boolean;
+  message?: string;
+  subscriptionId?: number;
+  paymentId?: number;
+}
+
+export interface LeadPmPropertyOverview {
+  id: string;
+  title?: string;
+  userPropertyId?: string;
+  twobighaPropertyId?: string;
+  pmStage?: string;
+  assignmentStatus?: string;
+  subscriptionStatus?: string;
+  legalCheckStatus?: string;
+  visitsRemaining?: number;
+  visitsUsed?: number;
+  rmName?: string;
+  legalName?: string;
+  fieldName?: string;
+  source: "crm" | "twobigha";
+}
+
+export interface PmPaymentRecord {
+  id: number;
+  planName?: string;
+  billingCycle?: string;
+  totalAmount?: number;
+  status: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  propertyTitle?: string;
+  initiatedAt?: string;
+  completedAt?: string;
+}
+
+export interface PmSubscriptionRecord {
+  id: string;
+  subscriptionId?: number;
+  planName?: string;
+  billingCycle?: string;
+  status: string;
+  assignmentStatus?: string;
+  propertyTitle?: string;
+  startDate?: string;
+  endDate?: string;
+  createdAt?: string;
+}
+
+export interface PmActivityEntry {
+  id: string;
+  eventType: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LeadPmOverview {
+  twobighaUserId?: string;
+  unboundSubscriptions: UnboundSubscription[];
+  activePlans: ActivePropertyPlan[];
+  activeSubscriptions: PmSubscriptionRecord[];
+  paymentHistory: PmPaymentRecord[];
+  properties: LeadPmPropertyOverview[];
+  combinedStatus?: string;
+}

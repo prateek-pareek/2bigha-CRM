@@ -92,6 +92,28 @@ export async function completePmLegalVerification(
   });
 }
 
+export async function unassignPmRole(
+  id: string,
+  role: "manager" | "legal" | "field",
+): Promise<PropertyListingRecord> {
+  if (role === "manager") {
+    return patchPropertyListing(id, {
+      rmAssigneeName: undefined,
+      pmStage: "Property Submitted",
+    });
+  }
+  if (role === "legal") {
+    return patchPropertyListing(id, {
+      legalAssigneeName: undefined,
+      pmStage: "Assigned to RM",
+    });
+  }
+  return patchPropertyListing(id, {
+    fieldAssigneeName: undefined,
+    pmStage: "Assigned to Legal",
+  });
+}
+
 /** RM assigns Field Agent after legal review. */
 export async function assignPmToFieldAgent(
   id: string,

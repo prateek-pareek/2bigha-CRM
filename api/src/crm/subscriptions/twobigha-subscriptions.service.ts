@@ -54,6 +54,34 @@ export interface AdminMini {
   role: string;
 }
 
+function mapAdminMini(raw?: {
+  adminId?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  id?: string;
+  name?: string;
+  role?: string;
+} | null): AdminMini | undefined {
+  if (!raw) return undefined;
+  const id = raw.adminId || raw.id;
+  const name =
+    raw.name ||
+    [raw.firstName, raw.lastName].filter(Boolean).join(' ').trim() ||
+    raw.email ||
+    id;
+  if (!id && !name) return undefined;
+  return { id: id || '', name: name || '', role: raw.role || '' };
+}
+
+function parseLivePropertyRef(id: string): { propertyId?: string; userPropertyId?: string } {
+  if (!id) return {};
+  if (id.startsWith('pm_prop_')) return { propertyId: id.slice('pm_prop_'.length) };
+  if (id.startsWith('pm_')) return { userPropertyId: id.slice(3) };
+  // Never pass the same uuid as both arguments — 2bigha returns null / INTERNAL_ERROR.
+  return { userPropertyId: id };
+}
+
 export interface PMPlanDetails {
   planId: number;
   planName: string;
@@ -117,6 +145,102 @@ export interface SubscriptionPlan {
   isActive: boolean;
   pricing: PlanPricing[];
   features: PlanFeature[];
+}
+
+/** PM plan catalog from getPMPlans — distinct from marketplace subscriptionPlans. */
+export interface PMPlanVariant {
+  id: number;
+  planId: number;
+  planName: string;
+  billingCycle: string;
+  price: number;
+  durationMonths: number;
+  visitsPerCycle: number;
+  preVerificationIncluded?: boolean;
+  discountPercentage?: number;
+  gstApplicable?: boolean;
+  gstRate?: number;
+}
+
+export interface PMPlanCatalogItem {
+  planId: number;
+  planName: string;
+  slug: string;
+  description?: string;
+  basePrice: number;
+  sortOrder: number;
+  variants: PMPlanVariant[];
+}
+
+export interface RazorpayOrderPayload {
+  orderId: string;
+  amount: number;
+  currency?: string;
+  keyId?: string;
+  discount?: number;
+  netAmount?: number;
+  gstAmount?: number;
+  totalAmount?: number;
+}
+
+export interface PmPaymentVerifyResult {
+  success: boolean;
+  message?: string;
+  subscriptionId?: number;
+  paymentId?: number;
+}
+
+export interface LeadPmPropertyOverview {
+  id: string;
+  title?: string;
+  userPropertyId?: string;
+  twobighaPropertyId?: string;
+  pmStage?: string;
+  assignmentStatus?: string;
+  subscriptionStatus?: string;
+  legalCheckStatus?: string;
+  visitsRemaining?: number;
+  visitsUsed?: number;
+  rmName?: string;
+  legalName?: string;
+  fieldName?: string;
+  source: 'crm' | 'twobigha';
+}
+
+export interface LeadPmOverview {
+  twobighaUserId?: string;
+  unboundSubscriptions: UnboundSubscription[];
+  activePlans: ActivePropertyPlan[];
+  activeSubscriptions: PmSubscriptionRecord[];
+  paymentHistory: PmPaymentRecord[];
+  properties: LeadPmPropertyOverview[];
+  combinedStatus?: string;
+}
+
+export interface PmPaymentRecord {
+  id: number;
+  planName?: string;
+  billingCycle?: string;
+  totalAmount?: number;
+  status: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  propertyTitle?: string;
+  initiatedAt?: string;
+  completedAt?: string;
+}
+
+export interface PmSubscriptionRecord {
+  id: string;
+  subscriptionId?: number;
+  planName?: string;
+  billingCycle?: string;
+  status: string;
+  assignmentStatus?: string;
+  propertyTitle?: string;
+  startDate?: string;
+  endDate?: string;
+  createdAt?: string;
 }
 
 @Injectable()
@@ -260,11 +384,11 @@ export class TwoBighaSubscriptionsService {
       const data = await twoBighaGraphqlRequest<{ getActivePropertyPlan: ActivePropertyPlan }>(
         config,
         query,
-        { propertyId },
+        { propertyId: parseLivePropertyRef(propertyId).propertyId || propertyId },
       );
       return data?.getActivePropertyPlan || null;
     } catch (error) {
-      this.logger.error(`Failed to fetch active property plan: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.warn(`Failed to fetch active property plan: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }
@@ -322,7 +446,7 @@ export class TwoBighaSubscriptionsService {
       const data = await twoBighaGraphqlRequest<{ getPropertyPlanHistory: ActivePropertyPlan[] }>(
         config,
         query,
-        { propertyId },
+        { propertyId: parseLivePropertyRef(propertyId).propertyId || propertyId },
       );
       return data?.getPropertyPlanHistory || [];
     } catch (error) {
@@ -397,15 +521,15 @@ export class TwoBighaSubscriptionsService {
 
   async getManagedPropertyDetail(propertyId: string): Promise<ManagedPropertyDetail | null> {
     const config = getTwoBighaConfig();
-    
+
     if (!config) {
       this.logger.log('Returning mock managed property detail since TWOBIGHA_USE_MOCK=true or credentials missing.');
       return this.getMockManagedPropertyDetail(propertyId);
     }
 
     const query = `
-      query getManagedPropertyDetail($propertyId: String) {
-        getManagedPropertyDetail(propertyId: $propertyId) {
+      query getManagedPropertyDetail($propertyId: String, $userPropertyId: String) {
+        getManagedPropertyDetail(propertyId: $propertyId, userPropertyId: $userPropertyId) {
           userPropertyId
           subscriptionStatus
           assignmentStatus
@@ -443,19 +567,22 @@ export class TwoBighaSubscriptionsService {
             price
           }
           assignedManager {
-            id
-            name
-            role
+            adminId
+            firstName
+            lastName
+            email
           }
           assignedAgent {
-            id
-            name
-            role
+            adminId
+            firstName
+            lastName
+            email
           }
           assignedLegalManager {
-            id
-            name
-            role
+            adminId
+            firstName
+            lastName
+            email
           }
           visits
           tickets {
@@ -467,12 +594,20 @@ export class TwoBighaSubscriptionsService {
     `;
 
     try {
+      const refs = parseLivePropertyRef(propertyId);
       const data = await twoBighaGraphqlRequest<{ getManagedPropertyDetail: ManagedPropertyDetail }>(
         config,
         query,
-        { propertyId },
+        { propertyId: refs.propertyId, userPropertyId: refs.userPropertyId },
       );
-      return data?.getManagedPropertyDetail || null;
+      const detail = data?.getManagedPropertyDetail;
+      if (!detail) return null;
+      return {
+        ...detail,
+        assignedManager: mapAdminMini(detail.assignedManager as any),
+        assignedAgent: mapAdminMini(detail.assignedAgent as any),
+        assignedLegalManager: mapAdminMini(detail.assignedLegalManager as any),
+      };
     } catch (error) {
       this.logger.error(`Failed to fetch managed property detail: ${error instanceof Error ? error.message : String(error)}`);
       return null;
@@ -536,7 +671,415 @@ export class TwoBighaSubscriptionsService {
         role: 'legal_manager'
       },
       visits: [{ visitId: 'v1', status: 'COMPLETED' }, { visitId: 'v2', status: 'PENDING' }],
-      tickets: [{ id: 't1', status: 'OPEN' }]
+      tickets: [{ id: 't1', status: 'OPEN' }],
+    };
+  }
+
+  async getPMPlans(): Promise<PMPlanCatalogItem[]> {
+    const config = getTwoBighaConfig();
+    if (!config) {
+      return [
+        {
+          planId: 1,
+          planName: 'Standard PM',
+          slug: 'standard-pm',
+          basePrice: 9999,
+          sortOrder: 0,
+          variants: [
+            {
+              id: 1,
+              planId: 1,
+              planName: 'Standard PM',
+              billingCycle: 'YEARLY',
+              price: 9999,
+              durationMonths: 12,
+              visitsPerCycle: 4,
+            },
+          ],
+        },
+      ];
+    }
+    const query = `
+      query GetPMPlans {
+        getPMPlans {
+          planId
+          planName
+          slug
+          description
+          basePrice
+          sortOrder
+          variants {
+            id
+            planId
+            planName
+            billingCycle
+            price
+            durationMonths
+            visitsPerCycle
+            preVerificationIncluded
+            discountPercentage
+            gstApplicable
+            gstRate
+          }
+        }
+      }
+    `;
+    const data = await twoBighaGraphqlRequest<{ getPMPlans: PMPlanCatalogItem[] }>(config, query, {});
+    return data?.getPMPlans || [];
+  }
+
+  async getPMPlanVariant(variantId: number) {
+    const config = getTwoBighaConfig();
+    if (!config) return null;
+    const query = `
+      query GetPMPlanVariant($variantId: Int!) {
+        getPMPlanVariant(variantId: $variantId) {
+          id
+          planId
+          planName
+          billingCycle
+          price
+          durationMonths
+          visitsPerCycle
+          preVerificationIncluded
+          discountPercentage
+          gstApplicable
+          gstRate
+        }
+      }
+    `;
+    const data = await twoBighaGraphqlRequest<{ getPMPlanVariant: PMPlanVariant }>(config, query, {
+      variantId,
+    });
+    return data?.getPMPlanVariant || null;
+  }
+
+  async createPmOrderForUser(input: {
+    userId: string;
+    planId: number;
+    planVariantId: number;
+    billingCycle?: string;
+    gstDetails?: { gstin: string; businessName: string; businessAddress: string; pinCode: string };
+  }): Promise<RazorpayOrderPayload & { razorpayOrderId?: string }> {
+    const config = getTwoBighaConfig();
+    if (!config) {
+      return {
+        orderId: 'mock-order-1',
+        razorpayOrderId: 'order_mock_razorpay',
+        amount: 999900,
+        currency: 'INR',
+        keyId: 'mock_key',
+      };
+    }
+
+    // PM plan orders must use pmAdminCreatePlanOrder (CRM API key). Marketplace
+    // adminCreateSubscriptionOrder reads plan_pricing (wrong table) and createPMOrder
+    // requires an end-user JWT.
+    const pmAdminMutation = `
+      mutation PmAdminCreatePlanOrder($userId: String!, $planVariantId: Int!) {
+        pmAdminCreatePlanOrder(userId: $userId, planVariantId: $planVariantId) {
+          orderId
+          razorpayOrderId
+          amount
+          currency
+          keyId
+        }
+      }
+    `;
+
+    const data = await twoBighaGraphqlRequest<{
+      pmAdminCreatePlanOrder?: RazorpayOrderPayload & { razorpayOrderId?: string };
+    }>(config, pmAdminMutation, {
+      userId: input.userId,
+      planVariantId: input.planVariantId,
+    });
+    const order = data?.pmAdminCreatePlanOrder;
+    if (!order) throw new Error('pmAdminCreatePlanOrder returned empty');
+    return {
+      ...order,
+      razorpayOrderId: order.razorpayOrderId || order.orderId,
+    };
+  }
+
+  async verifyPmPaymentForUser(input: {
+    userId: string;
+    planId: number;
+    billingCycle?: string;
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+  }): Promise<PmPaymentVerifyResult> {
+    const config = getTwoBighaConfig();
+    if (!config) {
+      return { success: true, message: 'Mock payment verified', subscriptionId: 101, paymentId: 1 };
+    }
+    const pmAdminMutation = `
+      mutation PmAdminVerifyPlanOrder(
+        $razorpayOrderId: String!
+        $razorpayPaymentId: String!
+        $razorpaySignature: String!
+      ) {
+        pmAdminVerifyPlanOrder(
+          razorpayOrderId: $razorpayOrderId
+          razorpayPaymentId: $razorpayPaymentId
+          razorpaySignature: $razorpaySignature
+        ) {
+          success
+          message
+        }
+      }
+    `;
+    const data = await twoBighaGraphqlRequest<{ pmAdminVerifyPlanOrder?: PmPaymentVerifyResult }>(
+      config,
+      pmAdminMutation,
+      {
+        razorpayOrderId: input.razorpayOrderId,
+        razorpayPaymentId: input.razorpayPaymentId,
+        razorpaySignature: input.razorpaySignature,
+      },
+    );
+    const res = data?.pmAdminVerifyPlanOrder;
+    if (!res) throw new Error('pmAdminVerifyPlanOrder returned empty');
+    return res;
+  }
+
+  async getPmPaymentHistory(
+    search: string,
+    page = 1,
+    limit = 10,
+  ): Promise<{ payments: PmPaymentRecord[]; totalCount: number }> {
+    const config = getTwoBighaConfig();
+    const term = search?.trim();
+    if (!config || !term) return { payments: [], totalCount: 0 };
+
+    const query = `
+      query PmAdminListPayments($search: String, $page: Int, $limit: Int) {
+        pmAdminListPayments(search: $search, page: $page, limit: $limit) {
+          totalCount
+          payments {
+            id
+            planName
+            billingCycle
+            totalAmount
+            status
+            razorpayOrderId
+            razorpayPaymentId
+            propertyTitle
+            initiatedAt
+            completedAt
+          }
+        }
+      }
+    `;
+    try {
+      const data = await twoBighaGraphqlRequest<{
+        pmAdminListPayments?: { totalCount: number; payments: PmPaymentRecord[] };
+      }>(config, query, { search: term, page, limit });
+      const block = data?.pmAdminListPayments;
+      return { payments: block?.payments || [], totalCount: block?.totalCount || 0 };
+    } catch (error) {
+      this.logger.warn(
+        `getPmPaymentHistory failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return { payments: [], totalCount: 0 };
+    }
+  }
+
+  async getPmActiveSubscriptions(
+    search: string,
+    page = 1,
+    limit = 10,
+  ): Promise<{ subscriptions: PmSubscriptionRecord[]; totalCount: number }> {
+    const config = getTwoBighaConfig();
+    const term = search?.trim();
+    if (!config || !term) return { subscriptions: [], totalCount: 0 };
+
+    const query = `
+      query PmAdminListActiveSubscriptions($search: String, $page: Int, $limit: Int) {
+        pmAdminListActiveSubscriptions(search: $search, page: $page, limit: $limit) {
+          totalCount
+          subscriptions {
+            id
+            subscriptionId
+            planName
+            billingCycle
+            status
+            assignmentStatus
+            propertyTitle
+            startDate
+            endDate
+            createdAt
+          }
+        }
+      }
+    `;
+    try {
+      const data = await twoBighaGraphqlRequest<{
+        pmAdminListActiveSubscriptions?: { totalCount: number; subscriptions: PmSubscriptionRecord[] };
+      }>(config, query, { search: term, page, limit });
+      const block = data?.pmAdminListActiveSubscriptions;
+      return { subscriptions: block?.subscriptions || [], totalCount: block?.totalCount || 0 };
+    } catch (error) {
+      this.logger.warn(
+        `getPmActiveSubscriptions failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return { subscriptions: [], totalCount: 0 };
+    }
+  }
+
+  async getLeadPmOverview(opts: {
+    twobighaUserId?: string;
+    leadPhone?: string;
+    leadEmail?: string;
+    crmProperties?: Array<{
+      _id: string;
+      title?: string;
+      userPropertyId?: string;
+      twobighaPropertyId?: string;
+      pmStage?: string;
+    }>;
+  }): Promise<LeadPmOverview> {
+    const userId = opts.twobighaUserId?.trim();
+    const unbound = userId ? await this.getUnboundSubscriptions(userId) : [];
+
+    const properties: LeadPmPropertyOverview[] = [];
+    const seen = new Set<string>();
+
+    for (const row of opts.crmProperties || []) {
+      const key = row.userPropertyId || row._id;
+      seen.add(key);
+      let detail: ManagedPropertyDetail | null = null;
+      if (row.userPropertyId || row.twobighaPropertyId) {
+        detail = await this.getManagedPropertyDetail(
+          row.userPropertyId ? `pm_${row.userPropertyId}` : row.twobighaPropertyId!,
+        );
+      }
+      properties.push({
+        id: row._id,
+        title: row.title,
+        userPropertyId: row.userPropertyId || detail?.userPropertyId,
+        twobighaPropertyId: row.twobighaPropertyId,
+        pmStage: row.pmStage,
+        assignmentStatus: detail?.assignmentStatus,
+        subscriptionStatus: detail?.subscriptionStatus,
+        legalCheckStatus: detail?.legalCheckStatus,
+        visitsRemaining: detail?.visitsRemaining,
+        visitsUsed: detail?.visitsUsed,
+        rmName: detail?.assignedManager?.name,
+        legalName: detail?.assignedLegalManager?.name,
+        fieldName: detail?.assignedAgent?.name,
+        source: 'crm',
+      });
+    }
+
+    const searchTerm = opts.leadPhone?.trim() || opts.leadEmail?.trim();
+    if (searchTerm && userId) {
+      const config = getTwoBighaConfig();
+      if (config) {
+        try {
+          const query = `
+            query SearchManaged($searchTerm: String, $limit: Int) {
+              getAllManagedPropertiesByRole(searchTerm: $searchTerm, limit: $limit, page: 1) {
+                data {
+                  userPropertyId
+                  assignmentStatus
+                  subscriptionStatus
+                  legalCheckStatus
+                  visitsRemaining
+                  visitsUsed
+                  assignedManager { firstName lastName }
+                  assignedLegalManager { firstName lastName }
+                  assignedAgent { firstName lastName }
+                  property { id title propertyName }
+                }
+              }
+            }
+          `;
+          const data = await twoBighaGraphqlRequest<{
+            getAllManagedPropertiesByRole?: {
+              data?: Array<Record<string, any>>;
+            };
+          }>(config, query, { searchTerm, limit: 20 });
+          for (const item of data?.getAllManagedPropertiesByRole?.data || []) {
+            const upid = item.userPropertyId as string;
+            if (!upid || seen.has(upid)) continue;
+            seen.add(upid);
+            properties.push({
+              id: `pm_${upid}`,
+              title: item.property?.title || item.property?.propertyName,
+              userPropertyId: upid,
+              twobighaPropertyId: item.property?.id,
+              assignmentStatus: item.assignmentStatus,
+              subscriptionStatus: item.subscriptionStatus,
+              legalCheckStatus: item.legalCheckStatus,
+              visitsRemaining: item.visitsRemaining,
+              visitsUsed: item.visitsUsed,
+              rmName: [item.assignedManager?.firstName, item.assignedManager?.lastName]
+                .filter(Boolean)
+                .join(' '),
+              legalName: [item.assignedLegalManager?.firstName, item.assignedLegalManager?.lastName]
+                .filter(Boolean)
+                .join(' '),
+              fieldName: [item.assignedAgent?.firstName, item.assignedAgent?.lastName]
+                .filter(Boolean)
+                .join(' '),
+              source: 'twobigha',
+            });
+          }
+        } catch (e: any) {
+          this.logger.warn(`getAllManagedPropertiesByRole search failed: ${e?.message}`);
+        }
+      }
+    }
+
+    const activePlans: ActivePropertyPlan[] = [];
+    for (const p of properties) {
+      const ref = p.userPropertyId ? `pm_${p.userPropertyId}` : p.twobighaPropertyId;
+      if (ref) {
+        const plan = await this.getActivePropertyPlan(ref);
+        if (plan) activePlans.push(plan);
+      }
+    }
+
+    const searchForPayments = opts.leadEmail?.trim() || opts.leadPhone?.trim() || '';
+    const [paymentBlock, subscriptionBlock] = searchForPayments
+      ? await Promise.all([
+          this.getPmPaymentHistory(searchForPayments, 1, 15),
+          this.getPmActiveSubscriptions(searchForPayments, 1, 10),
+        ])
+      : [{ payments: [], totalCount: 0 }, { subscriptions: [], totalCount: 0 }];
+
+    const hasBoundSubscription =
+      activePlans.length > 0 ||
+      subscriptionBlock.subscriptions.some((s) => s.status === 'ACTIVE') ||
+      properties.some((p) => p.subscriptionStatus === 'ACTIVE');
+
+    const primary = properties[0];
+    const combinedStatus = primary
+      ? [
+          primary.subscriptionStatus,
+          primary.assignmentStatus,
+          primary.legalCheckStatus,
+          primary.pmStage,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : unbound.length
+        ? `${unbound.length} unbound credit(s) — no property bound yet`
+        : hasBoundSubscription
+          ? 'PM subscription active — bound to property'
+          : paymentBlock.payments.some((p) => p.status === 'SUCCESS')
+            ? 'Payment recorded — awaiting property bind'
+            : undefined;
+
+    return {
+      twobighaUserId: userId,
+      unboundSubscriptions: unbound,
+      activePlans,
+      activeSubscriptions: subscriptionBlock.subscriptions,
+      paymentHistory: paymentBlock.payments,
+      properties,
+      combinedStatus,
     };
   }
 

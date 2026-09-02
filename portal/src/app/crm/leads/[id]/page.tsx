@@ -933,6 +933,7 @@ export default function LeadDetailPage() {
                   if (email) params.set('ownerEmail', email);
                   router.push(`/crm/property-listings/new?${params.toString()}`);
                 }}
+                onRefresh={() => setPropertiesRefreshKey((k) => k + 1)}
               />
             ) : null}
             {entityId ? (

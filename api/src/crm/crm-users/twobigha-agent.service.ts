@@ -88,6 +88,8 @@ export interface AgentFetchFilter {
   roleSlug?: string;
   limit?: number;
   offset?: number;
+  /** When true, paginate through every page until hasMore is false. */
+  fetchAll?: boolean;
 }
 
 export interface TwoBighaAgentFetchResult {
@@ -218,6 +220,38 @@ export class TwoBighaAgentService {
     }
   }
 
+  private buildAdminFilter(filter: AgentFetchFilter) {
+    return {
+      search: filter.search || undefined,
+      isActive: typeof filter.isActive === 'boolean' ? filter.isActive : undefined,
+      department: filter.department || undefined,
+      roleSlug: filter.roleSlug || undefined,
+    };
+  }
+
+  private async fetchAgentsPage(
+    config: TwoBighaConfig,
+    filter: AgentFetchFilter,
+    limit: number,
+    offset: number,
+  ): Promise<TwoBighaAgentFetchResult> {
+    const data = await twoBighaGraphqlRequest<{
+      getAllAdmins?: { admins?: TwoBighaAdmin[]; total?: number; hasMore?: boolean };
+    }>(config, GET_ALL_ADMINS_QUERY, {
+      filter: this.buildAdminFilter(filter),
+      sort: { field: 'createdAt', direction: 'DESC' },
+      limit,
+      offset,
+    });
+    const res = data?.getAllAdmins;
+    return {
+      status: 'fetched',
+      admins: res?.admins ?? [],
+      total: res?.total ?? res?.admins?.length ?? 0,
+      hasMore: Boolean(res?.hasMore),
+    };
+  }
+
   async fetchAgents(filter: AgentFetchFilter = {}): Promise<TwoBighaAgentFetchResult> {
     const config = getTwoBighaConfig();
     if (!config) {
@@ -249,26 +283,26 @@ export class TwoBighaAgentService {
     }
 
     try {
-      const data = await twoBighaGraphqlRequest<{
-        getAllAdmins?: { admins?: TwoBighaAdmin[]; total?: number; hasMore?: boolean };
-      }>(config, GET_ALL_ADMINS_QUERY, {
-        filter: {
-          search: filter.search || undefined,
-          isActive: typeof filter.isActive === 'boolean' ? filter.isActive : undefined,
-          department: filter.department || undefined,
-          roleSlug: filter.roleSlug || undefined,
-        },
-        sort: { field: 'createdAt', direction: 'DESC' },
-        limit: filter.limit ?? 20,
-        offset: filter.offset ?? 0,
-      });
-      const res = data?.getAllAdmins;
-      return {
-        status: 'fetched',
-        admins: res?.admins ?? [],
-        total: res?.total ?? res?.admins?.length ?? 0,
-        hasMore: Boolean(res?.hasMore),
-      };
+      if (filter.fetchAll) {
+        const pageSize = Math.min(Math.max(filter.limit ?? 100, 1), 100);
+        let offset = filter.offset ?? 0;
+        const allAdmins: TwoBighaAdmin[] = [];
+        let total = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const page = await this.fetchAgentsPage(config, filter, pageSize, offset);
+          allAdmins.push(...page.admins);
+          total = page.total;
+          hasMore = page.hasMore;
+          offset += pageSize;
+          if (page.admins.length === 0) break;
+        }
+
+        return { status: 'fetched', admins: allAdmins, total, hasMore: false };
+      }
+
+      return await this.fetchAgentsPage(config, filter, filter.limit ?? 20, filter.offset ?? 0);
     } catch (e: any) {
       this.logger.error(`2bigha getAllAdmins failed: ${e?.message}`);
       return { status: 'failed', admins: [], total: 0, hasMore: false, error: e?.message || 'Unknown error' };
