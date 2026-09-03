@@ -1439,6 +1439,94 @@ export class PropertyListingsService {
     return doc;
   }
 
+  /**
+   * Real-time live status aggregator for PM Stages 3–6.
+   * Reads fresh 2bigha managed property detail, visit reports, and field visits,
+   * updates the local MongoDB listing snapshot, and returns the unified state.
+   */
+  async getLivePmStatus(id: string): Promise<{
+    listing: PropertyListingDocument | Record<string, any>;
+    liveDetail: any;
+    visitReports: any[];
+    fieldVisits: any[];
+    latestReportDetail?: any;
+  }> {
+    const listing =
+      id.startsWith('pm_') || !Types.ObjectId.isValid(id)
+        ? (await this.pmAssignment.getManagedPropertyListing(id)) || { _id: id }
+        : await this.findOne(id);
+
+    const userPropertyId =
+      (listing as any).userPropertyId ||
+      (await this.resolvePmUserPropertyId(id, listing).catch(() => null));
+
+    let liveDetail: any = null;
+    let visitReports: any[] = [];
+    let fieldVisits: any[] = [];
+    let latestReportDetail: any = null;
+
+    if (userPropertyId) {
+      try {
+        liveDetail = await this.subscriptions.getManagedPropertyDetail(`pm_${userPropertyId}`);
+      } catch (err: any) {
+        this.logger.warn(`Could not fetch live managed property detail for ${userPropertyId}: ${err?.message}`);
+      }
+
+      try {
+        const reportsRes = await this.visits.getVisitReports({ userPropertyId });
+        const raw = (reportsRes as any)?.data?.rows || (reportsRes as any)?.rows || (Array.isArray(reportsRes?.data) ? reportsRes?.data : []) || [];
+        visitReports = Array.isArray(raw) ? raw : [];
+      } catch (err: any) {
+        this.logger.warn(`Could not fetch live visit reports for ${userPropertyId}: ${err?.message}`);
+      }
+
+      try {
+        const fieldVisitsRes = await this.visits.getFieldVisitByPropertyId(userPropertyId);
+        const rawVisits = (fieldVisitsRes as any)?.data?.rows || (fieldVisitsRes as any)?.rows || (Array.isArray(fieldVisitsRes?.data) ? fieldVisitsRes?.data : []) || [];
+        fieldVisits = Array.isArray(rawVisits) ? rawVisits : [];
+      } catch (err: any) {
+        this.logger.warn(`Could not fetch live field visits for ${userPropertyId}: ${err?.message}`);
+      }
+
+      const latestReportId =
+        visitReports[0]?.id || visitReports[0]?.reportId || (listing as any).pmWorkflowIds?.reportId;
+      if (latestReportId) {
+        try {
+          const repRes = await this.visits.getVisitReportDetailsByReportId(Number(latestReportId));
+          latestReportDetail = repRes?.data || null;
+        } catch {
+          /* optional */
+        }
+      }
+    }
+
+    const latestReport = visitReports[0];
+    const latestFieldVisit = fieldVisits[0];
+
+    const refreshed = await this.refreshPmListingState(id, listing, {
+      reportId: latestReport?.id ? Number(latestReport.id) : undefined,
+      reportStatus: latestReport?.status || latestReport?.report?.reportStatus,
+      fieldVisitId: latestFieldVisit?.id ? Number(latestFieldVisit.id) : undefined,
+      scheduledAt: latestFieldVisit?.scheduledAt,
+      visitStatus: latestFieldVisit?.status,
+    });
+
+    const persisted = await this.persistPmListing(id, refreshed);
+
+    return {
+      listing: persisted,
+      liveDetail,
+      visitReports,
+      fieldVisits,
+      latestReportDetail,
+    };
+  }
+
+  async getVisitReportDetail(reportId: number) {
+    const res = await this.visits.getVisitReportDetailsByReportId(reportId);
+    return res?.data || null;
+  }
+
   async startPmLegalVerification(listingId: string, dto: PmLegalActionDto) {
     const userPropertyId = await this.resolvePmUserPropertyId(listingId);
     const result = await this.pmWorkflow.startLegalCheck(userPropertyId, dto.summary);

@@ -49,6 +49,12 @@ export interface BackendPropertyListing {
   twobighaPropertyId?: string;
   twobighaSyncStatus?: TwoBighaSyncStatus;
   twobighaSyncError?: string;
+  rmAssigneeName?: string;
+  legalAssigneeName?: string;
+  fieldAssigneeName?: string;
+  legalVerification?: any;
+  fieldVisit?: any;
+  visitReport?: any;
   createdAt?: string;
   updatedAt?: string;
 }

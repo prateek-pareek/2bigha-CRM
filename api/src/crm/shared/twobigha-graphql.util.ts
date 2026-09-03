@@ -26,10 +26,10 @@ export function getTwoBighaConfig(): TwoBighaConfig | null {
   const apiHost =
     process.env.TWOBIGHA_API_HOST || "https://admin-staging.2bigha.net";
   const apiKey =
-    process.env.TWOBIGHA_API_KEY || "2b_key_live_9f3a1c2e8b7d4f56";
+    process.env.TWOBIGHA_API_KEY || "0ab4fe164b5f92b7118e78ddb8fabb921cbdc32bb4fc6994";
   const apiSecret =
     process.env.TWOBIGHA_API_SECRET ||
-    "2b_secret_live_7a2f9e1b4c8d0a3f6e5b2c1d9a8f7e6b";
+    "95a31ad47521a1d7f6963cd662a4d869864f61dfce2104f269e6d7831f70db33";
   return { apiHost, apiKey, apiSecret };
 }
 
@@ -64,6 +64,8 @@ export async function twoBighaGraphqlRequest<T = any>(
       "x-api-secret": config.apiSecret,
       "x-key": config.apiKey,
       "x-secret": config.apiSecret,
+      "x-role": "super_admin",
+      "apollo-require-preflight": "true",
     },
     body: JSON.stringify({ query, variables }),
   });

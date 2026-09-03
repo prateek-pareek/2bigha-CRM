@@ -202,6 +202,10 @@ export interface PropertyListingRecord {
   legalVerification?: PmLegalVerification;
   fieldVisit?: PmFieldVisit;
   visitReport?: PmVisitReport;
+  pmWorkflowIds?: {
+    fieldVisitId?: number;
+    reportId?: number;
+  };
   /**
    * Subscription Legal Verification request (doc §§2–8) — marketplace / listed
    * properties. Not the PM pipeline legal checklist.
