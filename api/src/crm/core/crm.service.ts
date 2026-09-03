@@ -119,6 +119,9 @@ import { AssociationsService } from '../associations/associations.service';
 import { LeadIntentService } from '../records/lead-intent.service';
 import { ExportQuotaService } from '../admin/export-quota.service';
 import { TwoBighaLeadService } from '../records/twobigha-lead.service';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { CrmNotifyService } from '../notifications/crm-notify.service';
+import { CRMUsersService } from '../crm-users/crm-users.service';
 
 type ImportDuplicateStrategy = 'create' | 'skip' | 'merge' | 'replace';
 type ImportRowOutcome = 'created' | 'merged' | 'replaced' | 'skipped';
@@ -166,7 +169,135 @@ export class CRMService {
     private readonly exportQuotaService: ExportQuotaService,
     private readonly roleAuditLog: RoleAuditLogService,
     private readonly twoBighaLeadService: TwoBighaLeadService,
+    private readonly notificationsService: NotificationsService,
+    private readonly crmNotify: CrmNotifyService,
+    private readonly crmUsersService: CRMUsersService,
   ) { }
+
+  private normalizeTaskStatus(status?: string): string {
+    const s = String(status || '').trim();
+    if (!s || ['Backlog', 'To Do', 'Pending', 'Open'].includes(s)) return 'Open';
+    if (['Completed', 'Done'].includes(s)) return 'Done';
+    if (s === 'Overdue' || s === 'Escalated') return 'Open';
+    return s;
+  }
+
+  private actorLabel(user?: any): string {
+    if (!user) return 'System';
+    return (
+      [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+      user.fullName ||
+      user.email ||
+      'User'
+    );
+  }
+
+  private appendTaskLog(
+    metadata: Record<string, any>,
+    entry: { action: string; detail?: string; actorId?: string; actorName?: string },
+  ) {
+    const log = Array.isArray(metadata.activityLog) ? [...metadata.activityLog] : [];
+    log.unshift({
+      id: new Types.ObjectId().toString(),
+      at: new Date().toISOString(),
+      actorId: entry.actorId,
+      actorName: entry.actorName,
+      action: entry.action,
+      detail: entry.detail,
+    });
+    metadata.activityLog = log.slice(0, 80);
+    return metadata;
+  }
+
+  private async notifyTaskRecipient(opts: {
+    recipientId?: string;
+    email?: string;
+    title: string;
+    message: string;
+    type: string;
+    activityId?: string;
+    relatedTo?: unknown;
+    relatedType?: string;
+  }) {
+    const event =
+      opts.type === 'CRM_TASK_ESCALATED' || opts.type === 'CRM_TASK_REASSIGNED'
+        ? 'task_reassigned'
+        : 'task_assigned';
+    const link = '/crm/tasks';
+    await this.crmNotify.notify({
+      event,
+      title: opts.title,
+      message: opts.message,
+      recipient: {
+        userId: opts.recipientId,
+        email: opts.email,
+      },
+      link,
+      metadata: {
+        link,
+        activityId: opts.activityId,
+        entityId: opts.relatedTo ? String(opts.relatedTo) : undefined,
+        relatedType: opts.relatedType,
+      },
+      type: opts.type,
+    });
+    // Keep Teams DM as a secondary channel for assignees with linked Teams.
+    if (opts.email) {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const dm = await this.teamsBotService.sendProactiveDM(
+        opts.email,
+        opts.title,
+        opts.message,
+        `${frontendUrl}/crm/tasks`,
+        { projectName: 'CRM', status: opts.type },
+      );
+      if (!dm.success) {
+        console.error('[CRMService] Teams DM failed:', dm.error);
+      }
+    }
+  }
+
+  private async resolveTaskAssigneeRef(
+    raw: string,
+    metadata?: Record<string, any>,
+  ): Promise<Types.ObjectId | undefined> {
+    let value = String(raw || '').trim();
+    if (value.startsWith('twobigha:')) value = value.slice('twobigha:'.length);
+    if (value.startsWith('crm:')) value = value.slice('crm:'.length);
+
+    if (isMongoObjectIdString(value)) {
+      const asHrms = await this.hrmsUserModel.findById(value).select('_id').lean().exec();
+      if (asHrms) return new Types.ObjectId(String(asHrms._id));
+    }
+
+    const tbId = String(metadata?.twobighaAdminId || (!isMongoObjectIdString(value) ? value : '')).trim();
+    if (tbId) {
+      const linked = await this.crmUsersService.findByTwobighaAdminId(tbId);
+      if (linked?.email) {
+        const hrms = await this.hrmsUserModel
+          .findOne({ email: new RegExp(`^${String(linked.email).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+          .select('_id')
+          .lean()
+          .exec();
+        if (hrms) return new Types.ObjectId(String(hrms._id));
+      }
+      if (linked && Types.ObjectId.isValid(String(linked._id))) {
+        return new Types.ObjectId(String(linked._id));
+      }
+    }
+
+    const email = String(metadata?.assigneeEmail || '').trim();
+    if (email) {
+      const hrms = await this.hrmsUserModel
+        .findOne({ email: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+        .select('_id')
+        .lean()
+        .exec();
+      if (hrms) return new Types.ObjectId(String(hrms._id));
+    }
+
+    return isMongoObjectIdString(value) ? new Types.ObjectId(value) : undefined;
+  }
 
   private notifySalesAgent(event: {
     trigger:
@@ -2720,6 +2851,8 @@ export class CRMService {
       dto.nextFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
       // A changed/cleared follow-up date needs a fresh reminder cycle.
       dto.followUpReminderSentAt = null;
+      dto.followUpUpcomingReminderSentAt = null;
+      dto.followUpOverdueReminderSentAt = null;
     }
     if (dto.leadVertical !== undefined) {
       if (dto.leadVertical !== 'property_management' && dto.leadVertical !== 'property_listing') {
@@ -2727,6 +2860,11 @@ export class CRMService {
       }
     }
     let pendingIntentUpdate: { intents: string[]; followUpAt?: Date } | null = null;
+    if (dto.leadIntentFollowUpAt !== undefined && dto.leadIntents === undefined) {
+      const parsed = dto.leadIntentFollowUpAt ? new Date(dto.leadIntentFollowUpAt) : null;
+      dto.leadIntentFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+      dto.intentFollowUpReminderSentAt = null;
+    }
     if (dto.leadIntents !== undefined) {
       const rawIntents: unknown[] = Array.isArray(dto.leadIntents) ? dto.leadIntents : [];
       const cleanIntents: string[] = Array.from(
@@ -2736,6 +2874,7 @@ export class CRMService {
       if (dto.leadIntentFollowUpAt !== undefined) {
         const parsed = dto.leadIntentFollowUpAt ? new Date(dto.leadIntentFollowUpAt) : null;
         dto.leadIntentFollowUpAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+        dto.intentFollowUpReminderSentAt = null;
       }
       // Logged after the update succeeds so the analytics event only fires on a real change.
       pendingIntentUpdate = { intents: cleanIntents, followUpAt: dto.leadIntentFollowUpAt || undefined };
@@ -2979,6 +3118,45 @@ export class CRMService {
         before: { leadOwner: (oldLead as any).leadOwner },
         after: { leadOwner: dto.leadOwner },
       });
+      const leadLabel =
+        `${updated.firstName || ''} ${updated.lastName || ''}`.trim() || 'a lead';
+      const link = `/crm/leads/${updated._id}`;
+      void this.crmNotify
+        .notify({
+          event: 'lead_reassigned',
+          title: 'Lead assigned to you',
+          message: `${leadLabel} has been assigned to you${(oldLead as any).leadOwner ? ` (from ${(oldLead as any).leadOwner})` : ''}.`,
+          recipient: { label: String(dto.leadOwner || '') },
+          link,
+          metadata: {
+            link,
+            entityId: String(updated._id),
+            relatedType: 'Lead',
+            action: 'lead_owner_changed_in',
+          },
+          type: 'LEAD_ASSIGNED',
+        })
+        .catch((err) =>
+          console.error('[CRMService] Lead owner notify failed:', err?.message || err),
+        );
+      if ((oldLead as any).leadOwner) {
+        void this.crmNotify
+          .notify({
+            event: 'lead_reassigned',
+            title: 'Lead reassigned',
+            message: `${leadLabel} has been reassigned to ${dto.leadOwner}.`,
+            recipient: { label: String((oldLead as any).leadOwner) },
+            link,
+            metadata: {
+              link,
+              entityId: String(updated._id),
+              relatedType: 'Lead',
+              action: 'lead_owner_changed_out',
+            },
+            type: 'LEAD_ASSIGNED',
+          })
+          .catch(() => null);
+      }
     }
     if (updated)
       await this.syncContactFromLeadSafe(
@@ -4018,6 +4196,9 @@ export class CRMService {
       mongoId = await this.resolveDocumentId(this.organizationModel, s);
     else if (t === 'Client')
       mongoId = await this.resolveDocumentId(this.clientModel, s);
+    else if (t === 'PropertyListing' || t === 'Property') {
+      if (isMongoObjectIdString(s)) mongoId = s;
+    }
 
     return mongoId ? new Types.ObjectId(mongoId) : undefined;
   }
@@ -4061,6 +4242,29 @@ export class CRMService {
 
   async createActivity(dto: any, user?: any): Promise<Activity> {
     dto = this.normalizeScheduledActivityMetadata(dto);
+    if (dto.type === 'Task') {
+      dto.status = this.normalizeTaskStatus(dto.status);
+      const meta =
+        dto.metadata && typeof dto.metadata === 'object' ? { ...dto.metadata } : {};
+      if (meta.dueDate) {
+        const parsed = new Date(meta.dueDate);
+        if (!Number.isNaN(parsed.getTime())) {
+          meta.dueDate = parsed.toISOString();
+          if (meta.isCalendarEvent !== false) meta.isCalendarEvent = true;
+        }
+      }
+      if (!Array.isArray(meta.checklist)) meta.checklist = [];
+      if (!Array.isArray(meta.comments)) meta.comments = [];
+      if (!Array.isArray(meta.activityLog)) meta.activityLog = [];
+      this.appendTaskLog(meta, {
+        action: 'created',
+        detail: 'Task created',
+        actorId: String(user?.userId || user?._id || dto.author || ''),
+        actorName: this.actorLabel(user),
+      });
+      dto.metadata = meta;
+    }
+    if (dto.relatedType === 'Property') dto.relatedType = 'PropertyListing';
     if (dto.relatedTo != null && dto.relatedTo !== '') {
       const rid = await this.resolveActivityRelatedTo(
         dto.relatedTo,
@@ -4100,6 +4304,8 @@ export class CRMService {
             }
           }
           clients.forEach(c => involved.push({ id: c._id as Types.ObjectId, type: 'Client' }));
+        } else if (dto.relatedType === 'PropertyListing') {
+          involved.push({ id: primaryOid, type: 'PropertyListing' });
         } else if (dto.relatedType === 'Contact') {
           const contact = await this.contactModel.findById(primaryOid).select('associatedOrganizations sourceLead associatedLeads email').lean().exec();
           if (contact) {
@@ -4191,61 +4397,76 @@ export class CRMService {
     }
     if (dto.assignee === '' || dto.assignee === undefined) {
       delete dto.assignee;
-    } else if (
-      typeof dto.assignee === 'string' &&
-      isMongoObjectIdString(dto.assignee)
-    ) {
-      dto.assignee = new Types.ObjectId(dto.assignee);
+    } else if (typeof dto.assignee === 'string') {
+      const resolved = await this.resolveTaskAssigneeRef(dto.assignee, dto.metadata);
+      if (resolved) dto.assignee = resolved;
+      else delete dto.assignee;
     }
     const activity = await new this.activityModel(dto).save();
 
-    // Asynchronous notification (tasks: prefer assignee; else author)
-    void (async () => {
-      try {
-        const populated = await this.activityModel
-          .findById(activity._id)
-          .populate({ path: 'author', model: this.hrmsUserModel, select: 'fullName email' })
-          .populate({ path: 'assignee', model: this.hrmsUserModel, select: 'fullName email' })
-          .exec();
-        if (!populated) return;
-        const assignee = populated.assignee as any;
-        const author = populated.author as any;
-        const notify =
-          populated.type === 'Task' && assignee?.email ? assignee : author;
-        if (notify?.email) {
-          const frontendUrl =
-            process.env.FRONTEND_URL || 'http://localhost:3000';
-          const link = `${frontendUrl}/crm/tasks`;
-          const metadata = {
-            status: (populated as any).status || 'Planned',
-            projectName: 'CRM',
-            reporterName: author?.fullName,
-          };
-          const isTaskAssignee =
-            populated.type === 'Task' && assignee?.email === notify.email;
-          const title = isTaskAssignee
-            ? `CRM task assigned: ${populated.title || 'Task'}`
-            : `CRM ${populated.type}: ${populated.title || 'New Assignment'}`;
-          const body =
-            isTaskAssignee && author?.fullName
-              ? `${author.fullName} assigned you a task in CRM.`
-              : populated.content ||
-              `You have a new ${populated.type} in CRM.`;
-          const dm = await this.teamsBotService.sendProactiveDM(
-            notify.email,
-            title,
-            body,
-            link,
-            metadata,
-          );
-          if (!dm.success) {
-            console.error('[CRMService] Teams DM failed:', dm.error);
-          }
+    if (dto.type === 'Task') {
+      void (async () => {
+        try {
+          const populated = await this.activityModel
+            .findById(activity._id)
+            .populate({ path: 'author', model: this.hrmsUserModel, select: 'fullName email firstName lastName' })
+            .populate({ path: 'assignee', model: this.hrmsUserModel, select: 'fullName email firstName lastName' })
+            .exec();
+          if (!populated) return;
+          const assignee = populated.assignee as any;
+          const author = populated.author as any;
+          const notify = assignee?.email || assignee?._id ? assignee : author;
+          if (!notify) return;
+          const isTaskAssignee = Boolean(assignee?._id);
+          await this.notifyTaskRecipient({
+            recipientId: String(notify._id || ''),
+            email: notify.email,
+            title: isTaskAssignee
+              ? `Task assigned: ${populated.title || 'Task'}`
+              : `CRM ${populated.type}: ${populated.title || 'New item'}`,
+            message:
+              isTaskAssignee && (author?.fullName || author?.firstName)
+                ? `${author.fullName || [author.firstName, author.lastName].filter(Boolean).join(' ')} assigned you a task.`
+                : populated.content || `You have a new ${populated.type} in CRM.`,
+            type: 'CRM_TASK_ASSIGNED',
+            activityId: String(populated._id),
+            relatedTo: populated.relatedTo,
+            relatedType: populated.relatedType,
+          });
+        } catch (err) {
+          console.error('[CRMService] Task create notify failed:', err);
         }
-      } catch (err) {
-        console.error('[CRMService] Teams DM failed:', err);
-      }
-    })();
+      })();
+    } else {
+      // Asynchronous notification (non-task activities: author)
+      void (async () => {
+        try {
+          const populated = await this.activityModel
+            .findById(activity._id)
+            .populate({ path: 'author', model: this.hrmsUserModel, select: 'fullName email' })
+            .exec();
+          if (!populated) return;
+          const author = populated.author as any;
+          if (author?.email) {
+            const frontendUrl =
+              process.env.FRONTEND_URL || 'http://localhost:3000';
+            const link = `${frontendUrl}/crm/tasks`;
+            const dm = await this.teamsBotService.sendProactiveDM(
+              author.email,
+              `CRM ${populated.type}: ${populated.title || 'New Assignment'}`,
+              populated.content || `You have a new ${populated.type} in CRM.`,
+              link,
+              { status: (populated as any).status || 'Planned', projectName: 'CRM' },
+            );
+            if (!dm.success) {
+              console.error('[CRMService] Teams DM failed:', dm.error);
+            }
+          }
+        } catch (err) {
+          console.error('[CRMService] Teams DM failed:', err);
+        }
+      })();
+    }
 
     const full = await this.activityModel
       .findById(activity._id)
@@ -4460,6 +4681,12 @@ export class CRMService {
     type?: string,
     pipelineId?: string,
     relatedType?: string,
+    extras?: {
+      assignee?: string;
+      teamScope?: string;
+      user?: any;
+      listingId?: string;
+    },
   ): Promise<Activity[]> {
     const filter: any = {};
     if (relatedTo) {
@@ -4491,6 +4718,26 @@ export class CRMService {
     }
     if (type) filter.type = type;
     if (pipelineId) filter.pipelineId = pipelineId;
+    if (extras?.listingId) {
+      const lid = extras.listingId;
+      const listingOr: Record<string, unknown>[] = [
+        { 'metadata.propertyListingId': lid },
+        { 'metadata.relatedPropertyId': lid },
+      ];
+      if (Types.ObjectId.isValid(lid)) {
+        listingOr.push({ relatedTo: new Types.ObjectId(lid), relatedType: 'PropertyListing' });
+        listingOr.push({ 'involvedEntities.id': new Types.ObjectId(lid) });
+      }
+      filter.$and = [...(filter.$and || []), { $or: listingOr }];
+    }
+    if (extras?.assignee && Types.ObjectId.isValid(extras.assignee)) {
+      filter.assignee = new Types.ObjectId(extras.assignee);
+    } else if (extras?.teamScope === '1' || extras?.teamScope === 'true') {
+      const selfId = this.userObjectId(extras?.user);
+      const { ids } = await this.teamMemberIdsAndNames(extras?.user);
+      const allIds = selfId ? [selfId, ...ids] : ids;
+      if (allIds.length) filter.assignee = { $in: allIds };
+    }
     try {
       const activities = await this.activityModel
         .find(filter)
@@ -4539,9 +4786,32 @@ export class CRMService {
       return [];
     }
   }
-  async updateActivity(id: string, dto: any): Promise<Activity | null> {
+  async updateActivity(
+    id: string,
+    dto: any,
+    user?: any,
+    opts?: { skipReassignNotify?: boolean; forceNotifyReassign?: boolean },
+  ): Promise<Activity | null> {
     if (!id.match(/^[0-9a-fA-F]{24}$/)) return null;
-    const patch: any = this.normalizeScheduledActivityMetadata({ ...dto });
+    const existing = await this.activityModel.findById(id).exec();
+    if (!existing) return null;
+
+    const commentBody =
+      typeof dto?.comment === 'string'
+        ? dto.comment
+        : typeof dto?.comment?.body === 'string'
+          ? dto.comment.body
+          : '';
+    const escalateTo = dto?.escalateTo;
+    const escalateFlag = dto?.escalate === true || dto?.escalate === 'true';
+    const { comment, escalate, escalateTo: _et, skipReassignNotify, forceNotifyReassign, ...rest } = dto || {};
+    void comment;
+    void escalate;
+    void _et;
+    void skipReassignNotify;
+    void forceNotifyReassign;
+
+    const patch: any = this.normalizeScheduledActivityMetadata({ ...rest });
     if (patch.author === '') delete patch.author;
     else if (
       typeof patch.author === 'string' &&
@@ -4550,17 +4820,134 @@ export class CRMService {
       patch.author = new Types.ObjectId(patch.author);
     }
     if (patch.assignee === '') patch.assignee = null;
-    else if (
-      typeof patch.assignee === 'string' &&
-      isMongoObjectIdString(patch.assignee)
-    ) {
-      patch.assignee = new Types.ObjectId(patch.assignee);
+    else if (typeof patch.assignee === 'string') {
+      patch.assignee =
+        (await this.resolveTaskAssigneeRef(
+          patch.assignee,
+          patch.metadata && typeof patch.metadata === 'object'
+            ? { ...(existing.metadata || {}), ...patch.metadata }
+            : existing.metadata,
+        )) || null;
     }
-    return this.activityModel
+    if (existing.type === 'Task' && patch.status) {
+      patch.status = this.normalizeTaskStatus(patch.status);
+    }
+    if (patch.relatedType === 'Property') patch.relatedType = 'PropertyListing';
+
+    const prevMeta =
+      existing.metadata && typeof existing.metadata === 'object' ? { ...existing.metadata } : {};
+    let nextMeta = patch.metadata && typeof patch.metadata === 'object'
+      ? { ...prevMeta, ...patch.metadata }
+      : { ...prevMeta };
+
+    if (existing.type === 'Task' && nextMeta.dueDate) {
+      const parsed = new Date(nextMeta.dueDate);
+      if (!Number.isNaN(parsed.getTime())) {
+        nextMeta.dueDate = parsed.toISOString();
+        if (nextMeta.isCalendarEvent !== false) nextMeta.isCalendarEvent = true;
+      }
+    }
+
+    const actorId = String(user?.userId || user?._id || '');
+    const actorName = this.actorLabel(user);
+
+    if (commentBody.trim()) {
+      const comments = Array.isArray(nextMeta.comments) ? [...nextMeta.comments] : [];
+      comments.push({
+        id: new Types.ObjectId().toString(),
+        body: commentBody.trim(),
+        authorId: actorId,
+        authorName: actorName,
+        createdAt: new Date().toISOString(),
+      });
+      nextMeta.comments = comments;
+      this.appendTaskLog(nextMeta, {
+        action: 'commented',
+        detail: commentBody.trim().slice(0, 180),
+        actorId,
+        actorName,
+      });
+    }
+
+    if (escalateFlag || escalateTo) {
+      let targetId = escalateTo ? String(escalateTo) : '';
+      if (!targetId && existing.assignee) {
+        const current = await this.hrmsUserModel
+          .findById(existing.assignee)
+          .select('reportsTo')
+          .lean()
+          .exec();
+        if (current?.reportsTo) targetId = String(current.reportsTo);
+      }
+      if (targetId && Types.ObjectId.isValid(targetId)) {
+        patch.assignee = new Types.ObjectId(targetId);
+        nextMeta.escalated = true;
+        nextMeta.escalatedAt = new Date().toISOString();
+        nextMeta.escalatedTo = targetId;
+        nextMeta.priority = nextMeta.priority === 'Low' ? 'Medium' : 'High';
+        this.appendTaskLog(nextMeta, {
+          action: 'escalated',
+          detail: 'Task escalated to manager',
+          actorId,
+          actorName,
+        });
+      }
+    }
+
+    const prevAssignee = existing.assignee ? String(existing.assignee) : '';
+    const nextAssignee = patch.assignee !== undefined
+      ? patch.assignee
+        ? String(patch.assignee)
+        : ''
+      : prevAssignee;
+    if (prevAssignee !== nextAssignee) {
+      this.appendTaskLog(nextMeta, {
+        action: 'reassigned',
+        detail: nextAssignee ? 'Assignee changed' : 'Assignee cleared',
+        actorId,
+        actorName,
+      });
+    } else if (patch.status && patch.status !== existing.status) {
+      this.appendTaskLog(nextMeta, {
+        action: 'status',
+        detail: `${existing.status || 'Open'} → ${patch.status}`,
+        actorId,
+        actorName,
+      });
+    }
+
+    patch.metadata = nextMeta;
+
+    const updated = await this.activityModel
       .findByIdAndUpdate(id, patch, { new: true })
       .populate({ path: 'author', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
       .populate({ path: 'assignee', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
       .exec();
+
+    const shouldNotifyReassign =
+      existing.type === 'Task' &&
+      prevAssignee !== nextAssignee &&
+      nextAssignee &&
+      !opts?.skipReassignNotify;
+    if (shouldNotifyReassign || (opts?.forceNotifyReassign && nextAssignee)) {
+      const assignee = updated?.assignee as any;
+      void this.notifyTaskRecipient({
+        recipientId: nextAssignee,
+        email: assignee?.email,
+        title: nextMeta.escalated
+          ? `Task escalated: ${updated?.title || existing.title || 'Task'}`
+          : `Task reassigned: ${updated?.title || existing.title || 'Task'}`,
+        message: nextMeta.escalated
+          ? `${actorName} escalated a task to you.`
+          : `${actorName} reassigned a task to you.`,
+        type: nextMeta.escalated ? 'CRM_TASK_ESCALATED' : 'CRM_TASK_REASSIGNED',
+        activityId: id,
+        relatedTo: updated?.relatedTo || existing.relatedTo,
+        relatedType: updated?.relatedType || existing.relatedType,
+      });
+    }
+
+    return updated;
   }
 
   async convertLead(
@@ -4863,6 +5250,24 @@ export class CRMService {
       before: { owners: previousOwners.map((l: any) => ({ id: l._id, leadOwner: l.leadOwner })) },
       after: { leadOwner: ownerName, ids: oids },
     });
+
+    void this.crmNotify
+      .notify({
+        event: 'lead_reassigned',
+        title: 'Leads assigned to you',
+        message: `${previousOwners.length} lead(s) were reassigned to you.`,
+        recipient: { label: ownerName },
+        link: '/crm/leads',
+        metadata: {
+          link: '/crm/leads',
+          action: 'bulk_assign',
+          count: previousOwners.length,
+        },
+        type: 'LEAD_ASSIGNED',
+      })
+      .catch((err) =>
+        console.error('[CRMService] Bulk assign notify failed:', err?.message || err),
+      );
 
     return {
       ownerName,

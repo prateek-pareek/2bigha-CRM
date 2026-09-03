@@ -188,6 +188,14 @@ export class Lead {
   @Prop()
   followUpReminderSentAt?: Date;
 
+  /** Upcoming (pre-due) follow-up reminder last sent — cleared with nextFollowUpAt changes. */
+  @Prop()
+  followUpUpcomingReminderSentAt?: Date;
+
+  /** Overdue follow-up reminder last sent — cleared with nextFollowUpAt changes. */
+  @Prop()
+  followUpOverdueReminderSentAt?: Date;
+
   /**
    * Onboarding checklist state for this lead — keyed by the `label` of an active
    * `LeadPicklistOption` with listKey 'checklistItem' (see Settings > Lead Type & Group).
@@ -210,6 +218,10 @@ export class Lead {
   /** When to reconnect about the current lead intent(s). */
   @Prop()
   leadIntentFollowUpAt?: Date;
+
+  /** Bookkeeping — intent follow-up reminder last sent; cleared when leadIntentFollowUpAt changes. */
+  @Prop()
+  intentFollowUpReminderSentAt?: Date;
 
   /**
    * Denormalized creator display name, set alongside `createdBy` at creation time so
@@ -308,6 +320,7 @@ LeadSchema.index({ createdBy: 1, createdAt: -1 });
 LeadSchema.index({ sharedWith: 1, createdAt: -1 });
 /** Follow-up reminder cron scans for due/upcoming nextFollowUpAt. */
 LeadSchema.index({ nextFollowUpAt: 1 });
+LeadSchema.index({ leadIntentFollowUpAt: 1 });
 /** Helps email-based search and dedupe checks on huge datasets. */
 LeadSchema.index({ email: 1, createdAt: -1 });
 /** Platform opportunities list (Upwork, Freelancer, etc.). */

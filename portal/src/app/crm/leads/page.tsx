@@ -396,6 +396,8 @@ export default function LeadsPage() {
   }, []);
 
   const handleKanbanDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
     const board = kanbanBoardRef.current;
     if (!board) return;
     const rect = board.getBoundingClientRect();
@@ -1134,6 +1136,7 @@ export default function LeadsPage() {
   };
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
+    e.dataTransfer.setData('text/plain', leadId);
     e.dataTransfer.setData('leadId', leadId);
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -1145,9 +1148,10 @@ export default function LeadsPage() {
 
   const handleDrop = async (e: React.DragEvent, stageName: string) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!canMoveLeadsAcrossPipelines) return;
-    const leadId = e.dataTransfer.getData('leadId');
-    if (!leadId) return;
+    const leadId = e.dataTransfer.getData('leadId') || e.dataTransfer.getData('text/plain');
+    if (!leadId || leadId === 'crm-kanban-card') return;
 
     const cleanStage = stageName.trim();
 

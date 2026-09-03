@@ -38,6 +38,12 @@ export class CRMUsersController {
     return this.usersService.findAllWithCrmPortalAccess();
   }
 
+  /** CRM team + 2bigha staff/agents for task assignee pickers. */
+  @Get('list/task-assignees')
+  listTaskAssignees() {
+    return this.usersService.listTaskAssigneeDirectory();
+  }
+
   @Get()
   @Permissions('settings:admin')
   findAll() {

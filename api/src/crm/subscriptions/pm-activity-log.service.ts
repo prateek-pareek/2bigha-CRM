@@ -9,7 +9,15 @@ export type PmActivityEventType =
   | 'pm_payment_failed'
   | 'pm_property_created'
   | 'pm_sync_success'
-  | 'pm_sync_failed';
+  | 'pm_sync_failed'
+  | 'pm_staff_assigned'
+  | 'pm_staff_reassigned'
+  | 'pm_staff_unassigned'
+  | 'pm_legal_started'
+  | 'pm_legal_completed'
+  | 'pm_visit_scheduled'
+  | 'pm_visit_report_submitted'
+  | 'pm_visit_report_reviewed';
 
 export interface LogPmActivityInput {
   leadId?: string;

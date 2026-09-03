@@ -1,6 +1,8 @@
 "use client";
 
-import { CrmLabel, CrmSelect } from "@/components/crm/ui";
+import { useMemo } from "react";
+import { CrmLabel } from "@/components/crm/ui";
+import { CrmPersonSearchSelect } from "@/components/crm/ui/CrmPersonSearchSelect";
 import {
   parseStaffOption,
   staffOptionValue,
@@ -35,37 +37,35 @@ export default function PmAssigneeSelect({
   const crm = pool.crm || [];
   const empty = twobigha.length === 0 && crm.length === 0;
 
+  const options = useMemo(
+    () => [
+      ...twobigha.map((p) => ({
+        value: staffOptionValue(p),
+        label: personLabel(p),
+        keywords: [p.email, p.name].filter(Boolean).join(" "),
+        group: "2bigha staff (live roster)",
+      })),
+      ...crm.map((p) => ({
+        value: staffOptionValue(p),
+        label: personLabel(p),
+        keywords: [p.email, p.name].filter(Boolean).join(" "),
+        group: "CRM team (added in CRM)",
+      })),
+    ],
+    [twobigha, crm],
+  );
+
   return (
     <div className="min-w-[220px] flex-1">
       <CrmLabel>{label}</CrmLabel>
-      <CrmSelect
-        value={value}
-        onChange={(e) => {
-          const raw = e.target.value;
-          onChange(parseStaffOption(raw, pool), raw);
-        }}
+      <CrmPersonSearchSelect
         className="mt-1"
-      >
-        <option value="">Select…</option>
-        {twobigha.length > 0 ? (
-          <optgroup label="2bigha staff (live roster)">
-            {twobigha.map((p) => (
-              <option key={staffOptionValue(p)} value={staffOptionValue(p)}>
-                {personLabel(p)}
-              </option>
-            ))}
-          </optgroup>
-        ) : null}
-        {crm.length > 0 ? (
-          <optgroup label="CRM team (added in CRM)">
-            {crm.map((p) => (
-              <option key={staffOptionValue(p)} value={staffOptionValue(p)}>
-                {personLabel(p)}
-              </option>
-            ))}
-          </optgroup>
-        ) : null}
-      </CrmSelect>
+        value={value}
+        onChange={(raw) => onChange(parseStaffOption(raw, pool), raw)}
+        options={options}
+        emptyLabel="Select…"
+        placeholder="Type a name to search…"
+      />
       {empty ? (
         <p className="mt-1 text-[11px] text-[var(--text-muted)]">
           {emptyHint || "No people in this list yet. Sync agents in Settings → 2bigha Sync."}

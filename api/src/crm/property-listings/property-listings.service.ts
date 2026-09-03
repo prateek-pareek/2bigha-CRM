@@ -48,6 +48,8 @@ export interface PropertyListingListQuery {
 }
 
 import { StorageService } from '../../storage/storage.service';
+import { PmTaskBridgeService } from '../tasks/pm-task-bridge.service';
+import { CrmNotifyService } from '../notifications/crm-notify.service';
 
 @Injectable()
 export class PropertyListingsService {
@@ -71,6 +73,8 @@ export class PropertyListingsService {
     private readonly visits: TwoBighaVisitsService,
     private readonly crmUsers: CRMUsersService,
     private readonly storageService: StorageService,
+    private readonly pmTasks: PmTaskBridgeService,
+    private readonly crmNotify: CrmNotifyService,
   ) {}
 
   async create(
@@ -106,6 +110,15 @@ export class PropertyListingsService {
           twobighaSyncStatus: created.twobighaSyncStatus,
         },
       });
+      if (dto.leadId && Types.ObjectId.isValid(dto.leadId)) {
+        void this.leadModel
+          .findByIdAndUpdate(dto.leadId, {
+            $addToSet: { leadIntents: 'Property Management' },
+            $set: { leadVertical: 'property_management' },
+          })
+          .exec()
+          .catch(() => undefined);
+      }
     } else {
       await this.syncToTwoBigha(created);
     }
@@ -871,6 +884,28 @@ export class PropertyListingsService {
       .findByIdAndUpdate(leadId, { $set: { leadOwner: trimmedOwner } }, { new: true })
       .exec();
     if (!updated) throw new NotFoundException('Lead not found');
+
+    const leadLabel =
+      `${(updated as any).firstName || ''} ${(updated as any).lastName || ''}`.trim() ||
+      'a lead';
+    const link = `/crm/leads/${leadId}`;
+    void this.crmNotify
+      .notify({
+        event: 'lead_transferred',
+        title: 'Lead assigned to you',
+        message: `${leadLabel} has been transferred to you.`,
+        recipient: { label: trimmedOwner },
+        link,
+        metadata: {
+          link,
+          entityId: leadId,
+          relatedType: 'Lead',
+          action: 'transfer_lead',
+        },
+        type: 'LEAD_TRANSFERRED',
+      })
+      .catch(() => null);
+
     // `_id` here (not just `leadId`) so the global AuditLogInterceptor attributes this
     // action to the lead's entityId — surfaces in the lead's own Update History tab.
     return { _id: leadId, leadId, ownerName: trimmedOwner };
@@ -1102,12 +1137,27 @@ export class PropertyListingsService {
     const patched = this.applyLiveAssignee(current, body.role, adminId, displayName);
 
     if (skippedReason) {
+      const listing = {
+        ...patched,
+        pmAssignmentSyncStatus: 'skipped' as const,
+        pmAssignmentSyncError: skippedReason,
+      };
+      void this.pmTasks.onStaffAssigned({
+        listing,
+        role: body.role,
+        source: body.source,
+        pickId: body.id,
+        pickName: displayName,
+        wasReassign: Boolean(
+          body.role === 'manager'
+            ? current.rmAssigneeId
+            : body.role === 'legal'
+              ? current.legalAssigneeId
+              : current.fieldAssigneeId,
+        ),
+      });
       return {
-        listing: {
-          ...patched,
-          pmAssignmentSyncStatus: 'skipped',
-          pmAssignmentSyncError: skippedReason,
-        },
+        listing,
         twobigha: { status: 'skipped' as const, message: skippedReason },
       };
     }
@@ -1117,12 +1167,21 @@ export class PropertyListingsService {
       const roleLabel =
         body.role === 'manager' ? 'Regional Manager' : body.role === 'legal' ? 'Legal Manager' : 'Field Agent';
       const message = `2bigha rejected this person as ${roleLabel}. Pick someone from “2bigha staff (live roster)” in that dropdown — CRM team / System Admin cannot be assigned to this role on 2bigha.`;
+      const listing = {
+        ...patched,
+        pmAssignmentSyncStatus: 'skipped' as const,
+        pmAssignmentSyncError: message,
+      };
+      void this.pmTasks.onStaffAssigned({
+        listing,
+        role: body.role,
+        source: body.source,
+        pickId: body.id,
+        pickName: displayName,
+        wasReassign: false,
+      });
       return {
-        listing: {
-          ...patched,
-          pmAssignmentSyncStatus: 'skipped',
-          pmAssignmentSyncError: message,
-        },
+        listing,
         twobigha: { status: 'skipped' as const, message },
       };
     }
@@ -1134,12 +1193,21 @@ export class PropertyListingsService {
     if (!userPropertyId) {
       const message =
         'This 2bigha property has no managed subscription yet, so RM cannot be written to 2bigha. The assignment is shown here in CRM only. Open a PM case whose id starts with pm_ (not pm_prop_) to test a live assign.';
+      const listing = {
+        ...patched,
+        pmAssignmentSyncStatus: 'skipped' as const,
+        pmAssignmentSyncError: message,
+      };
+      void this.pmTasks.onStaffAssigned({
+        listing,
+        role: body.role,
+        source: body.source,
+        pickId: body.id,
+        pickName: displayName,
+        wasReassign: false,
+      });
       return {
-        listing: {
-          ...patched,
-          pmAssignmentSyncStatus: 'skipped',
-          pmAssignmentSyncError: message,
-        },
+        listing,
         twobigha: { status: 'skipped' as const, message },
       };
     }
@@ -1161,10 +1229,19 @@ export class PropertyListingsService {
       const listing =
         (await this.pmAssignment.getManagedPropertyListing(`pm_${userPropertyId}`)) || patched;
       const status = result?.message?.toLowerCase().includes('mock') ? 'mock' : 'synced';
-      return {
+      const out = {
         listing: { ...listing, ...this.liveAssigneeFields(patched, body.role), pmAssignmentSyncStatus: status },
         twobigha: { status, message: result?.message },
       };
+      void this.pmTasks.onStaffAssigned({
+        listing: out.listing,
+        role: body.role,
+        source: body.source,
+        pickId: body.id,
+        pickName: displayName,
+        wasReassign: alreadyAssigned,
+      });
+      return out;
     } catch (e: any) {
       const message = e?.message || '2bigha assignment failed';
       return {
@@ -1279,6 +1356,14 @@ export class PropertyListingsService {
     }
 
     await listing.save();
+    void this.pmTasks.onStaffAssigned({
+      listing: listing.toObject ? listing.toObject() : listing,
+      role,
+      source: body.source,
+      pickId: body.id,
+      pickName: displayName,
+      wasReassign: alreadyAssigned,
+    });
     return { listing, twobigha };
   }
 
@@ -1340,6 +1425,10 @@ export class PropertyListingsService {
       }
     }
     await listing.save();
+    void this.pmTasks.onStaffUnassigned(
+      listing.toObject ? listing.toObject() : listing,
+      role,
+    );
     return { listing, twobigha };
   }
 
@@ -1545,7 +1634,9 @@ export class PropertyListingsService {
       },
       pmStage: 'Assigned to Legal',
     });
-    return this.persistPmListing(listingId, refreshed);
+    const persisted = await this.persistPmListing(listingId, refreshed);
+    void this.pmTasks.onLegalStarted(persisted as any);
+    return persisted;
   }
 
   async updatePmLegalChecklist(listingId: string, dto: PmLegalChecklistDto) {
@@ -1593,7 +1684,9 @@ export class PropertyListingsService {
         summary: dto.summary ?? (base as any).legalVerification?.summary,
       },
     });
-    return this.persistPmListing(listingId, refreshed);
+    const persisted = await this.persistPmListing(listingId, refreshed);
+    void this.pmTasks.onLegalCompleted(persisted as any);
+    return persisted;
   }
 
   async schedulePmFieldVisit(listingId: string, dto: PmScheduleVisitDto) {
@@ -1624,7 +1717,14 @@ export class PropertyListingsService {
         visitRequestId: result.visitRequestId,
       },
     });
-    return this.persistPmListing(listingId, refreshed);
+    const persisted = await this.persistPmListing(listingId, refreshed);
+    void this.pmTasks.onVisitScheduled({
+      listing: persisted as any,
+      scheduledAt: dto.scheduledAt,
+      agentId: dto.agentId,
+      notes: dto.notes,
+    });
+    return persisted;
   }
 
   async setPmFieldVisitStatus(listingId: string, dto: PmVisitStatusDto) {
@@ -1667,7 +1767,9 @@ export class PropertyListingsService {
       },
       reportStatus: 'SUBMITTED',
     });
-    return this.persistPmListing(listingId, refreshed);
+    const persisted = await this.persistPmListing(listingId, refreshed);
+    void this.pmTasks.onVisitReportSubmitted(persisted as any);
+    return persisted;
   }
 
   async reviewPmVisitReport(listingId: string, dto: PmReviewReportDto) {
@@ -1684,8 +1786,10 @@ export class PropertyListingsService {
     }
     if (!reportId) throw new BadRequestException('No visit report id found on 2bigha for this property.');
 
-    let result;
-    if (dto.sections?.length) {
+    let result: { success: boolean; message?: string } = { success: true };
+    if (dto.decision === 'Changes Requested') {
+      result = { success: true, message: 'CRM: changes requested on same visit' };
+    } else if (dto.sections?.length) {
       result = await this.pmWorkflow.reviewReportSections(
         reportId,
         dto.sections.map((s) => ({
@@ -1704,7 +1808,7 @@ export class PropertyListingsService {
     } else {
       result = await this.pmWorkflow.reviewVisitReport(
         reportId,
-        dto.decision,
+        dto.decision === 'Approved' ? 'Approved' : 'Rejected',
         dto.rejectionReason,
       );
     }
@@ -1713,17 +1817,28 @@ export class PropertyListingsService {
     const refreshed = await this.refreshPmListingState(listingId, {
       ...base,
       pmStage:
-        dto.decision === 'Approved' ? 'Visit Report Approved' : 'Visit Report Rejected',
+        dto.decision === 'Approved'
+          ? 'Visit Report Approved'
+          : dto.decision === 'Changes Requested'
+            ? 'Assigned to Field Agent'
+            : 'Visit Report Rejected',
       visitReport: {
         status: dto.decision,
         rejectionReason: dto.rejectionReason,
         reviewedAt: new Date().toISOString(),
       },
       reportId,
-      reportStatus: dto.decision === 'Approved' ? 'APPROVED' : 'REJECTED',
+      reportStatus:
+        dto.decision === 'Approved'
+          ? 'APPROVED'
+          : dto.decision === 'Changes Requested'
+            ? 'CHANGES_REQUESTED'
+            : 'REJECTED',
       pmWorkflowIds: { ...(base as any).pmWorkflowIds, reportId },
     });
-    return this.persistPmListing(listingId, refreshed);
+    const persisted = await this.persistPmListing(listingId, refreshed);
+    void this.pmTasks.onVisitReportReviewed(persisted as any, dto.decision);
+    return persisted;
   }
 }
 
