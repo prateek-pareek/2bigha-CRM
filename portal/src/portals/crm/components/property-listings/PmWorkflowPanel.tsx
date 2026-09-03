@@ -52,9 +52,9 @@ const PM_STAGES = [
 ] as const;
 
 const EMPTY_STAFF: PmAssignmentStaffResponse = {
-  managers: [],
-  legal: [],
-  field: [],
+  manager: { twobigha: [], crm: [] },
+  legal: { twobigha: [], crm: [] },
+  field: { twobigha: [], crm: [] },
 };
 
 function StageRail({ stage }: { stage: string }) {
@@ -353,14 +353,13 @@ export default function PmWorkflowPanel({
 
         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
           <PmAssigneeSelect
-            roleLabel="Regional Manager"
-            options={staff.managers}
-            valueText={rmValue}
-            selectedPick={rmPick}
-            loading={staffLoading}
-            currentAssignedName={listing.rmAssigneeName}
-            onTextChange={setRmValue}
-            onPickSelect={setRmPick}
+            label="Regional Manager (RM)"
+            pool={staff.manager}
+            value={rmValue}
+            onChange={(pick, raw) => {
+              setRmPick(pick);
+              setRmValue(raw);
+            }}
           />
           <div className="flex items-end gap-2">
             <CrmButton
@@ -430,14 +429,13 @@ export default function PmWorkflowPanel({
 
         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
           <PmAssigneeSelect
-            roleLabel="Legal Manager"
-            options={staff.legal}
-            valueText={legalValue}
-            selectedPick={legalPick}
-            loading={staffLoading}
-            currentAssignedName={listing.legalAssigneeName}
-            onTextChange={setLegalValue}
-            onPickSelect={setLegalPick}
+            label="Legal Manager"
+            pool={staff.legal}
+            value={legalValue}
+            onChange={(pick, raw) => {
+              setLegalPick(pick);
+              setLegalValue(raw);
+            }}
           />
           <div className="flex items-end gap-2">
             <CrmButton
@@ -569,14 +567,13 @@ export default function PmWorkflowPanel({
 
         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
           <PmAssigneeSelect
-            roleLabel="Field Agent"
-            options={staff.field}
-            valueText={fieldValue}
-            selectedPick={fieldPick}
-            loading={staffLoading}
-            currentAssignedName={listing.fieldAssigneeName}
-            onTextChange={setFieldValue}
-            onPickSelect={setFieldPick}
+            label="Field Agent"
+            pool={staff.field}
+            value={fieldValue}
+            onChange={(pick, raw) => {
+              setFieldPick(pick);
+              setFieldValue(raw);
+            }}
           />
           <div className="flex items-end gap-2">
             <CrmButton
