@@ -13,6 +13,7 @@ import {
   completePmLegalVerification,
   fetchPmAssignmentStaff,
   reviewPmVisitReport,
+  schedulePmFieldVisit,
   setPmFieldVisitStatus,
   startPmLegalVerification,
   submitPmVisitReport,
@@ -128,6 +129,14 @@ export default function PmWorkflowPanel({ listing, onUpdated }: Props) {
   const [fieldPick, setFieldPick] = useState<PmAssignPick | null>(null);
   const [legalSummary, setLegalSummary] = useState(listing.legalVerification?.summary || "");
   const [visitNotes, setVisitNotes] = useState(listing.fieldVisit?.notes || "");
+  const [visitAt, setVisitAt] = useState(() => {
+    const raw = listing.fieldVisit?.scheduledAt;
+    if (!raw) return "";
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
   const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
@@ -447,6 +456,40 @@ export default function PmWorkflowPanel({ listing, onUpdated }: Props) {
               ? ` · scheduled ${new Date(visit.scheduledAt).toLocaleString()}`
               : ""}
           </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <CrmLabel>Schedule visit (date & time)</CrmLabel>
+              <input
+                type="datetime-local"
+                value={visitAt}
+                onChange={(e) => setVisitAt(e.target.value)}
+                className="mt-1 h-9 w-full rounded-md border border-[var(--border-color)] px-2 text-sm"
+              />
+            </div>
+            <div className="flex items-end">
+              <CrmButton
+                disabled={busy || !visitAt || !listing.fieldAssigneeId}
+                onClick={() =>
+                  void run(
+                    () =>
+                      schedulePmFieldVisit(
+                        listing._id,
+                        listing.fieldAssigneeId || "",
+                        new Date(visitAt).toISOString(),
+                        visitNotes,
+                      ),
+                    "Visit scheduled — task & calendar updated",
+                  )
+                }
+                className="bg-sky-600 hover:bg-sky-700"
+              >
+                Schedule visit
+              </CrmButton>
+            </div>
+          </div>
+          {!listing.fieldAssigneeId ? (
+            <p className="text-[11px] text-[var(--text-muted)]">Assign a field agent before scheduling.</p>
+          ) : null}
           <div>
             <CrmLabel>Visit notes</CrmLabel>
             <CrmTextarea
@@ -557,12 +600,29 @@ export default function PmWorkflowPanel({ listing, onUpdated }: Props) {
                   variant="secondary"
                   onClick={() =>
                     void run(
+                      () =>
+                        reviewPmVisitReport(
+                          listing._id,
+                          "Changes Requested",
+                          rejectReason || "Changes requested on one or more sections",
+                        ),
+                      "Changes requested — field agent notified",
+                    )
+                  }
+                >
+                  Request changes
+                </CrmButton>
+                <CrmButton
+                  disabled={busy}
+                  variant="secondary"
+                  onClick={() =>
+                    void run(
                       () => reviewPmVisitReport(listing._id, "Rejected", rejectReason || "Rejected by RM"),
                       "Visit report rejected",
                     )
                   }
                 >
-                  Reject report
+                  Reject & reschedule
                 </CrmButton>
               </div>
             </>

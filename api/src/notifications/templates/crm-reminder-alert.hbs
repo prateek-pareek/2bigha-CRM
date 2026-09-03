@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 680px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 6px; }
+        .header { background: #f8f9fa; padding: 12px; border-bottom: 1px solid #eee; }
+        .content { padding: 16px 4px; }
+        .message { white-space: pre-wrap; margin: 12px 0; }
+        .button { display: inline-block; margin-top: 16px; padding: 10px 16px; background: #0f766e; color: #fff !important; text-decoration: none; border-radius: 4px; }
+        .footer { font-size: 12px; color: #777; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin:0;">{{title}}</h2>
+        </div>
+        <div class="content">
+            <p>Hi {{recipientName}},</p>
+            <div class="message">{{message}}</div>
+            {{#if actionUrl}}
+            <a class="button" href="{{actionUrl}}">Open in CRM</a>
+            {{/if}}
+        </div>
+        <div class="footer">
+            This is an automated 2Bigha CRM reminder so you do not miss a follow-up.
+            You can change notification preferences under CRM Settings.
+        </div>
+    </div>
+</body>
+</html>

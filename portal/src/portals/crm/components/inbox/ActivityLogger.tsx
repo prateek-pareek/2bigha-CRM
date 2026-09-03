@@ -10,12 +10,18 @@ import {
   Clock,
 } from 'lucide-react';
 import { DatePickerField } from '@/components/ui/date-picker';
+import { CrmPersonSearchSelect } from '@/components/crm/ui/CrmPersonSearchSelect';
+import { buildCrmUserSearchOptions } from '@/lib/crm/build-crm-user-search-options';
 
 export type CrmPortalUserOption = {
   _id: string;
   firstName?: string;
   lastName?: string;
   email?: string;
+  source?: 'crm' | 'twobigha';
+  roleLabel?: string;
+  twobighaAdminId?: string;
+  crmUserId?: string;
 };
 
 function crmUserRefId(u: unknown): string {
@@ -29,7 +35,18 @@ function crmUserRefId(u: unknown): string {
 
 export function formatCrmUserLabel(u: CrmPortalUserOption): string {
   const n = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
-  return n || (u.email ? u.email.split('@')[0] : '') || u._id;
+  const base = n || (u.email ? u.email.split('@')[0] : '') || u._id;
+  const extras: string[] = [];
+  if (u.source === 'twobigha') extras.push(u.roleLabel || '2bigha');
+  else if (u.roleLabel && u.roleLabel !== 'CRM team') extras.push(u.roleLabel);
+  return extras.length ? `${base} · ${extras.join(' · ')}` : base;
+}
+
+export function taskAssigneeOptionValue(u: CrmPortalUserOption): string {
+  if (u.source === 'twobigha' && u.twobighaAdminId && !u.crmUserId) {
+    return `twobigha:${u.twobighaAdminId}`;
+  }
+  return u.crmUserId || u._id;
 }
 
 interface ActivityLoggerProps {
@@ -75,7 +92,7 @@ export default function ActivityLogger({
       : ''
   );
   const [status, setStatus] = useState(
-    initialData?.status || initialData?.metadata?.status || (statuses && statuses.length > 0 ? statuses[0] : 'Backlog')
+    initialData?.status || initialData?.metadata?.status || (statuses && statuses.length > 0 ? statuses[0] : 'Open')
   );
   const [reporterId, setReporterId] = useState(() => crmUserRefId(initialData?.author));
   const [assigneeId, setAssigneeId] = useState(() => crmUserRefId(initialData?.assignee));
@@ -126,13 +143,40 @@ export default function ActivityLogger({
     };
 
     if (activeTab === 'Task') {
-      payload.status = status;
-      payload.metadata = { priority, dueDate: dueDate || undefined };
+      const markOverdue = status === 'Overdue';
+      const markEscalated = status === 'Escalated';
+      payload.status = markOverdue || markEscalated ? 'Open' : status;
+      let nextDue = dueDate || undefined;
+      if (markOverdue && !nextDue) {
+        const d = new Date();
+        d.setHours(12, 0, 0, 0);
+        d.setDate(d.getDate() - 1);
+        nextDue = d.toISOString();
+      }
+      payload.metadata = {
+        priority,
+        dueDate: nextDue,
+        markedOverdue: markOverdue,
+        escalated: markEscalated,
+      };
+      if (markEscalated) {
+        payload.escalate = true;
+        payload.metadata.escalatedAt = new Date().toISOString();
+      }
       if (crmUsers) {
         const isEdit = !!initialData?._id;
         if (reporterId) payload.author = reporterId;
-        if (assigneeId) payload.assignee = assigneeId;
-        else if (isEdit) payload.assignee = null;
+        const picked = crmUsers.find((u) => taskAssigneeOptionValue(u) === assigneeId || u._id === assigneeId);
+        if (assigneeId) {
+          payload.assignee = assigneeId;
+          if (picked) {
+            payload.metadata.assigneeSource = picked.source || 'crm';
+            payload.metadata.assigneeName = formatCrmUserLabel(picked);
+            payload.metadata.assigneeEmail = picked.email;
+            if (picked.twobighaAdminId) payload.metadata.twobighaAdminId = picked.twobighaAdminId;
+            if (picked.roleLabel) payload.metadata.assigneeRole = picked.roleLabel;
+          }
+        } else if (isEdit) payload.assignee = null;
       }
     } else if (activeTab === 'Call') {
       payload.metadata = { type: callType, duration: parseInt(duration) * 60, status: callStatus };
@@ -332,29 +376,25 @@ export default function ActivityLogger({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>Reporter</label>
-                  <select
-                    className={selectClass}
+                  <CrmPersonSearchSelect
                     value={reporterId}
-                    onChange={(e) => setReporterId(e.target.value)}
-                  >
-                    <option value="">{initialData?._id ? '—' : 'Default (you)'}</option>
-                    {crmUsers.map((u) => (
-                      <option key={u._id} value={u._id}>{formatCrmUserLabel(u)}</option>
-                    ))}
-                  </select>
+                    onChange={setReporterId}
+                    options={buildCrmUserSearchOptions(crmUsers, { taskAssigneeValues: false })}
+                    emptyLabel={initialData?._id ? '—' : 'Default (you)'}
+                    placeholder="Type a name to search…"
+                    triggerClassName={isHubspot ? 'h-10' : 'h-10 bg-surface-dim'}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Assignee</label>
-                  <select
-                    className={selectClass}
+                  <CrmPersonSearchSelect
                     value={assigneeId}
-                    onChange={(e) => setAssigneeId(e.target.value)}
-                  >
-                    <option value="">Unassigned</option>
-                    {crmUsers.map((u) => (
-                      <option key={u._id} value={u._id}>{formatCrmUserLabel(u)}</option>
-                    ))}
-                  </select>
+                    onChange={setAssigneeId}
+                    options={buildCrmUserSearchOptions(crmUsers)}
+                    emptyLabel="Unassigned"
+                    placeholder="Type a name to search…"
+                    triggerClassName={isHubspot ? 'h-10' : 'h-10 bg-surface-dim'}
+                  />
                 </div>
               </div>
             )}

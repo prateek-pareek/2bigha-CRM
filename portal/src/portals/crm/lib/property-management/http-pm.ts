@@ -66,7 +66,7 @@ export async function httpSubmitVisitReport(id: string) {
 
 export async function httpReviewVisitReport(
   id: string,
-  decision: "Approved" | "Rejected",
+  decision: "Approved" | "Rejected" | "Changes Requested",
   rejectionReason?: string,
   sections?: PmChecklistItem[],
 ) {

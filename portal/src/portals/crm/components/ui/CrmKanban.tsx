@@ -2,9 +2,11 @@
 
 import {
   forwardRef,
+  useRef,
   type CSSProperties,
   type ReactNode,
   type HTMLAttributes,
+  type DragEvent,
 } from "react";
 import { cn } from "@/lib/utils";
 import { crmStageAccent } from "@/lib/crm/stage-accent";
@@ -79,10 +81,20 @@ export function CrmKanbanColumn({
   style,
 }: CrmKanbanColumnProps) {
   const stageAccent = accent || crmStageAccent(stageKey || title);
+  // HTML5 DnD requires preventDefault on dragover or the browser rejects the drop.
+  const allowDrop = (e: DragEvent<HTMLDivElement>) => {
+    if (!onDrop) {
+      onDragOver?.(e);
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    onDragOver?.(e);
+  };
   return (
     <div
       className={cn(COL, className)}
-      onDragOver={onDragOver}
+      onDragOver={allowDrop}
       onDrop={onDrop}
       style={
         {
@@ -131,7 +143,11 @@ export function CrmKanbanColumn({
           {headerExtra}
         </div>
       </div>
-      <div className="crm-kanban-column-body flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div
+        className="crm-kanban-column-body flex min-h-0 flex-1 flex-col overflow-y-auto"
+        onDragOver={allowDrop}
+        onDrop={onDrop}
+      >
         {children}
       </div>
     </div>
@@ -168,14 +184,47 @@ export const CrmKanbanCard = forwardRef<HTMLDivElement, CrmKanbanCardProps>(
     ref,
   ) {
     const stageAccent = accent || (stageKey ? crmStageAccent(stageKey) : "#ffa201");
+    const didDragRef = useRef(false);
     return (
       <div
         ref={ref}
         role={onClick ? "button" : undefined}
         tabIndex={onClick ? 0 : undefined}
         draggable={draggable}
-        onDragStart={onDragStart}
-        onClick={onClick}
+        onDragStart={(e) => {
+          if (!draggable) return;
+          didDragRef.current = true;
+          e.dataTransfer.effectAllowed = "move";
+          onDragStart?.(e);
+          // Fallback MIME for browsers that drop custom types on drop.
+          try {
+            if (!e.dataTransfer.getData("text/plain")) {
+              const fallback =
+                e.dataTransfer.getData("leadId") ||
+                e.dataTransfer.getData("propertyId") ||
+                e.dataTransfer.getData("legalCaseId") ||
+                e.dataTransfer.getData("text/pm-id");
+              if (fallback) e.dataTransfer.setData("text/plain", fallback);
+            }
+          } catch {
+            /* ignore */
+          }
+        }}
+        onDragEnd={() => {
+          // Keep flag until click handler runs (dragend then click).
+          window.setTimeout(() => {
+            didDragRef.current = false;
+          }, 50);
+        }}
+        onClick={(e) => {
+          if (didDragRef.current) {
+            didDragRef.current = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          onClick?.();
+        }}
         onKeyDown={
           onClick
             ? (e) => {
@@ -188,13 +237,14 @@ export const CrmKanbanCard = forwardRef<HTMLDivElement, CrmKanbanCardProps>(
         }
         className={cn(
           CARD,
-          draggable && "cursor-grab active:cursor-grabbing",
-          onClick && "cursor-pointer",
+          draggable && "cursor-grab active:cursor-grabbing select-none",
+          onClick && !draggable && "cursor-pointer",
           className,
         )}
         style={
           {
             ["--crm-stage-accent" as string]: stageAccent,
+            WebkitUserDrag: draggable ? "element" : undefined,
             ...style,
           } as CSSProperties
         }

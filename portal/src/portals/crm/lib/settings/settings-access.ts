@@ -23,6 +23,7 @@ export const CRM_SETTINGS_ITEMS: CrmSettingsItem[] = [
   { name: "Currency", href: "/crm/settings/currency", requiredPermission: "settings-currency:read", superAdminOnly: true },
   { name: "Users", href: "/crm/settings/users", requiredPermission: "settings:admin" },
   { name: "Roles", href: "/crm/settings/roles", requiredPermission: "settings:admin" },
+  { name: "Notifications & reminders", href: "/crm/settings/notifications", requiredPermission: "settings:read" },
   { name: "Integrations", href: "/crm/settings/integrations", requiredPermission: "settings-integrations:read" },
   { name: "2bigha platform sync", href: "/crm/settings/twobigha-sync", requiredPermission: "settings:admin" },
   { name: "Audit", href: "/crm/settings/audit-logs", requiredPermission: "settings-audit-logs:read" },

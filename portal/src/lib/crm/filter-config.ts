@@ -141,8 +141,11 @@ const CLIENT_PROPERTIES: FilterProperty[] = [
 const ACTIVITY_PROPERTIES: FilterProperty[] = [
   { key: 'title', label: 'Title', type: 'text' },
   { key: 'content', label: 'Content', type: 'text' },
-  { key: 'status', label: 'Status', type: 'text' },
+  { key: 'status', label: 'Status', type: 'select', options: ['Open', 'In Progress', 'Done', 'Overdue', 'Escalated'] },
   { key: 'type', label: 'Type', type: 'text' },
+  { key: 'priority', label: 'Priority', type: 'select', options: ['Low', 'Medium', 'High'] },
+  { key: 'assignee', label: 'Assignee', type: 'text' },
+  { key: 'dueDate', label: 'Due date', type: 'date' },
   { key: 'createdAt', label: 'Created Date', type: 'date' },
 ];
 
@@ -239,6 +242,19 @@ export function applyFilters<T extends Record<string, any>>(
       const rs = item.relatedService as { name?: string; _id?: string } | string | undefined;
       if (rs && typeof rs === 'object' && 'name' in rs) v = (rs as any).name;
       else v = rs != null && rs !== '' ? String(rs) : '';
+    }
+    if (key === 'priority') {
+      return item.metadata?.priority || item.priority || '';
+    }
+    if (key === 'dueDate') {
+      const d = item.metadata?.dueDate || item.dueDate;
+      return d ? new Date(d) : '';
+    }
+    if (key === 'assignee') {
+      const a = item.assignee;
+      if (!a) return '';
+      if (typeof a === 'string') return a;
+      return [a.firstName, a.lastName].filter(Boolean).join(' ').trim() || a.email || a.fullName || '';
     }
     if (key === 'createdAt') {
       v = v || item.date; // Inbox emails use .date, CRM logs use .createdAt

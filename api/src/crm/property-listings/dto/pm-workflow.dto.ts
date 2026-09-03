@@ -58,8 +58,8 @@ export class PmVisitStatusDto {
 }
 
 export class PmReviewReportDto {
-  @IsIn(['Approved', 'Rejected'])
-  decision: 'Approved' | 'Rejected';
+  @IsIn(['Approved', 'Rejected', 'Changes Requested'])
+  decision: 'Approved' | 'Rejected' | 'Changes Requested';
 
   @IsOptional()
   @IsString()

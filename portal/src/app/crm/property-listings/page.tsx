@@ -607,7 +607,8 @@ function PropertyListingsPageContent() {
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
-                  const id = e.dataTransfer.getData("text/pm-id") || draggingId;
+                  e.stopPropagation();
+                  const id = e.dataTransfer.getData("text/pm-id") || e.dataTransfer.getData("text/plain") || draggingId;
                   setDraggingId(null);
                   if (id) void movePmToStage(id, col.key);
                 }}
@@ -621,6 +622,7 @@ function PropertyListingsPageContent() {
                     draggable
                     onDragStart={(e) => {
                       setDraggingId(p._id);
+                      e.dataTransfer.setData("text/plain", p._id);
                       e.dataTransfer.setData("text/pm-id", p._id);
                       e.dataTransfer.effectAllowed = "move";
                     }}

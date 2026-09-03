@@ -212,8 +212,23 @@ import { InboxPushController } from './inbox/inbox-push.controller';
 import { InboxIdleService } from './inbox/inbox-idle.service';
 import { CrmCalendarCronService } from './calendar/crm-calendar-cron.service';
 import { LeadFollowUpReminderCronService } from './records/lead-followup-reminder-cron.service';
+import { CallbackReminderCronService } from './ivr/callback-reminder-cron.service';
 import { CrmCalendarSyncService } from './calendar/crm-calendar-sync.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import {
+  CrmReminder,
+  CrmReminderSchema,
+} from './notifications/schemas/crm-reminder.schema';
+import {
+  CrmNotificationPreference,
+  CrmNotificationPreferenceSchema,
+} from './notifications/schemas/crm-notification-preference.schema';
+import { CrmNotifyService } from './notifications/crm-notify.service';
+import { CrmRemindersService } from './notifications/crm-reminders.service';
+import { CrmRemindersController } from './notifications/crm-reminders.controller';
+import { CrmNotificationPreferencesService } from './notifications/crm-notification-preferences.service';
+import { CrmNotificationPreferencesController } from './notifications/crm-notification-preferences.controller';
+import { CrmReminderCronService } from './notifications/crm-reminder-cron.service';
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { PmProgressReadService } from './pm-bridge/pm-progress-read.service';
 import {
@@ -270,6 +285,7 @@ import { TwoBighaPmWorkflowService } from './property-listings/twobigha-pm-workf
 import { SubscriptionsController } from './subscriptions/subscriptions.controller';
 import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscriptions.service';
 import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
+import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
 
 @Module({
   imports: [
@@ -344,6 +360,11 @@ import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
         { name: CrmObjectType.name, schema: CrmObjectTypeSchema },
         { name: CrmObjectRecord.name, schema: CrmObjectRecordSchema },
         { name: CallLog.name, schema: CallLogSchema },
+        { name: CrmReminder.name, schema: CrmReminderSchema },
+        {
+          name: CrmNotificationPreference.name,
+          schema: CrmNotificationPreferenceSchema,
+        },
       ],
       'crmConnection',
     ),
@@ -395,6 +416,8 @@ import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
     CustomObjectTypesController,
     CustomObjectRecordsController,
     SubscriptionsController,
+    CrmRemindersController,
+    CrmNotificationPreferencesController,
   ],
   providers: [
     LeadEngagementAutomationService,
@@ -439,6 +462,11 @@ import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
     InboxSyncCronService,
     CrmCalendarCronService,
     LeadFollowUpReminderCronService,
+    CallbackReminderCronService,
+    CrmNotifyService,
+    CrmRemindersService,
+    CrmNotificationPreferencesService,
+    CrmReminderCronService,
     CrmCalendarSyncService,
     InboxIdleService,
     InboxPushService,
@@ -469,6 +497,7 @@ import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
     CustomObjectsService,
     TwoBighaSubscriptionsService,
     PmActivityLogService,
+    PmTaskBridgeService,
     TwoBighaPmWorkflowService,
     {
       provide: APP_INTERCEPTOR,
@@ -501,7 +530,10 @@ import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
     WhatsAppService,
     TwoBighaSubscriptionsService,
     PmActivityLogService,
+    PmTaskBridgeService,
     TwoBighaPmWorkflowService,
+    CrmNotifyService,
+    CrmRemindersService,
     MongooseModule,
   ],
 })

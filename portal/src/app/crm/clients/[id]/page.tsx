@@ -36,6 +36,7 @@ import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/c
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
 import CrmRecordSidebarGroup from '@/components/crm/records/detail/CrmRecordSidebarGroup';
+import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
@@ -464,6 +465,7 @@ export default function ClientDetailPage() {
         <aside className={crmRecordChrome.sidebar}>
           <CrmRecordSidebarGroup title="Engagement" defaultOpen>
             <EmailEngagementPanel rows={emailTracking} />
+            <CrmRecordRemindersPanel relatedType="Client" relatedTo={recordId} />
           </CrmRecordSidebarGroup>
 
           <CrmRecordSidebarGroup title="Associations & platform" defaultOpen>
