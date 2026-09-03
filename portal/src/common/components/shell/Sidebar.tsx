@@ -311,6 +311,26 @@ const crmGroups = [
                 children: dashboardNavChildren,
             },
             {
+                name: 'Reports & Analytics',
+                href: '/crm/reports/agents',
+                icon: CrmNavIcon.Analytics,
+                permission: 'dashboard:read',
+                children: [
+                    {
+                        name: 'Agent Performance',
+                        href: '/crm/reports/agents',
+                        icon: CrmNavIcon.Analytics,
+                        permission: 'dashboard:read',
+                    },
+                    {
+                        name: 'Team & Organizations',
+                        href: '/crm/reports/team-organizations',
+                        icon: CrmNavIcon.Analytics,
+                        permission: 'dashboard:read',
+                    },
+                ],
+            },
+            {
                 name: 'Action queue',
                 href: '/crm/workspace/work-queue',
                 icon: CrmNavIcon.ListTodo,
@@ -439,18 +459,6 @@ const crmGroups = [
         items: [
             { name: 'Outreach', href: '/crm/outreach', icon: CrmNavIcon.Activities, permission: 'outreach:read' },
             { name: 'Email campaigns', href: '/crm/campaigns', icon: CrmNavIcon.Mail, permission: 'outreach:read' },
-        ],
-    },
-    {
-        name: 'Reports',
-        items: [
-            {
-                name: 'Reports',
-                href: '/crm/reports/overview',
-                icon: CrmNavIcon.Analytics,
-                permission: 'dashboard:read',
-                children: reportNavChildren,
-            },
         ],
     },
     // Hidden from sidebar per request — do not remove, kept for future re-enable.
