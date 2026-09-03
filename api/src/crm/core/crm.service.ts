@@ -1900,6 +1900,27 @@ export class CRMService {
     return this.reportingService.upsertAgentTarget(agentId, patch);
   }
 
+  // Team & Organizations Reports
+  async getTeamPerformanceMetrics(window: string) {
+    return this.reportingService.getTeamPerformanceMetrics(window);
+  }
+
+  async getLeadSourceConversion(window: string) {
+    return this.reportingService.getLeadSourceConversion(window);
+  }
+
+  async getLeadIntentConversion(window: string) {
+    return this.reportingService.getLeadIntentConversion(window);
+  }
+
+  async getWhatsAppEngagement(window: string) {
+    return this.reportingService.getWhatsAppEngagement(window);
+  }
+
+  async getIVRAnalytics(window: string) {
+    return this.reportingService.getIVRAnalytics(window);
+  }
+
   async getSalesDepartmentHealth(window: string = 'this_week', owner?: string) {
     return this.reportingService.getSalesDepartmentHealth(window, owner);
   }

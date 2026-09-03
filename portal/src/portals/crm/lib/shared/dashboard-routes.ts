@@ -105,32 +105,21 @@ export const LEAD_REPORT_ROUTES = LEAD_REPORT_SECTIONS;
 export type LeadReportVariant = (typeof LEAD_REPORT_SECTIONS)[number]["variant"];
 
 /**
- * Reports — one dedicated page per topic (Dreams-style; no in-page sibling tabs).
- * Order: Overview → Lead reports → Email → Pipeline insights.
- * Each page has its own RBAC module (`reports-*:read`).
+ * Reports — Agent Performance and Team & Organizations reports.
+ * Agent Performance: individual agent metrics (calls, leads, conversion, follow-up, response time, properties).
+ * Team & Organizations: team-level roll-ups, lead source/intent conversion, WhatsApp/IVR engagement.
  */
 export const REPORT_ROUTES = [
-  { slug: "overview", label: "Overview", href: "/crm/reports/overview", permission: "reports-overview:read" },
-  ...LEAD_REPORT_SECTIONS.map(({ slug, label, href, permission }) => ({ slug, label, href, permission })),
-  { slug: "forecast", label: "Pipeline Insights", href: "/crm/reports/forecast", permission: "reports-forecast:read" },
-  { slug: "health", label: "Sales Health", href: "/crm/reports/forecast/health", permission: "reports-health:read" },
   { slug: "agents", label: "Agent Performance", href: "/crm/reports/agents", permission: "dashboard:read" },
+  { slug: "teams", label: "Team & Organizations", href: "/crm/reports/team-organizations", permission: "dashboard:read" },
 ] as const;
 
 export type ReportRouteSlug = (typeof REPORT_ROUTES)[number]["slug"];
 
 /** Page blurbs — keyed by slug; keep in sync with REPORT_ROUTES. */
 export const REPORT_SECTION_DESCRIPTIONS: Record<string, string> = {
-  overview: "Period analytics — KPIs, funnel, revenue trend, activity mix, and engagement summary.",
-  leads:
-    "Daily lead intake by platform (LinkedIn, Website, …) and employee, plus volume and channel detail.",
-  "leads-funnel": "Created → converted funnel, open stages, and lost/converted stage detail.",
-  "leads-aging": "Follow-up coverage and stale open leads needing attention.",
-  "leads-conversion": "Time from lead created to first outreach and between follow-ups.",
-  forecast:
-    "Daily lead intake by platform and employee plus board outreach insights.",
-  health: "Work done, activity mix, and pipeline risk signals.",
-  agents: "Calls, activities, leads, and properties/farms listed per human agent, with target-vs-actual.",
+  agents: "Comprehensive agent performance analytics — calls made, leads conversion, follow-up adherence, response time, properties listed, and target achievement.",
+  teams: "Team-level analytics with lead source/intent conversion tracking, WhatsApp engagement rates, and IVR call metrics for managers and team leads.",
 };
 
 export function reportSectionTitle(slug: string): string {

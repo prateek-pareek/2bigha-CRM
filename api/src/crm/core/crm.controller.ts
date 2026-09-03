@@ -492,6 +492,41 @@ export class CRMController {
     return this.crmService.upsertAgentTarget(agentId, body || {});
   }
 
+  /** Team & Organizations Reports - Team-level metrics aggregation. */
+  @Get('reports/teams')
+  @Permissions('dashboard:read', 'leads:read')
+  async getTeamPerformanceMetrics(@Query('window') window?: string) {
+    return this.crmService.getTeamPerformanceMetrics(window || 'this_month');
+  }
+
+  /** Lead source conversion tracking by channel. */
+  @Get('reports/lead-sources')
+  @Permissions('dashboard:read', 'leads:read')
+  async getLeadSourceConversion(@Query('window') window?: string) {
+    return this.crmService.getLeadSourceConversion(window || 'this_month');
+  }
+
+  /** Lead intent conversion analytics. */
+  @Get('reports/lead-intents')
+  @Permissions('dashboard:read', 'leads:read')
+  async getLeadIntentConversion(@Query('window') window?: string) {
+    return this.crmService.getLeadIntentConversion(window || 'this_month');
+  }
+
+  /** WhatsApp engagement metrics by team. */
+  @Get('reports/whatsapp-engagement')
+  @Permissions('dashboard:read', 'leads:read')
+  async getWhatsAppEngagement(@Query('window') window?: string) {
+    return this.crmService.getWhatsAppEngagement(window || 'this_month');
+  }
+
+  /** IVR call analytics metrics by team. */
+  @Get('reports/ivr-analytics')
+  @Permissions('dashboard:read', 'leads:read')
+  async getIVRAnalytics(@Query('window') window?: string) {
+    return this.crmService.getIVRAnalytics(window || 'this_month');
+  }
+
   /** Sales department health: work done, activity trends, rep leaderboard, pipeline snapshot. */
   @Get('reports/sales-health')
   @Permissions('dashboard:read', 'leads:read')
