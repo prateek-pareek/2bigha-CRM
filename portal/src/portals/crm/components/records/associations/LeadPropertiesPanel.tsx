@@ -2,7 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Building2, Loader2, Plus, RefreshCw } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  FileCheck,
+  FileText,
+  Loader2,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Scale,
+  ShieldCheck,
+  UserCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -11,8 +25,10 @@ import {
   type BackendPropertyListing,
 } from "@/lib/crm/property-listings/backend-api";
 import { formatAddress, formatPrice, statusTone } from "@/lib/crm/property-listings/types";
+import { pmStageBadgeTone } from "@/lib/crm/property-management/types";
+import { CrmStatusBadge } from "@/components/crm/ui";
 
-/** Properties linked to this lead, with a shortcut to add a new one. */
+/** Properties linked to this lead, with full PM operational details when applicable. */
 export default function LeadPropertiesPanel({
   leadId,
   onAddClick,
@@ -64,47 +80,64 @@ export default function LeadPropertiesPanel({
   };
 
   return (
-    <div className="bg-card border border-border rounded-[var(--crm-radius-ui)] p-6 shadow-sm">
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <h3 className="text-xs font-bold text-text-muted">Properties</h3>
+    <div className="bg-card border border-border rounded-[var(--crm-radius-ui)] p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-1.5">
+          <Building2 size={15} className="text-slate-600" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">
+            Properties & PM Cases
+          </h3>
+        </div>
         <button
           type="button"
           onClick={onAddClick}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-bold uppercase tracking-wide border border-border bg-surface-dim text-text-main transition-colors hover:border-primary/40"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] text-[11px] font-bold uppercase tracking-wide border border-border bg-surface-dim text-text-main transition-colors hover:border-primary/40"
         >
-          <Plus size={14} />
+          <Plus size={13} />
           Add property
         </button>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 py-2 text-xs text-text-muted">
-          <Loader2 size={14} className="animate-spin" />
-          Loading…
+        <div className="flex items-center gap-2 py-3 text-xs text-text-muted">
+          <Loader2 size={14} className="animate-spin text-sky-600" />
+          Loading properties…
         </div>
       ) : properties.length === 0 ? (
-        <p className="text-xs text-text-muted italic">No properties linked to this lead yet.</p>
+        <p className="text-xs text-text-muted italic py-2">No properties linked to this lead yet.</p>
       ) : (
-        <div className="space-y-2">
-          {properties.map((p) => (
-            <div key={p._id} className="space-y-1">
-              <Link
-                href={`/crm/property-listings/${p._id}`}
-                className="crm-kanban-card group !mt-0 !p-3 flex items-center gap-2 no-underline"
-                style={{ ["--crm-stage-accent" as string]: p.listingBucket === "pm" ? "#059669" : "#2f80ed" }}
+        <div className="space-y-3">
+          {properties.map((p) => {
+            const isPm = p.listingBucket === "pm";
+            return (
+              <div
+                key={p._id}
+                className={cn(
+                  "rounded-lg border transition-all",
+                  isPm
+                    ? "border-emerald-200 bg-emerald-50/20 p-3"
+                    : "border-border bg-white p-3",
+                )}
               >
-                <div className="crm-kanban-avatar crm-kanban-avatar--sm shrink-0" aria-hidden>
-                  <Building2 size={14} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="crm-kanban-card-title truncate text-sm">{p.title}</p>
-                  <p className="crm-kanban-card-subtitle truncate">
-                    {p.listingBucket === "pm" ? `PM · ${p.pmStage || "—"}` : formatAddress(p)} ·{" "}
-                    {formatPrice(p.price, p.currency)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  {p.listingBucket !== "pm" ? (
+                {/* Title & Stage Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/crm/property-listings/${p._id}`}
+                      className="font-semibold text-sm text-[var(--text-main)] hover:text-emerald-700 transition-colors line-clamp-1"
+                    >
+                      {p.title}
+                    </Link>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                      {isPm ? "Property Management" : formatAddress(p)} ·{" "}
+                      {formatPrice(p.price, p.currency)}
+                    </p>
+                  </div>
+                  {isPm && p.pmStage ? (
+                    <CrmStatusBadge tone={pmStageBadgeTone(p.pmStage)}>
+                      {p.pmStage}
+                    </CrmStatusBadge>
+                  ) : (
                     <span
                       className={cn(
                         "rounded-md border px-1.5 py-0.5 text-[10px] font-semibold",
@@ -113,50 +146,87 @@ export default function LeadPropertiesPanel({
                     >
                       {p.status || "Available"}
                     </span>
-                  ) : p.pmStage ? (
-                    <span className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                      {p.pmStage}
-                    </span>
-                  ) : null}
-                  {p.twobighaSyncStatus === "synced" ? (
-                    <span className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                      2bigha: synced
-                    </span>
-                  ) : p.twobighaSyncStatus === "failed" || p.twobighaSyncStatus === "unsupported" ? (
-                    <span
-                      className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
-                      title={p.twobighaSyncError}
+                  )}
+                </div>
+
+                {/* PM Pipeline Operational Summary (Stages 3-6) */}
+                {isPm ? (
+                  <div className="mt-2.5 rounded-md border border-emerald-100 bg-white p-2.5 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <UserCheck size={12} className="text-indigo-600" /> RM:
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {p.rmAssigneeName || "Unassigned"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <Scale size={12} className="text-amber-600" /> Legal:
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {p.legalAssigneeName || "Unassigned"}
+                        {p.legalVerification?.status ? ` (${p.legalVerification.status})` : ""}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <MapPin size={12} className="text-emerald-600" /> Field Agent:
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {p.fieldAssigneeName || "Unassigned"}
+                        {p.fieldVisit?.status ? ` (${p.fieldVisit.status})` : ""}
+                      </span>
+                    </div>
+
+                    {p.visitReport?.status ? (
+                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
+                        <span className="text-slate-500 flex items-center gap-1">
+                          <FileCheck size={12} className="text-sky-600" /> Inspection Report:
+                        </span>
+                        <span className="font-semibold text-sky-800">
+                          {p.visitReport.status}
+                        </span>
+                      </div>
+                    ) : null}
+
+                    {/* Direct CTA */}
+                    <div className="pt-1.5 text-right border-t border-slate-100">
+                      <Link
+                        href={`/crm/property-listings/${p._id}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                      >
+                        Open PM Pipeline & Report <ArrowRight size={11} />
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Sync error retry */}
+                {(p.twobighaSyncStatus === "failed" || p.twobighaSyncStatus === "unsupported") &&
+                p.twobighaSyncError ? (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50/80 px-2.5 py-1.5 text-[11px] text-amber-900">
+                    <p className="leading-snug">{p.twobighaSyncError}</p>
+                    <button
+                      type="button"
+                      disabled={retryingId === p._id}
+                      onClick={() => void retrySync(p._id)}
+                      className="mt-1 inline-flex items-center gap-1 font-semibold text-amber-800 hover:underline disabled:opacity-60"
                     >
-                      2bigha: {p.twobighaSyncStatus === "unsupported" ? "manual only" : "not synced"}
-                    </span>
-                  ) : p.twobighaSyncStatus === "mock" ? (
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
-                      2bigha: mock
-                    </span>
-                  ) : null}
-                </div>
-              </Link>
-              {(p.twobighaSyncStatus === "failed" || p.twobighaSyncStatus === "unsupported") &&
-              p.twobighaSyncError ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50/80 px-2.5 py-2 text-[11px] text-amber-900">
-                  <p className="leading-snug">{p.twobighaSyncError}</p>
-                  <button
-                    type="button"
-                    disabled={retryingId === p._id}
-                    onClick={() => void retrySync(p._id)}
-                    className="mt-1.5 inline-flex items-center gap-1 font-semibold text-amber-800 hover:underline disabled:opacity-60"
-                  >
-                    {retryingId === p._id ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <RefreshCw size={12} />
-                    )}
-                    Retry 2bigha sync
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ))}
+                      {retryingId === p._id ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={11} />
+                      )}
+                      Retry 2bigha sync
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

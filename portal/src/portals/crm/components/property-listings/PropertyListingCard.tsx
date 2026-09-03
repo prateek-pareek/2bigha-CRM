@@ -310,29 +310,25 @@ export function PropertyListingCard({
           {listing.title}
         </p>
 
-        <p className="text-[13px] text-slate-600">
-          Area:{" "}
-          {(() => {
-            const areaLabel = formatListingArea(listing);
-            if (areaLabel !== "—") {
-              return (
+        {(() => {
+          const areaLabel = formatListingArea(listing);
+          if (areaLabel === "—") return null;
+          return (
+            <p className="text-[13px] text-slate-600">
+              Area:{" "}
+              <span className="font-semibold text-[#1a9f4b]">{areaLabel}</span>
+              {listing.areaUnit === "Bigha" && areaBigha != null ? (
                 <>
-                  <span className="font-semibold text-[#1a9f4b]">{areaLabel}</span>
-                  {listing.areaUnit === "Bigha" && areaBigha != null ? (
-                    <>
-                      <ChevronDown size={12} className="ml-0.5 inline text-[#1a9f4b]" />
-                      <span className="text-slate-400">
-                        {" "}
-                        ({formatSqYd(areaBighaToSqYd(areaBigha))} sq. yd)
-                      </span>
-                    </>
-                  ) : null}
+                  <ChevronDown size={12} className="ml-0.5 inline text-[#1a9f4b]" />
+                  <span className="text-slate-400">
+                    {" "}
+                    ({formatSqYd(areaBighaToSqYd(areaBigha))} sq. yd)
+                  </span>
                 </>
-              );
-            }
-            return <span className="text-slate-400">—</span>;
-          })()}
-        </p>
+              ) : null}
+            </p>
+          );
+        })()}
 
         <p className="text-[13px] text-slate-600">
           Type:{" "}

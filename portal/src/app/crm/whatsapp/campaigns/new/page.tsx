@@ -11,6 +11,10 @@ import WhatsAppNavTabs from "@/components/crm/whatsapp/WhatsAppNavTabs";
 import type { WhatsAppTemplateRecord } from "@/components/crm/whatsapp/types";
 import { extractSlots } from "@/lib/crm/whatsapp/template-variables";
 import { generatePropertyBrochurePdf } from "@/lib/crm/whatsapp/property-share-api";
+import {
+  fetchTwoBighaProperties,
+  mapTwoBighaPropertyToRecord,
+} from "@/portals/crm/lib/property-listings/backend-api";
 import PropertySearchDropdown from "@/portals/crm/components/inbox/PropertySearchDropdown";
 
 interface LeadSearchResult {
@@ -99,21 +103,60 @@ export default function NewWhatsAppCampaignPage() {
       .catch(() => toast.error("Failed to load templates"))
       .finally(() => setLoadingTemplates(false));
 
-    // Load active property listings
+    // Load active property listings from 2Bigha GraphQL and CRM
     setLoadingProperties(true);
-    fetch(`${CRM_API_URL}/crm/property-listings?pageSize=200`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : { data: [] }))
-      .then((data) => {
-        const allProps = Array.isArray(data) ? data : (data.data || []);
-        setProperties(allProps);
-        if (allProps.length > 0) {
-          setSelectedPropertyId(allProps[0]._id || allProps[0].id);
+    const loadProps = async () => {
+      try {
+        let list: any[] = [];
+        const existingKeys = new Set<string>();
+
+        const addUnique = (p: any) => {
+          if (!p) return;
+          const key = String(p._id || p.id || p.twobighaPropertyId || p.slug || "").trim();
+          if (key && !existingKeys.has(key)) {
+            existingKeys.add(key);
+            list.push(p);
+          }
+        };
+
+        // 1. Live 2Bigha GraphQL properties
+        try {
+          const { data: twoBighaData } = await fetchTwoBighaProperties({ limit: 100 });
+          if (Array.isArray(twoBighaData)) {
+            for (const item of twoBighaData) {
+              const mapped = mapTwoBighaPropertyToRecord(item);
+              addUnique(mapped);
+            }
+          }
+        } catch (gqlErr) {
+          console.warn("Could not load 2Bigha GraphQL properties:", gqlErr);
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoadingProperties(false));
+
+        // 2. CRM-local listings
+        try {
+          const res = await fetch(`${CRM_API_URL}/crm/property-listings?pageSize=50`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json().catch(() => ({}));
+          const allProps = Array.isArray(data) ? data : (data.data || []);
+          for (const p of allProps) {
+            addUnique(p);
+          }
+        } catch {
+          // ignore
+        }
+
+        setProperties(list);
+        if (list.length > 0) {
+          setSelectedPropertyId(list[0]._id || list[0].id);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoadingProperties(false);
+      }
+    };
+    void loadProps();
   }, []);
 
   const generateBrochure = async (propId: string, forceRegenerate = false) => {
