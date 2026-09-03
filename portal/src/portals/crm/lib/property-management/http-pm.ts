@@ -11,6 +11,24 @@ function listingPath(id: string, suffix: string) {
   return `/crm/property-listings/${encodeURIComponent(id)}/pm/${suffix}`;
 }
 
+export async function httpGetLivePmStatus(id: string) {
+  const { data } = await api.get<{
+    listing: PropertyListingRecord;
+    liveDetail: any;
+    visitReports: any[];
+    fieldVisits: any[];
+    latestReportDetail?: any;
+  }>(`/crm/property-listings/${encodeURIComponent(id)}/pm/live-status`);
+  return data;
+}
+
+export async function httpGetVisitReportDetail(reportId: number) {
+  const { data } = await api.get<any>(
+    `/crm/property-listings/pm/reports/${encodeURIComponent(String(reportId))}`,
+  );
+  return data;
+}
+
 export async function httpStartLegal(id: string, summary?: string) {
   const { data } = await api.post<PropertyListingRecord>(listingPath(id, "legal/start"), {
     summary,

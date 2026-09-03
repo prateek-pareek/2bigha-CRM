@@ -108,6 +108,10 @@ function mapLocalListing(item: any): PropertyListingRecord {
     fieldAssigneeName: item.fieldAssigneeName,
     pmAssignmentSyncStatus: item.pmAssignmentSyncStatus,
     pmAssignmentSyncError: item.pmAssignmentSyncError,
+    legalVerification: item.legalVerification,
+    fieldVisit: item.fieldVisit,
+    visitReport: item.visitReport,
+    pmWorkflowIds: item.pmWorkflowIds,
   };
 }
 

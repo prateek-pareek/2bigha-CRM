@@ -133,3 +133,22 @@ export async function reviewPmVisitReport(
     ? mock.reviewPmVisitReport(id, decision, rejectionReason, sections)
     : http.httpReviewVisitReport(id, decision, rejectionReason, sections);
 }
+
+export async function fetchLivePmStatus(id: string) {
+  if (mockMode() || isDemoListingId(id)) {
+    return null;
+  }
+  try {
+    return await http.httpGetLivePmStatus(id);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchVisitReportDetail(reportId: number) {
+  try {
+    return await http.httpGetVisitReportDetail(reportId);
+  } catch {
+    return null;
+  }
+}

@@ -84,6 +84,7 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
   const drawnPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
   const pointMarkersRef = useRef<any[]>([]);
   const isDrawingActiveRef = useRef<boolean>(true);
+  const renderedCoordsKeyRef = useRef<string>("");
 
   const [isCompleted, setIsCompleted] = useState(false);
   const [pointCount, setPointCount] = useState(0);
@@ -222,6 +223,42 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
     }
   }, [mapLoaded, googleAvailable]);
 
+  // Reactive polygon boundary rendering from loaded draft
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.google?.maps) return;
+
+    let coords: Array<{ lat: number; lng: number }> = [];
+    if (draft.mapCoordinates && draft.mapCoordinates.length >= 3) {
+      coords = draft.mapCoordinates.map((c) => ({ lat: Number(c.lat), lng: Number(c.lng) }));
+    } else if (draft.mapBoundaries && Array.isArray(draft.mapBoundaries) && draft.mapBoundaries.length > 0) {
+      const b = draft.mapBoundaries[0];
+      if (b?.coordinates && Array.isArray(b.coordinates)) {
+        coords = b.coordinates.map((c: any) => ({ lat: Number(c.lat), lng: Number(c.lng) }));
+      }
+    }
+
+    const key = JSON.stringify({
+      coords,
+      lat: draft.mapLocation?.lat,
+      lng: draft.mapLocation?.lng,
+    });
+    if (key === renderedCoordsKeyRef.current) return;
+    renderedCoordsKeyRef.current = key;
+
+    if (coords.length >= 3) {
+      renderCompletedPolygon(coords);
+      const bounds = new window.google.maps.LatLngBounds();
+      coords.forEach((c) => bounds.extend(c));
+      mapInstanceRef.current.fitBounds(bounds);
+    } else if (draft.mapLocation?.lat && draft.mapLocation?.lng) {
+      mapInstanceRef.current.setCenter({
+        lat: Number(draft.mapLocation.lat),
+        lng: Number(draft.mapLocation.lng),
+      });
+      mapInstanceRef.current.setZoom(17);
+    }
+  }, [draft.mapBoundaries, draft.mapCoordinates, draft.mapLocation, mapLoaded]);
+
   // Handle map type switch
   useEffect(() => {
     if (!mapInstanceRef.current || !window.google?.maps) return;
@@ -354,8 +391,6 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
         });
       }
     };
-
-    updateData();
 
     polygon.addListener("rightclick", () => {
       clearBoundaries();

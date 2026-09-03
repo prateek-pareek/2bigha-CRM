@@ -14,7 +14,11 @@ import {
   type WhatsAppTemplateComponent,
 } from "@/lib/crm/whatsapp/template-variables";
 import { generatePropertyBrochurePdf } from "@/lib/crm/whatsapp/property-share-api";
-import { fetchBackendPropertyListingsByLead } from "@/lib/crm/property-listings/backend-api";
+import {
+  fetchBackendPropertyListingsByLead,
+  fetchTwoBighaProperties,
+  mapTwoBighaPropertyToRecord,
+} from "@/portals/crm/lib/property-listings/backend-api";
 import PropertySearchDropdown from "./PropertySearchDropdown";
 
 export type { WhatsAppCachedTemplate, WhatsAppTemplateComponent };
@@ -266,27 +270,58 @@ export default function WhatsAppTemplatePicker({
     const loadProps = async () => {
       try {
         let list: any[] = [];
+        const existingKeys = new Set<string>();
+
+        const addUnique = (p: any) => {
+          if (!p) return;
+          const key = String(p._id || p.id || p.twobighaPropertyId || p.slug || "").trim();
+          if (key && !existingKeys.has(key)) {
+            existingKeys.add(key);
+            list.push(p);
+          }
+        };
+
+        // 1. Prioritize properties associated with this lead
         if (leadId) {
           try {
             const leadProps = await fetchBackendPropertyListingsByLead(leadId);
             if (Array.isArray(leadProps)) {
-              list.push(...leadProps);
+              for (const lp of leadProps) addUnique(lp);
             }
           } catch {
             // ignore
           }
         }
-        const res = await fetch(`${CRM_API_URL}/crm/property-listings?pageSize=200`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json().catch(() => ({}));
-        const allProps = Array.isArray(data) ? data : (data.data || []);
-        const existingIds = new Set(list.map((p) => p._id || p.id));
-        for (const p of allProps) {
-          if (!existingIds.has(p._id || p.id)) {
-            list.push(p);
+
+        // 2. Fetch live properties directly from 2Bigha GraphQL server
+        try {
+          const { data: twoBighaData } = await fetchTwoBighaProperties({
+            limit: 100,
+          });
+          if (Array.isArray(twoBighaData)) {
+            for (const item of twoBighaData) {
+              const mapped = mapTwoBighaPropertyToRecord(item);
+              addUnique(mapped);
+            }
           }
+        } catch (gqlErr) {
+          console.warn("Could not load 2Bigha GraphQL properties:", gqlErr);
         }
+
+        // 3. Also include locally stored CRM listings
+        try {
+          const res = await fetch(`${CRM_API_URL}/crm/property-listings?pageSize=50`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json().catch(() => ({}));
+          const allProps = Array.isArray(data) ? data : (data.data || []);
+          for (const p of allProps) {
+            addUnique(p);
+          }
+        } catch {
+          // ignore
+        }
+
         setProperties(list);
         if (list.length > 0 && !selectedPropertyId) {
           setSelectedPropertyId(list[0]._id || list[0].id);

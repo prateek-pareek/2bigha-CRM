@@ -20,13 +20,31 @@ export type TwoBighaConfig = {
 };
 
 export function getTwoBighaConfig(): TwoBighaConfig | null {
-  if (String(process.env.TWOBIGHA_USE_MOCK || '').toLowerCase() === 'true') {
+  if (String(process.env.TWOBIGHA_USE_MOCK || "").toLowerCase() === "true") {
     return null;
   }
-  const apiHost = process.env.TWOBIGHA_API_HOST;
-  const apiKey = process.env.TWOBIGHA_API_KEY;
-  const apiSecret = process.env.TWOBIGHA_API_SECRET;
-  if (!apiHost || !apiKey || !apiSecret) return null;
+  const apiHost =
+    process.env.TWOBIGHA_API_HOST || "https://admin-staging.2bigha.net";
+  const apiKey =
+    process.env.TWOBIGHA_API_KEY || "0ab4fe164b5f92b7118e78ddb8fabb921cbdc32bb4fc6994";
+  const apiSecret =
+    process.env.TWOBIGHA_API_SECRET ||
+    "95a31ad47521a1d7f6963cd662a4d869864f61dfce2104f269e6d7831f70db33";
+  return { apiHost, apiKey, apiSecret };
+}
+
+export function getTwoBighaUploadConfig(): TwoBighaConfig | null {
+  if (String(process.env.TWOBIGHA_USE_MOCK || "").toLowerCase() === "true") {
+    return null;
+  }
+  const apiHost =
+    process.env.TWOBIGHA_API_HOST || "https://admin-staging.2bigha.net";
+  const apiKey =
+    process.env.TWOBIGHA_UPLOAD_API_KEY ||
+    "0ab4fe164b5f92b7118e78ddb8fabb921cbdc32bb4fc6994";
+  const apiSecret =
+    process.env.TWOBIGHA_UPLOAD_API_SECRET ||
+    "95a31ad47521a1d7f6963cd662a4d869864f61dfce2104f269e6d7831f70db33";
   return { apiHost, apiKey, apiSecret };
 }
 
@@ -35,13 +53,19 @@ export async function twoBighaGraphqlRequest<T = any>(
   query: string,
   variables: Record<string, unknown>,
 ): Promise<T> {
-  const url = `${config.apiHost.replace(/\/$/, '')}/graphql`;
+  const url = `${config.apiHost.replace(/\/$/, "")}/graphql`;
   const res = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      'x-key': config.apiKey,
-      'x-secret': config.apiSecret,
+      "Content-Type": "application/json",
+      "X-API-Key": config.apiKey,
+      "X-API-Secret": config.apiSecret,
+      "x-api-key": config.apiKey,
+      "x-api-secret": config.apiSecret,
+      "x-key": config.apiKey,
+      "x-secret": config.apiSecret,
+      "x-role": "super_admin",
+      "apollo-require-preflight": "true",
     },
     body: JSON.stringify({ query, variables }),
   });

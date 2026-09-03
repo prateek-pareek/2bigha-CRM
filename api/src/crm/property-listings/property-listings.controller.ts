@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -253,6 +254,30 @@ export class PropertyListingsController {
   @Permissions('property_listings:write')
   retrySync(@Param('id') id: string) {
     return this.listingsService.retrySync(id);
+  }
+
+  /** Update sold status and sync directly to 2bigha updatePropertySoldStatus mutation. */
+  @Patch(':id/sold-status')
+  @Permissions('property_listings:write')
+  updateSoldStatus(
+    @Param('id') id: string,
+    @Body() body: { isSold: boolean },
+  ) {
+    return this.listingsService.updateSoldStatus(id, Boolean(body.isSold));
+  }
+
+  /** Live PM aggregated status read-through for Stages 3-6. */
+  @Get(':id/pm/live-status')
+  @Permissions('property_listings:read')
+  getLivePmStatus(@Param('id') id: string) {
+    return this.listingsService.getLivePmStatus(id);
+  }
+
+  /** Drill into full visit report details by reportId. */
+  @Get('pm/reports/:reportId')
+  @Permissions('property_listings:read')
+  getVisitReportDetail(@Param('reportId') reportId: string) {
+    return this.listingsService.getVisitReportDetail(Number(reportId));
   }
 
   @Post(':id/pm/assign')

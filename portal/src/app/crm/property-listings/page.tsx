@@ -45,7 +45,13 @@ import {
   fetchThirdPartyPropertyStats,
   updateThirdPartyProperty,
 } from "@/lib/crm/property-listings/third-party-api";
-import { fetchTwoBighaFarms, mapTwoBighaFarmToRecord } from "@/lib/crm/property-listings/backend-api";
+import {
+  fetchTwoBighaFarms,
+  fetchTwoBighaProperties,
+  mapTwoBighaFarmToRecord,
+  mapTwoBighaPropertyToRecord,
+} from "@/lib/crm/property-listings/backend-api";
+import { CRM_API_URL } from "@/lib/crm/config";
 import {
   LISTING_BUCKETS,
   PROPERTY_STATUSES,
@@ -213,15 +219,13 @@ function PropertyListingsPageContent() {
       }
       if (bucket === "properties") {
         // Live 2bigha GraphQL properties
-        const data = await fetchThirdPartyPropertyListings({
+        const { data, total: propTotal } = await fetchTwoBighaProperties({
           page,
-          pageSize: safePageSize,
-          search: search.trim() || undefined,
-          listingBucket: bucket,
-          status: statusFilter !== "all" ? statusFilter : undefined,
+          limit: safePageSize,
+          searchTerm: search.trim() || undefined,
         });
-        setListings(data.data);
-        setTotal(data.total);
+        setListings(data.map((raw) => mapTwoBighaPropertyToRecord(raw)));
+        setTotal(propTotal);
         return;
       }
       // PM bucket — same page/pageSize in list and kanban so the board never dumps the full set.
@@ -344,24 +348,29 @@ function PropertyListingsPageContent() {
   const openListing = (id: string) => {
     router.push(`/crm/property-listings/${id}`);
   };
-  const isLive2bigha = bucket === "farm" || bucket === "properties";
-  const isLiveRow = (id: string) => isLive2bigha || id.startsWith("pm_");
   const editListing = (id: string) => {
-    if (isLiveRow(id)) {
-      toast.error("Editing a live 2bigha listing isn't available here yet");
+    if (bucket === "farm") {
+      toast.error("Editing a live 2bigha farm marketplace listing isn't available");
       return;
     }
     router.push(`/crm/property-listings/${id}/edit`);
   };
 
   const removeListing = async (id: string) => {
-    if (isLiveRow(id)) {
-      toast.error("Deleting a live 2bigha listing isn't available here yet");
+    if (bucket === "farm" || id.startsWith("pm_")) {
+      toast.error("Deleting this live listing isn't available here");
       return;
     }
     if (!confirm("Delete this listing?")) return;
+    const token = localStorage.getItem("token");
     try {
-      await deleteThirdPartyProperty(id);
+      const res = await fetch(`${CRM_API_URL}/crm/property-listings/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        await deleteThirdPartyProperty(id);
+      }
       toast.success("Listing deleted");
       setListings((prev) => prev.filter((l) => l._id !== id));
       setTotal((t) => Math.max(0, t - 1));
