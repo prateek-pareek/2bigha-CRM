@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
+
 import {
   BarChart,
   Bar,
@@ -19,6 +22,7 @@ import {
   CRM_CHART_TOOLTIP,
   CRM_CHART_TICK,
 } from "@/portals/crm/lib/shared/chart-theme";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 interface AgentComparisonChartProps {
   agents: any[];
@@ -26,7 +30,11 @@ interface AgentComparisonChartProps {
 }
 
 export default function AgentComparisonChart({ agents, loading }: AgentComparisonChartProps) {
-  if (loading) return null;
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
 
   // Prepare data - sort by total activity score (calls + leads created)
   const chartData = agents
@@ -51,13 +59,23 @@ export default function AgentComparisonChart({ agents, loading }: AgentCompariso
   if (chartData.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Agent Performance Ranking</h3>
-        <p className="text-xs text-[var(--text-muted)]">Top agents by calls and leads created</p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl' : ''}`}>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">Agent Performance Ranking</h3>
+          <p className="text-xs text-[var(--text-muted)]">Top agents by calls and leads created</p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
-      <div className="h-[300px] w-full">
+      <div className={`${isFullScreen ? 'h-[calc(100vh-200px)]' : 'h-[300px]'} w-full transition-all`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
@@ -74,7 +92,7 @@ export default function AgentComparisonChart({ agents, loading }: AgentCompariso
               height={80}
             />
             <YAxis tick={CRM_CHART_TICK} axisLine={false} tickLine={false} />
-            <Tooltip {...CRM_CHART_TOOLTIP} />
+            <Tooltip {...CRM_CHART_TOOLTIP} cursor={{ fill: "var(--surface-dim)", opacity: 0.5 }} />
             <Legend wrapperStyle={{ paddingTop: 20, fontSize: 11, fontWeight: 600 }} />
             <Bar dataKey="calls" fill={CRM_CHART_PRIMARY} radius={[6, 6, 0, 0]} />
             <Bar dataKey="leadsCreated" fill={CRM_CHART_SUCCESS} radius={[6, 6, 0, 0]} />

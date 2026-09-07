@@ -206,6 +206,11 @@ import {
   CrmContractAiSettingsSchema,
 } from './schemas/crm-contract-ai-settings.schema';
 import { CrmContractAiSettingsService } from './proposals/crm-contract-ai-settings.service';
+import {
+  ReportSchedule,
+  ReportScheduleSchema,
+} from './reporting/schemas/report-schedule.schema';
+import { ReportSchedulerService } from './reporting/report-scheduler.service';
 import { InboxSyncCronService } from './inbox/inbox-sync-cron.service';
 import { InboxPushService } from './inbox/inbox-push.service';
 import { InboxPushController } from './inbox/inbox-push.controller';
@@ -365,6 +370,7 @@ import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
           name: CrmNotificationPreference.name,
           schema: CrmNotificationPreferenceSchema,
         },
+        { name: ReportSchedule.name, schema: ReportScheduleSchema },
       ],
       'crmConnection',
     ),
@@ -451,6 +457,7 @@ import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
     GlobalSearchService,
     PipelinesService,
     ReportingService,
+    ReportSchedulerService,
     TeamsIntegrationService,
     SlackIntegrationService,
     IntegrationCatalogService,

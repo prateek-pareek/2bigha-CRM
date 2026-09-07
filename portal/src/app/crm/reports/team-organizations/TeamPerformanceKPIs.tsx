@@ -60,7 +60,23 @@ export default function TeamPerformanceKPIs({
   teamData,
   loading,
 }: TeamPerformanceKPIsProps) {
-  if (loading || teamData.length === 0) return null;
+  if (loading) {
+    return (
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm h-[104px] animate-pulse">
+            <div className="flex justify-between items-start">
+              <div className="h-4 bg-[var(--surface-dim)] rounded w-24 mb-4"></div>
+              <div className="h-8 w-8 bg-[var(--surface-dim)] rounded"></div>
+            </div>
+            <div className="h-6 bg-[var(--surface-dim)] rounded w-16"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (teamData.length === 0) return null;
 
   // Aggregate metrics across all teams
   const totalTeams = teamData.length;

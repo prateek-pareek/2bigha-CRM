@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -22,6 +23,7 @@ import {
   CRM_CHART_TOOLTIP,
   CRM_CHART_TICK,
 } from "@/portals/crm/lib/shared/chart-theme";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 type TeamData = {
   teamName: string;
@@ -39,6 +41,8 @@ export default function WhatsAppEngagementChart({
   teamData,
   loading,
 }: WhatsAppEngagementChartProps) {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   const chartData = useMemo(() => {
     if (loading || !teamData || teamData.length === 0) return [];
 
@@ -68,13 +72,15 @@ export default function WhatsAppEngagementChart({
       .slice(0, 8);
   }, [teamData, loading]);
 
-  if (loading || chartData.length === 0) {
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
+
+  if (chartData.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)] mb-2">WhatsApp Engagement</h3>
-        <div className="h-64 flex items-center justify-center text-[var(--text-muted)]">
-          <p className="text-xs">No WhatsApp data available</p>
-        </div>
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-[350px] flex flex-col items-center justify-center relative">
+        <h3 className="text-sm font-bold text-[var(--text-main)] mb-2 self-start absolute top-6 left-6">WhatsApp Engagement</h3>
+        <p className="text-xs text-[var(--text-muted)]">No WhatsApp data available</p>
       </div>
     );
   }
@@ -86,12 +92,22 @@ export default function WhatsAppEngagementChart({
   const overallFailureRate = totalSent > 0 ? Math.round((totalFailed / totalSent) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">WhatsApp Engagement</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Message delivery and read rates by team
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl flex flex-col' : ''}`}>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">WhatsApp Engagement</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Message delivery and read rates by team
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
       {/* Summary Stats */}
@@ -117,7 +133,7 @@ export default function WhatsAppEngagementChart({
       </div>
 
       {/* Chart */}
-      <div className="h-[300px] w-full mb-4">
+      <div className={`${isFullScreen ? 'flex-1 min-h-[400px]' : 'h-[300px]'} w-full mb-4 transition-all`}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CRM_CHART_GRID} />
@@ -131,6 +147,7 @@ export default function WhatsAppEngagementChart({
               height={80}
             />
             <YAxis tick={CRM_CHART_TICK} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="right" orientation="right" tick={CRM_CHART_TICK} axisLine={false} tickLine={false} />
             <Tooltip {...CRM_CHART_TOOLTIP} />
             <Legend wrapperStyle={{ paddingTop: 20, fontSize: 11, fontWeight: 600 }} />
             <Bar dataKey="sent" fill={CRM_CHART_PRIMARY} radius={[6, 6, 0, 0]} />

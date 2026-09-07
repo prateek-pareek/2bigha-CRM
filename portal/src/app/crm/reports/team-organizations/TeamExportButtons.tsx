@@ -1,9 +1,10 @@
 "use client";
 
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, FileText } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { exportReport, TeamReportData } from "../lib/export-reports";
+import { CrmDropdown } from "@/components/crm/ui";
 
 type Props = {
   data: TeamReportData[];
@@ -12,9 +13,14 @@ type Props = {
 };
 
 export default function TeamExportButtons({ data, fileName, disabled }: Props) {
-  const [exporting, setExporting] = useState<"csv" | "excel" | null>(null);
+  const [exporting, setExporting] = useState<"csv" | "excel" | "pdf" | null>(null);
 
-  const handleExport = async (format: "csv" | "excel") => {
+  const handleExport = async (format: "csv" | "excel" | "pdf") => {
+    if (format === "pdf") {
+      window.print();
+      return;
+    }
+
     if (!data || data.length === 0) {
       toast.error("No data to export");
       return;
@@ -34,35 +40,19 @@ export default function TeamExportButtons({ data, fileName, disabled }: Props) {
 
   return (
     <div className="flex gap-2">
-      <button
-        type="button"
-        onClick={() => handleExport("csv")}
+      <CrmDropdown
+        value=""
+        onChange={(val) => handleExport(val as "csv" | "excel" | "pdf")}
+        options={[
+          { value: "csv", label: "Download CSV" },
+          { value: "excel", label: "Download Excel" },
+          { value: "pdf", label: "Print PDF" }
+        ]}
+        placeholder={exporting ? "Exporting..." : "Export Reports"}
         disabled={disabled || exporting !== null}
-        title="Download as CSV"
-        className="inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {exporting === "csv" ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : (
-          <Download size={14} />
-        )}
-        CSV
-      </button>
-
-      <button
-        type="button"
-        onClick={() => handleExport("excel")}
-        disabled={disabled || exporting !== null}
-        title="Download as Excel"
-        className="inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {exporting === "excel" ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : (
-          <Download size={14} />
-        )}
-        Excel
-      </button>
+        buttonClassName="h-8 !py-1.5 inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        textSize="text-xs"
+      />
     </div>
   );
 }

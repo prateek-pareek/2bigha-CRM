@@ -3642,6 +3642,129 @@ export class ReportingService {
   }
 
   /**
+   * Agent Performance Time-Series Trend
+   */
+  async getAgentPerformanceTrend(window: string) {
+    const range = this.resolveWorkspaceWindow(window);
+    const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+
+    const [callRows, leadRows, convertedRows] = await Promise.all([
+      this.callLogModel.aggregate([
+        { $match: { ...dateMatch, initiatedByUserId: { $exists: true, $ne: null } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+            calls: { $sum: 1 },
+          },
+        },
+      ]).exec(),
+      this.leadModel.aggregate([
+        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+            leadsCreated: { $sum: 1 },
+          },
+        },
+      ]).exec(),
+      this.leadModel.aggregate([
+        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null }, converted: true } },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+            leadsConverted: { $sum: 1 },
+          },
+        },
+      ]).exec(),
+    ]);
+
+    const dateMap = new Map<string, any>();
+    const current = new Date(range.start);
+    while (current <= range.end) {
+      const dateStr = current.toISOString().split('T')[0];
+      dateMap.set(dateStr, { date: dateStr, calls: 0, leadsCreated: 0, leadsConverted: 0 });
+      current.setDate(current.getDate() + 1);
+    }
+
+    callRows.forEach(r => { if (dateMap.has(r._id)) dateMap.get(r._id).calls = r.calls; });
+    leadRows.forEach(r => { if (dateMap.has(r._id)) dateMap.get(r._id).leadsCreated = r.leadsCreated; });
+    convertedRows.forEach(r => { if (dateMap.has(r._id)) dateMap.get(r._id).leadsConverted = r.leadsConverted; });
+
+    return Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  /**
+   * Team Performance Time-Series Trend
+   */
+  async getTeamPerformanceTrend(window: string) {
+    const range = this.resolveWorkspaceWindow(window);
+    const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+
+    // Group leads by date and agent
+    const [leadRows, agents] = await Promise.all([
+      this.leadModel.aggregate([
+        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null } } },
+        {
+          $group: {
+            _id: { 
+              date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+              agentId: "$createdBy"
+            },
+            count: { $sum: 1 },
+          },
+        },
+      ]).exec(),
+      this.hrmsUserModel.find().select('_id firstName lastName email reportsTo').limit(2000).lean().exec(),
+    ]);
+
+    const userById = new Map(agents.map((u: any) => [String(u._id), u]));
+    
+    const teamMap = new Map<string, string>(); // teamId -> teamName
+    agents.forEach((agent: any) => {
+      const tlId = agent.reportsTo?.toString() || 'Unassigned';
+      if (!teamMap.has(tlId)) {
+        if (tlId === 'Unassigned') {
+          teamMap.set(tlId, 'Unassigned');
+        } else {
+          const tl = userById.get(tlId);
+          teamMap.set(tlId, tl ? `${tl.firstName || ''} ${tl.lastName || ''}`.trim() || tl.email : tlId);
+        }
+      }
+    });
+
+    const dateMap = new Map<string, any>();
+    const current = new Date(range.start);
+    const teamNames = Array.from(teamMap.values());
+
+    while (current <= range.end) {
+      const dateStr = current.toISOString().split('T')[0];
+      const entry: any = { date: dateStr };
+      teamNames.forEach(t => { entry[t] = 0; });
+      dateMap.set(dateStr, entry);
+      current.setDate(current.getDate() + 1);
+    }
+
+    leadRows.forEach(r => {
+      if (!r._id.date) return;
+      const agentId = String(r._id.agentId);
+      const agent = userById.get(agentId);
+      const tlId = agent?.reportsTo?.toString() || 'Unassigned';
+      const teamName = teamMap.get(tlId) || 'Unassigned';
+      
+      if (dateMap.has(r._id.date)) {
+        if (dateMap.get(r._id.date)[teamName] !== undefined) {
+          dateMap.get(r._id.date)[teamName] += r.count;
+        }
+      }
+    });
+
+    return {
+      teams: teamNames,
+      data: Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+    };
+  }
+
+  /**
    * Team & Organization Reports - Team-level aggregations
    */
   async getTeamPerformanceMetrics(window: string) {

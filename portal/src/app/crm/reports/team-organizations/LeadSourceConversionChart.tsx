@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   CRM_CHART_PRIMARY,
   CRM_CHART_SUCCESS,
   CRM_CHART_SECONDARY,
 } from "@/portals/crm/lib/shared/chart-theme";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 type SourceData = {
   source: string;
@@ -22,6 +24,8 @@ export default function LeadSourceConversionChart({
   sourceData,
   loading,
 }: LeadSourceConversionChartProps) {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   const funnelData = useMemo(() => {
     if (loading || !sourceData || sourceData.length === 0) return [];
 
@@ -42,13 +46,15 @@ export default function LeadSourceConversionChart({
       .slice(0, 6);
   }, [sourceData, loading]);
 
-  if (loading || funnelData.length === 0) {
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
+
+  if (funnelData.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)] mb-2">Lead Source Conversion</h3>
-        <div className="h-48 flex items-center justify-center text-[var(--text-muted)]">
-          <p className="text-xs">No lead source data available</p>
-        </div>
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-[350px] flex flex-col justify-center items-center text-[var(--text-muted)] relative">
+        <h3 className="text-sm font-bold text-[var(--text-main)] self-start absolute top-6 left-6">Lead Source Conversion</h3>
+        <p className="text-xs">No lead source data available</p>
       </div>
     );
   }
@@ -58,15 +64,25 @@ export default function LeadSourceConversionChart({
   const overallConversion = totalLeads > 0 ? Math.round((totalConverted / totalLeads) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Lead Source Conversion</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Conversion rates by lead source channel
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl flex flex-col' : ''}`}>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">Lead Source Conversion</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Conversion rates by lead source channel
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
-      <div className="space-y-4">
+      <div className={`space-y-4 ${isFullScreen ? 'flex-1 overflow-auto' : ''}`}>
         {funnelData.map((source, index) => {
           const dropoff = index === 0 ? 0 : funnelData[index - 1].leads - source.leads;
           const dropoffPct = index === 0 ? 0 : Math.round((dropoff / funnelData[index - 1].leads) * 100);
@@ -90,7 +106,10 @@ export default function LeadSourceConversionChart({
               </div>
 
               {/* Conversion bar */}
-              <div className="relative h-8 overflow-hidden rounded-lg bg-[var(--surface-dim)]">
+              <div 
+                className="relative h-8 overflow-hidden rounded-lg bg-[var(--surface-dim)]"
+                title={`${source.source}: ${source.converted} converted out of ${source.leads} leads (${source.rate}%)`}
+              >
                 <div
                   className="flex items-center justify-end pr-3 transition-all duration-300"
                   style={{

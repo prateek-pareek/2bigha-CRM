@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
+
 import {
   BarChart,
   Bar,
@@ -18,6 +21,7 @@ import {
   CRM_CHART_TOOLTIP,
   CRM_CHART_TICK,
 } from "@/portals/crm/lib/shared/chart-theme";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 type TeamData = {
   teamId?: string;
@@ -42,7 +46,13 @@ export default function TeamComparisonChart({
   teamData,
   loading,
 }: TeamComparisonChartProps) {
-  if (loading || teamData.length === 0) return null;
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
+
+  if (teamData.length === 0) return null;
 
   // Prepare data - sort by total activity score
   const chartData = teamData
@@ -65,15 +75,25 @@ export default function TeamComparisonChart({
   if (chartData.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Team Performance Ranking</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Top teams by calls and leads generated
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl' : ''}`}>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">Team Performance Ranking</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Top teams by calls and leads generated
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
-      <div className="h-[300px] w-full">
+      <div className={`${isFullScreen ? 'h-[calc(100vh-200px)]' : 'h-[300px]'} w-full transition-all`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}

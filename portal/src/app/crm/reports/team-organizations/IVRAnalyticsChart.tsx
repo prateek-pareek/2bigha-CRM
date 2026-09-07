@@ -1,7 +1,9 @@
 "use client";
+// TS-check trigger
 
-import { useMemo } from "react";
-import { Clock, PhoneOff, PhoneMissed } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Clock, PhoneOff, PhoneMissed, Maximize2, Minimize2 } from "lucide-react";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 type TeamData = {
   teamName: string;
@@ -28,6 +30,8 @@ export default function IVRAnalyticsChart({
   teamData,
   loading,
 }: IVRAnalyticsChartProps) {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   const analyticsData = useMemo(() => {
     if (loading || !teamData || teamData.length === 0) return [];
 
@@ -59,13 +63,15 @@ export default function IVRAnalyticsChart({
       .slice(0, 8);
   }, [teamData, loading]);
 
-  if (loading || analyticsData.length === 0) {
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
+
+  if (analyticsData.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)] mb-2">IVR Call Analytics</h3>
-        <div className="h-48 flex items-center justify-center text-[var(--text-muted)]">
-          <p className="text-xs">No IVR data available</p>
-        </div>
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-[350px] flex flex-col items-center justify-center relative">
+        <h3 className="text-sm font-bold text-[var(--text-main)] mb-2 self-start absolute top-6 left-6">IVR Call Analytics</h3>
+        <p className="text-xs text-[var(--text-muted)]">No IVR data available</p>
       </div>
     );
   }
@@ -80,12 +86,22 @@ export default function IVRAnalyticsChart({
     : 0;
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">IVR Call Analytics</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Inbound call metrics and missed call rates
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl flex flex-col' : 'h-full flex flex-col'}`}>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">IVR Call Analytics</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Inbound call metrics and missed call rates
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
       {/* Summary Stats */}
@@ -113,7 +129,7 @@ export default function IVRAnalyticsChart({
       </div>
 
       {/* Team Details */}
-      <div className="space-y-3">
+      <div className={`space-y-3 flex-1 flex flex-col justify-center min-h-[300px] ${isFullScreen ? 'overflow-auto' : ''}`}>
         {analyticsData.map((team) => {
           const completionBarColor = team.completionRate >= 70 ? "#10b981" : team.completionRate >= 50 ? "#f59e0b" : "#ef4444";
 

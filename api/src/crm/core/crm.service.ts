@@ -22,6 +22,13 @@ import {
   CustomField,
   CustomFieldDocument,
 } from '../admin/schemas/custom-field.schema';
+import {
+  actionVerb,
+  crmRecordPath,
+  moduleToRelatedType,
+  summarizeAuditChanges,
+} from '../admin/audit-log.util';
+import { ReportSchedule, ReportScheduleDocument } from '../reporting/schemas/report-schedule.schema';
 import { ReportingService } from '../reporting/reporting.service';
 import { TeamsBotService } from '../../teams-bot/teams-bot.service';
 import { PipelinesService } from './pipelines.service';
@@ -172,6 +179,8 @@ export class CRMService {
     private readonly notificationsService: NotificationsService,
     private readonly crmNotify: CrmNotifyService,
     private readonly crmUsersService: CRMUsersService,
+    @InjectModel(ReportSchedule.name, 'crmConnection')
+    private reportScheduleModel?: Model<ReportScheduleDocument>,
   ) { }
 
   private normalizeTaskStatus(status?: string): string {
@@ -255,6 +264,36 @@ export class CRMService {
         console.error('[CRMService] Teams DM failed:', dm.error);
       }
     }
+  }
+
+  // --- Report Scheduling ---
+
+  async createReportSchedule(userId: string, dto: {
+    reportType: 'agent' | 'team';
+    frequency: 'daily' | 'weekly' | 'monthly';
+    emailRecipients: string[];
+    filters: Record<string, any>;
+  }) {
+    if (!this.reportScheduleModel) return null;
+    const schedule = new this.reportScheduleModel({
+      userId,
+      ...dto,
+    });
+    return schedule.save();
+  }
+
+  async getReportSchedules(userId: string) {
+    if (!this.reportScheduleModel) return [];
+    return this.reportScheduleModel.find({ userId, isActive: true }).lean().exec();
+  }
+
+  async deleteReportSchedule(userId: string, scheduleId: string) {
+    if (!this.reportScheduleModel) return null;
+    return this.reportScheduleModel.findOneAndUpdate(
+      { _id: scheduleId, userId },
+      { $set: { isActive: false } },
+      { new: true }
+    );
   }
 
   private async resolveTaskAssigneeRef(
@@ -2023,6 +2062,10 @@ export class CRMService {
     return this.reportingService.getAgentPerformanceLeaderboard(window);
   }
 
+  async getAgentPerformanceTrend(window: string) {
+    return this.reportingService.getAgentPerformanceTrend(window);
+  }
+
   async getAgentTargets() {
     return this.reportingService.getAgentTargets();
   }
@@ -2034,6 +2077,10 @@ export class CRMService {
   // Team & Organizations Reports
   async getTeamPerformanceMetrics(window: string) {
     return this.reportingService.getTeamPerformanceMetrics(window);
+  }
+
+  async getTeamPerformanceTrend(window: string) {
+    return this.reportingService.getTeamPerformanceTrend(window);
   }
 
   async getLeadSourceConversion(window: string) {

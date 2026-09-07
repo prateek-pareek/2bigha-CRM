@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import {
   CRM_CHART_SERIES,
   CRM_CHART_TOOLTIP,
 } from "@/portals/crm/lib/shared/chart-theme";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 type IntentData = {
   intentLabel: string;
@@ -22,6 +24,8 @@ export default function LeadIntentAnalytics({
   intentData,
   loading,
 }: LeadIntentAnalyticsProps) {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   const chartData = useMemo(() => {
     if (loading || !intentData || intentData.length === 0) return [];
 
@@ -38,13 +42,15 @@ export default function LeadIntentAnalytics({
       .slice(0, 8);
   }, [intentData, loading]);
 
-  if (loading || chartData.length === 0) {
+  if (loading) {
+    return <ReportChartSkeleton type="pie" height="350px" />;
+  }
+
+  if (chartData.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)] mb-2">Lead Intent Distribution</h3>
-        <div className="h-64 flex items-center justify-center text-[var(--text-muted)]">
-          <p className="text-xs">No intent data available</p>
-        </div>
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-[350px] flex flex-col items-center justify-center relative">
+        <h3 className="text-sm font-bold text-[var(--text-main)] mb-2 self-start absolute top-6 left-6">Lead Intent Distribution</h3>
+        <p className="text-xs text-[var(--text-muted)]">No intent data available</p>
       </div>
     );
   }
@@ -54,28 +60,39 @@ export default function LeadIntentAnalytics({
   const avgConversionRate = totalLeads > 0 ? Math.round((totalConverted / totalLeads) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Lead Intent Distribution</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Intent types and their conversion rates
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all flex flex-col ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl' : 'h-full'}`}>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">Lead Intent Distribution</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Intent types and their conversion rates
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className={`grid grid-cols-1 gap-6 flex-1 items-center ${isFullScreen ? 'lg:grid-cols-2 lg:h-[calc(100vh-250px)]' : 'lg:grid-cols-2 min-h-[300px]'}`}>
         {/* Pie Chart */}
-        <div className="h-[300px]">
+        <div className={isFullScreen ? 'h-full min-h-[400px] flex items-center justify-center' : 'h-[300px] flex items-center justify-center'}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${(name || "").slice(0, 10)}: ${((percent || 0) * 100).toFixed(0)}%`}
-                outerRadius={80}
+                innerRadius={isFullScreen ? "50%" : "55%"}
+                outerRadius={isFullScreen ? "70%" : "80%"}
+                paddingAngle={2}
                 fill="#8884d8"
                 dataKey="value"
+                stroke="none"
               >
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={CRM_CHART_SERIES[index % CRM_CHART_SERIES.length]} />
@@ -93,17 +110,17 @@ export default function LeadIntentAnalytics({
               key={intent.name}
               className="rounded-lg border border-[var(--border-color)] p-3 hover:bg-[var(--surface-dim)] transition-colors"
             >
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
                 <div className="flex items-center gap-2">
                   <div
-                    className="h-3 w-3 rounded-full"
+                    className="h-3 w-3 rounded-full flex-shrink-0"
                     style={{ backgroundColor: CRM_CHART_SERIES[idx % CRM_CHART_SERIES.length] }}
                   />
-                  <span className="text-sm font-semibold text-[var(--text-main)]">
+                  <span className="text-sm font-semibold text-[var(--text-main)] truncate">
                     {intent.name}
                   </span>
                 </div>
-                <span className="text-xs font-bold text-[var(--text-main)]">
+                <span className="text-xs font-bold text-[var(--text-main)] whitespace-nowrap">
                   {intent.rate}% conversion
                 </span>
               </div>

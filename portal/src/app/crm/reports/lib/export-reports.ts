@@ -1,6 +1,9 @@
 import { toast } from "sonner";
 
-type ExportFormat = "csv" | "excel";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+type ExportFormat = "csv" | "excel" | "pdf";
 
 export interface AgentReportData {
   agentId: string;
@@ -215,6 +218,100 @@ export async function exportToExcel(
 }
 
 /**
+ * Export to PDF format
+ */
+export function exportToPDF(
+  data: AgentReportData[] | TeamReportData[],
+  fileName: string,
+  isTeamReport: boolean
+) {
+  try {
+    const doc = new jsPDF("landscape");
+
+    const headers = isTeamReport
+      ? [
+          "Team Name",
+          "Size",
+          "Calls",
+          "Leads",
+          "Conv",
+          "Conv %",
+          "Msg Sent",
+          "Msg Read",
+          "Read %",
+          "In Calls",
+          "Missed",
+          "Missed %",
+        ]
+      : [
+          "Agent Name",
+          "Calls",
+          "Activities",
+          "Leads",
+          "Conv",
+          "Conv %",
+          "Follow-up %",
+          "Resp Time",
+          "Revenue (₹)",
+          "Props",
+          "Farms",
+          "Target %",
+        ];
+
+    const rows = data.map((row: any) =>
+      isTeamReport
+        ? [
+            row.teamName,
+            row.teamSize,
+            row.totalCalls,
+            row.totalLeads,
+            row.leadsConverted,
+            row.conversionRate,
+            row.messagesOutbound,
+            row.messagesRead,
+            row.readRate,
+            row.incomingCalls,
+            row.missedCalls,
+            row.missedRate,
+          ]
+        : [
+            row.name,
+            row.calls,
+            row.activities,
+            row.leadsCreated,
+            row.leadsConverted,
+            row.conversionRate,
+            row.followUpAdherence,
+            row.responseTime,
+            row.revenue,
+            row.properties,
+            row.farms,
+            row.targetProgress,
+          ]
+    );
+
+    doc.setFontSize(14);
+    doc.text(`2Bigha CRM - ${isTeamReport ? 'Team' : 'Agent'} Report`, 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+
+    autoTable(doc, {
+      head: [headers],
+      body: rows,
+      startY: 30,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [37, 99, 235] }, // --primary color
+      alternateRowStyles: { fillColor: [248, 250, 252] }, // --surface-dim roughly
+    });
+
+    doc.save(`${fileName}.pdf`);
+  } catch (error) {
+    console.error("PDF export error:", error);
+    toast.error("Failed to export to PDF");
+  }
+}
+
+/**
  * Main export function that routes to the appropriate format
  */
 export async function exportReport(
@@ -227,5 +324,7 @@ export async function exportReport(
     exportToCSV(data, fileName, isTeamReport);
   } else if (format === "excel") {
     await exportToExcel(data, fileName, isTeamReport);
+  } else if (format === "pdf") {
+    exportToPDF(data, fileName, isTeamReport);
   }
 }
