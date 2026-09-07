@@ -47,7 +47,7 @@ export class CRMUsersController {
   @Get()
   @Permissions('settings:admin')
   findAll() {
-    return this.usersService.findAll();
+    return this.usersService.findAllIncludingPending();
   }
 
   @Post()

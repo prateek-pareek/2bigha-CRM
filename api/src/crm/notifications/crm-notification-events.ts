@@ -16,6 +16,10 @@ export const CRM_NOTIFY_EVENTS = [
   'task_due',
   'task_overdue',
   'custom_reminder',
+  'hrms_user_pending',
+  'hrms_user_unavailable',
+  'hrms_user_revoked',
+  'hrms_workload_reassigned',
 ] as const;
 
 export type CrmNotifyEvent = (typeof CRM_NOTIFY_EVENTS)[number];
@@ -47,6 +51,10 @@ export const CRM_NOTIFY_DEFAULT_PREFS: Record<
   task_due: { inApp: true, email: true },
   task_overdue: { inApp: true, email: true },
   custom_reminder: { inApp: true, email: true },
+  hrms_user_pending: { inApp: true, email: true },
+  hrms_user_unavailable: { inApp: true, email: true },
+  hrms_user_revoked: { inApp: true, email: true },
+  hrms_workload_reassigned: { inApp: true, email: true },
 };
 
 export const CRM_NOTIFY_EVENT_LABELS: Record<CrmNotifyEvent, string> = {
@@ -63,4 +71,8 @@ export const CRM_NOTIFY_EVENT_LABELS: Record<CrmNotifyEvent, string> = {
   task_due: 'Task due',
   task_overdue: 'Task overdue',
   custom_reminder: 'Custom reminders',
+  hrms_user_pending: 'HRMS user pending CRM access',
+  hrms_user_unavailable: 'Teammate unavailable today',
+  hrms_user_revoked: 'HRMS CRM eligibility revoked',
+  hrms_workload_reassigned: 'Workload reassigned (HRMS absence)',
 };
