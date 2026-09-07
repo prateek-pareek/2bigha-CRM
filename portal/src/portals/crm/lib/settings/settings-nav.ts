@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
   Braces,
+  Bell,
   Building2,
   Columns,
   Database,
@@ -153,6 +154,12 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
     description: "Integrations, audit trail, and data hygiene.",
     icon: Shield,
     items: [
+      {
+        name: "Notifications & reminders",
+        description: "In-app and email alerts for follow-ups, callbacks, tasks, and custom reminders.",
+        href: "/crm/settings/notifications",
+        icon: Bell,
+      },
       {
         name: "Integrations",
         description: "Connect external tools and platforms.",

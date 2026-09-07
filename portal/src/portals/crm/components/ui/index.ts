@@ -47,6 +47,8 @@ export { CrmSectionCard, CrmSegmentedControl } from "./CrmSectionCard";
 export { CrmChartPanel } from "./CrmChartPanel";
 export { CrmDropdown } from "./CrmDropdown";
 export type { CrmDropdownOption, CrmDropdownProps } from "./CrmDropdown";
+export { CrmPersonSearchSelect } from "./CrmPersonSearchSelect";
+export type { CrmPersonSearchOption } from "./CrmPersonSearchSelect";
 export { CrmSubnav } from "./CrmSubnav";
 export type { CrmSubnavItem } from "./CrmSubnav";
 export { CrmTiIcon } from "./CrmTiIcon";

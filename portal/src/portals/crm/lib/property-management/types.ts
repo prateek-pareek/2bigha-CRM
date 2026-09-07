@@ -49,7 +49,7 @@ export const PM_STAGE_RAIL: { key: string; match: PmPipelineStage[] }[] = [
 
 export type PmLegalStatus = "Not started" | "In progress" | "Completed";
 export type PmVisitStatus = "Pending" | "Complete" | "Cancel";
-export type PmReportStatus = "Pending" | "Approved" | "Rejected";
+export type PmReportStatus = "Pending" | "Approved" | "Rejected" | "Changes Requested";
 
 export interface PmChecklistItem {
   id: string;

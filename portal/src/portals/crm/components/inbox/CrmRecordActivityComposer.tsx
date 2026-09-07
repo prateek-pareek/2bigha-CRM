@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Send, Calendar, CheckSquare, Video, MessageCircle } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { getCrmAuthToken } from "@/lib/crm/api";
 import { crmRecordIdFromParams } from "@/lib/crm/crm-route-params";
-import { formatCrmUserLabel, type CrmPortalUserOption } from "@/components/crm/inbox/ActivityLogger";
+import { formatCrmUserLabel, taskAssigneeOptionValue, type CrmPortalUserOption } from "@/components/crm/inbox/ActivityLogger";
+import { CrmPersonSearchSelect } from "@/components/crm/ui/CrmPersonSearchSelect";
+import { buildCrmUserSearchOptions } from "@/lib/crm/build-crm-user-search-options";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import SocialPostPreview from '../sales/SocialPostPreview';
@@ -57,6 +59,7 @@ export default function CrmRecordActivityComposer({
   const { user } = usePermissions();
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskPriority, setTaskPriority] = useState("Medium");
   const [crmUsers, setCrmUsers] = useState<CrmPortalUserOption[]>([]);
   const [taskReporterId, setTaskReporterId] = useState("");
   const [taskAssigneeId, setTaskAssigneeId] = useState("");
@@ -64,6 +67,12 @@ export default function CrmRecordActivityComposer({
   const [noteAttachments, setNoteAttachments] = useState<MediaAttachment[]>([]);
   const [fetchedMetadata, setFetchedMetadata] = useState<Record<string, unknown> | null>(null);
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
+
+  const reporterOptions = useMemo(
+    () => buildCrmUserSearchOptions(crmUsers, { taskAssigneeValues: false }),
+    [crmUsers],
+  );
+  const assigneeOptions = useMemo(() => buildCrmUserSearchOptions(crmUsers), [crmUsers]);
 
   const isSocialUrl = (url?: string) =>
     !!url && (
@@ -129,12 +138,20 @@ export default function CrmRecordActivityComposer({
   useEffect(() => {
     const token = getCrmAuthToken();
     if (!token) return;
-    void fetch(`${CRM_API_URL}/crm-users/list/crm-portal`, {
+    void fetch(`${CRM_API_URL}/crm-users/list/task-assignees`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setCrmUsers(data);
+        if (Array.isArray(data) && data.length) {
+          setCrmUsers(data);
+          return;
+        }
+        return fetch(`${CRM_API_URL}/crm-users/list/crm-portal`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()).then((fallback) => {
+          if (Array.isArray(fallback)) setCrmUsers(fallback);
+        });
       })
       .catch(() => {});
   }, []);
@@ -188,11 +205,27 @@ export default function CrmRecordActivityComposer({
         relatedType,
         metadata: {
           dueDate: taskDueDate || undefined,
-          status: "Pending",
+          priority: taskPriority,
         },
+        status: "Open",
       };
       if (taskReporterId) body.author = taskReporterId;
-      if (taskAssigneeId) body.assignee = taskAssigneeId;
+      if (taskAssigneeId) {
+        body.assignee = taskAssigneeId;
+        const picked = crmUsers.find(
+          (u) => taskAssigneeOptionValue(u) === taskAssigneeId || u._id === taskAssigneeId,
+        );
+        if (picked) {
+          body.metadata = {
+            ...(body.metadata as Record<string, unknown>),
+            assigneeSource: picked.source || "crm",
+            assigneeName: formatCrmUserLabel(picked),
+            assigneeEmail: picked.email,
+            twobighaAdminId: picked.twobighaAdminId,
+            assigneeRole: picked.roleLabel,
+          };
+        }
+      }
       const res = await fetch(`${CRM_API_URL}/crm/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -207,6 +240,7 @@ export default function CrmRecordActivityComposer({
       setNewComment("");
       setTaskTitle("");
       setTaskDueDate("");
+      setTaskPriority("Medium");
       setTaskAssigneeId("");
       setNoteAttachments([]);
       const uid = String(user?._id || user?.id || "");
@@ -353,7 +387,8 @@ export default function CrmRecordActivityComposer({
               onChange={(e) => setNewComment(e.target.value)}
             />
           </div>
-          <div className="space-y-1.5 max-w-xs">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5 max-w-xs">
             <label className="block text-xs font-black text-text-muted px-1">
               Due date
             </label>
@@ -363,6 +398,19 @@ export default function CrmRecordActivityComposer({
               placeholder="No due date"
               buttonClassName="h-11 rounded-[var(--radius-md)] border-border/60 bg-surface-dim/30 hover:bg-surface-dim/50"
             />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-black text-text-muted px-1">Priority</label>
+              <select
+                value={taskPriority}
+                onChange={(e) => setTaskPriority(e.target.value)}
+                className="w-full rounded-[var(--radius-md)] border border-border/60 bg-surface-dim/30 px-3 py-2.5 text-xs font-semibold text-text-main outline-none"
+              >
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+              </select>
+            </div>
           </div>
           {crmUsers.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -370,35 +418,27 @@ export default function CrmRecordActivityComposer({
                 <label className="block text-xs font-black text-text-muted px-1">
                   Reporter
                 </label>
-                <select
-                  className="w-full rounded-[var(--radius-md)] border border-border/60 bg-surface-dim/30 px-3 py-2.5 text-xs font-semibold text-text-main outline-none focus:ring-2 focus:ring-primary/20"
+                <CrmPersonSearchSelect
                   value={taskReporterId}
-                  onChange={(e) => setTaskReporterId(e.target.value)}
-                >
-                  <option value="">Default (you)</option>
-                  {crmUsers.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {formatCrmUserLabel(u)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setTaskReporterId}
+                  options={reporterOptions}
+                  emptyLabel="Default (you)"
+                  placeholder="Type a name to search…"
+                  triggerClassName="bg-surface-dim/30"
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-black text-text-muted px-1">
                   Assignee
                 </label>
-                <select
-                  className="w-full rounded-[var(--radius-md)] border border-border/60 bg-surface-dim/30 px-3 py-2.5 text-xs font-semibold text-text-main outline-none focus:ring-2 focus:ring-primary/20"
+                <CrmPersonSearchSelect
                   value={taskAssigneeId}
-                  onChange={(e) => setTaskAssigneeId(e.target.value)}
-                >
-                  <option value="">Unassigned</option>
-                  {crmUsers.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {formatCrmUserLabel(u)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setTaskAssigneeId}
+                  options={assigneeOptions}
+                  emptyLabel="Unassigned"
+                  placeholder="Type a name to search…"
+                  triggerClassName="bg-surface-dim/30"
+                />
               </div>
             </div>
           ) : null}

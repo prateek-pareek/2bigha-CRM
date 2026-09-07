@@ -183,6 +183,7 @@ function LegalVerificationDashboardContent() {
   );
 
   const handleDragStart = (e: React.DragEvent, propertyId: string) => {
+    e.dataTransfer.setData("text/plain", propertyId);
     e.dataTransfer.setData("propertyId", propertyId);
     e.dataTransfer.effectAllowed = "move";
   };
@@ -194,7 +195,8 @@ function LegalVerificationDashboardContent() {
 
   const handleDrop = (e: React.DragEvent, status: PropertyLegalStatus) => {
     e.preventDefault();
-    const propertyId = e.dataTransfer.getData("propertyId");
+    e.stopPropagation();
+    const propertyId = e.dataTransfer.getData("propertyId") || e.dataTransfer.getData("text/plain");
     if (!propertyId) return;
     if (status === "Rejected") {
       // Rejection reason is required and shown back to the client — collect it first.

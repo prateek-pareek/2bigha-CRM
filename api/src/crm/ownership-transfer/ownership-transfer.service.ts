@@ -18,7 +18,7 @@ import {
   roleAllowsModule,
 } from '../shared/crm-workspace-module.util';
 import { RoleAuditLogService } from '../../users/role-audit-log.service';
-import { NotificationsService } from '../../notifications/notifications.service';
+import { CrmNotifyService } from '../notifications/crm-notify.service';
 
 export type OwnershipTransferEntityType = 'Lead' | 'LegalCase';
 
@@ -41,7 +41,7 @@ export class OwnershipTransferService {
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
     private readonly roleAuditLog: RoleAuditLogService,
-    private readonly notifications: NotificationsService,
+    private readonly crmNotify: CrmNotifyService,
   ) {}
 
   private ownerLabel(u: any): string {
@@ -213,23 +213,41 @@ export class OwnershipTransferService {
 
     await Promise.all([
       prevOwnerUser && String(prevOwnerUser._id) !== String(newOwner._id)
-        ? this.notifications
-            .create({
-              recipient: String(prevOwnerUser._id),
+        ? this.crmNotify
+            .notify({
+              event: 'lead_transferred',
               title: `${entityType} reassigned`,
               message: `${recordLabel} has been transferred to ${newOwnerLabel}.`,
-              type: 'Info',
-              metadata: { entityType, entityId: id, action: 'ownership_transfer_out' },
+              recipient: { userId: prevOwnerUser._id },
+              link:
+                entityType === 'Lead'
+                  ? `/crm/leads/${id}`
+                  : `/crm/legal-cases/${id}`,
+              metadata: {
+                entityType,
+                entityId: id,
+                action: 'ownership_transfer_out',
+              },
+              type: 'LEAD_TRANSFERRED',
             })
             .catch(() => null)
         : null,
-      this.notifications
-        .create({
-          recipient: String(newOwner._id),
+      this.crmNotify
+        .notify({
+          event: 'lead_transferred',
           title: `${entityType} assigned to you`,
           message: `${recordLabel} has been transferred to you${previousOwnerLabel ? ` from ${previousOwnerLabel}` : ''}.`,
-          type: 'Info',
-          metadata: { entityType, entityId: id, action: 'ownership_transfer_in' },
+          recipient: { userId: newOwner._id, email: (newOwner as any).email },
+          link:
+            entityType === 'Lead'
+              ? `/crm/leads/${id}`
+              : `/crm/legal-cases/${id}`,
+          metadata: {
+            entityType,
+            entityId: id,
+            action: 'ownership_transfer_in',
+          },
+          type: 'LEAD_TRANSFERRED',
         })
         .catch(() => null),
     ]);

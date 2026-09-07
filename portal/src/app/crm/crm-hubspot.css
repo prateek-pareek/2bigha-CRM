@@ -201,6 +201,35 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent) !important;
 }
 
+/* Inline person combobox: one outer border only (no nested input border) */
+.theme-crm-hubspot .crm-person-search-input,
+.theme-crm-hubspot .crm-person-search-input:focus,
+.theme-crm-hubspot .crm-person-search-input:focus-visible,
+.theme-crm-hubspot .crm-person-search-input:hover,
+.theme-crm-hubspot .crm-person-search-input:active {
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.theme-crm-hubspot .crm-person-search-trigger {
+  background-color: #fff !important;
+}
+
+.theme-crm-hubspot .crm-person-search-trigger:focus-within,
+.theme-crm-hubspot .crm-person-search-trigger[data-open="true"] {
+  border-color: #94a3b8 !important; /* slate-400 — slight dark, not primary red */
+  box-shadow: none !important;
+}
+
 /* List toolbars — softer focus so Search / selects don't look like error borders */
 .theme-crm-hubspot .crm-list-page input:focus,
 .theme-crm-hubspot .crm-list-page textarea:focus,
@@ -2543,18 +2572,18 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   letter-spacing: normal;
 }
 
-[data-crm-theme="crms"] .crm-modal input,
+[data-crm-theme="crms"] .crm-modal input:not(.crm-person-search-input),
 [data-crm-theme="crms"] .crm-modal textarea,
 [data-crm-theme="crms"] .crm-modal select,
-[data-crm-theme="crms"] .crm-modal [role="combobox"],
-[data-crm-theme="crms"] .crm-modal input,
+[data-crm-theme="crms"] .crm-modal [role="combobox"]:not(.crm-person-search-input):not(.crm-person-search-trigger),
+[data-crm-theme="crms"] .crm-modal input:not(.crm-person-search-input),
 [data-crm-theme="crms"] .crm-modal textarea,
 [data-crm-theme="crms"] .crm-modal select,
-[data-crm-theme="crms"] .crm-modal [role="combobox"],
-[data-crm-app] .crm-modal input,
+[data-crm-theme="crms"] .crm-modal [role="combobox"]:not(.crm-person-search-input):not(.crm-person-search-trigger),
+[data-crm-app] .crm-modal input:not(.crm-person-search-input),
 [data-crm-app] .crm-modal textarea,
 [data-crm-app] .crm-modal select,
-[data-crm-app] .crm-modal input,
+[data-crm-app] .crm-modal input:not(.crm-person-search-input),
 [data-crm-app] .crm-modal textarea,
 [data-crm-app] .crm-modal select {
   border-radius: var(--radius-md);
@@ -2563,15 +2592,15 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   font-weight: 400;
 }
 
-[data-crm-theme="crms"] .crm-modal input:focus,
+[data-crm-theme="crms"] .crm-modal input:not(.crm-person-search-input):focus,
 [data-crm-theme="crms"] .crm-modal textarea:focus,
 [data-crm-theme="crms"] .crm-modal select:focus,
-[data-crm-theme="crms"] .crm-modal input:focus,
+[data-crm-theme="crms"] .crm-modal input:not(.crm-person-search-input):focus,
 [data-crm-theme="crms"] .crm-modal textarea:focus,
 [data-crm-theme="crms"] .crm-modal select:focus,
-[data-crm-app] .crm-modal input:focus,
+[data-crm-app] .crm-modal input:not(.crm-person-search-input):focus,
 [data-crm-app] .crm-modal textarea:focus,
-[data-crm-app] .crm-modal input:focus,
+[data-crm-app] .crm-modal input:not(.crm-person-search-input):focus,
 [data-crm-app] .crm-modal textarea:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent);
@@ -2699,4 +2728,40 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 
 .crm-record-quick-actions-scroll > div {
   min-width: min-content;
+}
+
+/* Person search combobox — beat modal/global input borders (must be last) */
+.theme-crm-hubspot input.crm-person-search-input,
+.theme-crm-hubspot input.crm-person-search-input:hover,
+.theme-crm-hubspot input.crm-person-search-input:focus,
+.theme-crm-hubspot input.crm-person-search-input:focus-visible,
+.theme-crm-hubspot input.crm-person-search-input:active,
+[data-crm-theme="crms"] .crm-modal input.crm-person-search-input,
+[data-crm-theme="crms"] .crm-modal input.crm-person-search-input:focus,
+[data-crm-theme="crms"] .crm-modal input.crm-person-search-input:focus-visible,
+[data-crm-app] .crm-modal input.crm-person-search-input,
+[data-crm-app] .crm-modal input.crm-person-search-input:focus,
+[data-crm-app] .crm-modal input.crm-person-search-input:focus-visible,
+.crm-modal input.crm-person-search-input,
+.crm-modal input.crm-person-search-input:focus,
+.crm-modal input.crm-person-search-input:focus-visible {
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.theme-crm-hubspot .crm-person-search-trigger:focus-within,
+[data-crm-theme="crms"] .crm-modal .crm-person-search-trigger:focus-within,
+[data-crm-app] .crm-modal .crm-person-search-trigger:focus-within,
+.crm-modal .crm-person-search-trigger:focus-within {
+  border-color: #64748b !important; /* slate-500 slight dark */
+  box-shadow: none !important;
 }

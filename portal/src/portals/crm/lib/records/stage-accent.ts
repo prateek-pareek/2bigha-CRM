@@ -13,10 +13,11 @@ const STAGE_ACCENTS = [
 export function crmStageAccent(stageName: string): string {
   const s = (stageName || "").trim().toLowerCase();
   if (!s) return STAGE_ACCENTS[0];
-  if (/lost|reject|dead|fail|churn/.test(s)) return "#ef1e1e";
+  if (/overdue|lost|reject|dead|fail|churn/.test(s)) return "#ef1e1e";
+  if (/escalat/.test(s)) return "#fd7e14";
   if (/won|closed|done|complete|success/.test(s)) return "#1abe17";
   if (/not\s*contacted|new|open|prospect|unassigned|inbox/.test(s)) return "#2f80ed";
-  if (/contacted|qualified|active|warm/.test(s)) return "#ffa201";
+  if (/in\s*progress|progress|contacted|qualified|active|warm/.test(s)) return "#ffa201";
   if (/negotiat|proposal|demo|meeting|pilot/.test(s)) return "#ab47bc";
   let hash = 0;
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;

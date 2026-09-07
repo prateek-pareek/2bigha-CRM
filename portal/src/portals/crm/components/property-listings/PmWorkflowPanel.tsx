@@ -16,10 +16,30 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CrmButton, CrmInput, CrmLabel, CrmStatusBadge, CrmTextarea } from "@/components/crm/ui";
 import type { PropertyListingRecord } from "@/lib/crm/property-listings/types";
-import { pmStageBadgeTone } from "@/lib/crm/property-management/types";
-import { CrmStatusBadge } from "@/components/crm/ui";
-import { fetchLivePmStatus } from "@/lib/crm/property-management/pm-api";
+import {
+  assignPmToFieldAgent,
+  assignPmToLegal,
+  assignPmToRm,
+  completePmLegalVerification,
+  fetchLivePmStatus,
+  fetchPmAssignmentStaff,
+  reviewPmVisitReport,
+  schedulePmFieldVisit,
+  setPmFieldVisitStatus,
+  startPmLegalVerification,
+  submitPmVisitReport,
+  unassignPmStaff,
+  updatePmLegalChecklist,
+  type PmAssignPick,
+  type PmAssignmentStaffResponse,
+} from "@/lib/crm/property-management/pm-api";
+import {
+  pmStageBadgeTone,
+  type PmChecklistItem,
+} from "@/lib/crm/property-management/types";
+import PmAssigneeSelect from "./PmAssigneeSelect";
 import PmVisitReportModal from "./PmVisitReportModal";
 
 const PM_STAGES = [
@@ -28,8 +48,14 @@ const PM_STAGES = [
   "Assigned to Legal",
   "Assigned to Field Agent",
   "Visit Report Pending",
-  "Report Approved",
+  "Visit Report Approved",
 ] as const;
+
+const EMPTY_STAFF: PmAssignmentStaffResponse = {
+  manager: { twobigha: [], crm: [] },
+  legal: { twobigha: [], crm: [] },
+  field: { twobigha: [], crm: [] },
+};
 
 function StageRail({ stage }: { stage: string }) {
   const currentIndex = PM_STAGES.findIndex(
@@ -70,6 +96,41 @@ function StageRail({ stage }: { stage: string }) {
   );
 }
 
+function ChecklistEditor({
+  items,
+  disabled,
+  onChange,
+}: {
+  items: PmChecklistItem[];
+  disabled?: boolean;
+  onChange: (next: PmChecklistItem[]) => void;
+}) {
+  return (
+    <div className="space-y-1.5 rounded-md border border-[var(--border-color)] bg-slate-50 p-2.5">
+      {items.map((item, idx) => (
+        <div key={item.id || idx} className="flex items-center justify-between gap-2 text-xs">
+          <label className="flex items-center gap-2 cursor-pointer text-slate-700">
+            <input
+              type="checkbox"
+              checked={item.checked}
+              disabled={disabled}
+              onChange={(e) => {
+                const next = items.map((i, iidx) =>
+                  iidx === idx ? { ...i, checked: e.target.checked } : i,
+                );
+                onChange(next);
+              }}
+              className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            />
+            <span>{item.label}</span>
+          </label>
+          {item.note ? <span className="text-[11px] text-slate-400 italic">{item.note}</span> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PmWorkflowPanel({
   listing,
   onUpdated,
@@ -84,6 +145,27 @@ export default function PmWorkflowPanel({
     visitReports?: any[];
     fieldVisits?: any[];
   } | null>(null);
+
+  const [busy, setBusy] = useState(false);
+  const [staff, setStaff] = useState<PmAssignmentStaffResponse>(EMPTY_STAFF);
+  const [staffLoading, setStaffLoading] = useState(true);
+  const [rmValue, setRmValue] = useState("");
+  const [legalValue, setLegalValue] = useState("");
+  const [fieldValue, setFieldValue] = useState("");
+  const [rmPick, setRmPick] = useState<PmAssignPick | null>(null);
+  const [legalPick, setLegalPick] = useState<PmAssignPick | null>(null);
+  const [fieldPick, setFieldPick] = useState<PmAssignPick | null>(null);
+  const [legalSummary, setLegalSummary] = useState(listing.legalVerification?.summary || "");
+  const [visitNotes, setVisitNotes] = useState(listing.fieldVisit?.notes || "");
+  const [visitAt, setVisitAt] = useState(() => {
+    const raw = listing.fieldVisit?.scheduledAt;
+    if (!raw) return "";
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+  const [rejectReason, setRejectReason] = useState("");
 
   const triggerLiveSync = async (notify = true) => {
     setSyncingLive(true);
@@ -107,13 +189,44 @@ export default function PmWorkflowPanel({
     void triggerLiveSync(false);
   }, [listing._id]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setStaffLoading(true);
+    fetchPmAssignmentStaff()
+      .then((data) => {
+        if (!cancelled) setStaff(data);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Could not load 2bigha / CRM staff lists");
+      })
+      .finally(() => {
+        if (!cancelled) setStaffLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const run = async (fn: () => Promise<PropertyListingRecord>, okMsg: string) => {
+    setBusy(true);
+    try {
+      const next = await fn();
+      toast.success(okMsg);
+      onUpdated(next);
+      void triggerLiveSync(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Operation failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const stage = listing.pmStage || "Property Submitted";
   const legal = listing.legalVerification;
   const visit = listing.fieldVisit;
   const report = listing.visitReport;
   const liveDetail = liveData?.liveDetail;
 
-  // Resolved Stage 4 Legal Status
   const legalStatus =
     legal?.status ||
     liveDetail?.legalCheckStatus ||
@@ -123,7 +236,6 @@ export default function PmWorkflowPanel({
         ? "In progress"
         : "Pending");
 
-  // Resolved Stage 5 Visit Status
   const visitStatus =
     visit?.status ||
     liveDetail?.recentVisit?.status ||
@@ -133,7 +245,6 @@ export default function PmWorkflowPanel({
         ? "Scheduled"
         : "Pending");
 
-  // Resolved Stage 6 Report Status
   const reportStatus =
     report?.status ||
     liveDetail?.recentVisit?.reportStatus ||
@@ -174,7 +285,7 @@ export default function PmWorkflowPanel({
             </button>
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Read-only status tracking synchronized from 2bigha operations (Stages 3–6).
+            Operational status tracking & workflow management synchronized with 2bigha operations.
           </p>
         </div>
         {listing.pmStage ? (
@@ -212,7 +323,7 @@ export default function PmWorkflowPanel({
       ) : null}
 
       {/* STAGE 3: REGIONAL MANAGER */}
-      <div className="rounded-lg border border-[var(--border-color)] bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-[var(--border-color)] bg-white p-4 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
@@ -238,14 +349,45 @@ export default function PmWorkflowPanel({
               </p>
             </div>
           </div>
-          <span className="text-[11px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-            Managed by 2bigha Ops
-          </span>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <PmAssigneeSelect
+            label="Regional Manager (RM)"
+            pool={staff.manager}
+            value={rmValue}
+            onChange={(pick, raw) => {
+              setRmPick(pick);
+              setRmValue(raw);
+            }}
+          />
+          <div className="flex items-end gap-2">
+            <CrmButton
+              disabled={busy || (!rmValue.trim() && !rmPick)}
+              onClick={() =>
+                void run(
+                  () => assignPmToRm(listing._id, rmPick || rmValue.trim()),
+                  "RM assigned — stage updated",
+                )
+              }
+            >
+              {listing.rmAssigneeName ? "Reassign RM" : "Assign RM"}
+            </CrmButton>
+            {listing.rmAssigneeName ? (
+              <CrmButton
+                disabled={busy}
+                variant="secondary"
+                onClick={() => void run(() => unassignPmStaff(listing._id, "manager").then(res => res.listing), "RM unassigned")}
+              >
+                Unassign
+              </CrmButton>
+            ) : null}
+          </div>
         </div>
       </div>
 
       {/* STAGE 4: LEGAL MANAGER & VERIFICATION */}
-      <div className="rounded-lg border border-[var(--border-color)] bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-[var(--border-color)] bg-white p-4 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
@@ -283,45 +425,107 @@ export default function PmWorkflowPanel({
               </p>
             </div>
           </div>
-          <span className="text-[11px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-            Managed by 2bigha Ops
-          </span>
         </div>
 
-        {legal?.summary ? (
-          <p className="mt-2.5 rounded bg-slate-50 p-2.5 text-xs text-[var(--text-muted)] border border-slate-100">
-            <strong className="text-slate-700">Summary:</strong> {legal.summary}
-          </p>
-        ) : null}
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <PmAssigneeSelect
+            label="Legal Manager"
+            pool={staff.legal}
+            value={legalValue}
+            onChange={(pick, raw) => {
+              setLegalPick(pick);
+              setLegalValue(raw);
+            }}
+          />
+          <div className="flex items-end gap-2">
+            <CrmButton
+              disabled={busy || (!legalValue.trim() && !legalPick)}
+              onClick={() =>
+                void run(
+                  () => assignPmToLegal(listing._id, legalPick || legalValue.trim()),
+                  "Legal Manager assigned — checklist ready",
+                )
+              }
+            >
+              {listing.legalAssigneeName ? "Reassign Legal" : "Assign Legal"}
+            </CrmButton>
+            {listing.legalAssigneeName ? (
+              <CrmButton
+                disabled={busy}
+                variant="secondary"
+                onClick={() => void run(() => unassignPmStaff(listing._id, "legal").then(res => res.listing), "Legal Manager unassigned")}
+              >
+                Unassign
+              </CrmButton>
+            ) : null}
+          </div>
+        </div>
 
-        {/* Read-only Document Checklist */}
+        <div>
+          <CrmLabel>Legal summary / notes</CrmLabel>
+          <CrmInput
+            value={legalSummary}
+            onChange={(e) => setLegalSummary(e.target.value)}
+            className="mt-1"
+            placeholder="Key findings, document verification details..."
+          />
+        </div>
+
         {legal?.checklist?.length ? (
-          <div className="mt-3 space-y-1.5 rounded-lg border border-slate-100 bg-slate-50/50 p-2.5">
+          <div className="mt-2 space-y-1.5">
             <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-              Document Verification Checklist:
+              Verification Checklist:
             </span>
-            <div className="space-y-1">
-              {legal.checklist.map((item: any) => (
-                <div key={item.id} className="flex items-center justify-between text-xs py-0.5">
-                  <span className="flex items-center gap-1.5 text-slate-700">
-                    <CheckCircle2
-                      size={13}
-                      className={cn(item.checked ? "text-emerald-600" : "text-slate-300")}
-                    />
-                    {item.label}
-                  </span>
-                  {item.note ? (
-                    <span className="text-[11px] text-slate-400 italic">{item.note}</span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
+            <ChecklistEditor
+              items={legal.checklist}
+              disabled={busy}
+              onChange={(nextItems) => {
+                void (async () => {
+                  try {
+                    const next = await updatePmLegalChecklist(listing._id, nextItems, legalSummary);
+                    onUpdated(next);
+                  } catch {
+                    toast.error("Could not save checklist");
+                  }
+                })();
+              }}
+            />
           </div>
         ) : null}
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          {legal?.status !== "In progress" && legal?.status !== "Completed" ? (
+            <CrmButton
+              disabled={busy}
+              onClick={() =>
+                void run(
+                  () => startPmLegalVerification(listing._id, legalSummary),
+                  "Legal verification started",
+                )
+              }
+            >
+              Start verification
+            </CrmButton>
+          ) : null}
+          {legal?.status === "In progress" ? (
+            <CrmButton
+              disabled={busy}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={() =>
+                void run(
+                  () => completePmLegalVerification(listing._id, legalSummary),
+                  "Legal verification completed",
+                )
+              }
+            >
+              Complete verification
+            </CrmButton>
+          ) : null}
+        </div>
       </div>
 
       {/* STAGE 5: FIELD AGENT & PHYSICAL SITE VISIT */}
-      <div className="rounded-lg border border-[var(--border-color)] bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-[var(--border-color)] bg-white p-4 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
@@ -359,20 +563,136 @@ export default function PmWorkflowPanel({
               </p>
             </div>
           </div>
-          <span className="text-[11px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-            Managed by 2bigha Ops
-          </span>
         </div>
 
-        {visit?.notes ? (
-          <p className="mt-2.5 rounded bg-slate-50 p-2.5 text-xs text-[var(--text-muted)] border border-slate-100">
-            <strong className="text-slate-700">Visit Notes:</strong> {visit.notes}
-          </p>
-        ) : null}
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <PmAssigneeSelect
+            label="Field Agent"
+            pool={staff.field}
+            value={fieldValue}
+            onChange={(pick, raw) => {
+              setFieldPick(pick);
+              setFieldValue(raw);
+            }}
+          />
+          <div className="flex items-end gap-2">
+            <CrmButton
+              disabled={busy || (!fieldValue.trim() && !fieldPick)}
+              onClick={() =>
+                void run(
+                  () => assignPmToFieldAgent(listing._id, fieldPick || fieldValue.trim(), visitAt ? new Date(visitAt).toISOString() : undefined),
+                  "Field Agent assigned",
+                )
+              }
+            >
+              {listing.fieldAssigneeName ? "Reassign Field Agent" : "Assign Field Agent"}
+            </CrmButton>
+            {listing.fieldAssigneeName ? (
+              <CrmButton
+                disabled={busy}
+                variant="secondary"
+                onClick={() => void run(() => unassignPmStaff(listing._id, "field").then(res => res.listing), "Field Agent unassigned")}
+              >
+                Unassign
+              </CrmButton>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <CrmLabel>Schedule visit (date & time)</CrmLabel>
+            <input
+              type="datetime-local"
+              value={visitAt}
+              onChange={(e) => setVisitAt(e.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-[var(--border-color)] px-2 text-sm"
+            />
+          </div>
+          <div className="flex items-end">
+            <CrmButton
+              disabled={busy || !visitAt || (!listing.fieldAssigneeId && !listing.fieldAssigneeName)}
+              onClick={() =>
+                void run(
+                  () =>
+                    schedulePmFieldVisit(
+                      listing._id,
+                      listing.fieldAssigneeId || listing.fieldAssigneeName || "",
+                      new Date(visitAt).toISOString(),
+                      visitNotes,
+                    ),
+                  "Visit scheduled — task & calendar updated",
+                )
+              }
+              className="bg-sky-600 hover:bg-sky-700 w-full sm:w-auto"
+            >
+              Schedule Visit
+            </CrmButton>
+          </div>
+        </div>
+
+        <div>
+          <CrmLabel>Visit notes</CrmLabel>
+          <CrmTextarea
+            value={visitNotes}
+            onChange={(e) => setVisitNotes(e.target.value)}
+            className="mt-1"
+            placeholder="Field visit notes, instructions for agent..."
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <CrmButton
+            disabled={busy}
+            onClick={() =>
+              void run(
+                () => setPmFieldVisitStatus(listing._id, "Pending", visitNotes),
+                "Visit marked Pending",
+              )
+            }
+          >
+            Pending
+          </CrmButton>
+          <CrmButton
+            disabled={busy}
+            className="bg-emerald-600 hover:bg-emerald-700"
+            onClick={() =>
+              void run(
+                () => setPmFieldVisitStatus(listing._id, "Complete", visitNotes),
+                "Visit completed",
+              )
+            }
+          >
+            Complete
+          </CrmButton>
+          <CrmButton
+            disabled={busy}
+            variant="secondary"
+            onClick={() =>
+              void run(
+                () => setPmFieldVisitStatus(listing._id, "Cancel", visitNotes),
+                "Visit cancelled",
+              )
+            }
+          >
+            Cancel
+          </CrmButton>
+          {visit?.status === "Complete" || visitStatus === "Complete" || visitStatus === "Completed" ? (
+            <CrmButton
+              disabled={busy}
+              className="bg-sky-600 hover:bg-sky-700"
+              onClick={() =>
+                void run(() => submitPmVisitReport(listing._id), "Visit report submitted")
+              }
+            >
+              Submit Visit Report
+            </CrmButton>
+          ) : null}
+        </div>
       </div>
 
       {/* STAGE 6: FIELD VISIT REPORT & RM APPROVAL */}
-      <div className="rounded-lg border border-[var(--border-color)] bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-[var(--border-color)] bg-white p-4 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
@@ -421,11 +741,71 @@ export default function PmWorkflowPanel({
           )}
         </div>
 
-        {(reportStatus === "Rejected" || reportStatus === "REJECTED") && report?.rejectionReason ? (
-          <div className="mt-2.5 rounded border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">
-            <strong>Rejection Note:</strong> {report.rejectionReason}
-          </div>
+        {report?.sections ? (
+          <ChecklistEditor
+            items={report.sections}
+            disabled={busy || report.status !== "Pending"}
+            onChange={() => {
+              /* sections signed off at approve time */
+            }}
+          />
         ) : null}
+
+        <div className="space-y-2 pt-1">
+          <div>
+            <CrmLabel>Rejection / Feedback Notes (if rejecting or requesting changes)</CrmLabel>
+            <CrmInput
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="mt-1"
+              placeholder="Provide reason for rejection or details of requested changes..."
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <CrmButton
+              disabled={busy}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={() =>
+                void run(
+                  () => reviewPmVisitReport(listing._id, "Approved"),
+                  "Visit report approved",
+                )
+              }
+            >
+              Approve Report
+            </CrmButton>
+            <CrmButton
+              disabled={busy}
+              variant="secondary"
+              onClick={() =>
+                void run(
+                  () =>
+                    reviewPmVisitReport(
+                      listing._id,
+                      "Changes Requested",
+                      rejectReason || "Changes requested on one or more sections",
+                    ),
+                  "Changes requested — field agent notified",
+                )
+              }
+            >
+              Request Changes
+            </CrmButton>
+            <CrmButton
+              disabled={busy}
+              variant="secondary"
+              onClick={() =>
+                void run(
+                  () => reviewPmVisitReport(listing._id, "Rejected", rejectReason || "Rejected by RM"),
+                  "Visit report rejected",
+                )
+              }
+            >
+              Reject & Reschedule
+            </CrmButton>
+          </div>
+        </div>
       </div>
 
       {/* Modal for Stage 6 Report Details */}

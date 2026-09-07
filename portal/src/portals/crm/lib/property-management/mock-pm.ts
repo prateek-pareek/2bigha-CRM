@@ -130,6 +130,24 @@ export async function assignPmToFieldAgent(
   });
 }
 
+export async function schedulePmFieldVisit(
+  id: string,
+  _agentId: string,
+  scheduledAt: string,
+  notes?: string,
+): Promise<PropertyListingRecord> {
+  const current = await fetchThirdPartyPropertyById(id);
+  if (!current) throw new Error("Listing not found");
+  return patchPropertyListing(id, {
+    pmStage: "Assigned to Field Agent",
+    fieldVisit: {
+      status: "Pending",
+      scheduledAt,
+      notes: notes ?? current.fieldVisit?.notes,
+    },
+  });
+}
+
 export async function setPmFieldVisitStatus(
   id: string,
   status: PmVisitStatus,
@@ -168,14 +186,19 @@ export async function submitPmVisitReport(id: string): Promise<PropertyListingRe
 
 export async function reviewPmVisitReport(
   id: string,
-  decision: "Approved" | "Rejected",
+  decision: "Approved" | "Rejected" | "Changes Requested",
   rejectionReason?: string,
   sections?: PmChecklistItem[],
 ): Promise<PropertyListingRecord> {
   const current = await fetchThirdPartyPropertyById(id);
   if (!current) throw new Error("Listing not found");
   return patchPropertyListing(id, {
-    pmStage: decision === "Approved" ? "Visit Report Approved" : "Visit Report Rejected",
+    pmStage:
+      decision === "Approved"
+        ? "Visit Report Approved"
+        : decision === "Changes Requested"
+          ? "Assigned to Field Agent"
+          : "Visit Report Rejected",
     visitReport: {
       status: decision,
       submittedAt: current.visitReport?.submittedAt || new Date().toISOString(),

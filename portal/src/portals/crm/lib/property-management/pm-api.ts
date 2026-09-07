@@ -102,6 +102,17 @@ export async function completePmLegalVerification(id: string, summary?: string) 
     : http.httpCompleteLegal(id, summary);
 }
 
+export async function schedulePmFieldVisit(
+  id: string,
+  agentId: string,
+  scheduledAt: string,
+  notes?: string,
+) {
+  return mockMode()
+    ? mock.schedulePmFieldVisit(id, agentId, scheduledAt, notes)
+    : http.httpScheduleVisit(id, agentId, scheduledAt, notes);
+}
+
 export async function setPmFieldVisitStatus(id: string, status: PmVisitStatus, notes?: string) {
   return mockMode()
     ? mock.setPmFieldVisitStatus(id, status, notes)
@@ -114,7 +125,7 @@ export async function submitPmVisitReport(id: string) {
 
 export async function reviewPmVisitReport(
   id: string,
-  decision: "Approved" | "Rejected",
+  decision: "Approved" | "Rejected" | "Changes Requested",
   rejectionReason?: string,
   sections?: PmChecklistItem[],
 ) {

@@ -21,14 +21,14 @@ export const crmModalChrome = {
   slideFooter:
     "flex shrink-0 items-center justify-end gap-2 border-t border-[var(--border-color)] bg-[var(--card-bg)] px-5 py-3.5",
   centerShell:
-    "crm-modal relative flex w-full flex-col overflow-hidden rounded-[var(--crm-radius-modal)] border border-[var(--border-color)] bg-[var(--card-bg)] shadow-[var(--crm-shadow-raised)] animate-in zoom-in-95 duration-200",
+    "crm-modal relative flex w-full flex-col overflow-visible rounded-[var(--crm-radius-modal)] border border-[var(--border-color)] bg-[var(--card-bg)] shadow-[var(--crm-shadow-raised)] animate-in zoom-in-95 duration-200",
   centerHeader:
-    "flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border-color)] px-5 py-3.5",
+    "flex shrink-0 items-start justify-between gap-3 rounded-t-[var(--crm-radius-modal)] border-b border-[var(--border-color)] bg-[var(--card-bg)] px-5 py-3.5",
   centerTitle: "text-[20px] font-bold leading-[1.2] tracking-normal text-[var(--text-main)]",
   centerLead: "text-sm font-normal text-[var(--text-muted)]",
-  centerBody: "min-h-0 flex-1 overflow-y-auto px-5 py-5",
+  centerBody: "min-h-0 flex-1 overflow-y-auto overflow-x-clip px-5 py-5",
   centerFooter:
-    "flex shrink-0 justify-end gap-2 border-t border-[var(--border-color)] bg-[var(--card-bg)] px-5 py-3.5",
+    "flex shrink-0 justify-end gap-2 rounded-b-[var(--crm-radius-modal)] border-t border-[var(--border-color)] bg-[var(--card-bg)] px-5 py-3.5",
   sectionTitle: "text-sm font-semibold text-[var(--text-main)]",
   sectionPanel:
     "rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--background)] p-4",

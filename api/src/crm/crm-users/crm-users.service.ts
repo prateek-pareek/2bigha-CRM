@@ -157,6 +157,15 @@ export class CRMUsersService implements OnModuleInit {
     return user || undefined;
   }
 
+  async findByTwobighaAdminId(adminId: string): Promise<CRMUserDocument | undefined> {
+    const id = String(adminId || '').trim();
+    if (!id) return undefined;
+    const user = await this.userModel
+      .findOne({ twobighaAdminId: id, isActive: { $ne: false } })
+      .exec();
+    return user || undefined;
+  }
+
   async findAll(): Promise<CRMUserDocument[]> {
     return this.userModel
       .find({ isActive: { $ne: false } })
@@ -191,6 +200,130 @@ export class CRMUsersService implements OnModuleInit {
       lastName: u.lastName || '',
       email: u.email,
     }));
+  }
+
+  /**
+   * People who can be picked as a task assignee: CRM portal users plus
+   * 2bigha staff/agents from getAllAdmins (and CRM user records linked to them).
+   */
+  async listTaskAssigneeDirectory(): Promise<
+    Array<{
+      _id: string;
+      firstName: string;
+      lastName: string;
+      email?: string;
+      source: 'crm' | 'twobigha';
+      roleLabel?: string;
+      twobighaAdminId?: string;
+      crmUserId?: string;
+    }>
+  > {
+    const [portalUsers, crmUsers, twoBigha] = await Promise.all([
+      this.findAllWithCrmPortalAccess(),
+      this.findAll(),
+      this.twoBighaAgentService.fetchAgents({ isActive: true, fetchAll: true, limit: 100 }),
+    ]);
+
+    const byKey = new Map<
+      string,
+      {
+        _id: string;
+        firstName: string;
+        lastName: string;
+        email?: string;
+        source: 'crm' | 'twobigha';
+        roleLabel?: string;
+        twobighaAdminId?: string;
+        crmUserId?: string;
+      }
+    >();
+
+    const keyFor = (email?: string, twobighaAdminId?: string, id?: string) => {
+      const e = String(email || '').trim().toLowerCase();
+      if (e) return `email:${e}`;
+      if (twobighaAdminId) return `tb:${twobighaAdminId}`;
+      return `id:${id || ''}`;
+    };
+
+    for (const admin of twoBigha.admins || []) {
+      if (admin.isActive === false) continue;
+      const id = String(admin.id || '').trim();
+      if (!id) continue;
+      const firstName = admin.firstName || '';
+      const lastName = admin.lastName || '';
+      byKey.set(keyFor(admin.email, id), {
+        _id: id,
+        firstName,
+        lastName,
+        email: admin.email,
+        source: 'twobigha',
+        roleLabel: admin.department || '2bigha staff',
+        twobighaAdminId: id,
+      });
+    }
+
+    const portalByEmail = new Map(
+      portalUsers
+        .filter((u) => u.email)
+        .map((u) => [u.email!.trim().toLowerCase(), u]),
+    );
+
+    for (const u of crmUsers) {
+      const email = u.email?.trim();
+      const nameFirst = u.firstName || '';
+      const nameLast = u.lastName || '';
+      const portal = email ? portalByEmail.get(email.toLowerCase()) : undefined;
+      const crmId = portal?._id || String(u._id);
+      const tbId = u.twobighaAdminId;
+      const key = keyFor(email, tbId, crmId);
+      const existing = byKey.get(key);
+      const roleDoc = u.roleId as { name?: string } | undefined;
+      if (existing) {
+        existing.crmUserId = crmId;
+        existing._id = crmId;
+        if (!existing.firstName) existing.firstName = nameFirst;
+        if (!existing.lastName) existing.lastName = nameLast;
+        existing.roleLabel = existing.roleLabel || roleDoc?.name || u.role || 'CRM';
+        continue;
+      }
+      byKey.set(key, {
+        _id: crmId,
+        firstName: nameFirst,
+        lastName: nameLast,
+        email,
+        source: 'crm',
+        roleLabel: roleDoc?.name || u.role || 'CRM team',
+        twobighaAdminId: tbId,
+        crmUserId: crmId,
+      });
+    }
+
+    for (const u of portalUsers) {
+      const key = keyFor(u.email, undefined, u._id);
+      if (byKey.has(key)) {
+        const row = byKey.get(key)!;
+        row.crmUserId = row.crmUserId || u._id;
+        if (row.source === 'twobigha' && Types.ObjectId.isValid(u._id)) {
+          row._id = u._id;
+        }
+        continue;
+      }
+      byKey.set(key, {
+        _id: u._id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        email: u.email,
+        source: 'crm',
+        roleLabel: 'CRM team',
+        crmUserId: u._id,
+      });
+    }
+
+    return Array.from(byKey.values()).sort((a, b) => {
+      const an = `${a.firstName} ${a.lastName}`.trim() || a.email || '';
+      const bn = `${b.firstName} ${b.lastName}`.trim() || b.email || '';
+      return an.localeCompare(bn);
+    });
   }
 
 

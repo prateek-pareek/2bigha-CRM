@@ -35,6 +35,7 @@ import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
 import CrmRecordOwnerCard from '@/components/crm/records/detail/CrmRecordOwnerCard';
+import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
 import LeadOnboardingChecklistCard from '@/components/crm/records/detail/LeadOnboardingChecklistCard';
 import LeadUpdateHistoryPanel from '@/components/crm/records/detail/LeadUpdateHistoryPanel';
 import CrmRecordPipelineStatus from '@/components/crm/records/detail/CrmRecordPipelineStatus';
@@ -898,6 +899,7 @@ export default function LeadDetailPage() {
               canReassign={hasAccess('leads:write')}
               onReassigned={() => void fetchLead()}
             />
+            <CrmRecordRemindersPanel relatedType="Lead" relatedTo={entityId} />
           </CrmRecordSidebarGroup>
 
           <CrmRecordSidebarGroup title="Associations" defaultOpen>

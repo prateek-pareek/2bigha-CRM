@@ -329,12 +329,17 @@ export class CRMController {
     @Query('type') type?: string,
     @Query('pipelineId') pipelineId?: string,
     @Query('relatedType') relatedType?: string,
+    @Query('assignee') assignee?: string,
+    @Query('teamScope') teamScope?: string,
+    @Query('listingId') listingId?: string,
+    @Request() req?: any,
   ) {
     return this.crmService.findActivities(
       relatedTo,
       type,
       pipelineId,
       relatedType,
+      { assignee, teamScope, listingId, user: req?.user },
     );
   }
 
@@ -346,8 +351,8 @@ export class CRMController {
 
   @Patch('activities/:id')
   @Permissions('activities:write')
-  patchActivity(@Param('id') id: string, @Body() dto: any) {
-    return this.crmService.updateActivity(id, dto);
+  patchActivity(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    return this.crmService.updateActivity(id, dto, req.user);
   }
 
   @Delete('activities/:id')

@@ -457,7 +457,7 @@ export class IvrService {
       .findByIdAndUpdate(leadOid, {
         $set: {
           callStatus: status,
-          ...(followUpDate ? { nextFollowUpAt: followUpDate, followUpReminderSentAt: null } : {}),
+          ...(followUpDate ? { nextFollowUpAt: followUpDate, followUpReminderSentAt: null, followUpUpcomingReminderSentAt: null, followUpOverdueReminderSentAt: null } : {}),
         },
       })
       .exec();
@@ -581,8 +581,12 @@ export class IvrService {
   async updateFollowUp(id: string, body: { followUpAt?: string | null; callbackScheduledAt?: string | null }) {
     const update: Record<string, unknown> = {};
     if (body.followUpAt !== undefined) update.followUpAt = body.followUpAt ? new Date(body.followUpAt) : null;
-    if (body.callbackScheduledAt !== undefined)
-      update.callbackScheduledAt = body.callbackScheduledAt ? new Date(body.callbackScheduledAt) : null;
+    if (body.callbackScheduledAt !== undefined) {
+      update.callbackScheduledAt = body.callbackScheduledAt
+        ? new Date(body.callbackScheduledAt)
+        : null;
+      update.callbackReminderSentAt = null;
+    }
     return this.callLogModel.findByIdAndUpdate(id, { $set: update }, { new: true }).exec();
   }
 }

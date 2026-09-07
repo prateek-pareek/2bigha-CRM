@@ -243,6 +243,7 @@ export default function LegalCasesPage() {
   };
 
   const handleDragStart = (e: React.DragEvent, caseId: string) => {
+    e.dataTransfer.setData('text/plain', caseId);
     e.dataTransfer.setData('legalCaseId', caseId);
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -255,7 +256,7 @@ export default function LegalCasesPage() {
   const handleDrop = async (e: React.DragEvent, stageName: string) => {
     e.preventDefault();
     if (!canMoveStage) return;
-    const caseId = e.dataTransfer.getData('legalCaseId');
+    const caseId = e.dataTransfer.getData('legalCaseId') || e.dataTransfer.getData('text/plain');
     if (!caseId) return;
 
     const updated = cases.map((c) => (c._id === caseId ? { ...c, stage: stageName } : c));

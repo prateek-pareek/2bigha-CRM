@@ -89,6 +89,10 @@ export class CallLog {
   @Prop({ type: Date })
   callbackScheduledAt?: Date | null;
 
+  /** Bookkeeping — callback-due reminder last sent; cleared when callbackScheduledAt changes. */
+  @Prop({ type: Date })
+  callbackReminderSentAt?: Date | null;
+
   /** Set for outbound calls we initiated ourselves (links the row to the CRM user who clicked "Call"). */
   @Prop({ type: Types.ObjectId, ref: 'User' })
   initiatedByUserId?: Types.ObjectId;
