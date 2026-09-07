@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Home, X } from "lucide-react";
+import { ArrowUpDown, Building2, Home, IndianRupee, Landmark, ShieldCheck, Sprout, TrendingUp, X } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_TOOLBAR_SELECT } from "@/lib/crm/ui";
 import { cn } from "@/lib/utils";
@@ -127,6 +127,17 @@ export default function PropertyListingsPage() {
   );
 }
 
+function formatRupeesInWords(amount?: number) {
+  if (!amount) return "₹0";
+  if (amount >= 10000000) {
+    return `₹${(amount / 10000000).toFixed(2)} Cr`;
+  }
+  if (amount >= 100000) {
+    return `₹${(amount / 100000).toFixed(2)} L`;
+  }
+  return `₹${amount.toLocaleString("en-IN")}`;
+}
+
 function PropertyListingsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -134,8 +145,12 @@ function PropertyListingsPageContent() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [approvalFilter, setApprovalFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [legalStatusFilter, setLegalStatusFilter] = useState<string>("all");
   const [pmStageFilter, setPmStageFilter] = useState<string>("all");
   const [pmPlanFilter, setPmPlanFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("newest");
   const [bucket, setBucket] = useState<PropertyRecordBucket>(() =>
     parseBucket(searchParams.get("bucket")),
   );
@@ -171,7 +186,12 @@ function PropertyListingsPageContent() {
 
   const changeBucket = useCallback(
     (next: PropertyRecordBucket) => {
+      if (next === bucket) return;
       setBucket(next);
+      setListings([]);
+      setStats(null);
+      setTotal(0);
+      setLoading(true);
       setPage(1);
       setPmStageFilter("all");
       setPmPlanFilter("all");
@@ -185,7 +205,7 @@ function PropertyListingsPageContent() {
       params.set("bucket", next);
       router.replace(`/crm/property-listings?${params.toString()}`);
     },
-    [router, searchParams],
+    [bucket, router, searchParams],
   );
 
   const changeViewMode = useCallback(
@@ -205,6 +225,7 @@ function PropertyListingsPageContent() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setListings([]);
     const safePageSize = Math.min(Math.max(1, pageSize), LISTING_PAGE_SIZE_MAX);
     try {
       if (bucket === "farm") {
@@ -302,8 +323,8 @@ function PropertyListingsPageContent() {
   const soldCount = stats?.byStatus?.["Sold"] ?? 0;
   const statusOptions = useMemo(() => ["all", ...PROPERTY_STATUSES], []);
   const filtersActive = marketplace
-    ? statusFilter !== "all" || Boolean(search)
-    : pmStageFilter !== "all" || pmPlanFilter !== "all" || Boolean(search);
+    ? statusFilter !== "all" || approvalFilter !== "all" || typeFilter !== "all" || Boolean(search)
+    : pmStageFilter !== "all" || pmPlanFilter !== "all" || legalStatusFilter !== "all" || Boolean(search);
 
   const listingPills = marketplace
     ? [
@@ -403,6 +424,33 @@ function PropertyListingsPageContent() {
     }
   };
 
+  const sortedListings = useMemo(() => {
+    let result = [...listings];
+    if (statusFilter !== "all") {
+      result = result.filter((l) => l.status === statusFilter);
+    }
+    if (approvalFilter !== "all") {
+      result = result.filter((l) => (l.approvalStatus || "").toLowerCase() === approvalFilter.toLowerCase());
+    }
+    if (typeFilter !== "all") {
+      result = result.filter((l) =>
+        (l.propertyType || "").toLowerCase().includes(typeFilter.toLowerCase()) ||
+        (l.category || "").toLowerCase().includes(typeFilter.toLowerCase())
+      );
+    }
+    if (!marketplace && legalStatusFilter !== "all") {
+      result = result.filter((l) => (l.propertyLegal?.status || "").toLowerCase() === legalStatusFilter.toLowerCase());
+    }
+    if (sortBy === "price_asc") {
+      result.sort((a, b) => (a.price || 0) - (b.price || 0));
+    } else if (sortBy === "price_desc") {
+      result.sort((a, b) => (b.price || 0) - (a.price || 0));
+    } else if (sortBy === "area_desc") {
+      result.sort((a, b) => (b.areaValue || 0) - (a.areaValue || 0));
+    }
+    return result;
+  }, [listings, marketplace, statusFilter, approvalFilter, typeFilter, legalStatusFilter, sortBy]);
+
   const newHref =
     bucket === "pm"
       ? "/crm/property-listings/new?bucket=pm"
@@ -417,8 +465,8 @@ function PropertyListingsPageContent() {
       <CrmPageHeader
         bordered={false}
         title="Property Listings"
-        icon={<Home size={18} />}
-        badge={<CrmCountBadge>{total}</CrmCountBadge>}
+        icon={bucket === "farm" ? <Sprout size={18} className="text-emerald-600" /> : bucket === "pm" ? <ShieldCheck size={18} className="text-blue-600" /> : <Building2 size={18} className="text-amber-600" />}
+        badge={loading ? <span className="inline-block h-5 w-8 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" /> : <CrmCountBadge>{total}</CrmCountBadge>}
         description={
           bucket === "pm"
             ? "Subscription verification pipeline — RM, legal, and field visit."
@@ -439,6 +487,96 @@ function PropertyListingsPageContent() {
         className="mb-3"
       />
 
+      {/* KPI Stats Header Banner (Interactive Filter Cards with Skeleton Loading) */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <button
+          type="button"
+          onClick={() => setStatusFilter("all")}
+          className={cn(
+            "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+            statusFilter === "all"
+              ? "border-emerald-500 bg-white ring-2 ring-emerald-500/20 dark:bg-slate-900"
+              : "border-slate-200/80 bg-gradient-to-br from-white to-slate-50/50 hover:border-slate-300 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50",
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Inventory</span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+              <Landmark size={15} />
+            </div>
+          </div>
+          {loading ? (
+            <div className="mt-2 h-6 w-16 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700" />
+          ) : (
+            <p className="mt-1.5 text-xl font-extrabold text-slate-900 dark:text-white">{stats?.total || total}</p>
+          )}
+          <p className="text-[11px] text-slate-400">Total listed properties</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStatusFilter("Available")}
+          className={cn(
+            "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+            statusFilter === "Available"
+              ? "border-emerald-500 bg-emerald-50/40 ring-2 ring-emerald-500/30 dark:bg-emerald-950/40"
+              : "border-slate-200/80 bg-gradient-to-br from-white to-emerald-50/20 hover:border-slate-300 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50",
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Available</span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+              <TrendingUp size={15} />
+            </div>
+          </div>
+          {loading ? (
+            <div className="mt-2 h-6 w-12 animate-pulse rounded-lg bg-emerald-200/60 dark:bg-emerald-950/60" />
+          ) : (
+            <p className="mt-1.5 text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{availableCount}</p>
+          )}
+          <p className="text-[11px] text-slate-400">Active marketplace listings</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStatusFilter("Under Offer")}
+          className={cn(
+            "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+            statusFilter === "Under Offer"
+              ? "border-amber-500 bg-amber-50/40 ring-2 ring-amber-500/30 dark:bg-amber-950/40"
+              : "border-slate-200/80 bg-gradient-to-br from-white to-amber-50/20 hover:border-slate-300 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50",
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Under Offer</span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <Home size={15} />
+            </div>
+          </div>
+          {loading ? (
+            <div className="mt-2 h-6 w-12 animate-pulse rounded-lg bg-amber-200/60 dark:bg-amber-950/60" />
+          ) : (
+            <p className="mt-1.5 text-xl font-extrabold text-amber-600 dark:text-amber-400">{underOfferCount}</p>
+          )}
+          <p className="text-[11px] text-slate-400">Deal in negotiation</p>
+        </button>
+
+        <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-blue-50/20 p-3.5 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Portfolio Value</span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+              <IndianRupee size={15} />
+            </div>
+          </div>
+          {loading ? (
+            <div className="mt-2 h-6 w-24 animate-pulse rounded-lg bg-blue-200/60 dark:bg-blue-950/60" />
+          ) : (
+            <p className="mt-1.5 text-xl font-extrabold text-blue-600 dark:text-blue-400">{formatRupeesInWords(stats?.totalValue)}</p>
+          )}
+          <p className="text-[11px] text-slate-400">Estimated value</p>
+        </div>
+      </div>
+
       <div className="mb-3 overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white shadow-[var(--crm-shadow-card)]">
         <SectionTabs
           value={bucket}
@@ -446,23 +584,9 @@ function PropertyListingsPageContent() {
           items={STREAM_TABS.map((tab) => ({
             value: tab.value,
             label: tab.label,
-            count: bucket === tab.value ? total : undefined,
+            count: bucket === tab.value ? (loading ? undefined : total) : undefined,
           }))}
         />
-        <div className="px-3 py-2">
-          <VisitStatPills
-            items={listingPills}
-            activeKey={marketplace ? statusFilter : pmStageFilter}
-            onSelect={(key) => {
-              if (marketplace) {
-                setStatusFilter(key);
-                return;
-              }
-              setPmStageFilter(key);
-              if (viewMode === "kanban" && key !== "all") changeViewMode("list");
-            }}
-          />
-        </div>
       </div>
 
       <CrmListToolbar
@@ -475,19 +599,57 @@ function PropertyListingsPageContent() {
         }}
         leftExtra={
           marketplace ? (
-            <CrmSelect
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-[38px] w-[160px]"
-            >
-              {statusOptions.map((s) => (
-                <option key={s} value={s}>
-                  {s === "all" ? "All statuses" : s}
-                </option>
-              ))}
-            </CrmSelect>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className={cn(CRM_TOOLBAR_SELECT, "h-[38px] min-w-[130px]")}
+              >
+                {statusOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "all" ? "All Statuses" : s}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={approvalFilter}
+                onChange={(e) => setApprovalFilter(e.target.value)}
+                className={cn(CRM_TOOLBAR_SELECT, "h-[38px] min-w-[140px]")}
+              >
+                <option value="all">All Moderation</option>
+                <option value="Approved">Approved</option>
+                <option value="Pending">Pending Review</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className={cn(CRM_TOOLBAR_SELECT, "h-[38px] min-w-[140px]")}
+              >
+                <option value="all">All Property Types</option>
+                <option value="Agricultural">Agricultural Land</option>
+                <option value="Plot">Plot / Land</option>
+                <option value="Farmhouse">Farmhouse</option>
+                <option value="Farmland">Farmland</option>
+                <option value="Commercial">Commercial</option>
+                <option value="Residential">Residential</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className={cn(CRM_TOOLBAR_SELECT, "h-[38px] w-[140px]")}
+              >
+                <option value="newest">Newest First</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                <option value="area_desc">Area: High to Low</option>
+              </select>
+            </div>
           ) : (
-            <>
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={pmStageFilter}
                 onChange={(e) => {
@@ -515,7 +677,17 @@ function PropertyListingsPageContent() {
                   </option>
                 ))}
               </select>
-            </>
+              <select
+                value={legalStatusFilter}
+                onChange={(e) => setLegalStatusFilter(e.target.value)}
+                className={cn(CRM_TOOLBAR_SELECT, "min-w-[130px] shrink-0")}
+              >
+                <option value="all">All Legal Statuses</option>
+                <option value="Verified">Verified</option>
+                <option value="Pending">Pending Verification</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
           )
         }
         right={
@@ -525,12 +697,16 @@ function PropertyListingsPageContent() {
                 type="button"
                 onClick={() => {
                   setStatusFilter("all");
+                  setApprovalFilter("all");
+                  setTypeFilter("all");
+                  setLegalStatusFilter("all");
                   setPmStageFilter("all");
                   setPmPlanFilter("all");
                   setSearchInput("");
                   setSearch("");
+                  setSortBy("newest");
                 }}
-                className="inline-flex h-[38px] items-center gap-1 rounded-[var(--radius-md)] px-2 text-[12px] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]"
+                className="inline-flex h-[38px] items-center gap-1 rounded-[var(--radius-md)] px-2.5 text-[12px] font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
               >
                 <X size={13} /> Reset
               </button>
@@ -774,7 +950,7 @@ function PropertyListingsPageContent() {
         </div>
       ) : viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {listings.map((p) => (
+          {sortedListings.map((p) => (
             <PropertyListingCard
               key={p._id}
               listing={p}
@@ -797,7 +973,7 @@ function PropertyListingsPageContent() {
               </tr>
             </thead>
             <tbody>
-              {listings.map((p) => (
+              {sortedListings.map((p) => (
                 <tr
                   key={p._id}
                   className="group cursor-pointer transition-colors"

@@ -133,8 +133,6 @@ export class KommunoAgentService {
       agentMobile,
       agentEmail: agent.email,
       status: agent.isActive !== false ? 1 : 0,
-      inTime,
-      outTime,
       stickyAgent: 'soft',
       stickyDays: 7,
       agentMasking: agent.agentMasking ? 1 : 0,
@@ -159,12 +157,27 @@ export class KommunoAgentService {
         data = { raw: text };
       }
 
-      if (!res.ok || (data.status && data.status !== 200 && data.status !== '200')) {
+      const isFailed =
+        !res.ok ||
+        data.status === 0 ||
+        data.status === '0' ||
+        (data.status !== undefined &&
+          ![1, 200, '1', '200', 'success', true].includes(data.status));
+
+      if (isFailed) {
         const msg = data.message || data.error || `Kommuno API error (HTTP ${res.status})`;
         throw new Error(msg);
       }
 
-      const agentId = String(data?.data?.agentId || data?.data?.agent_id || data?.agentId || '').trim();
+      const agentId = String(
+        data?.data?.agentId ||
+          data?.data?.agent_id ||
+          data?.agentId ||
+          data?.agent_id ||
+          data?.data?.id ||
+          data?.id ||
+          '',
+      ).trim();
       if (!agentId) {
         throw new Error(data.message || 'Kommuno addAgent did not return an agentId');
       }
@@ -230,8 +243,6 @@ export class KommunoAgentService {
       agentMobile,
       agentEmail: agent.email,
       status: agent.isActive !== false ? 1 : 0,
-      inTime,
-      outTime,
       stickyAgent: 'soft',
       stickyDays: 7,
       agentMasking: agent.agentMasking ? 1 : 0,
@@ -256,7 +267,14 @@ export class KommunoAgentService {
         data = { raw: text };
       }
 
-      if (!res.ok || (data.status && data.status !== 200 && data.status !== '200')) {
+      const isFailed =
+        !res.ok ||
+        data.status === 0 ||
+        data.status === '0' ||
+        (data.status !== undefined &&
+          ![1, 200, '1', '200', 'success', true].includes(data.status));
+
+      if (isFailed) {
         const msg = data.message || data.error || `Kommuno API error (HTTP ${res.status})`;
         throw new Error(msg);
       }
@@ -308,7 +326,14 @@ export class KommunoAgentService {
         data = { raw: text };
       }
 
-      if (!res.ok || (data.status && data.status !== 200 && data.status !== '200')) {
+      const isFailed =
+        !res.ok ||
+        data.status === 0 ||
+        data.status === '0' ||
+        (data.status !== undefined &&
+          ![1, 200, '1', '200', 'success', true].includes(data.status));
+
+      if (isFailed) {
         const msg = data.message || data.error || `Kommuno API error (HTTP ${res.status})`;
         throw new Error(msg);
       }

@@ -24,6 +24,14 @@ import {
   Tag,
   ArrowLeft,
   MessageSquare,
+  IndianRupee,
+  Clock,
+  AlertCircle,
+  Share2,
+  Check,
+  Edit3,
+  ExternalLink,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -59,6 +67,8 @@ import {
   legalStatusBadgeTone,
   statusBadgeTone,
   approvalStatusBadgeTone,
+  normalizeApprovalStatus,
+  normalizeListingStatus,
   LISTING_BUCKETS,
   type LeadSubscriptionMock,
   type PropertyListingRecord,
@@ -99,6 +109,7 @@ export default function PropertyListingDetailPage() {
   const [sub, setSub] = useState<LeadSubscriptionMock | null>(null);
   const [requestBusy, setRequestBusy] = useState(false);
   const [pmPayments, setPmPayments] = useState<PmPaymentRecord[]>([]);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -197,10 +208,25 @@ export default function PropertyListingDetailPage() {
 
   const images = Array.isArray(listing.images) ? listing.images.filter(Boolean) : [];
 
+  const normStatus = normalizeListingStatus(listing.status);
+  const normApproval = normalizeApprovalStatus(listing.approvalStatus);
+  const isApproved = normApproval.toLowerCase() === "approved";
+  const isPending = normApproval.toLowerCase() === "pending";
+  const isRejected = normApproval.toLowerCase() === "rejected";
+
+  const handleCopyLink = () => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      toast.success("Listing link copied to clipboard");
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
   return (
     <div className="theme-crm-hubspot mx-auto w-full max-w-6xl animate-in fade-in duration-500 pb-16">
       {/* Back Button & Breadcrumbs */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3.5 flex items-center justify-between">
         <button
           type="button"
           onClick={() => router.push(`/crm/property-listings?bucket=${listing.listingBucket || "properties"}`)}
@@ -208,9 +234,20 @@ export default function PropertyListingDetailPage() {
         >
           <ArrowLeft size={14} /> Back to Property Listings
         </button>
-        <span className="text-xs text-[var(--text-muted)] font-mono">
-          ID: {listing._id}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[var(--text-muted)] font-mono">
+            ID: {listing._id}
+          </span>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+            title="Copy Listing URL"
+          >
+            {copiedLink ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+            {copiedLink ? "Copied" : "Copy ID"}
+          </button>
+        </div>
       </div>
 
       {/* Main Header */}
@@ -218,28 +255,63 @@ export default function PropertyListingDetailPage() {
         icon={<Home size={20} />}
         title={listing.title || "Untitled Property Listing"}
         badge={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <CrmSoftBadge label={bucketLabel} tone="secondary" />
-            {isPm && listing.pmStage ? (
-              <CrmStatusBadge tone={pmStageBadgeTone(listing.pmStage)}>
-                {listing.pmStage}
-              </CrmStatusBadge>
-            ) : (
-              <>
-                <CrmStatusBadge tone={statusBadgeTone(listing.status)}>
-                  {listing.status || "Available"}
-                </CrmStatusBadge>
-                <CrmStatusBadge tone={approvalStatusBadgeTone(listing.approvalStatus)}>
-                  {listing.approvalStatus || "Pending"}
-                </CrmStatusBadge>
-              </>
-            )}
-            {listing.pmPlan ? <CrmSoftBadge label={`Plan: ${listing.pmPlan}`} tone="secondary" /> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-dim)] px-2.5 py-0.5 text-xs font-semibold text-[var(--text-muted)] border border-[var(--border-color)]">
+              <Tag size={12} className="text-[var(--primary)]" />
+              {bucketLabel}
+            </span>
+
+            {/* Marketplace Status (Dynamic) */}
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-bold shadow-xs border transition-colors",
+                normStatus === "Available"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
+                  : normStatus === "Sold"
+                    ? "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800"
+                    : normStatus === "Managed"
+                      ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800"
+                      : "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300"
+              )}
+            >
+              {normStatus === "Available" && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              )}
+              {normStatus === "Sold" && <CheckCircle2 size={13} className="text-sky-600" />}
+              {normStatus === "Managed" && <Building size={13} className="text-amber-600" />}
+              {normStatus}
+            </span>
+
+            {/* Moderation Status (Dynamic) */}
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-bold shadow-xs border transition-colors",
+                isApproved
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
+                  : isPending
+                    ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800"
+                    : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800"
+              )}
+            >
+              {isApproved && <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-400" />}
+              {isPending && <Clock size={13} className="text-amber-600 dark:text-amber-400" />}
+              {isRejected && <AlertCircle size={13} className="text-rose-600 dark:text-rose-400" />}
+              Moderation: {normApproval}
+            </span>
+
             {listing.verified ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
-                <CheckCircle2 size={12} /> Verified
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800">
+                <CheckCircle2 size={12} className="text-blue-600 dark:text-blue-400" /> Verified
               </span>
             ) : null}
+
+            {listing.pmPlan ? (
+              <CrmSoftBadge label={`Plan: ${listing.pmPlan}`} tone="secondary" />
+            ) : null}
+
             {listing.propertyLegal ? (
               <CrmStatusBadge tone={legalStatusBadgeTone(listing.propertyLegal.status)}>
                 Legal: {listing.propertyLegal.status}
@@ -255,18 +327,28 @@ export default function PropertyListingDetailPage() {
                 type="button"
                 disabled={requestBusy}
                 onClick={() => void requestLegal()}
-                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-sky-200 bg-sky-50 px-3.5 text-xs font-semibold text-sky-800 shadow-[var(--crm-shadow-input)] transition-colors hover:bg-sky-100 disabled:opacity-60"
+                className="inline-flex h-[38px] items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3.5 text-xs font-semibold text-sky-800 shadow-sm transition-colors hover:bg-sky-100 disabled:opacity-60"
               >
-                {requestBusy ? <Loader2 size={14} className="animate-spin" /> : null}
+                {requestBusy ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
                 Request Legal Verification
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-xs font-semibold text-[var(--text-main)] shadow-sm transition-colors hover:bg-[var(--surface-dim)]"
+              title="Copy Listing Link"
+            >
+              {copiedLink ? <Check size={14} className="text-emerald-500" /> : <Share2 size={14} />}
+              <span>{copiedLink ? "Copied" : "Share"}</span>
+            </button>
             {!isLivePm ? (
               <button
                 type="button"
                 onClick={() => router.push(`/crm/property-listings/${id}/edit`)}
-                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3.5 text-xs font-semibold text-[var(--text-main)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--surface-dim)]"
+                className="inline-flex h-[38px] items-center gap-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-3.5 text-xs font-semibold text-[var(--text-main)] shadow-sm transition-colors hover:bg-[var(--surface-dim)]"
               >
+                <Edit3 size={14} />
                 Edit Listing
               </button>
             ) : null}
@@ -274,7 +356,7 @@ export default function PropertyListingDetailPage() {
               <button
                 type="button"
                 onClick={() => void remove()}
-                className="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-md)] border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 shadow-[var(--crm-shadow-input)] transition-colors hover:bg-rose-100"
+                className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 shadow-sm transition-colors hover:bg-rose-100 dark:bg-rose-950/30 dark:border-rose-900"
               >
                 <Trash2 size={14} /> Delete
               </button>
@@ -284,48 +366,140 @@ export default function PropertyListingDetailPage() {
         className="mb-5"
       />
 
-      {/* KPI Stats Strip */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-[var(--radius-lg)] border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm transition-all hover:border-[var(--primary)]/40">
-          <span className="text-xs font-medium text-[var(--text-muted)]">Total Price</span>
-          <p className="mt-1 text-xl font-bold text-[var(--text-main)]">
-            {formatIndianLandAmount(listing.price)}
-          </p>
-          <span className="text-xs text-[var(--text-muted)]">
-            {formatPrice(listing.price, listing.currency)}
-          </span>
+      {/* Premium KPI Stats Strip */}
+      <div className="mb-6 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Card 1: Total Price */}
+        <div className="group relative overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm transition-all hover:shadow-md hover:border-emerald-500/40">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Total Price
+            </span>
+            <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+              <IndianRupee size={16} />
+            </div>
+          </div>
+          <div className="mt-2.5">
+            <p className="text-2xl font-extrabold tracking-tight text-[var(--text-main)]">
+              {formatIndianLandAmount(listing.price)}
+            </p>
+            <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">
+              {formatPrice(listing.price, listing.currency)}
+            </p>
+          </div>
+          <div className="mt-2.5 flex items-center justify-between border-t border-[var(--border-color)] pt-2 text-[11px] text-[var(--text-muted)]">
+            <span>Listing Bucket</span>
+            <strong className="text-[var(--text-main)] capitalize">{listing.listingBucket || "Property"}</strong>
+          </div>
         </div>
 
-        <div className="rounded-[var(--radius-lg)] border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm transition-all hover:border-[var(--primary)]/40">
-          <span className="text-xs font-medium text-[var(--text-muted)]">Price / Unit</span>
-          <p className="mt-1 text-xl font-bold text-[var(--text-main)]">
-            {listing.pricePerUnit ? `₹${Number(listing.pricePerUnit).toLocaleString()}` : "—"}
-          </p>
-          <span className="text-xs text-[var(--text-muted)]">
-            per {listing.areaUnit || "Unit"}
-          </span>
+        {/* Card 2: Price / Unit */}
+        <div className="group relative overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm transition-all hover:shadow-md hover:border-blue-500/40">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Price / Unit
+            </span>
+            <div className="rounded-xl bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
+              <Tag size={16} />
+            </div>
+          </div>
+          <div className="mt-2.5">
+            <p className="text-2xl font-extrabold tracking-tight text-[var(--text-main)]">
+              {listing.pricePerUnit ? `₹${Number(listing.pricePerUnit).toLocaleString("en-IN")}` : "—"}
+            </p>
+            <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">
+              per {listing.areaUnit || "Unit"}
+            </p>
+          </div>
+          <div className="mt-2.5 flex items-center justify-between border-t border-[var(--border-color)] pt-2 text-[11px] text-[var(--text-muted)]">
+            <span>Unit Measure</span>
+            <strong className="text-[var(--text-main)]">{listing.areaUnit || "Custom"}</strong>
+          </div>
         </div>
 
-        <div className="rounded-[var(--radius-lg)] border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm transition-all hover:border-[var(--primary)]/40">
-          <span className="text-xs font-medium text-[var(--text-muted)]">Total Area</span>
-          <p className="mt-1 text-xl font-bold text-[var(--text-main)]">
-            {listing.areaValue != null
-              ? `${listing.areaValue.toLocaleString()} ${listing.areaUnit || "Bigha"}`
-              : formatListingArea(listing)}
-          </p>
-          <span className="text-xs text-[var(--text-muted)]">
-            {listing.propertyType || "Property"}
-          </span>
+        {/* Card 3: Total Area */}
+        <div className="group relative overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm transition-all hover:shadow-md hover:border-purple-500/40">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Total Area
+            </span>
+            <div className="rounded-xl bg-purple-50 p-2 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400">
+              <Layers size={16} />
+            </div>
+          </div>
+          <div className="mt-2.5">
+            <p className="text-2xl font-extrabold tracking-tight text-[var(--text-main)]">
+              {listing.areaValue != null
+                ? `${listing.areaValue.toLocaleString()} ${listing.areaUnit || "Bigha"}`
+                : formatListingArea(listing)}
+            </p>
+            <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">
+              {listing.propertyType || "Agricultural"} Land
+            </p>
+          </div>
+          <div className="mt-2.5 flex items-center justify-between border-t border-[var(--border-color)] pt-2 text-[11px] text-[var(--text-muted)]">
+            <span>Property Type</span>
+            <strong className="text-[var(--text-main)]">{listing.propertyType || "Agricultural"}</strong>
+          </div>
         </div>
 
-        <div className="rounded-[var(--radius-lg)] border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm transition-all hover:border-[var(--primary)]/40">
-          <span className="text-xs font-medium text-[var(--text-muted)]">Moderation Status</span>
-          <p className="mt-1 text-lg font-bold text-emerald-600 dark:text-emerald-400">
-            {listing.approvalStatus || "Approved"}
-          </p>
-          <span className="text-xs text-[var(--text-muted)]">
-            Listed for {listing.listedFor || "Sale"}
-          </span>
+        {/* Card 4: Moderation Status (Dynamic Theme!) */}
+        <div
+          className={cn(
+            "group relative overflow-hidden rounded-2xl border p-4 shadow-sm transition-all hover:shadow-md",
+            isApproved
+              ? "border-emerald-200/80 bg-gradient-to-br from-emerald-50/50 via-[var(--card-bg)] to-[var(--card-bg)] hover:border-emerald-400 dark:border-emerald-900/50"
+              : isPending
+                ? "border-amber-200/80 bg-gradient-to-br from-amber-50/50 via-[var(--card-bg)] to-[var(--card-bg)] hover:border-amber-400 dark:border-amber-900/50"
+                : "border-rose-200/80 bg-gradient-to-br from-rose-50/50 via-[var(--card-bg)] to-[var(--card-bg)] hover:border-rose-400 dark:border-rose-900/50"
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Moderation Status
+            </span>
+            <div
+              className={cn(
+                "rounded-xl p-2",
+                isApproved
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                  : isPending
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                    : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+              )}
+            >
+              {isApproved ? <ShieldCheck size={16} /> : isPending ? <Clock size={16} /> : <AlertCircle size={16} />}
+            </div>
+          </div>
+          <div className="mt-2.5">
+            <p
+              className={cn(
+                "text-2xl font-extrabold tracking-tight flex items-center gap-1.5",
+                isApproved
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : isPending
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-rose-600 dark:text-rose-400"
+              )}
+            >
+              {isApproved ? <CheckCircle2 size={20} /> : isPending ? <Clock size={20} /> : <AlertCircle size={20} />}
+              {normApproval}
+            </p>
+            <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">
+              Listed for {listing.listedFor || "Sale"} • {normStatus}
+            </p>
+          </div>
+          <div className="mt-2.5 flex items-center justify-between border-t border-[var(--border-color)] pt-2 text-[11px] text-[var(--text-muted)]">
+            <span>Market Status</span>
+            <strong
+              className={cn(
+                normStatus === "Available"
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-[var(--text-main)]"
+              )}
+            >
+              {normStatus}
+            </strong>
+          </div>
         </div>
       </div>
 
@@ -445,24 +619,24 @@ export default function PropertyListingDetailPage() {
                   <>
                     <DetailRow
                       label="PM Plan"
-                      value={listing.pmPlan || "None"}
+                      value={listing.pmPlan}
                       icon={<ShieldCheck size={15} className="text-[var(--primary)]" />}
                     />
                     <DetailRow
                       label="PM Stage"
-                      value={listing.pmStage || "Pending"}
+                      value={listing.pmStage}
                       icon={<Tag size={15} className="text-[var(--primary)]" />}
                     />
                   </>
                 ) : null}
                 <DetailRow
                   label="Property Type"
-                  value={listing.propertyType || "Plot"}
+                  value={listing.propertyType}
                   icon={<Building size={15} className="text-[var(--text-muted)]" />}
                 />
                 <DetailRow
                   label="Category"
-                  value={listing.category || "None"}
+                  value={listing.category}
                   icon={<Tag size={15} className="text-[var(--text-muted)]" />}
                 />
                 <DetailRow
@@ -562,6 +736,8 @@ export default function PropertyListingDetailPage() {
               coordinates={listing.mapCoordinates}
               boundaries={listing.mapBoundaries}
               location={listing.mapLocation}
+              geoJson={listing.geoJson}
+              calculatedArea={listing.calculatedArea}
               title={listing.title}
               address={formatAddress(listing)}
             />
@@ -591,67 +767,91 @@ export default function PropertyListingDetailPage() {
           <div className="space-y-6">
             {/* Contact & Lister Info */}
             <CrmSectionCard title="Contact & Lister Details">
-              <div className="divide-y divide-[var(--border-color)]">
-                <DetailRow
-                  label="Lister Type"
-                  value={
-                    <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                      {listing.listerType || "Owner"}
+              <div className="space-y-4">
+                {/* Profile Header */}
+                <div className="flex items-center gap-3 rounded-xl bg-[var(--surface-dim)] p-3 border border-[var(--border-color)]">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-700 text-sm font-bold text-white shadow-sm">
+                    {listing.contactName
+                      ? listing.contactName
+                          .split(" ")
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join("")
+                          .toUpperCase()
+                      : "2B"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-bold text-[var(--text-main)]">
+                        {listing.contactName || "2Bigha Verified Lister"}
+                      </p>
+                    </div>
+                    <span className="inline-block mt-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      {listing.listerType || "Owner / Lister"}
                     </span>
-                  }
-                />
-                {listing.contactName && (
-                  <DetailRow
-                    label="Contact Name"
-                    value={
-                      <span className="inline-flex items-center gap-1 font-semibold">
-                        <User size={14} className="text-[var(--primary)]" />
-                        {listing.contactName}
-                      </span>
-                    }
-                  />
-                )}
-                {listing.contactPhone && (
-                  <div className="py-2.5 flex items-center justify-between">
-                    <span className="text-sm text-[var(--text-muted)] flex items-center gap-1.5">
-                      <Phone size={14} /> Phone
-                    </span>
+                  </div>
+                </div>
+
+                {/* Quick Action Buttons */}
+                <div className="grid grid-cols-2 gap-2">
+                  {listing.contactPhone && (
                     <a
                       href={`tel:${listing.contactPhone}`}
-                      className="text-sm font-semibold text-[var(--primary)] hover:underline flex items-center gap-1"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 transition-colors shadow-xs"
                     >
-                      {listing.contactPhone}
+                      <Phone size={13} /> Call
                     </a>
-                  </div>
-                )}
-                {listing.whatsappNumber && (
-                  <div className="py-2.5 flex items-center justify-between">
-                    <span className="text-sm text-[var(--text-muted)] flex items-center gap-1.5">
-                      <MessageSquare size={14} className="text-emerald-500" /> WhatsApp
-                    </span>
+                  )}
+                  {listing.whatsappNumber && (
                     <a
                       href={`https://wa.me/${listing.whatsappNumber.replace(/[^0-9]/g, "")}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors shadow-xs"
                     >
-                      Chat ({listing.whatsappNumber})
+                      <MessageSquare size={13} /> WhatsApp
                     </a>
-                  </div>
-                )}
-                {listing.contactEmail && (
-                  <div className="py-2.5 flex items-center justify-between">
-                    <span className="text-sm text-[var(--text-muted)] flex items-center gap-1.5">
-                      <Mail size={14} /> Email
-                    </span>
-                    <a
-                      href={`mailto:${listing.contactEmail}`}
-                      className="text-sm font-semibold text-[var(--primary)] hover:underline"
-                    >
-                      {listing.contactEmail}
-                    </a>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                {/* Contact Rows */}
+                <div className="divide-y divide-[var(--border-color)] text-xs">
+                  {listing.contactPhone && (
+                    <div className="py-2 flex items-center justify-between">
+                      <span className="text-[var(--text-muted)] flex items-center gap-1.5">
+                        <Phone size={13} /> Phone
+                      </span>
+                      <a href={`tel:${listing.contactPhone}`} className="font-mono font-medium text-[var(--primary)] hover:underline">
+                        {listing.contactPhone}
+                      </a>
+                    </div>
+                  )}
+                  {listing.whatsappNumber && (
+                    <div className="py-2 flex items-center justify-between">
+                      <span className="text-[var(--text-muted)] flex items-center gap-1.5">
+                        <MessageSquare size={13} className="text-emerald-500" /> WhatsApp
+                      </span>
+                      <a
+                        href={`https://wa.me/${listing.whatsappNumber.replace(/[^0-9]/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono font-medium text-emerald-600 hover:underline"
+                      >
+                        {listing.whatsappNumber}
+                      </a>
+                    </div>
+                  )}
+                  {listing.contactEmail && (
+                    <div className="py-2 flex items-center justify-between">
+                      <span className="text-[var(--text-muted)] flex items-center gap-1.5">
+                        <Mail size={13} /> Email
+                      </span>
+                      <a href={`mailto:${listing.contactEmail}`} className="font-medium text-[var(--primary)] hover:underline truncate max-w-[180px]">
+                        {listing.contactEmail}
+                      </a>
+                    </div>
+                  )}
+                </div>
               </div>
             </CrmSectionCard>
 
