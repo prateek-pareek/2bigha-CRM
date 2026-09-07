@@ -211,11 +211,14 @@ export class OwnershipTransferService {
           .catch(() => null)
       : null;
 
+    const eventType = entityType === 'Lead' ? 'lead_transferred' : 'legal_case_transferred';
+    const notificationType = entityType === 'Lead' ? 'LEAD_TRANSFERRED' : 'CASE_TRANSFERRED';
+
     await Promise.all([
       prevOwnerUser && String(prevOwnerUser._id) !== String(newOwner._id)
         ? this.crmNotify
             .notify({
-              event: 'lead_transferred',
+              event: eventType,
               title: `${entityType} reassigned`,
               message: `${recordLabel} has been transferred to ${newOwnerLabel}.`,
               recipient: { userId: prevOwnerUser._id },
@@ -228,13 +231,13 @@ export class OwnershipTransferService {
                 entityId: id,
                 action: 'ownership_transfer_out',
               },
-              type: 'LEAD_TRANSFERRED',
+              type: notificationType,
             })
             .catch(() => null)
         : null,
       this.crmNotify
         .notify({
-          event: 'lead_transferred',
+          event: eventType,
           title: `${entityType} assigned to you`,
           message: `${recordLabel} has been transferred to you${previousOwnerLabel ? ` from ${previousOwnerLabel}` : ''}.`,
           recipient: { userId: newOwner._id, email: (newOwner as any).email },
@@ -247,7 +250,7 @@ export class OwnershipTransferService {
             entityId: id,
             action: 'ownership_transfer_in',
           },
-          type: 'LEAD_TRANSFERRED',
+          type: notificationType,
         })
         .catch(() => null),
     ]);

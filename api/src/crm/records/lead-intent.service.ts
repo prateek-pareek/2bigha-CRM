@@ -70,10 +70,11 @@ export class LeadIntentService {
     return { leadId, intents: cleanIntents, followUpAt: followUpDate };
   }
 
-  /** Lead Intent List page — paginated leads filtered by current intent + owner. */
+  /** Lead Intent List page — paginated leads filtered by current intent + owner + search. */
   async listByIntent(query: {
     intent?: string;
     owner?: string;
+    search?: string;
     page?: number;
     pageSize?: number;
   }) {
@@ -84,7 +85,25 @@ export class LeadIntentService {
     else filter.leadIntents = { $exists: true, $ne: [] };
     if (query.owner) filter.leadOwner = query.owner;
 
-    const [items, total] = await Promise.all([
+    if (query.search && query.search.trim()) {
+      const sanitized = query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const reg = new RegExp(sanitized, 'i');
+      filter.$or = [
+        { firstName: reg },
+        { lastName: reg },
+        { email: reg },
+        { phone: reg },
+        { mobileNo: reg },
+        { organization: reg },
+        { leadOwner: reg },
+      ];
+    }
+
+    const baseFilter = { isDeleted: { $ne: true }, leadIntents: { $exists: true, $ne: [] } };
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const [items, total, statsAgg] = await Promise.all([
       this.leadModel
         .find(filter)
         .select(LEAD_LIST_PROJECTION)
@@ -94,9 +113,43 @@ export class LeadIntentService {
         .lean()
         .exec(),
       this.leadModel.countDocuments(filter),
+      this.leadModel.aggregate([
+        { $match: baseFilter },
+        {
+          $facet: {
+            total: [{ $count: 'count' }],
+            buyers: [{ $match: { leadIntents: 'Buyer' } }, { $count: 'count' }],
+            sellers: [{ $match: { leadIntents: 'Seller' } }, { $count: 'count' }],
+            investors: [{ $match: { leadIntents: 'Investor' } }, { $count: 'count' }],
+            farms: [{ $match: { leadIntents: 'Farm' } }, { $count: 'count' }],
+            pm: [{ $match: { leadIntents: 'Property Management' } }, { $count: 'count' }],
+            subscriptions: [{ $match: { leadIntents: 'Subscription' } }, { $count: 'count' }],
+            dueToday: [
+              {
+                $match: {
+                  leadIntentFollowUpAt: { $exists: true, $ne: null, $lte: todayEnd },
+                },
+              },
+              { $count: 'count' },
+            ],
+          },
+        },
+      ]),
     ]);
 
-    return { items, total, page, pageSize };
+    const facet = statsAgg?.[0] || {};
+    const stats = {
+      total: facet.total?.[0]?.count || 0,
+      buyers: facet.buyers?.[0]?.count || 0,
+      sellers: facet.sellers?.[0]?.count || 0,
+      investors: facet.investors?.[0]?.count || 0,
+      farms: facet.farms?.[0]?.count || 0,
+      pm: facet.pm?.[0]?.count || 0,
+      subscriptions: facet.subscriptions?.[0]?.count || 0,
+      dueToday: facet.dueToday?.[0]?.count || 0,
+    };
+
+    return { items, total, stats, page, pageSize };
   }
 
   /** Lead Intent Analytics dashboard — counts by intent label, filterable by date range + agent. */

@@ -48,8 +48,8 @@ export class PropertyListingsController {
 
   @Get()
   @Permissions('property_listings:read')
-  findAll(@Query() query: Record<string, string>) {
-    return this.listingsService.findAll(query);
+  findAll(@Query() query: Record<string, string>, @Request() req?: any) {
+    return this.listingsService.findAll({ ...query, user: req?.user });
   }
 
   @Get('pm/assignment-staff')
@@ -337,5 +337,12 @@ export class PropertyListingsController {
   @Permissions('property_listings:write', 'leads:write')
   reviewPmVisitReport(@Param('id') id: string, @Body() body: PmReviewReportDto) {
     return this.listingsService.reviewPmVisitReport(id, body);
+  }
+
+  /** Read-only hand-off: PM property views associated legal cases (legal status snapshot only). */
+  @Get(':id/associated-legal-status')
+  @Permissions('property_listings:read')
+  getPropertyAssociatedLegalStatus(@Param('id') id: string) {
+    return this.listingsService.getPropertyAssociatedLegalStatus(id);
   }
 }

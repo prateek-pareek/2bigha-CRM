@@ -13,6 +13,9 @@ import {
   PropertyListingSchema,
 } from './schemas/property-listing.schema';
 import { CRMModule } from '../crm.module';
+import { PropertyListingExpiryCronService } from './property-listing-expiry-cron.service';
+import { SubscriptionPlanExpiryCronService } from '../subscriptions/subscription-plan-expiry-cron.service';
+import { LegalCase, LegalCaseSchema } from '../records/schemas/legal-case.schema';
 
 @Module({
   imports: [
@@ -24,7 +27,10 @@ import { CRMModule } from '../crm.module';
     CRMModule,
     VisitsModule,
     MongooseModule.forFeature(
-      [{ name: PropertyListing.name, schema: PropertyListingSchema }],
+      [
+        { name: PropertyListing.name, schema: PropertyListingSchema },
+        { name: LegalCase.name, schema: LegalCaseSchema },
+      ],
       'crmConnection',
     ),
   ],
@@ -35,6 +41,8 @@ import { CRMModule } from '../crm.module';
     TwoBighaPmAssignmentService,
     TwoBighaPmCreateService,
     PropertyShareService,
+    PropertyListingExpiryCronService,
+    SubscriptionPlanExpiryCronService,
   ],
   exports: [PropertyListingsService],
 })

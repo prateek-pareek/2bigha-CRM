@@ -4,7 +4,11 @@ import type {
   PropertyListingRecord,
   PropertyListingType,
 } from "@/lib/crm/property-listings/types";
-import { areaValueToBigha } from "@/lib/crm/property-listings/types";
+import {
+  areaValueToBigha,
+  normalizeApprovalStatus,
+  normalizeListingStatus,
+} from "@/lib/crm/property-listings/types";
 
 /**
  * Calls this repo's own NestJS backend (`/crm/property-listings`) — the
@@ -206,28 +210,79 @@ export async function retryBackendPropertyListingSync(
 export interface TwoBighaFarmRaw {
   property?: {
     id?: string;
+    uuid?: string;
     propertyName?: string;
     title?: string;
     description?: string;
     propertyType?: string;
     status?: string;
+    availablilityStatus?: string;
     price?: number;
+    pricePerUnit?: number | string;
     area?: number;
     areaUnit?: string;
+    khasraNumber?: string | null;
+    murabbaNumber?: string | null;
+    khewatNumber?: string | null;
     address?: string;
     city?: string;
     district?: string;
     state?: string;
     country?: string;
     source?: string;
+    waterLevel?: number;
+    landMark?: string[] | null;
+    landType?: string | null;
+    category?: string | null;
+    highwayConn?: boolean;
+    roadAccess?: boolean;
+    roadAccessDistance?: number | null;
+    roadAccessWidth?: number;
+    roadAccessDistanceUnit?: string;
+    listingType?: string;
+    isPriceNegotiable?: boolean;
+    hasGatedCommunity?: boolean;
+    multipleSizeOptions?: boolean;
+    nearbyActivities?: string[];
+    scenicFeatures?: string[];
+    amenities?: string[];
+    listingAs?: string;
     isVerified?: boolean;
     isActive?: boolean;
-    images?: string[];
+    viewCount?: number;
+    saveCount?: number;
+    ownerName?: string | null;
+    ownerPhone?: string | null;
+    ownerWhatsapp?: string | null;
     createdAt?: string;
     updatedAt?: string;
+    images?: unknown;
+    coordinates?: any;
+    location?: any;
+    latLng?: any;
+    geoJson?: any;
+    boundary?: any;
+    boundaries?: any;
+    mapBoundaries?: any;
+    mapCoordinates?: any;
+    mapLocation?: any;
+    calculatedArea?: number | string | null;
+    [key: string]: any;
   } | null;
-  seo?: { slug?: string } | null;
+  seo?: { slug?: string; seoTitle?: string } | null;
+  verification?: { isVerified?: boolean; verificationMessage?: string } | null;
   images?: unknown;
+  user?: {
+    id?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    role?: string | null;
+    phone?: string | null;
+    whatsappNumber?: string | null;
+  } | null;
+  createdByUser?: { firstName?: string; lastName?: string } | null;
+  saved?: boolean | null;
 }
 
 /** Live read-through to 2bigha's getFarms — real farm marketplace data, replacing the FARMS bucket's old static mock. */
@@ -355,7 +410,15 @@ function mapTwoBighaArea(area: unknown, areaUnit: unknown): {
   };
 }
 
-function contactFromEnvelope(raw: { user?: { firstName?: string; lastName?: string; phone?: string; email?: string } | null }) {
+function contactFromEnvelope(raw: {
+  user?: {
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    whatsappNumber?: string | null;
+  } | null;
+}) {
   const u = raw.user;
   if (!u) return {};
   const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
@@ -363,7 +426,25 @@ function contactFromEnvelope(raw: { user?: { firstName?: string; lastName?: stri
     contactName: name || undefined,
     contactPhone: u.phone || undefined,
     contactEmail: u.email || undefined,
+    whatsappNumber: u.whatsappNumber || undefined,
   };
+}
+
+function parseLatLng(val: unknown): { lat: number; lng: number } | undefined {
+  if (!val) return undefined;
+  if (typeof val === "object" && val !== null) {
+    const obj = val as Record<string, unknown>;
+    const lat = Number(obj.lat ?? obj.latitude);
+    const lng = Number(obj.lng ?? obj.longitude ?? obj.long);
+    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
+  }
+  if (typeof val === "string") {
+    const parts = val.split(",").map((s) => parseFloat(s.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return { lat: parts[0], lng: parts[1] };
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -374,10 +455,12 @@ function contactFromEnvelope(raw: { user?: { firstName?: string; lastName?: stri
  * — these rows are read-only, not CRM-owned Mongo documents.
  */
 export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRecord {
-  const p = raw.property || {};
   const now = new Date().toISOString();
+  const p = raw.property || {};
   const area = mapTwoBighaArea(p.area, p.areaUnit);
   const images = extractTwoBighaImageUrls(raw.images ?? p.images);
+  const contact = contactFromEnvelope(raw);
+
   return {
     _id: String(raw.seo?.slug || p.id || `twobigha-farm-${Math.random().toString(36).slice(2)}`),
     listingBucket: "farm",
@@ -392,15 +475,63 @@ export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRe
     propertyType: (p.propertyType && FARM_PROPERTY_TYPE_REVERSE[p.propertyType]) || "Farm",
     listedFor: "Sale",
     ...area,
-    status: p.isActive === false ? "Off Market" : "Available",
-    approvalStatus: "Approved",
-    verified: p.isVerified,
+    status: normalizeListingStatus(
+      p.availablilityStatus === "SOLD" || p.status === "SOLD"
+        ? "Sold"
+        : p.availablilityStatus === "MANAGED"
+          ? "Managed"
+          : p.isActive === false
+            ? "Off Market"
+            : (p.availablilityStatus || p.status || "Available")
+    ),
+    approvalStatus: normalizeApprovalStatus(p.approvalStatus),
+    verified: raw.verification?.isVerified ?? p.isVerified,
+    description: p.description || undefined,
+    viewCount: typeof p.viewCount === "number" ? p.viewCount : undefined,
+    likeCount: typeof p.saveCount === "number" ? p.saveCount : undefined,
     images,
-    amenities: [],
+    amenities: Array.isArray(p.amenities)
+      ? p.amenities.filter((a: unknown) => typeof a === "string")
+      : [],
+    pricePerUnit: p.pricePerUnit ? String(p.pricePerUnit) : undefined,
+    waterLevel: p.waterLevel != null && p.waterLevel > 0 ? Number(p.waterLevel) : undefined,
+    landMark: Array.isArray(p.landMark) && p.landMark.length ? p.landMark : undefined,
+    category: p.category || undefined,
+    highwayConn: p.highwayConn != null ? Boolean(p.highwayConn) : undefined,
+    roadAccess: p.roadAccess != null ? Boolean(p.roadAccess) : undefined,
+    roadAccessDistance: p.roadAccessDistance != null ? Number(p.roadAccessDistance) : undefined,
+    roadAccessWidth:
+      p.roadAccessWidth != null && p.roadAccessWidth > 0 ? Number(p.roadAccessWidth) : undefined,
+    roadAccessDistanceUnit: p.roadAccessDistanceUnit || undefined,
+    listerType: p.listingAs || (raw.user?.role ? String(raw.user.role) : undefined),
+    contactName: contact.contactName || p.ownerName || undefined,
+    contactPhone: contact.contactPhone || p.ownerPhone || undefined,
+    contactEmail: contact.contactEmail,
+    whatsappNumber: contact.whatsappNumber || p.ownerWhatsapp || undefined,
+    khasraNumber: p.khasraNumber || undefined,
+    murabbaNumber: p.murabbaNumber || undefined,
+    khewatNumber: p.khewatNumber || undefined,
     twobighaPropertyId: p.id || undefined,
+    mapBoundaries:
+      p.geoJson?.coordinates ||
+      p.boundary?.coordinates ||
+      p.boundary ||
+      p.boundaries ||
+      p.mapBoundaries ||
+      undefined,
+    mapCoordinates:
+      parseLatLng(p.coordinates) ||
+      parseLatLng(p.location?.coordinates) ||
+      parseLatLng(p.latLng) ||
+      p.mapCoordinates ||
+      undefined,
+    mapLocation: p.location || p.mapLocation || undefined,
+    calculatedArea: p.calculatedArea != null ? Number(p.calculatedArea) : undefined,
+    geoJson: p.geoJson || undefined,
+    boundary: p.boundary || undefined,
     createdAt: p.createdAt || now,
     updatedAt: p.updatedAt || now,
-    listedDate: p.createdAt || now,
+    listedDate: p.createdAt || undefined,
   };
 }
 
@@ -421,10 +552,10 @@ const PROPERTY_TYPE_REVERSE: Record<string, PropertyListingType> = {
 
 /** Maps one live 2bigha standard property row onto PropertyListingRecord shape. */
 export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): PropertyListingRecord {
-  const p = raw.property || {};
   const now = new Date().toISOString();
+  const p = raw.property || {};
   const area = mapTwoBighaArea(p.area, p.areaUnit);
-  const listedAt = p.publishedAt || p.createdAt || now;
+  const listedAt = p.publishedAt || p.createdAt || undefined;
   const contact = contactFromEnvelope(raw);
 
   return {
@@ -442,14 +573,16 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
     propertyType: (p.propertyType && PROPERTY_TYPE_REVERSE[p.propertyType]) || "Other",
     listedFor: "Sale",
     ...area,
-    status: p.availablilityStatus === "SOLD"
-      ? "Sold"
-      : p.availablilityStatus === "MANAGED"
-        ? "Managed"
-        : p.isActive === false
-          ? "Off Market"
-          : "Available",
-    approvalStatus: p.approvalStatus || "Approved",
+    status: normalizeListingStatus(
+      p.availablilityStatus === "SOLD"
+        ? "Sold"
+        : p.availablilityStatus === "MANAGED"
+          ? "Managed"
+          : p.isActive === false
+            ? "Off Market"
+            : (p.availablilityStatus || p.status || "Available")
+    ),
+    approvalStatus: normalizeApprovalStatus(p.approvalStatus),
     verified: p.isVerified,
     description: p.description || undefined,
     viewCount: typeof p.viewCount === "number" ? p.viewCount : undefined,
@@ -478,9 +611,23 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
     contactPhone: contact.contactPhone || p.contactPhone || p.ownerPhone || undefined,
     contactEmail: contact.contactEmail,
     whatsappNumber: p.whatsappNumber || undefined,
-    mapBoundaries: p.mapBoundaries || undefined,
-    mapCoordinates: p.mapCoordinates || undefined,
-    mapLocation: p.mapLocation || undefined,
+    mapBoundaries:
+      p.geoJson?.coordinates ||
+      p.boundary?.coordinates ||
+      p.boundary ||
+      p.boundaries ||
+      p.mapBoundaries ||
+      undefined,
+    mapCoordinates:
+      parseLatLng(p.coordinates) ||
+      parseLatLng(p.location?.coordinates) ||
+      parseLatLng(p.latLng) ||
+      p.mapCoordinates ||
+      undefined,
+    mapLocation: p.location || p.mapLocation || undefined,
+    calculatedArea: p.calculatedArea != null ? Number(p.calculatedArea) : undefined,
+    geoJson: p.geoJson || undefined,
+    boundary: p.boundary || undefined,
     twobighaPropertyId: p.id || undefined,
     listedDate: listedAt,
     createdAt: p.createdAt || now,

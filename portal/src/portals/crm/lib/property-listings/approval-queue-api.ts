@@ -38,11 +38,33 @@ export interface ApprovalQueueProperty {
     isFeatured?: boolean;
     approvalStatus?: string;
     approvalMessage?: string;
+    ownerName?: string;
+    ownerPhone?: string;
+    ownerWhatsapp?: string;
+    khasraNumber?: string;
+    landZoning?: string;
+    soilType?: string;
+    waterLevel?: string;
+    roadAccess?: string;
+    highwayConn?: string;
+    category?: string;
+    latLng?: string;
+    location?: {
+      name?: string;
+      address?: string;
+      coordinates?: {
+        lat?: number;
+        lng?: number;
+      };
+    };
+    boundary?: any;
+    geoJson?: any;
+    calculatedArea?: string;
+    viewCount?: number;
+    saveCount?: number;
     createdAt?: string;
     updatedAt?: string;
     publishedAt?: string;
-    // No `images` field here — the backend query deliberately omits it; see
-    // the comment on PROPERTY_DETAIL_FIELDS in twobigha-property.service.ts.
   };
   seo?: { slug?: string };
 }

@@ -3,8 +3,21 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, ClipboardList, MapPin, X } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  MapPin,
+  Navigation,
+  X,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import Pagination from "@/components/suite/shell/Pagination";
 import {
   CrmCountBadge,
@@ -270,93 +283,362 @@ function VisitsPageContent() {
         className="mb-3"
       />
 
-      {!configured && !loading ? <div className="mb-3"><VisitConfigBanner /></div> : null}
+      {!configured && !loading ? <div className="mb-4"><VisitConfigBanner /></div> : null}
 
-      <div className="mb-3 overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white shadow-[var(--crm-shadow-card)]">
+      {/* Modern Interactive KPI Metric Cards (Matching Property Listings styling) */}
+      {tab === "visits" ? (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {/* Card 1: Total */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              !status
+                ? "border-emerald-500 bg-white ring-2 ring-emerald-500/20 dark:bg-slate-900"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total Visits</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <MapPin size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-slate-900 dark:text-white">
+              {visitStats?.total ?? total}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">All recorded visits</p>
+          </button>
+
+          {/* Card 2: Scheduled & En Route */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("SCHEDULED")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              status === "SCHEDULED" || status === "AGENT_ON_WAY"
+                ? "border-sky-500 bg-sky-50/30 ring-2 ring-sky-500/20 dark:bg-sky-950/30"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Scheduled</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-400">
+                <Clock size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-sky-600 dark:text-sky-400">
+              {(visitStats?.scheduled ?? 0) + (visitStats?.agentOnWay ?? 0)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              {visitStats?.scheduled ?? 0} booked · {visitStats?.agentOnWay ?? 0} on way
+            </p>
+          </button>
+
+          {/* Card 3: In Progress (Live on site) */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("IN_PROGRESS")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              status === "IN_PROGRESS"
+                ? "border-amber-500 bg-amber-50/30 ring-2 ring-amber-500/20 dark:bg-amber-950/30"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">In Progress</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+                <Activity size={15} />
+              </div>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <p className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">
+                {visitStats?.inProgress ?? 0}
+              </p>
+              {(visitStats?.inProgress ?? 0) > 0 && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-[11px] text-slate-400">Agents active on site</p>
+          </button>
+
+          {/* Card 4: Completed */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("COMPLETED")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              status === "COMPLETED"
+                ? "border-emerald-500 bg-emerald-50/30 ring-2 ring-emerald-500/20 dark:bg-emerald-950/30"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Completed</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+                <CheckCircle2 size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+              {visitStats?.completed ?? 0}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">Finished site inspections</p>
+          </button>
+
+          {/* Card 5: Missed / Cancelled */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("MISSED")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              status === "MISSED" || status === "CANCELLED"
+                ? "border-rose-500 bg-rose-50/30 ring-2 ring-rose-500/20 dark:bg-rose-950/30"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Exceptions</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
+                <AlertCircle size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-rose-600 dark:text-rose-400">
+              {(visitStats?.missed ?? 0) + (visitStats?.cancelled ?? 0)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              {visitStats?.missed ?? 0} missed · {visitStats?.cancelled ?? 0} cancelled
+            </p>
+          </button>
+        </div>
+      ) : (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {/* Requests Card 1: Total */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              !status
+                ? "border-emerald-500 bg-white ring-2 ring-emerald-500/20 dark:bg-slate-900"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">All Requests</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <ClipboardList size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-slate-900 dark:text-white">
+              {requestStats?.total ?? total}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">Total customer requests</p>
+          </button>
+
+          {/* Requests Card 2: Pending */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("PENDING")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              status === "PENDING"
+                ? "border-amber-500 bg-amber-50/30 ring-2 ring-amber-500/20 dark:bg-amber-950/30"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Pending Review</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+                <Clock size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-amber-600 dark:text-amber-400">
+              {requestStats?.pending ?? 0}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">Awaiting RM assignment</p>
+          </button>
+
+          {/* Requests Card 3: Approved */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("APPROVED")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              status === "APPROVED"
+                ? "border-emerald-500 bg-emerald-50/30 ring-2 ring-emerald-500/20 dark:bg-emerald-950/30"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Approved</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+                <CheckCircle2 size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+              {requestStats?.approved ?? 0}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">Approved for dispatch</p>
+          </button>
+
+          {/* Requests Card 4: Scheduled */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("SCHEDULED")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              status === "SCHEDULED"
+                ? "border-sky-500 bg-sky-50/30 ring-2 ring-sky-500/20 dark:bg-sky-950/30"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Scheduled</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-400">
+                <Calendar size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-sky-600 dark:text-sky-400">
+              {requestStats?.scheduled ?? 0}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">Field visit booked</p>
+          </button>
+
+          {/* Requests Card 5: Closed & Rejected */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("REJECTED")}
+            className={cn(
+              "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
+              status === "REJECTED" || status === "CLOSED"
+                ? "border-rose-500 bg-rose-50/30 ring-2 ring-rose-500/20 dark:bg-rose-950/30"
+                : "border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Closed</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
+                <XCircle size={15} />
+              </div>
+            </div>
+            <p className="mt-1.5 text-2xl font-extrabold text-rose-600 dark:text-rose-400">
+              {(requestStats?.rejected ?? 0) + (requestStats?.closed ?? 0)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              {requestStats?.rejected ?? 0} rejected · {requestStats?.closed ?? 0} closed
+            </p>
+          </button>
+        </div>
+      )}
+
+      {/* Tabs & Filter Toolbar Strip */}
+      <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <SectionTabs
           value={tab}
           onChange={changeTab}
           items={[
-            { value: "visits", label: "Field visits", count: visitStats?.total },
-            { value: "requests", label: "Visit requests", count: requestStats?.total },
+            { value: "visits", label: "Field Visits", count: visitStats?.total },
+            { value: "requests", label: "Visit Requests", count: requestStats?.total },
           ]}
           trailing={
-            <CrmSearchInput
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder={tab === "visits" ? "Search property or agent…" : "Search requests…"}
-              className="h-8"
-              wrapperClassName="relative w-full min-w-0 max-w-full"
-            />
+            <div className="relative w-full min-w-0 max-w-full">
+              <CrmSearchInput
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder={tab === "visits" ? "Search property, agent, city…" : "Search requests, owners…"}
+                className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/50 text-xs focus:bg-white dark:border-slate-800 dark:bg-slate-900"
+                wrapperClassName="w-full"
+              />
+            </div>
           }
         />
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-          <CrmSelect
+
+        {/* Filter Controls Row */}
+        <div className="flex flex-wrap items-center gap-2.5 p-3 border-t border-slate-100 bg-slate-50/30 dark:border-slate-800/60 dark:bg-slate-900/40">
+          {/* Status Filter */}
+          <select
+            value={status}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+          >
+            <option value="">All Statuses</option>
+            {tab === "visits" ? (
+              <>
+                <option value="SCHEDULED">Scheduled</option>
+                <option value="AGENT_ON_WAY">On The Way</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="MISSED">Missed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </>
+            ) : (
+              <>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="SCHEDULED">Scheduled</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="CLOSED">Closed</option>
+              </>
+            )}
+          </select>
+
+          {/* Category / Purpose Filter */}
+          <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="h-8 w-[160px]"
+            className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
           >
-            <option value="">All categories</option>
+            <option value="">All Categories / Purpose</option>
             {VISIT_CATEGORIES.map((c) => (
               <option key={c} value={c}>
                 {formatVisitCategory(c)}
               </option>
             ))}
-          </CrmSelect>
+          </select>
+
+          {/* Date Filter (for visits) */}
           {tab === "visits" ? (
             <>
-              <CrmSelect
+              <select
                 value={datePreset}
                 onChange={(e) => setDatePreset(e.target.value as DatePreset)}
-                className="h-8 w-[150px]"
+                className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
               >
-                <option value="">All dates</option>
+                <option value="">All Dates</option>
                 <option value="today">Today</option>
                 <option value="7d">Last 7 days</option>
                 <option value="30d">Last 30 days</option>
-              </CrmSelect>
-              <CrmSelect
+              </select>
+
+              <select
                 value={reportFilter}
                 onChange={(e) => setReportFilter(e.target.value as ReportFilter)}
-                className="h-8 w-[150px]"
+                className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
               >
-                <option value="">All reports</option>
-                <option value="yes">Has report</option>
-                <option value="no">No report</option>
-              </CrmSelect>
+                <option value="">All Reports</option>
+                <option value="yes">Has Report</option>
+                <option value="no">No Report</option>
+              </select>
             </>
           ) : null}
+
+          {/* Active Filter Counter & Reset */}
           {filtersActive ? (
             <button
               type="button"
               onClick={resetFilters}
-              className="inline-flex h-8 items-center gap-1 rounded-[var(--radius-md)] px-2 text-[12px] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]"
+              className="inline-flex h-8.5 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-rose-600 shadow-xs hover:bg-rose-50 hover:border-rose-200 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-rose-950/30"
             >
-              <X size={12} /> Reset
+              <X size={13} /> Reset Filters
             </button>
           ) : null}
         </div>
       </div>
-
-      {tab === "visits" && visitPills.length ? (
-        <div className="mb-3">
-          <VisitStatPills
-            items={visitPills}
-            activeKey={status || "all"}
-            onSelect={(key) => setStatusFilter(key === "all" ? "" : key)}
-          />
-        </div>
-      ) : null}
-
-      {tab === "requests" && requestPills.length ? (
-        <div className="mb-3">
-          <VisitStatPills
-            items={requestPills}
-            activeKey={status || "all"}
-            onSelect={(key) => setStatusFilter(key === "all" ? "" : key)}
-          />
-        </div>
-      ) : null}
 
       {loading ? (
         <CrmTableShell>

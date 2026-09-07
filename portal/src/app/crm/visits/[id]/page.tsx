@@ -255,6 +255,32 @@ export default function FieldVisitDetailPage() {
                   value={[property?.city, property?.state].filter(Boolean).join(", ") || undefined}
                 />
                 <VisitMetaRow emoji="#️⃣" label="Khasra" value={property?.khasraNumber} />
+                {property?.price != null ? (
+                  <VisitMetaRow
+                    emoji="💰"
+                    label="Price"
+                    value={`₹${Number(property.price).toLocaleString("en-IN")}`}
+                  />
+                ) : null}
+                {property?.area ? (
+                  <VisitMetaRow
+                    emoji="📐"
+                    label="Area"
+                    value={`${property.area} ${property.areaUnit || ""}`}
+                  />
+                ) : null}
+                {property?.propertyId ? (
+                  <div className="my-1 py-1">
+                    <a
+                      href={`/crm/property-listings/${property.propertyId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
+                    >
+                      Open Property Listing ↗
+                    </a>
+                  </div>
+                ) : null}
                 <VisitMetaRow
                   emoji="📨"
                   label="Request"

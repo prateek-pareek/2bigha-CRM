@@ -45,6 +45,8 @@ import {
   MapPin,
   IndianRupee,
   Banknote,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react';
 import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
 import CRMSavedViews, { SavedViewData } from '@/components/crm/segments/CRMSavedViews';
@@ -312,6 +314,7 @@ export default function LeadsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [serverTotal, setServerTotal] = useState(0);
+  const [activeMetricFilter, setActiveMetricFilter] = useState<'all' | 'new' | 'pipeline' | 'qualified' | 'converted'>('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [columns, setColumns] = useState<Column[]>([]);
@@ -1327,9 +1330,37 @@ export default function LeadsPage() {
   );
 
   const filteredLeads = useMemo(() => {
-    const base = needsClientFullList
+    let base = needsClientFullList
       ? applyFilters(pipelineLeads, apiFilters, filterProperties)
       : pipelineLeads;
+
+    if (activeMetricFilter === 'new') {
+      base = base.filter(
+        (l) =>
+          !l.callStatus ||
+          l.callStatus === 'Not Called' ||
+          /new|uncontacted/i.test(l.stage || l.status || ''),
+      );
+    } else if (activeMetricFilter === 'pipeline') {
+      base = base.filter(
+        (l) =>
+          /contact|in progress|visit|negotiat|follow/i.test(l.stage || l.status || '') ||
+          l.callStatus === 'Connected',
+      );
+    } else if (activeMetricFilter === 'qualified') {
+      base = base.filter(
+        (l) =>
+          /qualif|hot|proposal|decision/i.test(l.stage || l.status || '') ||
+          l.priority === 'High',
+      );
+    } else if (activeMetricFilter === 'converted') {
+      base = base.filter(
+        (l) =>
+          /won|convert|deal|close/i.test(l.stage || l.status || '') ||
+          (l as any).converted === true,
+      );
+    }
+
     return base.filter((l) => {
       if (!needsClientFullList || !search.trim()) return true;
       const q = search.toLowerCase();
@@ -1348,7 +1379,7 @@ export default function LeadsPage() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [pipelineLeads, apiFilters, filterProperties, search, needsClientFullList]);
+  }, [pipelineLeads, apiFilters, filterProperties, search, needsClientFullList, activeMetricFilter]);
 
   // Batch property/farm counts for the leads currently on screen — avoids N+1 calls
   // per row for the "Add Property"/"Add Farm" quick-action count badges.
@@ -1537,6 +1568,34 @@ export default function LeadsPage() {
 
   const displayedTotal = needsClientFullList ? filteredLeads.length : serverTotal;
 
+  const leadMetricStats = useMemo(() => {
+    let newCount = 0;
+    let pipelineCount = 0;
+    let qualifiedCount = 0;
+    let convertedCount = 0;
+
+    for (const l of pipelineLeads) {
+      const stageStr = (l.stage || l.status || '').toLowerCase();
+      const isNew = !l.callStatus || l.callStatus === 'Not Called' || /new|uncontacted/.test(stageStr);
+      const isPipeline = /contact|in progress|visit|negotiat|follow/.test(stageStr) || l.callStatus === 'Connected';
+      const isQualified = /qualif|hot|proposal|decision/.test(stageStr) || l.priority === 'High';
+      const isConverted = /won|convert|deal|close/.test(stageStr) || (l as any).converted === true;
+
+      if (isNew) newCount++;
+      if (isPipeline) pipelineCount++;
+      if (isQualified) qualifiedCount++;
+      if (isConverted) convertedCount++;
+    }
+
+    return {
+      total: displayedTotal,
+      newCount,
+      pipelineCount,
+      qualifiedCount,
+      convertedCount,
+    };
+  }, [pipelineLeads, displayedTotal]);
+
   const visibleCols = useMemo(
     () => columns.filter((c) => c.visible),
     [columns],
@@ -1622,7 +1681,7 @@ export default function LeadsPage() {
   return (
     <div className={CRM_LIST_PAGE}>
       <div className="crm-list-content">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden space-y-3.5 px-4 sm:px-6 py-4 max-w-[1600px] mx-auto w-full">
           <CrmPageHeader
             bordered={false}
             title="Leads"
@@ -1698,21 +1757,6 @@ export default function LeadsPage() {
                   entityLabel="lead"
                   onClick={() => setIsBulkEmailOpen(true)}
                 />
-                {/* Stage automation — disabled for now, not needed yet. Re-enable by uncommenting.
-                {hasAccess('leads:write') && isMongoObjectIdString(selectedPipelineId) && (
-                  <CrmButton
-                    variant="icon"
-                    onClick={() => setStageRulesPanelOpen(true)}
-                    title={
-                      selectedIds.size > 0
-                        ? `Stage rules — preview or apply for ${selectedIds.size} selected lead(s)`
-                        : 'Stage rules — preview or apply for this pipeline'
-                    }
-                    aria-label="Open stage automation rules"
-                    leftIcon={<CrmIcon.GitBranch size={16} aria-hidden />}
-                  />
-                )}
-                */}
                   </>
                 }
                 canExport={hasAccess('leads:export')}
@@ -1747,6 +1791,16 @@ export default function LeadsPage() {
                   window.dispatchEvent(new CustomEvent('crm-header:toggle-collapse'));
                 }}
                 collapsed={headerCollapsed}
+                trailing={
+                  <CrmButton
+                    type="button"
+                    variant="secondary"
+                    leftIcon={<Sparkles size={14} className="text-amber-500" />}
+                    onClick={() => router.push('/crm/leads/intent')}
+                  >
+                    Lead Intent
+                  </CrmButton>
+                }
               />
             }
           />
@@ -1851,120 +1905,7 @@ export default function LeadsPage() {
                 ) : null}
               </>
             }
-            secondary={
-              <>
-                <span className="mr-0.5 shrink-0 text-xs font-semibold text-[var(--text-muted)]">
-                  Email
-                </span>
-                <div className={CRM_TOOLBAR_ICON_GROUP} role="group" aria-label="Email open filters">
-                  {(
-                    [
-                      'all',
-                      'opened',
-                      'opened-in-days',
-                      'last-sent-unopened-days',
-                      'no-open-since-days',
-                    ] as const
-                  ).map((mode) => {
-                    const openTip =
-                      mode === 'all'
-                        ? 'Do not filter by opens. Click to clear this filter group.'
-                        : mode === 'opened'
-                          ? 'Keep leads who have opened at least one tracked email from us. Click again to turn off.'
-                          : mode === 'opened-in-days'
-                            ? 'Keep leads who opened a tracked email in the last N days. Set N in the box to the right. Click again to turn off.'
-                            : mode === 'last-sent-unopened-days'
-                              ? 'Keep leads whose latest tracked send is still unopened for at least N days. Set N in the box to the right. Click again to turn off.'
-                              : 'Keep leads with no recipient open in the last N days (needs outbound email). Set N in the box to the right. Click again to turn off.';
-                    return (
-                      <div key={mode} className="group relative inline-flex shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmailOpenFilterMode((m) => (m === mode ? 'all' : mode));
-                            setPage(1);
-                          }}
-                          className={cn(
-                            CRM_TOOLBAR_ICON_BTN,
-                            mode !== 'all' && emailOpenFilterMode === mode && CRM_TOOLBAR_ICON_BTN_ACTIVE,
-                          )}
-                          aria-pressed={emailOpenFilterMode === mode}
-                          aria-label={openTip}
-                        >
-                          {mode === 'all' ? <CrmIcon.Mail size={14} /> : null}
-                          {mode === 'opened' ? <CrmIcon.Eye size={14} /> : null}
-                          {mode === 'opened-in-days' ? (
-                            <CrmIcon.MailOpen size={14} />
-                          ) : null}
-                          {mode === 'last-sent-unopened-days' ? (
-                            <CrmIcon.EyeOff size={14} />
-                          ) : null}
-                          {mode === 'no-open-since-days' ? <CrmIcon.Timer size={14} /> : null}
-                        </button>
-                        <span className={CRM_ICON_FILTER_TIP} role="tooltip">
-                          {openTip}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {emailOpenFilterMode === 'opened-in-days' ||
-                emailOpenFilterMode === 'last-sent-unopened-days' ||
-                emailOpenFilterMode === 'no-open-since-days' ? (
-                  <input
-                    type="number"
-                    min={1}
-                    max={365}
-                    value={emailOpenFilterDays}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const n = Number.parseInt(raw, 10);
-                      setEmailOpenFilterDays(
-                        Number.isFinite(n) ? Math.max(1, Math.min(365, n)) : 7,
-                      );
-                      setPage(1);
-                    }}
-                    className="h-[38px] w-11 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-1 text-center text-xs font-semibold text-[var(--text-main)] tabular-nums shadow-[var(--crm-shadow-input)] outline-none focus:ring-1 focus:ring-[var(--primary)]/20"
-                    aria-label="Days for opens filter"
-                    title="Days (N)"
-                  />
-                ) : null}
-                <div className={CRM_TOOLBAR_ICON_GROUP} role="group" aria-label="Email reply filters">
-                  {(['all', 'replied', 'not-replied'] as const).map((mode) => {
-                    const replyTip =
-                      mode === 'all'
-                        ? 'Do not filter by thread replies. Click to clear this filter group.'
-                        : mode === 'replied'
-                          ? 'Keep leads where someone replied in the email thread after our tracked send (inbox sync). Click again to turn off.'
-                          : 'Keep leads with no logged thread reply yet. Click again to turn off.';
-                    return (
-                      <div key={mode} className="group relative inline-flex shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmailReplyFilter((m) => (m === mode ? 'all' : mode));
-                            setPage(1);
-                          }}
-                          className={cn(
-                            CRM_TOOLBAR_ICON_BTN,
-                            mode !== 'all' && emailReplyFilter === mode && CRM_TOOLBAR_ICON_BTN_ACTIVE,
-                          )}
-                          aria-pressed={emailReplyFilter === mode}
-                          aria-label={replyTip}
-                        >
-                          {mode === 'all' ? <CrmIcon.FilterOff size={14} /> : null}
-                          {mode === 'replied' ? <CrmIcon.Reply size={14} /> : null}
-                          {mode === 'not-replied' ? <CrmIcon.MailX size={14} /> : null}
-                        </button>
-                        <span className={CRM_ICON_FILTER_TIP} role="tooltip">
-                          {replyTip}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            }
+
             right={
               <>
                 <CrmViewToggle
@@ -1989,7 +1930,7 @@ export default function LeadsPage() {
           />
 
           <div
-            className="crm-list-subtabs shrink-0"
+            className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar border-b border-slate-200 dark:border-slate-800"
             role="tablist"
             aria-label="Lead vertical"
           >
@@ -2012,8 +1953,9 @@ export default function LeadsPage() {
                     setPage(1);
                   }}
                   className={cn(
+                    'shrink-0 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors',
                     isActive
-                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs'
                       : 'text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
                   )}
                 >
@@ -2021,15 +1963,28 @@ export default function LeadsPage() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              role="tab"
+              onClick={() => router.push('/crm/leads/intent')}
+              className="inline-flex items-center gap-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--primary)] transition-colors px-3 py-1.5 rounded-lg text-xs font-semibold ml-auto"
+            >
+              <Sparkles size={14} className="text-amber-500" />
+              <span>Lead Intent</span>
+              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                Pipeline
+              </span>
+            </button>
           </div>
 
           {leadCategoryTabs.length > 0 && (
             <div
-              className="crm-list-subtabs shrink-0"
+              className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scrollbar"
               role="tablist"
               aria-label="Lead type"
             >
-              {[{ _id: '__all__', label: 'All Leads' }, ...leadCategoryTabs].map((tab) => {
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1 shrink-0">Type:</span>
+              {[{ _id: '__all__', label: 'All Types' }, ...leadCategoryTabs].map((tab) => {
                 const isAll = tab._id === '__all__';
                 const isActive = isAll ? !activeLeadCategory : activeLeadCategory === tab.label;
                 return (
@@ -2043,10 +1998,10 @@ export default function LeadsPage() {
                       setPage(1);
                     }}
                     className={cn(
-                      'shrink-0 rounded-[var(--radius-md)] px-3 py-1.5 text-sm font-semibold transition-colors',
+                      'shrink-0 rounded-lg px-3 py-1 text-xs font-semibold transition-all',
                       isActive
-                        ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                        : 'text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
+                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800',
                     )}
                   >
                     {tab.label}

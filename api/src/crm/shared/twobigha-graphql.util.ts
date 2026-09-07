@@ -71,11 +71,11 @@ export async function twoBighaGraphqlRequest<T = any>(
   });
 
   // 2bigha always returns HTTP 200 even on business-logic errors (see the
-  // Integration Handbook's "Error handling conventions") — never branch on
-  // res.status alone, only on a populated `errors` array in the body.
+  // Integration Handbook's "Error handling conventions"). If data is returned
+  // alongside non-fatal field-level errors, return data rather than crashing.
   const body: any = await res.json().catch(() => ({}));
 
-  if (!res.ok || (Array.isArray(body?.errors) && body.errors.length)) {
+  if (!res.ok || (!body?.data && Array.isArray(body?.errors) && body.errors.length)) {
     const first = body?.errors?.[0];
     const message =
       (typeof first?.message === 'string' && first.message) ||

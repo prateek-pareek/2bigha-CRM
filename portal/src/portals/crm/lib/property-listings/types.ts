@@ -237,6 +237,10 @@ export interface PropertyListingRecord {
   mapBoundaries?: any;
   mapCoordinates?: any;
   mapLocation?: any;
+  calculatedArea?: number;
+  geoJson?: any;
+  boundary?: any;
+  coordinates?: any;
   createdAt: string;
   updatedAt: string;
 }
@@ -293,6 +297,25 @@ export const PROPERTY_APPROVAL_STATUSES: PropertyListingApprovalStatus[] = [
   "Approved",
   "Rejected",
 ];
+
+export function normalizeApprovalStatus(status: string | undefined | null): PropertyListingApprovalStatus {
+  if (!status) return "Pending";
+  const s = status.trim().toUpperCase();
+  if (s === "APPROVED") return "Approved";
+  if (s === "REJECTED") return "Rejected";
+  return "Pending";
+}
+
+export function normalizeListingStatus(status: string | undefined | null): PropertyListingStatus {
+  if (!status) return "Available";
+  const s = status.trim().toUpperCase();
+  if (s === "AVAILABLE") return "Available";
+  if (s === "SOLD") return "Sold";
+  if (s === "MANAGED") return "Managed";
+  if (s === "OFF MARKET" || s === "OFF_MARKET") return "Off Market";
+  if (s === "UNDER OFFER" || s === "UNDER_OFFER") return "Under Offer";
+  return "Available";
+}
 
 /** Maps an approval status to the shared `CrmStatusBadge` tone palette. */
 export function approvalStatusBadgeTone(status: string | undefined | null): PropertyStatusBadgeTone {
@@ -430,10 +453,11 @@ export function formatRatePerBigha(price: number, areaBigha: number | null): str
   return `${formatIndianLandAmount(price / areaBigha)}/ Bigha`;
 }
 
-export function daysOnPlatform(listing: Pick<PropertyListingRecord, "listedDate" | "createdAt">): number {
-  const raw = listing.listedDate || listing.createdAt;
+export function daysOnPlatform(listing: Pick<PropertyListingRecord, "listedDate" | "createdAt">): number | null {
+  const raw = listing.listedDate;
+  if (!raw) return null;
   const start = new Date(raw).getTime();
-  if (!Number.isFinite(start)) return 0;
+  if (!Number.isFinite(start) || Number.isNaN(start)) return null;
   const days = Math.floor((Date.now() - start) / (1000 * 60 * 60 * 24));
   return Math.max(0, days);
 }

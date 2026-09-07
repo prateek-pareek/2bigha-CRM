@@ -22,6 +22,13 @@ import {
   CustomField,
   CustomFieldDocument,
 } from '../admin/schemas/custom-field.schema';
+import {
+  actionVerb,
+  crmRecordPath,
+  moduleToRelatedType,
+  summarizeAuditChanges,
+} from '../admin/audit-log.util';
+import { ReportSchedule, ReportScheduleDocument } from '../reporting/schemas/report-schedule.schema';
 import { ReportingService } from '../reporting/reporting.service';
 import { TeamsBotService } from '../../teams-bot/teams-bot.service';
 import { PipelinesService } from './pipelines.service';
@@ -139,6 +146,8 @@ export class CRMService {
     private clientModel: Model<ClientDocument>,
     @InjectModel(Activity.name, 'crmConnection')
     private activityModel: Model<ActivityDocument>,
+    @InjectModel('LegalCase', 'crmConnection')
+    private legalCaseModel: Model<any>,
     @InjectModel(CustomField.name, 'crmConnection')
     private customFieldModel: Model<CustomFieldDocument>,
     @InjectModel(CrmGlobalSettings.name, 'crmConnection')
@@ -172,6 +181,8 @@ export class CRMService {
     private readonly notificationsService: NotificationsService,
     private readonly crmNotify: CrmNotifyService,
     private readonly crmUsersService: CRMUsersService,
+    @InjectModel(ReportSchedule.name, 'crmConnection')
+    private reportScheduleModel?: Model<ReportScheduleDocument>,
   ) { }
 
   private normalizeTaskStatus(status?: string): string {
@@ -255,6 +266,36 @@ export class CRMService {
         console.error('[CRMService] Teams DM failed:', dm.error);
       }
     }
+  }
+
+  // --- Report Scheduling ---
+
+  async createReportSchedule(userId: string, dto: {
+    reportType: 'agent' | 'team';
+    frequency: 'daily' | 'weekly' | 'monthly';
+    emailRecipients: string[];
+    filters: Record<string, any>;
+  }) {
+    if (!this.reportScheduleModel) return null;
+    const schedule = new this.reportScheduleModel({
+      userId,
+      ...dto,
+    });
+    return schedule.save();
+  }
+
+  async getReportSchedules(userId: string) {
+    if (!this.reportScheduleModel) return [];
+    return this.reportScheduleModel.find({ userId, isActive: true }).lean().exec();
+  }
+
+  async deleteReportSchedule(userId: string, scheduleId: string) {
+    if (!this.reportScheduleModel) return null;
+    return this.reportScheduleModel.findOneAndUpdate(
+      { _id: scheduleId, userId },
+      { $set: { isActive: false } },
+      { new: true }
+    );
   }
 
   private async resolveTaskAssigneeRef(
@@ -2023,12 +2064,41 @@ export class CRMService {
     return this.reportingService.getAgentPerformanceLeaderboard(window);
   }
 
+  async getAgentPerformanceTrend(window: string) {
+    return this.reportingService.getAgentPerformanceTrend(window);
+  }
+
   async getAgentTargets() {
     return this.reportingService.getAgentTargets();
   }
 
   async upsertAgentTarget(agentId: string, patch: Record<string, number>) {
     return this.reportingService.upsertAgentTarget(agentId, patch);
+  }
+
+  // Team & Organizations Reports
+  async getTeamPerformanceMetrics(window: string) {
+    return this.reportingService.getTeamPerformanceMetrics(window);
+  }
+
+  async getTeamPerformanceTrend(window: string) {
+    return this.reportingService.getTeamPerformanceTrend(window);
+  }
+
+  async getLeadSourceConversion(window: string) {
+    return this.reportingService.getLeadSourceConversion(window);
+  }
+
+  async getLeadIntentConversion(window: string) {
+    return this.reportingService.getLeadIntentConversion(window);
+  }
+
+  async getWhatsAppEngagement(window: string) {
+    return this.reportingService.getWhatsAppEngagement(window);
+  }
+
+  async getIVRAnalytics(window: string) {
+    return this.reportingService.getIVRAnalytics(window);
   }
 
   async getSalesDepartmentHealth(window: string = 'this_week', owner?: string) {
@@ -4737,6 +4807,9 @@ export class CRMService {
       const { ids } = await this.teamMemberIdsAndNames(extras?.user);
       const allIds = selfId ? [selfId, ...ids] : ids;
       if (allIds.length) filter.assignee = { $in: allIds };
+    } else {
+      const selfId = this.userObjectId(extras?.user);
+      if (selfId) filter.assignee = selfId;
     }
     try {
       const activities = await this.activityModel
@@ -6664,6 +6737,30 @@ export class CRMService {
       })),
       salesRepActivity,
     };
+  }
+
+  /** Read-only hand-off: fetch associated legal cases for a lead with status summary only. */
+  async getLeadAssociatedLegalStatus(leadId: string): Promise<Array<{
+    id: string;
+    title: string;
+    stage: string;
+    priority: string;
+    caseType: string;
+  }>> {
+    if (!Types.ObjectId.isValid(leadId)) return [];
+    const lead = await this.leadModel.findById(leadId).select('associatedLegalCases').lean();
+    if (!lead?.associatedLegalCases?.length) return [];
+    const cases = await this.legalCaseModel
+      .find({ _id: { $in: lead.associatedLegalCases } })
+      .select('title stage priority caseType')
+      .lean();
+    return cases.map((c: any) => ({
+      id: String(c._id),
+      title: c.title || '',
+      stage: c.stage || '',
+      priority: c.priority || 'medium',
+      caseType: c.caseType || 'other',
+    }));
   }
 }
 
