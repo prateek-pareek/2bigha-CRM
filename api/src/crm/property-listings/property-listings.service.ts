@@ -8,6 +8,7 @@ import {
 import { CreatePropertyListingDto } from './dto/create-property-listing.dto';
 import { UpdatePropertyListingDto } from './dto/update-property-listing.dto';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
+import { roleAllowsModule } from '../shared/crm-workspace-module.util';
 import { Lead, LeadDocument } from '../records/schemas/lead.schema';
 import { ApprovalQueueBucket, TwoBighaPropertyService } from './twobigha-property.service';
 import {
@@ -45,6 +46,7 @@ export interface PropertyListingListQuery {
   leadId?: string;
   listingBucket?: string;
   pmStage?: string;
+  user?: any;
 }
 
 import { StorageService } from '../../storage/storage.service';
@@ -64,6 +66,8 @@ export class PropertyListingsService {
     private readonly clientModel: Model<ClientDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private readonly contactModel: Model<ContactDocument>,
+    @InjectModel('LegalCase', 'crmConnection')
+    private readonly legalCaseModel: Model<any>,
     private readonly twoBighaService: TwoBighaPropertyService,
     private readonly pmAssignment: TwoBighaPmAssignmentService,
     private readonly pmCreate: TwoBighaPmCreateService,
@@ -584,6 +588,11 @@ export class PropertyListingsService {
     page: number;
     pageSize: number;
   }> {
+    // Module isolation: enforce PROPERTY_MGMT workspace boundary
+    if (query.user && !roleAllowsModule(query.user?.crmDbUser, 'PROPERTY_MGMT')) {
+      return { data: [], total: 0, page: 1, pageSize: 25 };
+    }
+
     const page = Math.max(1, parseInt(String(query.page || 1), 10) || 1);
     const pageSize = Math.min(
       Math.max(1, parseInt(String(query.pageSize ?? 25), 10) || 25),
@@ -1839,6 +1848,31 @@ export class PropertyListingsService {
     const persisted = await this.persistPmListing(listingId, refreshed);
     void this.pmTasks.onVisitReportReviewed(persisted as any, dto.decision);
     return persisted;
+  }
+
+  /** Read-only hand-off: fetch associated legal cases for a property listing with status summary only. */
+  async getPropertyAssociatedLegalStatus(listingId: string): Promise<Array<{
+    id: string;
+    title: string;
+    stage: string;
+    priority: string;
+    caseType: string;
+  }>> {
+    if (!Types.ObjectId.isValid(listingId)) return [];
+    const listing = await this.listingModel.findById(listingId).select('leadId').lean();
+    if (!listing?.leadId) return [];
+    const cases = await this.legalCaseModel
+      .find({ associatedLeads: listing.leadId })
+      .select('title stage priority caseType')
+      .limit(10)
+      .lean();
+    return cases.map((c: any) => ({
+      id: String(c._id),
+      title: c.title || '',
+      stage: c.stage || '',
+      priority: c.priority || 'medium',
+      caseType: c.caseType || 'other',
+    }));
   }
 }
 

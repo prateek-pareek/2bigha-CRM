@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CRMUsersModule } from '../crm-users/crm-users.module';
 import { LegalCase, LegalCaseSchema } from '../records/schemas/legal-case.schema';
@@ -7,11 +7,14 @@ import { Contact, ContactSchema } from '../records/schemas/contact.schema';
 import { LegalCaseService } from './legal-case.service';
 import { LegalCaseController } from './legal-case.controller';
 import { TwoBighaLegalVerificationService } from './twobigha-legal-verification.service';
+import { LegalCaseNotificationService } from './legal-case-notification.service';
+import { CRMModule } from '../crm.module';
 
 @Module({
   imports: [
-    // Needed for RbacGuard's CRMUsersService dependency.
+    // Needed for RbacGuard's CRMUsersService dependency and LegalCaseNotificationService.
     CRMUsersModule,
+    CRMModule,
     MongooseModule.forFeature(
       [
         { name: LegalCase.name, schema: LegalCaseSchema },
@@ -25,7 +28,11 @@ import { TwoBighaLegalVerificationService } from './twobigha-legal-verification.
     ),
   ],
   controllers: [LegalCaseController],
-  providers: [LegalCaseService, TwoBighaLegalVerificationService],
+  providers: [
+    LegalCaseService,
+    TwoBighaLegalVerificationService,
+    LegalCaseNotificationService,
+  ],
   exports: [LegalCaseService],
 })
 export class LegalModule {}

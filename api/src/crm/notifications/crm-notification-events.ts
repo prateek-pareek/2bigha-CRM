@@ -16,6 +16,10 @@ export const CRM_NOTIFY_EVENTS = [
   'task_due',
   'task_overdue',
   'custom_reminder',
+  'property_listing_expiring',
+  'subscription_plan_expiring',
+  'legal_case_transferred',
+  'legal_case_status_changed',
 ] as const;
 
 export type CrmNotifyEvent = (typeof CRM_NOTIFY_EVENTS)[number];
@@ -47,6 +51,10 @@ export const CRM_NOTIFY_DEFAULT_PREFS: Record<
   task_due: { inApp: true, email: true },
   task_overdue: { inApp: true, email: true },
   custom_reminder: { inApp: true, email: true },
+  property_listing_expiring: { inApp: true, email: false },
+  subscription_plan_expiring: { inApp: true, email: false },
+  legal_case_transferred: { inApp: true, email: false },
+  legal_case_status_changed: { inApp: true, email: false },
 };
 
 export const CRM_NOTIFY_EVENT_LABELS: Record<CrmNotifyEvent, string> = {
@@ -63,4 +71,8 @@ export const CRM_NOTIFY_EVENT_LABELS: Record<CrmNotifyEvent, string> = {
   task_due: 'Task due',
   task_overdue: 'Task overdue',
   custom_reminder: 'Custom reminders',
+  property_listing_expiring: 'Property listing expiring',
+  subscription_plan_expiring: 'Subscription plan expiring',
+  legal_case_transferred: 'Legal case transferred',
+  legal_case_status_changed: 'Legal case status changed',
 };

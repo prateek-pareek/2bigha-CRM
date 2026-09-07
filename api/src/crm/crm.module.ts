@@ -10,6 +10,7 @@ import {
   OrganizationSchema,
 } from './schemas/organization.schema';
 import { Contact, ContactSchema } from './schemas/contact.schema';
+import { LegalCase, LegalCaseSchema } from './records/schemas/legal-case.schema';
 import { Activity, ActivitySchema } from './schemas/activity.schema';
 import { CustomField, CustomFieldSchema } from './schemas/custom-field.schema';
 import { CustomFieldsService } from './admin/custom-fields.service';
@@ -291,6 +292,10 @@ import { SubscriptionsController } from './subscriptions/subscriptions.controlle
 import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscriptions.service';
 import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
 import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
+import {
+  SubscriptionNotificationTracker,
+  SubscriptionNotificationTrackerSchema,
+} from './subscriptions/schemas/subscription-notification-tracker.schema';
 
 @Module({
   imports: [
@@ -303,6 +308,7 @@ import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
         { name: Lead.name, schema: LeadSchema },
         { name: Organization.name, schema: OrganizationSchema },
         { name: Contact.name, schema: ContactSchema },
+        { name: LegalCase.name, schema: LegalCaseSchema },
         { name: Activity.name, schema: ActivitySchema },
         { name: CrmMigrationJob.name, schema: CrmMigrationJobSchema },
         { name: CrmMigrationIdMap.name, schema: CrmMigrationIdMapSchema },
@@ -371,6 +377,10 @@ import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
           schema: CrmNotificationPreferenceSchema,
         },
         { name: ReportSchedule.name, schema: ReportScheduleSchema },
+        {
+          name: SubscriptionNotificationTracker.name,
+          schema: SubscriptionNotificationTrackerSchema,
+        },
       ],
       'crmConnection',
     ),

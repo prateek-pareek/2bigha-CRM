@@ -54,6 +54,12 @@ export type TwoBighaSyncStatus =
  */
 @Schema({ timestamps: true, collection: 'propertylistings' })
 export class PropertyListing {
+  /**
+   * Workspace boundary (RBAC/workspace-isolation layer). Always 'PROPERTY_MGMT' for property listings.
+   */
+  @Prop({ enum: ['PROPERTY_MGMT'], default: 'PROPERTY_MGMT', index: true })
+  module: 'PROPERTY_MGMT';
+
   @Prop({ required: true, trim: true })
   title: string;
 
@@ -342,6 +348,22 @@ export class PropertyListing {
   @Prop({ type: Types.ObjectId, ref: 'CRMUser' })
   createdBy?: Types.ObjectId;
 
+  /** Expiry date for the property listing — used for expiration notifications. */
+  @Prop()
+  listingExpiryDate?: Date;
+
+  /** Tracks when 7-day expiry notification was sent (prevents duplicate sends). */
+  @Prop()
+  expiryNotification7DaysSentAt?: Date;
+
+  /** Tracks when 3-day expiry notification was sent (prevents duplicate sends). */
+  @Prop()
+  expiryNotification3DaysSentAt?: Date;
+
+  /** Tracks when day-of expiry notification was sent (prevents duplicate sends). */
+  @Prop()
+  expiryNotificationDaySentAt?: Date;
+
   @Prop({ default: false, index: true })
   isDeleted?: boolean;
 
@@ -356,6 +378,8 @@ export const PropertyListingSchema =
   SchemaFactory.createForClass(PropertyListing);
 applyCrmSoftDeletePlugin(PropertyListingSchema);
 
+/** Workspace boundary filter for module isolation. */
+PropertyListingSchema.index({ module: 1, createdAt: -1 });
 PropertyListingSchema.index({ listingBucket: 1, pmStage: 1, createdAt: -1 });
 PropertyListingSchema.index({ isDeleted: 1, createdAt: -1 });
 PropertyListingSchema.index({ status: 1, createdAt: -1 });

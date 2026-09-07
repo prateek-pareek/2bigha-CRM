@@ -54,8 +54,8 @@ export default function AdvancedReportFilters({
   const activeFilterCount = [
     filter.selectedAgents.length > 0,
     filter.selectedDepartments?.length,
-    filter.performanceLevel !== "all",
-    filter.targetStatus !== "all",
+    filter.performanceLevel && filter.performanceLevel !== "all",
+    filter.targetStatus && filter.targetStatus !== "all",
     filter.conversionRateRange && filter.conversionRateRange[0] > 0,
     filter.leadsCreatedMin,
     filter.followUpAdherenceMin,

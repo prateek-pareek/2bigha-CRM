@@ -848,4 +848,11 @@ export class CRMController {
   updateCrmWikiLinks(@Body('wikiLinks') wikiLinks: unknown) {
     return this.crmService.updateCrmWikiLinks(wikiLinks);
   }
+
+  /** Read-only hand-off: 2Bigha lead views associated legal cases (legal status snapshot only). */
+  @Get('leads/:id/associated-legal-status')
+  @Permissions('leads:read')
+  getLeadAssociatedLegalStatus(@Param('id') id: string) {
+    return this.crmService.getLeadAssociatedLegalStatus(id);
+  }
 }

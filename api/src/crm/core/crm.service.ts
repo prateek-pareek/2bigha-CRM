@@ -146,6 +146,8 @@ export class CRMService {
     private clientModel: Model<ClientDocument>,
     @InjectModel(Activity.name, 'crmConnection')
     private activityModel: Model<ActivityDocument>,
+    @InjectModel('LegalCase', 'crmConnection')
+    private legalCaseModel: Model<any>,
     @InjectModel(CustomField.name, 'crmConnection')
     private customFieldModel: Model<CustomFieldDocument>,
     @InjectModel(CrmGlobalSettings.name, 'crmConnection')
@@ -4805,6 +4807,9 @@ export class CRMService {
       const { ids } = await this.teamMemberIdsAndNames(extras?.user);
       const allIds = selfId ? [selfId, ...ids] : ids;
       if (allIds.length) filter.assignee = { $in: allIds };
+    } else {
+      const selfId = this.userObjectId(extras?.user);
+      if (selfId) filter.assignee = selfId;
     }
     try {
       const activities = await this.activityModel
@@ -6732,6 +6737,30 @@ export class CRMService {
       })),
       salesRepActivity,
     };
+  }
+
+  /** Read-only hand-off: fetch associated legal cases for a lead with status summary only. */
+  async getLeadAssociatedLegalStatus(leadId: string): Promise<Array<{
+    id: string;
+    title: string;
+    stage: string;
+    priority: string;
+    caseType: string;
+  }>> {
+    if (!Types.ObjectId.isValid(leadId)) return [];
+    const lead = await this.leadModel.findById(leadId).select('associatedLegalCases').lean();
+    if (!lead?.associatedLegalCases?.length) return [];
+    const cases = await this.legalCaseModel
+      .find({ _id: { $in: lead.associatedLegalCases } })
+      .select('title stage priority caseType')
+      .lean();
+    return cases.map((c: any) => ({
+      id: String(c._id),
+      title: c.title || '',
+      stage: c.stage || '',
+      priority: c.priority || 'medium',
+      caseType: c.caseType || 'other',
+    }));
   }
 }
 

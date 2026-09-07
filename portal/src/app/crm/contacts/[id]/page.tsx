@@ -20,6 +20,7 @@ import { contactWhatsappUrl, contactTelegramUrl, contactWhatsappWaId } from '@/l
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import { CRMContactCompanySidebarCard } from '@/components/crm/records/associations/CRMCompanySidebarCard';
 import ContactAssociationsPanel from '@/components/crm/records/associations/ContactAssociationsPanel';
+import LeadPmPanel from '@/components/crm/records/associations/LeadPmPanel';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForContact, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
@@ -76,6 +77,7 @@ export default function ContactDetailPage() {
   const [emailTracking, setEmailTracking] = useState<CrmEmailTrackingRow[]>([]);
   const [activeTab, setActiveTab] = useState<'Activity' | 'Details'>('Activity');
   const [recordMetaLoaded, setRecordMetaLoaded] = useState(false);
+  const [pmRefreshKey, setPmRefreshKey] = useState(0);
   const entityId = useMemo(
     () => String((contact?._id ?? recordId) || ''),
     [contact?._id, recordId],
@@ -98,6 +100,15 @@ export default function ContactDetailPage() {
     const waId = contactWhatsappWaId(contact);
     return waId ? `/crm/whatsapp?wa=${waId}` : null;
   }, [contact]);
+
+  const isValidObjectId = (id: any) => {
+    return id && /^[0-9a-fA-F]{24}$/.test(String(id));
+  };
+
+  const primaryAssociatedLeadId = useMemo(() => {
+    const leadId = contact?.associatedLeads?.[0];
+    return isValidObjectId(leadId) ? String(leadId) : null;
+  }, [contact?.associatedLeads]);
   const telegramUrl = useMemo(() => (contact ? contactTelegramUrl(contact) : null), [contact]);
 
   const fetchContact = async () => {
@@ -573,6 +584,13 @@ export default function ContactDetailPage() {
               fetchEmailTracking();
             }}
           />
+          {primaryAssociatedLeadId ? (
+            <LeadPmPanel
+              leadId={primaryAssociatedLeadId}
+              refreshKey={pmRefreshKey}
+              onCreatePmClick={() => setPmRefreshKey((k) => k + 1)}
+            />
+          ) : null}
           {entityId ? (
             <CrmRecordSegmentsPanel
               module="contacts"

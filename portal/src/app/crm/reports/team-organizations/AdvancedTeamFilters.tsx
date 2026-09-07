@@ -51,12 +51,12 @@ export default function AdvancedTeamFilters({
   const activeFilterCount = [
     filter.selectedTeams.length > 0,
     filter.teamSizeRange && (filter.teamSizeRange[0] > 1 || filter.teamSizeRange[1] < 100),
-    filter.performanceLevel !== "all",
+    filter.performanceLevel && filter.performanceLevel !== "all",
     filter.conversionRateRange && filter.conversionRateRange[0] > 0,
     filter.whatsappReadRateMin,
     filter.callCompletionRateMin,
     filter.searchTerm,
-    filter.engagementLevel !== "all",
+    filter.engagementLevel && filter.engagementLevel !== "all",
     filter.dateRange !== "this_month",
   ].filter(Boolean).length;
 
