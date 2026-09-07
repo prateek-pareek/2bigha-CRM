@@ -176,9 +176,16 @@ export class CRMUsersService implements OnModuleInit {
 
   async findAll(): Promise<CRMUserDocument[]> {
     return this.userModel
-      .find({ isActive: { $ne: false } })
+      .find({
+        isActive: { $ne: false },
+        provisioningStatus: { $nin: ['revoked', 'hidden', 'pending_access'] },
+      })
       .populate('roleId')
       .exec();
+  }
+
+  async findAllIncludingPending(): Promise<CRMUserDocument[]> {
+    return this.userModel.find().populate('roleId').sort({ updatedAt: -1 }).exec();
   }
 
   async findAllWithCrmPortalAccess(): Promise<
@@ -529,29 +536,46 @@ export class CRMUsersService implements OnModuleInit {
   }
 
   async syncWithEmployee(employee: any): Promise<void> {
-    let role = await this.roleModel.findOne({ name: 'Sales Rep' }).exec();
-    if (!role) {
-      role = await this.roleModel.findOne().exec();
-    }
+    const email = String(employee?.email || '')
+      .trim()
+      .toLowerCase();
+    if (!email) return;
+
+    const hrmsEmployeeId = String(
+      employee.employeeId || employee.hrmsEmployeeId || '',
+    ).trim();
 
     await this.userModel
       .findOneAndUpdate(
-        { email: employee.email },
+        hrmsEmployeeId ? { hrmsEmployeeId } : { email },
         {
           $set: {
             firstName: employee.firstName,
-            lastName: employee.lastName,
-            isActive: employee.status === 'Active',
-            role: 'Sales Rep',
-            roleId: role?._id,
+            lastName: employee.lastName || '',
+            email,
+            ...(hrmsEmployeeId ? { hrmsEmployeeId } : {}),
+            department: employee.departmentName || employee.department,
+            designation: employee.designationName || employee.designation,
+            employmentStatus: employee.status || 'Active',
+            hrmsReportsToEmployeeId: employee.reportsToEmployeeId,
+            provisioningStatus: 'pending_access',
+            isActive: false,
+            role: 'Unassigned',
+            hrmsSyncStatus: 'synced',
+            hrmsSyncedAt: new Date(),
             assignedLeadsPipeline: employee.assignedLeadsPipeline,
           },
           $setOnInsert: {
-            email: employee.email,
-            password: await bcrypt.hash('2Bigha@2026', 10),
+            password: await bcrypt.hash(
+              process.env.HRMS_SYNC_PLACEHOLDER_PASSWORD ||
+                'ChangeMe@HrmsSync1!',
+              10,
+            ),
             authProvider: 'local',
-            _id: employee._id,
+            permissions: [],
+            accessibleEmailAccounts: [],
           },
+          $unset: { roleId: 1 },
         },
         { upsert: true, new: true },
       )

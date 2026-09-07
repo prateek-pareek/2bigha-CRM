@@ -108,6 +108,14 @@ import { AiSensyWebhookController } from './integrations/aisensy-webhook.control
 import { MetaLeadAdsService } from './integrations/meta-lead-ads.service';
 import { MetaLeadAdsWebhookController } from './integrations/meta-lead-ads-webhook.controller';
 import { MetaLeadAdsPollingCronService } from './integrations/meta-lead-ads-polling-cron.service';
+import {
+  HrmsIntegrationService,
+  HrmsWebhookController,
+  HrmsAdminController,
+  HrmsAvailabilityCronService,
+  HrmsSyncEventLog,
+  HrmsSyncEventLogSchema,
+} from './integrations/hrms';
 import { Workflow, WorkflowSchema } from './schemas/workflow.schema';
 import {
   WorkflowExecution,
@@ -310,6 +318,7 @@ import {
         { name: Contact.name, schema: ContactSchema },
         { name: LegalCase.name, schema: LegalCaseSchema },
         { name: Activity.name, schema: ActivitySchema },
+        { name: HrmsSyncEventLog.name, schema: HrmsSyncEventLogSchema },
         { name: CrmMigrationJob.name, schema: CrmMigrationJobSchema },
         { name: CrmMigrationIdMap.name, schema: CrmMigrationIdMapSchema },
         { name: CrmMigrationTouch.name, schema: CrmMigrationTouchSchema },
@@ -413,6 +422,8 @@ import {
     WhatsAppWebhookController,
     AiSensyWebhookController,
     MetaLeadAdsWebhookController,
+    HrmsWebhookController,
+    HrmsAdminController,
     WorkflowsController,
     LeadEngagementAutomationController,
     DuplicatesController,
@@ -497,6 +508,8 @@ import {
     WhatsAppService,
     MetaLeadAdsService,
     MetaLeadAdsPollingCronService,
+    HrmsIntegrationService,
+    HrmsAvailabilityCronService,
     VoiceCallingService,
     IvrService,
     EmailIntelligenceService,
@@ -551,6 +564,7 @@ import {
     TwoBighaPmWorkflowService,
     CrmNotifyService,
     CrmRemindersService,
+    HrmsIntegrationService,
     MongooseModule,
   ],
 })

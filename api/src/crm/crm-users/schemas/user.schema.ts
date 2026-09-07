@@ -86,6 +86,71 @@ export class CRMUser {
 
   @Prop({ default: false })
   agentMasking?: boolean;
+
+  /** Stable HRMS employee code (Employee.employeeId). */
+  @Prop({ trim: true, index: true, sparse: true, unique: true })
+  hrmsEmployeeId?: string;
+
+  @Prop({ trim: true })
+  department?: string;
+
+  @Prop({ trim: true })
+  designation?: string;
+
+  @Prop({ trim: true })
+  employmentStatus?: string;
+
+  /** HRMS reportsTo employeeId — reference only; CRM owns team graph. */
+  @Prop({ trim: true })
+  hrmsReportsToEmployeeId?: string;
+
+  /**
+   * pending_access = synced from HRMS, not yet granted by CRM Admin (§2.3–2.4)
+   * active = CRM Admin granted role/access
+   * revoked = HRMS made ineligible or employment ended
+   * hidden = Admin dismissed without delete
+   */
+  @Prop({
+    enum: ['pending_access', 'active', 'revoked', 'hidden', 'manual'],
+    default: 'manual',
+    index: true,
+  })
+  provisioningStatus?:
+    | 'pending_access'
+    | 'active'
+    | 'revoked'
+    | 'hidden'
+    | 'manual';
+
+  @Prop({
+    enum: ['not_synced', 'synced', 'failed'],
+    default: 'not_synced',
+    index: true,
+  })
+  hrmsSyncStatus?: 'not_synced' | 'synced' | 'failed';
+
+  @Prop({ trim: true })
+  hrmsSyncError?: string;
+
+  @Prop()
+  hrmsSyncedAt?: Date;
+
+  @Prop({
+    enum: ['available', 'unavailable_today'],
+    default: 'available',
+    index: true,
+  })
+  availabilityStatus?: 'available' | 'unavailable_today';
+
+  /** Calendar date (YYYY-MM-DD) the availabilityStatus applies to. */
+  @Prop({ trim: true, index: true })
+  availabilityDate?: string;
+
+  @Prop({ trim: true })
+  availabilitySource?: string;
+
+  @Prop({ trim: true })
+  availabilityAttendanceStatus?: string;
 }
 
 export const CRMUserSchema = SchemaFactory.createForClass(CRMUser);

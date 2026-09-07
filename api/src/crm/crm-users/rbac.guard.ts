@@ -45,6 +45,18 @@ export class RbacGuard implements CanActivate {
     let dbUser = (await this.usersService.findOne(user.email)) as any;
 
     if (!dbUser) {
+      // Do not auto-create active CRM users. HRMS-synced staff must be granted by CRM Admin (§2.4).
+      // Only allow auto-stub for platform management emails that already have JWT access.
+      const isMgmt =
+        hasCrmAdminJwtBypass(user) ||
+        ['ADMIN', 'CEO', 'CTO', 'ADMINISTRATOR'].includes(
+          String(user.role || '').toUpperCase(),
+        );
+      if (!isMgmt) {
+        throw new ForbiddenException(
+          'CRM access has not been granted for this account. Ask a CRM Admin to activate you.',
+        );
+      }
       console.log(`RbacGuard: Auto-creating stub CRM user for ${user.email}`);
       try {
         dbUser = (await this.usersService.create({
@@ -53,6 +65,7 @@ export class RbacGuard implements CanActivate {
           lastName: user.lastName || user.name?.split(' ')[1] || '',
           role: user.role,
           isActive: true,
+          provisioningStatus: 'manual',
           password: Math.random().toString(36) + 'Aa1!',
         })) as any;
       } catch (e) {
@@ -71,6 +84,16 @@ export class RbacGuard implements CanActivate {
           );
         }
       }
+    }
+
+    if (
+      dbUser?.provisioningStatus === 'pending_access' ||
+      dbUser?.provisioningStatus === 'revoked' ||
+      dbUser?.provisioningStatus === 'hidden'
+    ) {
+      throw new ForbiddenException(
+        'CRM access is pending or revoked. Contact a CRM Admin.',
+      );
     }
 
     if (!dbUser?.isActive) {
