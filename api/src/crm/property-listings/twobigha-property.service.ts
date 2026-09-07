@@ -194,6 +194,7 @@ export const PROPERTY_LIST_FIELDS = `
   price
   pricePerUnit
   area
+  areaUnit
   address
   city
   district
@@ -218,10 +219,23 @@ export const PROPERTY_LIST_FIELDS = `
   isFeatured
   approvalStatus
   approvalMessage
+  viewCount
+  saveCount
   khasraNumber
+  murabbaNumber
+  khewatNumber
+  waterLevel
   category
   highwayConn
+  landZoning
+  ownersCount
+  ownershipYes
+  soilType
   roadAccess
+  roadAccessDistance
+  roadAccessWidth
+  roadAccessDistanceUnit
+  landMarkName
   ownerName
   ownerPhone
   ownerWhatsapp
@@ -464,24 +478,76 @@ const GET_PROPERTY_IMAGE_UPLOAD_URLS_QUERY = `
  */
 const FARM_DETAIL_FIELDS = `
   id
+  uuid
   propertyName
   title
   description
   propertyType
   status
+  availablilityStatus
   price
+  pricePerUnit
   area
   areaUnit
+  khasraNumber
+  murabbaNumber
+  khewatNumber
   address
   city
   district
   state
   country
   source
+  waterLevel
+  landType
+  category
+  highwayConn
+  roadAccess
+  roadAccessDistance
+  roadAccessWidth
+  roadAccessDistanceUnit
+  listingType
+  isPriceNegotiable
+  hasGatedCommunity
+  multipleSizeOptions
+  nearbyActivities
+  scenicFeatures
+  amenities
+  listingAs
   isVerified
   isActive
+  viewCount
+  saveCount
+  ownerName
+  ownerPhone
+  ownerWhatsapp
+  latLng
+  location {
+    name
+    address
+    coordinates {
+      lat
+      lng
+    }
+  }
+  boundary
+  geoJson
+  calculatedArea
   createdAt
   updatedAt
+`;
+
+const FARM_ENVELOPE_IMAGE_FIELDS = `
+  images {
+    id
+    imageUrl
+    variants {
+      thumbnail
+      medium
+      large
+      original
+    }
+  }
 `;
 
 /**
@@ -501,8 +567,27 @@ const GET_FARMS_QUERY = `
         }
         seo {
           slug
+          seoTitle
         }
-        ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
+        verification {
+          isVerified
+          verificationMessage
+        }
+        ${FARM_ENVELOPE_IMAGE_FIELDS}
+        user {
+          id
+          firstName
+          lastName
+          email
+          role
+          phone
+          whatsappNumber
+        }
+        createdByUser {
+          firstName
+          lastName
+        }
+        saved
       }
       meta {
         page
@@ -528,8 +613,27 @@ const GET_FARM_BY_SLUG_QUERY = `
       }
       seo {
         slug
+        seoTitle
       }
-      ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
+      verification {
+        isVerified
+        verificationMessage
+      }
+      ${FARM_ENVELOPE_IMAGE_FIELDS}
+      user {
+        id
+        firstName
+        lastName
+        email
+        role
+        phone
+        whatsappNumber
+      }
+      createdByUser {
+        firstName
+        lastName
+      }
+      saved
     }
   }
 `;
@@ -1362,15 +1466,27 @@ export class TwoBighaPropertyService {
     }
 
     try {
-      const data = await twoBighaGraphqlRequest<{
-        getApprovedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
-      }>(config, GET_APPROVED_PROPERTIES_QUERY, {
-        input,
-      });
-      const result = data?.getApprovedProperties;
+      let resultData: Record<string, unknown>[] | undefined;
+      let resultMeta: Record<string, unknown> | undefined;
+
+      try {
+        const data = await twoBighaGraphqlRequest<{
+          properties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_PROPERTIES_QUERY, { input });
+        resultData = data?.properties?.data;
+        resultMeta = data?.properties?.meta;
+      } catch (gqlErr: any) {
+        this.logger.warn(`2bigha properties query fallback to getApprovedProperties: ${gqlErr?.message}`);
+        const data = await twoBighaGraphqlRequest<{
+          getApprovedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_APPROVED_PROPERTIES_QUERY, { input });
+        resultData = data?.getApprovedProperties?.data;
+        resultMeta = data?.getApprovedProperties?.meta;
+      }
+
       return {
-        data: result?.data || [],
-        meta: result?.meta || { total: (result?.data || []).length },
+        data: resultData || [],
+        meta: resultMeta || { total: (resultData || []).length },
       };
     } catch (e: any) {
       this.logger.error(`2bigha listProperties failed: ${e?.message}`);

@@ -692,7 +692,7 @@ export default function VoiceCallingIntegrationPage() {
         </CrmButton>
       </form>
 
-      {config.activeProvider === "kommuno" && config.providers.kommuno.enabled && (
+      {((config.activeProvider === "kommuno" && config.providers.kommuno.enabled) || tab === "kommuno") && (
         <div className="mt-8 animate-in fade-in duration-300">
           <KommunoAgentSyncPanel />
         </div>
