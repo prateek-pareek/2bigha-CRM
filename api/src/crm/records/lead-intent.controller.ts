@@ -36,12 +36,14 @@ export class LeadIntentController {
   list(
     @Query('intent') intent?: string,
     @Query('owner') owner?: string,
+    @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
     return this.service.listByIntent({
       intent,
       owner,
+      search,
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     });

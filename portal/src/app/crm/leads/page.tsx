@@ -45,6 +45,8 @@ import {
   MapPin,
   IndianRupee,
   Banknote,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react';
 import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
 import CRMSavedViews, { SavedViewData } from '@/components/crm/segments/CRMSavedViews';
@@ -312,6 +314,7 @@ export default function LeadsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [serverTotal, setServerTotal] = useState(0);
+  const [activeMetricFilter, setActiveMetricFilter] = useState<'all' | 'new' | 'pipeline' | 'qualified' | 'converted'>('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [columns, setColumns] = useState<Column[]>([]);
@@ -1327,9 +1330,37 @@ export default function LeadsPage() {
   );
 
   const filteredLeads = useMemo(() => {
-    const base = needsClientFullList
+    let base = needsClientFullList
       ? applyFilters(pipelineLeads, apiFilters, filterProperties)
       : pipelineLeads;
+
+    if (activeMetricFilter === 'new') {
+      base = base.filter(
+        (l) =>
+          !l.callStatus ||
+          l.callStatus === 'Not Called' ||
+          /new|uncontacted/i.test(l.stage || l.status || ''),
+      );
+    } else if (activeMetricFilter === 'pipeline') {
+      base = base.filter(
+        (l) =>
+          /contact|in progress|visit|negotiat|follow/i.test(l.stage || l.status || '') ||
+          l.callStatus === 'Connected',
+      );
+    } else if (activeMetricFilter === 'qualified') {
+      base = base.filter(
+        (l) =>
+          /qualif|hot|proposal|decision/i.test(l.stage || l.status || '') ||
+          l.priority === 'High',
+      );
+    } else if (activeMetricFilter === 'converted') {
+      base = base.filter(
+        (l) =>
+          /won|convert|deal|close/i.test(l.stage || l.status || '') ||
+          (l as any).converted === true,
+      );
+    }
+
     return base.filter((l) => {
       if (!needsClientFullList || !search.trim()) return true;
       const q = search.toLowerCase();
@@ -1348,7 +1379,7 @@ export default function LeadsPage() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [pipelineLeads, apiFilters, filterProperties, search, needsClientFullList]);
+  }, [pipelineLeads, apiFilters, filterProperties, search, needsClientFullList, activeMetricFilter]);
 
   // Batch property/farm counts for the leads currently on screen — avoids N+1 calls
   // per row for the "Add Property"/"Add Farm" quick-action count badges.
@@ -1537,6 +1568,34 @@ export default function LeadsPage() {
 
   const displayedTotal = needsClientFullList ? filteredLeads.length : serverTotal;
 
+  const leadMetricStats = useMemo(() => {
+    let newCount = 0;
+    let pipelineCount = 0;
+    let qualifiedCount = 0;
+    let convertedCount = 0;
+
+    for (const l of pipelineLeads) {
+      const stageStr = (l.stage || l.status || '').toLowerCase();
+      const isNew = !l.callStatus || l.callStatus === 'Not Called' || /new|uncontacted/.test(stageStr);
+      const isPipeline = /contact|in progress|visit|negotiat|follow/.test(stageStr) || l.callStatus === 'Connected';
+      const isQualified = /qualif|hot|proposal|decision/.test(stageStr) || l.priority === 'High';
+      const isConverted = /won|convert|deal|close/.test(stageStr) || (l as any).converted === true;
+
+      if (isNew) newCount++;
+      if (isPipeline) pipelineCount++;
+      if (isQualified) qualifiedCount++;
+      if (isConverted) convertedCount++;
+    }
+
+    return {
+      total: displayedTotal,
+      newCount,
+      pipelineCount,
+      qualifiedCount,
+      convertedCount,
+    };
+  }, [pipelineLeads, displayedTotal]);
+
   const visibleCols = useMemo(
     () => columns.filter((c) => c.visible),
     [columns],
@@ -1622,7 +1681,7 @@ export default function LeadsPage() {
   return (
     <div className={CRM_LIST_PAGE}>
       <div className="crm-list-content">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden space-y-3.5 px-4 sm:px-6 py-4 max-w-[1600px] mx-auto w-full">
           <CrmPageHeader
             bordered={false}
             title="Leads"
@@ -1698,21 +1757,6 @@ export default function LeadsPage() {
                   entityLabel="lead"
                   onClick={() => setIsBulkEmailOpen(true)}
                 />
-                {/* Stage automation — disabled for now, not needed yet. Re-enable by uncommenting.
-                {hasAccess('leads:write') && isMongoObjectIdString(selectedPipelineId) && (
-                  <CrmButton
-                    variant="icon"
-                    onClick={() => setStageRulesPanelOpen(true)}
-                    title={
-                      selectedIds.size > 0
-                        ? `Stage rules — preview or apply for ${selectedIds.size} selected lead(s)`
-                        : 'Stage rules — preview or apply for this pipeline'
-                    }
-                    aria-label="Open stage automation rules"
-                    leftIcon={<CrmIcon.GitBranch size={16} aria-hidden />}
-                  />
-                )}
-                */}
                   </>
                 }
                 canExport={hasAccess('leads:export')}
@@ -1747,6 +1791,16 @@ export default function LeadsPage() {
                   window.dispatchEvent(new CustomEvent('crm-header:toggle-collapse'));
                 }}
                 collapsed={headerCollapsed}
+                trailing={
+                  <CrmButton
+                    type="button"
+                    variant="secondary"
+                    leftIcon={<Sparkles size={14} className="text-amber-500" />}
+                    onClick={() => router.push('/crm/leads/intent')}
+                  >
+                    Lead Intent
+                  </CrmButton>
+                }
               />
             }
           />
@@ -1876,7 +1930,7 @@ export default function LeadsPage() {
           />
 
           <div
-            className="crm-list-subtabs shrink-0"
+            className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar border-b border-slate-200 dark:border-slate-800"
             role="tablist"
             aria-label="Lead vertical"
           >
@@ -1899,8 +1953,9 @@ export default function LeadsPage() {
                     setPage(1);
                   }}
                   className={cn(
+                    'shrink-0 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors',
                     isActive
-                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs'
                       : 'text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
                   )}
                 >
@@ -1908,15 +1963,28 @@ export default function LeadsPage() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              role="tab"
+              onClick={() => router.push('/crm/leads/intent')}
+              className="inline-flex items-center gap-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--primary)] transition-colors px-3 py-1.5 rounded-lg text-xs font-semibold ml-auto"
+            >
+              <Sparkles size={14} className="text-amber-500" />
+              <span>Lead Intent</span>
+              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                Pipeline
+              </span>
+            </button>
           </div>
 
           {leadCategoryTabs.length > 0 && (
             <div
-              className="crm-list-subtabs shrink-0"
+              className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scrollbar"
               role="tablist"
               aria-label="Lead type"
             >
-              {[{ _id: '__all__', label: 'All Leads' }, ...leadCategoryTabs].map((tab) => {
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1 shrink-0">Type:</span>
+              {[{ _id: '__all__', label: 'All Types' }, ...leadCategoryTabs].map((tab) => {
                 const isAll = tab._id === '__all__';
                 const isActive = isAll ? !activeLeadCategory : activeLeadCategory === tab.label;
                 return (
@@ -1930,10 +1998,10 @@ export default function LeadsPage() {
                       setPage(1);
                     }}
                     className={cn(
-                      'shrink-0 rounded-[var(--radius-md)] px-3 py-1.5 text-sm font-semibold transition-colors',
+                      'shrink-0 rounded-lg px-3 py-1 text-xs font-semibold transition-all',
                       isActive
-                        ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                        : 'text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
+                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800',
                     )}
                   >
                     {tab.label}
