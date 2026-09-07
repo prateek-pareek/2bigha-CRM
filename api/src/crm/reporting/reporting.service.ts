@@ -30,6 +30,14 @@ import {
 import { Pipeline, PipelineDocument } from '../schemas/pipeline.schema';
 import { CallLog, CallLogDocument } from '../ivr/schemas/call-log.schema';
 import { AgentTarget, AgentTargetDocument } from './schemas/agent-target.schema';
+import {
+  WhatsAppMessage,
+  WhatsAppMessageDocument,
+} from '../integrations/schemas/whatsapp-message.schema';
+import {
+  LeadIntentEvent,
+  LeadIntentEventDocument,
+} from '../records/schemas/lead-intent-event.schema';
 import { AppCacheService } from '../../redis/app-cache.service';
 import {
   actionVerb,
@@ -541,6 +549,10 @@ export class ReportingService {
     private callLogModel: Model<CallLogDocument>,
     @InjectModel(AgentTarget.name, 'crmConnection')
     private agentTargetModel: Model<AgentTargetDocument>,
+    @InjectModel(WhatsAppMessage.name, 'crmConnection')
+    private whatsappMessageModel: Model<WhatsAppMessageDocument>,
+    @InjectModel(LeadIntentEvent.name, 'crmConnection')
+    private leadIntentEventModel: Model<LeadIntentEventDocument>,
     private readonly appCache: AppCacheService,
   ) {}
 
@@ -3627,6 +3639,257 @@ export class ReportingService {
       this.computeWindowWorkSnapshot(this.resolveWorkspaceWindow('this_month'), agentId, authorId),
     ]);
     return { today, thisWeek, thisMonth };
+  }
+
+  /**
+   * Team & Organization Reports - Team-level aggregations
+   */
+  async getTeamPerformanceMetrics(window: string) {
+    const range = this.resolveWorkspaceWindow(window);
+    const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+
+    // Get all agents grouped by team (using reportsTo for team hierarchy)
+    const [agents, callRows, leadRows, convertedRows, activityRows, users] = await Promise.all([
+      this.hrmsUserModel.find().select('_id firstName lastName email reportsTo').limit(2000).exec(),
+      this.callLogModel
+        .aggregate([
+          { $match: { ...dateMatch, initiatedByUserId: { $exists: true, $ne: null } } },
+          { $group: { _id: '$initiatedByUserId', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.leadModel
+        .aggregate([
+          { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null } } },
+          { $group: { _id: '$createdBy', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.leadModel
+        .aggregate([
+          { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null }, converted: true } },
+          { $group: { _id: '$createdBy', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.activityModel
+        .aggregate([
+          { $match: { ...dateMatch, type: { $nin: ['System'] }, author: { $exists: true, $ne: null } } },
+          { $group: { _id: '$author', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.hrmsUserModel.find().select('_id firstName lastName email reportsTo').limit(2000).exec(),
+    ]);
+
+    const userById = new Map(users.map((u: any) => [String(u._id), u]));
+    const countMapFn = (rows: Array<{ _id: unknown; count: number }>) =>
+      new Map(rows.map((r) => [String(r._id), r.count]));
+
+    const calls = countMapFn(callRows);
+    const leadsCreated = countMapFn(leadRows);
+    const leadsConverted = countMapFn(convertedRows);
+    const activities = countMapFn(activityRows);
+
+    // Group agents by team (manager/team lead from reportsTo)
+    const teamMap = new Map<string, any[]>();
+    for (const agent of agents) {
+      const teamId = agent.reportsTo?.toString() || 'Unassigned';
+      if (!teamMap.has(teamId)) {
+        teamMap.set(teamId, []);
+      }
+      teamMap.get(teamId)!.push(agent);
+    }
+
+    // Get team lead names for display
+    const teamLeadIds = Array.from(teamMap.keys()).filter(id => id !== 'Unassigned');
+    const teamLeadNames = new Map<string, string>();
+    for (const tlId of teamLeadIds) {
+      const tl = userById.get(tlId);
+      teamLeadNames.set(tlId, tl ? `${tl.firstName || ''} ${tl.lastName || ''}`.trim() || tl.email : tlId);
+    }
+
+    // Calculate team metrics
+    const teamMetrics = Array.from(teamMap.entries()).map(([teamId, teamAgents]) => {
+      const totalCalls = teamAgents.reduce((sum, a) => sum + (calls.get(String(a._id)) || 0), 0);
+      const totalLeads = teamAgents.reduce((sum, a) => sum + (leadsCreated.get(String(a._id)) || 0), 0);
+      const totalConverted = teamAgents.reduce((sum, a) => sum + (leadsConverted.get(String(a._id)) || 0), 0);
+      const totalActivities = teamAgents.reduce((sum, a) => sum + (activities.get(String(a._id)) || 0), 0);
+
+      return {
+        teamName: teamLeadNames.get(teamId) || (teamId === 'Unassigned' ? 'Unassigned' : teamId),
+        teamId,
+        teamSize: teamAgents.length,
+        totalCalls,
+        totalLeads,
+        leadsConverted: totalConverted,
+        totalActivities,
+      };
+    });
+
+    return {
+      window: range.key,
+      windowLabel: this.windowLabel(range.key),
+      teams: teamMetrics.sort((a, b) => (b.totalCalls + b.totalLeads) - (a.totalCalls + a.totalLeads)),
+    };
+  }
+
+  /**
+   * Lead Source Conversion Tracking
+   */
+  async getLeadSourceConversion(window: string) {
+    const range = this.resolveWorkspaceWindow(window);
+    const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+
+    const [sourceRows, sourceConvertedRows] = await Promise.all([
+      this.leadModel.aggregate([
+        { $match: dateMatch },
+        { $group: { _id: '$source', count: { $sum: 1 } } },
+      ]),
+      this.leadModel.aggregate([
+        { $match: { ...dateMatch, converted: true } },
+        { $group: { _id: '$source', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const sourceMap = new Map(sourceRows.map((r: any) => [r._id || 'Unknown', r.count]));
+    const convertedMap = new Map(sourceConvertedRows.map((r: any) => [r._id || 'Unknown', r.count]));
+
+    const sources = Array.from(sourceMap.entries()).map(([source, totalLeads]) => ({
+      source: source || 'Unknown',
+      totalLeads,
+      converted: convertedMap.get(source) || 0,
+    }));
+
+    return {
+      window: range.key,
+      windowLabel: this.windowLabel(range.key),
+      sources: sources.sort((a, b) => b.totalLeads - a.totalLeads),
+    };
+  }
+
+  /**
+   * Lead Intent Conversion Tracking
+   */
+  async getLeadIntentConversion(window: string) {
+    const range = this.resolveWorkspaceWindow(window);
+    const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+
+    // Get lead intents with conversion status
+    const intentEvents = await this.leadIntentEventModel.find(dateMatch).exec();
+
+    const leadIntentMap = new Map<string, { total: number; converted: number }>();
+
+    for (const event of intentEvents) {
+      const intent = event.intentLabel || 'Unknown';
+      if (!leadIntentMap.has(intent)) {
+        leadIntentMap.set(intent, { total: 0, converted: 0 });
+      }
+      const entry = leadIntentMap.get(intent)!;
+      entry.total++;
+    }
+
+    // Check conversion status for leads with intents
+    const intentsWithConversion = await this.leadModel.aggregate([
+      { $match: dateMatch },
+      { $match: { leadIntents: { $exists: true, $ne: [] } } },
+      { $unwind: '$leadIntents' },
+      { $group: { _id: '$leadIntents', converted: { $sum: { $cond: ['$converted', 1, 0] } }, total: { $sum: 1 } } },
+    ]);
+
+    const intentData = Array.from(leadIntentMap.entries()).map(([intent, data]) => ({
+      intentLabel: intent,
+      totalWithIntent: data.total,
+      converted: data.converted,
+    }));
+
+    return {
+      window: range.key,
+      windowLabel: this.windowLabel(range.key),
+      intents: intentData.sort((a, b) => b.totalWithIntent - a.totalWithIntent),
+    };
+  }
+
+  /**
+   * WhatsApp Engagement Metrics
+   */
+  async getWhatsAppEngagement(window: string) {
+    const range = this.resolveWorkspaceWindow(window);
+    const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+
+    // Aggregate WhatsApp messages by sender's team
+    const messageRows = await this.whatsappMessageModel
+      .aggregate([
+        { $match: { ...dateMatch, direction: 'outbound' } },
+        { $lookup: { from: 'hrms_users', localField: 'sentBy', foreignField: '_id', as: 'sender' } },
+        { $unwind: { path: '$sender', preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: { team: '$sender.reportsTo', status: '$status' },
+            count: { $sum: 1 },
+          },
+        },
+      ])
+      .exec();
+
+    const teamMap = new Map<string, any>();
+    for (const row of messageRows) {
+      const team = row._id?.team || 'Unassigned';
+      if (!teamMap.has(team)) {
+        teamMap.set(team, { messagesOutbound: 0, messagesRead: 0, messagesFailed: 0 });
+      }
+      const entry = teamMap.get(team)!;
+      entry.messagesOutbound += row.count;
+      if (row._id?.status === 'read') entry.messagesRead += row.count;
+      if (row._id?.status === 'failed') entry.messagesFailed += row.count;
+    }
+
+    const engagement = Array.from(teamMap.entries()).map(([team, data]) => ({
+      teamName: team,
+      ...data,
+    }));
+
+    return {
+      window: range.key,
+      windowLabel: this.windowLabel(range.key),
+      teams: engagement,
+    };
+  }
+
+  /**
+   * IVR Call Analytics
+   */
+  async getIVRAnalytics(window: string) {
+    const range = this.resolveWorkspaceWindow(window);
+    const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+
+    // Get call logs grouped by agent's team
+    const callRows = await this.callLogModel
+      .aggregate([
+        { $match: { ...dateMatch, direction: 'Incoming' } },
+        { $lookup: { from: 'hrms_users', localField: 'initiatedByUserId', foreignField: '_id', as: 'agent' } },
+        { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: '$agent.reportsTo',
+            incomingCalls: { $sum: 1 },
+            missedCalls: { $sum: { $cond: [{ $eq: ['$status', 'Missed'] }, 1, 0] } },
+            completedCalls: { $sum: { $cond: [{ $eq: ['$status', 'Completed'] }, 1, 0] } },
+            totalDuration: { $sum: '$duration' },
+          },
+        },
+      ])
+      .exec();
+
+    const ivrAnalytics = callRows.map((row: any) => ({
+      teamName: row._id || 'Unassigned',
+      incomingCalls: row.incomingCalls || 0,
+      missedCalls: row.missedCalls || 0,
+      completedCalls: row.completedCalls || 0,
+      avgCallDuration: row.incomingCalls > 0 ? Math.round(row.totalDuration / row.incomingCalls) : 0,
+    }));
+
+    return {
+      window: range.key,
+      windowLabel: this.windowLabel(range.key),
+      teams: ivrAnalytics,
+    };
   }
 
   private async computeSalesDepartmentHealth(
