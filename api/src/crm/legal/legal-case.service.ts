@@ -9,6 +9,7 @@ import { LegalCase, LegalCaseDocument } from '../records/schemas/legal-case.sche
 import { Lead, LeadDocument } from '../records/schemas/lead.schema';
 import { Contact, ContactDocument } from '../records/schemas/contact.schema';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
+import { LegalCaseNotificationService } from './legal-case-notification.service';
 import {
   assignUniqueRecordId,
   isMongoObjectIdString,
@@ -23,6 +24,7 @@ import {
   ScalableListResult,
 } from '../../common/lib/pagination/list-pagination';
 import { countDocumentsCapped } from '../../common/lib/pagination/capped-count';
+import { roleAllowsModule } from '../shared/crm-workspace-module.util';
 
 export type LegalCaseListOpts = {
   page?: number;
@@ -33,6 +35,7 @@ export type LegalCaseListOpts = {
   caseOwner?: string;
   priority?: string;
   caseType?: string;
+  user?: any;
 };
 
 @Injectable()
@@ -44,6 +47,7 @@ export class LegalCaseService {
     private readonly leadModel: Model<LeadDocument>,
     @InjectModel(Contact.name, 'crmConnection')
     private readonly contactModel: Model<ContactDocument>,
+    private readonly notificationService: LegalCaseNotificationService,
   ) {}
 
   private toObjectIdSafe(v: any): Types.ObjectId | null {
@@ -172,6 +176,11 @@ export class LegalCaseService {
       };
     }
 
+    // Module isolation: enforce LEGAL workspace boundary
+    if (listOpts?.user && !roleAllowsModule(listOpts.user?.crmDbUser, 'LEGAL')) {
+      return buildScalableListResult([], { page: 1, pageSize: 25, total: 0, totalIsApproximate: false });
+    }
+
     const page = Math.max(1, listOpts?.page ?? CRM_DEFAULT_PAGE);
     const pageSize = clampPageSize(
       listOpts?.pageSize ?? CRM_DEFAULT_PAGE_SIZE,
@@ -255,9 +264,23 @@ export class LegalCaseService {
       throw new BadRequestException('stage is required');
     }
     const oidStr = await this.requireOid(id);
-    return this.legalCaseModel
+    const oldCase = await this.legalCaseModel.findById(oidStr).select('stage').lean().exec();
+    const previousStage = (oldCase as any)?.stage || null;
+
+    const updated = await this.legalCaseModel
       .findByIdAndUpdate(oidStr, { $set: { stage } }, { new: true })
       .exec();
+
+    if (updated && previousStage !== stage) {
+      void this.notificationService.notifyStatusChange(
+        oidStr,
+        previousStage,
+        stage,
+        updated as LegalCaseDocument,
+      );
+    }
+
+    return updated;
   }
 
   // --- Soft delete (move to Trash) ---

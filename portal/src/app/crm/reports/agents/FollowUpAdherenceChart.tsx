@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
-import { CheckCircle2, AlertCircle, TrendingUp } from "lucide-react";
+import { useState, useMemo } from "react";
+import { CheckCircle2, AlertCircle, TrendingUp, Maximize2, Minimize2 } from "lucide-react";
 import {
   CRM_CHART_SUCCESS,
   CRM_CHART_DANGER,
   CRM_CHART_PRIMARY,
 } from "@/portals/crm/lib/shared/chart-theme";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 interface FollowUpAdherenceChartProps {
   agents: any[];
@@ -25,6 +26,8 @@ export default function FollowUpAdherenceChart({
   agents,
   loading,
 }: FollowUpAdherenceChartProps) {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   const adheranceData = useMemo(() => {
     if (loading || agents.length === 0) return [];
 
@@ -65,7 +68,11 @@ export default function FollowUpAdherenceChart({
       .sort((a, b) => b.adherenceRate - a.adherenceRate);
   }, [agents, loading]);
 
-  if (loading || adheranceData.length === 0) return null;
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
+  
+  if (adheranceData.length === 0) return null;
 
   const avgAdherence = Math.round(
     adheranceData.reduce((sum, a) => sum + a.adherenceRate, 0) / adheranceData.length
@@ -74,12 +81,22 @@ export default function FollowUpAdherenceChart({
   const excellentCount = adheranceData.filter((a) => a.status === "excellent").length;
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Follow-up Adherence</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Activity engagement per lead created across team
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl' : 'flex flex-col'}`}>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">Follow-up Adherence</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Activity engagement per lead created across team
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
       {/* Summary Stats */}

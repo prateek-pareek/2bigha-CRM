@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
-import { CheckCircle2, AlertCircle, Circle } from "lucide-react";
+import { useState, useMemo } from "react";
+import { CheckCircle2, AlertCircle, Circle, Maximize2, Minimize2 } from "lucide-react";
 import {
   CRM_CHART_SUCCESS,
   CRM_CHART_DANGER,
   CRM_CHART_PRIMARY,
 } from "@/portals/crm/lib/shared/chart-theme";
 import { cn } from "@/lib/utils";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 interface TargetVsActualChartProps {
   agents: any[];
@@ -30,6 +31,8 @@ export default function TargetVsActualChart({
   agents,
   loading,
 }: TargetVsActualChartProps) {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   const targetData = useMemo(() => {
     if (loading || agents.length === 0) return [];
 
@@ -77,12 +80,16 @@ export default function TargetVsActualChart({
       });
   }, [agents, loading]);
 
-  if (loading || targetData.length === 0) {
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
+
+  if (targetData.length === 0) {
     return (
-      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Target vs Actual</h3>
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-[350px] flex flex-col items-center justify-center">
+        <h3 className="text-sm font-bold text-[var(--text-main)] self-start absolute top-6 left-6">Target vs Actual</h3>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
-          {loading ? "Loading..." : "No agents with targets set yet"}
+          No agents with targets set yet
         </p>
       </div>
     );
@@ -127,15 +134,25 @@ export default function TargetVsActualChart({
   }
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Target Achievement</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Agent progress toward goals (calls & leads)
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all flex flex-col ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl' : 'h-full'}`}>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">Target Achievement</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Agent progress toward goals (calls & leads)
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-4 flex-1 flex flex-col justify-center min-h-[300px]">
         {targetData.map((agent) => (
           <div
             key={agent.name}

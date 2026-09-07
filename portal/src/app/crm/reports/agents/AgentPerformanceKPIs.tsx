@@ -47,7 +47,23 @@ export default function AgentPerformanceKPIs({
   agents,
   loading,
 }: AgentPerformanceKPIsProps) {
-  if (loading || agents.length === 0) return null;
+  if (loading) {
+    return (
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm h-[104px] animate-pulse">
+            <div className="flex justify-between items-start">
+              <div className="h-4 bg-[var(--surface-dim)] rounded w-24 mb-4"></div>
+              <div className="h-8 w-8 bg-[var(--surface-dim)] rounded"></div>
+            </div>
+            <div className="h-6 bg-[var(--surface-dim)] rounded w-16"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (agents.length === 0) return null;
 
   // Calculate aggregate metrics
   const totalCalls = agents.reduce((sum, a) => sum + (a.calls || 0), 0);
@@ -56,11 +72,12 @@ export default function AgentPerformanceKPIs({
   const conversionRate =
     totalLeadsCreated > 0 ? Math.round((totalLeadsConverted / totalLeadsCreated) * 100) : 0;
 
-  // Find top performer (by calls + leads created combined score)
+  // Find top performer using a weighted score: Converted(10) + Created(2) + Calls(1)
+  const getScore = (agent: any) => 
+    (agent.leadsConverted || 0) * 10 + (agent.leadsCreated || 0) * 2 + (agent.calls || 0);
+
   const topAgent = agents.reduce((max, agent) => {
-    const maxScore = (max.calls || 0) + (max.leadsCreated || 0);
-    const agentScore = (agent.calls || 0) + (agent.leadsCreated || 0);
-    return agentScore > maxScore ? agent : max;
+    return getScore(agent) > getScore(max) ? agent : max;
   }, agents[0]);
 
   // Get safe display name for top agent
@@ -72,19 +89,12 @@ export default function AgentPerformanceKPIs({
     return "Agent";
   };
 
-  // Calculate trend (comparing top 50% vs bottom 50%)
-  const sortedByScore = [...agents].sort(
-    (a, b) => ((b.calls || 0) + (b.leadsCreated || 0)) - ((a.calls || 0) + (a.leadsCreated || 0))
-  );
-  const topHalf = sortedByScore.slice(0, Math.ceil(sortedByScore.length / 2));
-  const bottomHalf = sortedByScore.slice(Math.ceil(sortedByScore.length / 2));
-  const topHalfScore = topHalf.reduce((sum, a) => sum + ((a.calls || 0) + (a.leadsCreated || 0)), 0);
-  const bottomHalfScore = bottomHalf.reduce(
-    (sum, a) => sum + ((a.calls || 0) + (a.leadsCreated || 0)),
-    0
-  );
+  // Calculate trend: How much better the top agent is vs the team average
+  const totalScore = agents.reduce((sum, agent) => sum + getScore(agent), 0);
+  const avgScore = agents.length > 0 ? totalScore / agents.length : 1;
+  const topScore = getScore(topAgent);
   const avgTrend =
-    bottomHalfScore > 0 ? Math.round(((topHalfScore - bottomHalfScore) / bottomHalfScore) * 100) : 0;
+    avgScore > 0 ? Math.round(((topScore - avgScore) / avgScore) * 100) : 0;
 
   const kpis: KPICard[] = [
     {

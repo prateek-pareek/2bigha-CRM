@@ -10,6 +10,7 @@ import {
   OrganizationSchema,
 } from './schemas/organization.schema';
 import { Contact, ContactSchema } from './schemas/contact.schema';
+import { LegalCase, LegalCaseSchema } from './records/schemas/legal-case.schema';
 import { Activity, ActivitySchema } from './schemas/activity.schema';
 import { CustomField, CustomFieldSchema } from './schemas/custom-field.schema';
 import { CustomFieldsService } from './admin/custom-fields.service';
@@ -206,6 +207,11 @@ import {
   CrmContractAiSettingsSchema,
 } from './schemas/crm-contract-ai-settings.schema';
 import { CrmContractAiSettingsService } from './proposals/crm-contract-ai-settings.service';
+import {
+  ReportSchedule,
+  ReportScheduleSchema,
+} from './reporting/schemas/report-schedule.schema';
+import { ReportSchedulerService } from './reporting/report-scheduler.service';
 import { InboxSyncCronService } from './inbox/inbox-sync-cron.service';
 import { InboxPushService } from './inbox/inbox-push.service';
 import { InboxPushController } from './inbox/inbox-push.controller';
@@ -286,6 +292,10 @@ import { SubscriptionsController } from './subscriptions/subscriptions.controlle
 import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscriptions.service';
 import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
 import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
+import {
+  SubscriptionNotificationTracker,
+  SubscriptionNotificationTrackerSchema,
+} from './subscriptions/schemas/subscription-notification-tracker.schema';
 
 @Module({
   imports: [
@@ -298,6 +308,7 @@ import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
         { name: Lead.name, schema: LeadSchema },
         { name: Organization.name, schema: OrganizationSchema },
         { name: Contact.name, schema: ContactSchema },
+        { name: LegalCase.name, schema: LegalCaseSchema },
         { name: Activity.name, schema: ActivitySchema },
         { name: CrmMigrationJob.name, schema: CrmMigrationJobSchema },
         { name: CrmMigrationIdMap.name, schema: CrmMigrationIdMapSchema },
@@ -364,6 +375,11 @@ import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
         {
           name: CrmNotificationPreference.name,
           schema: CrmNotificationPreferenceSchema,
+        },
+        { name: ReportSchedule.name, schema: ReportScheduleSchema },
+        {
+          name: SubscriptionNotificationTracker.name,
+          schema: SubscriptionNotificationTrackerSchema,
         },
       ],
       'crmConnection',
@@ -451,6 +467,7 @@ import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
     GlobalSearchService,
     PipelinesService,
     ReportingService,
+    ReportSchedulerService,
     TeamsIntegrationService,
     SlackIntegrationService,
     IntegrationCatalogService,

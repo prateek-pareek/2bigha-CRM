@@ -63,6 +63,30 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
       label: 'Move between pipelines / board stage',
     },
   ],
+  'property-listings': [
+    { perm: 'property-listings:approve', label: 'Approve listings' },
+    { perm: 'property-listings:feature', label: 'Mark properties as Featured' },
+  ],
+  'approval-queue': [
+    { perm: 'approval-queue:approve', label: 'Approve pending items' },
+    { perm: 'approval-queue:reject', label: 'Reject pending items' },
+  ],
+  contracts: [
+    { perm: 'contracts:approve', label: 'Approve contracts' },
+    { perm: 'contracts:sign', label: 'Sign & execute contracts' },
+  ],
+  quotations: [
+    { perm: 'quotations:approve', label: 'Approve quotations' },
+    { perm: 'quotations:send', label: 'Send quotations to clients' },
+  ],
+  visits: [
+    { perm: 'visits:schedule', label: 'Schedule visits' },
+    { perm: 'visits:complete', label: 'Mark visits as complete' },
+  ],
+  'ivr-service': [
+    { perm: 'ivr-service:configure', label: 'Configure IVR settings' },
+    { perm: 'ivr-service:manage', label: 'Manage IVR queues & rules' },
+  ],
 };
 
 export const GLOBAL_PERMISSION_KEYS = new Set([
@@ -78,6 +102,18 @@ export const GLOBAL_PERMISSION_KEYS = new Set([
   'clients:export',
   'inbox:connect',
   'legal:move_pipeline',
+  'property-listings:approve',
+  'property-listings:feature',
+  'approval-queue:approve',
+  'approval-queue:reject',
+  'contracts:approve',
+  'contracts:sign',
+  'quotations:approve',
+  'quotations:send',
+  'visits:schedule',
+  'visits:complete',
+  'ivr-service:configure',
+  'ivr-service:manage',
   ...SOCIAL_PERMISSION_KEYS,
 ]);
 
@@ -181,6 +217,12 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
   { id: 'inbox', label: 'Inbox', routes: ['/crm/inbox', '/crm/whatsapp'] },
   { id: 'outreach', label: 'Outreach', routes: ['/crm/outreach', '/crm/campaigns'] },
   { id: 'workflows', label: 'Workflows & automation', routes: ['/crm/workflows'] },
+  { id: 'property-listings', label: 'Property Listings', routes: ['/crm/property-listings'] },
+  { id: 'visits', label: 'Visit Tracking', routes: ['/crm/visits'] },
+  { id: 'contracts', label: 'Contracts', routes: ['/crm/contracts'] },
+  { id: 'quotations', label: 'Quotations', routes: ['/crm/quotations'] },
+  { id: 'approval-queue', label: 'Approval Queue', routes: ['/crm/approval-queue'] },
+  { id: 'ivr-service', label: 'IVR Service', routes: ['/crm/ivr'] },
   { id: 'settings', label: 'Settings & templates', routes: ['/crm/settings'] },
   { id: 'proposals', label: 'Proposals & CVs', routes: ['/crm/proposals'] },
   { id: 'services', label: 'Services catalog', routes: ['/crm/services'] },

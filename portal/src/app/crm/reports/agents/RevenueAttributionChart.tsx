@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -18,6 +19,7 @@ import {
   CRM_CHART_TOOLTIP,
   CRM_CHART_TICK,
 } from "@/portals/crm/lib/shared/chart-theme";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 interface RevenueAttributionChartProps {
   agents: any[];
@@ -28,6 +30,8 @@ export default function RevenueAttributionChart({
   agents,
   loading,
 }: RevenueAttributionChartProps) {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   const chartData = useMemo(() => {
     if (loading || agents.length === 0) return [];
 
@@ -65,7 +69,11 @@ export default function RevenueAttributionChart({
       .slice(0, 10); // Top 10 agents
   }, [agents, loading]);
 
-  if (loading || chartData.length === 0) return null;
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
+
+  if (chartData.length === 0) return null;
 
   const totalRevenue = chartData.reduce((sum, a) => sum + a.revenue, 0);
   const avgRevenuePerAgent = Math.round(totalRevenue / chartData.length);
@@ -77,12 +85,22 @@ export default function RevenueAttributionChart({
   }
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Revenue Attribution</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Estimated revenue generated per agent (based on conversions & activities)
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl flex flex-col' : ''}`}>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">Revenue Attribution</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Estimated revenue generated per agent (based on conversions & activities)
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
       {/* Summary Stats */}
@@ -102,7 +120,7 @@ export default function RevenueAttributionChart({
       </div>
 
       {/* Chart */}
-      <div className="h-[300px] w-full mb-4">
+      <div className={`${isFullScreen ? 'flex-1 min-h-[300px]' : 'h-[300px]'} w-full mb-4`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CRM_CHART_GRID} />
@@ -118,6 +136,7 @@ export default function RevenueAttributionChart({
             <YAxis tick={CRM_CHART_TICK} axisLine={false} tickLine={false} />
             <Tooltip
               {...CRM_CHART_TOOLTIP}
+              cursor={{ fill: "var(--surface-dim)", opacity: 0.5 }}
               formatter={(value) => (typeof value === "number" ? formatRevenue(value) : "—")}
               labelFormatter={(label) => `Agent: ${label}`}
             />

@@ -6,6 +6,12 @@ export type LegalCaseDocument = LegalCase & Document;
 
 @Schema({ timestamps: true })
 export class LegalCase {
+  /**
+   * Workspace boundary (RBAC/workspace-isolation layer). Always 'LEGAL' for legal cases.
+   */
+  @Prop({ enum: ['LEGAL'], default: 'LEGAL', index: true })
+  module: 'LEGAL';
+
   @Prop({ required: true })
   title: string;
 
@@ -103,6 +109,8 @@ export const LegalCaseSchema = SchemaFactory.createForClass(LegalCase);
 applyCrmSoftDeletePlugin(LegalCaseSchema);
 LegalCaseSchema.index({ isDeleted: 1, deletedAt: -1 });
 
+/** Workspace boundary filter for module isolation. */
+LegalCaseSchema.index({ module: 1, createdAt: -1 });
 /** Speeds up legal cases list / board when filtering by pipeline. */
 LegalCaseSchema.index({ pipeline: 1, createdAt: -1 });
 /** Speeds up "my legal cases" filtered list (owner + newest first). */

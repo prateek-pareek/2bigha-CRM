@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Target, Eye, EyeOff } from "lucide-react";
+import { Loader2, Target, Eye, EyeOff, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { CrmPageHeader, CrmButton } from "@/components/crm/ui";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 import AgentPerformanceKPIs from "./AgentPerformanceKPIs";
 import AgentComparisonChart from "./AgentComparisonChart";
 import ConversionFunnelChart from "./ConversionFunnelChart";
@@ -14,9 +15,13 @@ import TargetVsActualChart from "./TargetVsActualChart";
 import FollowUpAdherenceChart from "./FollowUpAdherenceChart";
 import ResponseTimeChart from "./ResponseTimeChart";
 import RevenueAttributionChart from "./RevenueAttributionChart";
+import AgentSkillRadarChart from "./AgentSkillRadarChart";
+import AgentPropertiesChart from "./AgentPropertiesChart";
+import AgentPerformanceTrendChart from "./AgentPerformanceTrendChart";
 import AdvancedReportFilters, { AdvancedAgentFilter } from "./AdvancedReportFilters";
 import ExportButtons from "./ExportButtons";
 import DetailedAgentView from "./DetailedAgentView";
+import ScheduleReportModal from "../_components/ScheduleReportModal";
 import { AgentReportData } from "../lib/export-reports";
 
 type AgentRow = {
@@ -53,11 +58,13 @@ export default function AgentPerformancePage() {
   const canSetTargets = hasAccess("settings:admin");
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [propertyCounts, setPropertyCounts] = useState<PropertyCounts>({});
+  const [trendData, setTrendData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [targetAgent, setTargetAgent] = useState<AgentRow | null>(null);
   const [targetForm, setTargetForm] = useState({ leadsTarget: "0", callsTarget: "0", propertiesTarget: "0" });
   const [savingTarget, setSavingTarget] = useState(false);
   const [showDetailedView, setShowDetailedView] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [filter, setFilter] = useState<AdvancedAgentFilter>({
     dateRange: "this_month",
     selectedAgents: [],
@@ -73,18 +80,27 @@ export default function AgentPerformancePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [leaderboardRes, propertiesRes] = await Promise.all([
-        fetch(`${CRM_API_URL}/crm/reports/agents?window=${filter.dateRange}`, { headers: authHeaders(), cache: "no-store" }),
+      const windowParam = filter.dateRange === "custom" && filter.customDateStart && filter.customDateEnd
+        ? `${filter.customDateStart},${filter.customDateEnd}`
+        : filter.dateRange;
+
+      const [leaderboardRes, propertiesRes, trendRes] = await Promise.all([
+        fetch(`${CRM_API_URL}/crm/reports/agents?window=${windowParam}`, { headers: authHeaders(), cache: "no-store" }),
         fetch(`${CRM_API_URL}/crm/property-listings/counts-by-agent`, { headers: authHeaders(), cache: "no-store" }),
+        fetch(`${CRM_API_URL}/crm/reports/agents/trend?window=${windowParam}`, { headers: authHeaders(), cache: "no-store" }),
       ]);
       const leaderboard = leaderboardRes.ok ? await leaderboardRes.json() : { agents: [] };
       const properties = propertiesRes.ok ? await propertiesRes.json() : {};
+      const trend = trendRes.ok ? await trendRes.json() : [];
+      
       const allAgents = Array.isArray(leaderboard.agents) ? leaderboard.agents : [];
       setAgents(allAgents);
       setPropertyCounts(properties || {});
+      setTrendData(trend || []);
     } catch {
       setAgents([]);
       setPropertyCounts({});
+      setTrendData([]);
     } finally {
       setLoading(false);
     }
@@ -220,23 +236,26 @@ export default function AgentPerformancePage() {
 
       {/* Core Performance Visualizations */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <AgentPerformanceTrendChart trendData={trendData} loading={loading} />
         <AgentComparisonChart agents={agents} loading={loading} />
+      </div>
+
+      {/* Advanced Skill & Pipeline Visualizations */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <AgentSkillRadarChart agents={agents} loading={loading} />
         <ConversionFunnelChart agents={agents} loading={loading} />
       </div>
 
-      {/* Follow-up & Response Time Analytics */}
-      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Follow-up, Response, & Portfolio Analytics */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <FollowUpAdherenceChart agents={agents} loading={loading} />
         <ResponseTimeChart agents={agents} loading={loading} />
+        <AgentPropertiesChart agents={agents} propertyCounts={propertyCounts} loading={loading} />
       </div>
 
-      {/* Revenue Attribution */}
-      <div className="mb-6">
+      {/* Revenue & Target Attribution */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <RevenueAttributionChart agents={agents} loading={loading} />
-      </div>
-
-      {/* Target Achievement */}
-      <div className="mb-6">
         <TargetVsActualChart agents={agents} loading={loading} />
       </div>
 
@@ -253,7 +272,16 @@ export default function AgentPerformancePage() {
             {showDetailedView ? "Hide Details" : "Show Details"}
           </button>
         </div>
-        <ExportButtons data={exportData} fileName={`Agent_Performance_${filter.dateRange}`} disabled={loading} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setScheduleModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+          >
+            <CalendarClock size={14} />
+            Schedule
+          </button>
+          <ExportButtons data={exportData} fileName={`Agent_Performance_${filter.dateRange}`} disabled={loading} />
+        </div>
       </div>
 
       {/* Detailed View or Table */}
@@ -402,6 +430,13 @@ export default function AgentPerformancePage() {
           </div>
         </div>
       ) : null}
+
+      <ScheduleReportModal
+        open={scheduleModalOpen}
+        onOpenChange={setScheduleModalOpen}
+        reportType="agent"
+        currentFilters={filter}
+      />
     </div>
   );
 }

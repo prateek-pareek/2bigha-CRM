@@ -81,6 +81,7 @@ export class LegalCaseController {
     @Query('caseOwner') caseOwner?: string,
     @Query('priority') priority?: string,
     @Query('caseType') caseType?: string,
+    @Request() req?: any,
   ) {
     const parsed = resolveListPagination(
       { page, pageSize: limit, search },
@@ -95,6 +96,7 @@ export class LegalCaseController {
       caseOwner,
       priority,
       caseType,
+      user: req?.user,
     });
   }
 

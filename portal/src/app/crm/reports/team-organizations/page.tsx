@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, Search, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
@@ -12,9 +12,13 @@ import LeadSourceConversionChart from "./LeadSourceConversionChart";
 import LeadIntentAnalytics from "./LeadIntentAnalytics";
 import WhatsAppEngagementChart from "./WhatsAppEngagementChart";
 import IVRAnalyticsChart from "./IVRAnalyticsChart";
+import OrganizationTargetGauge from "./OrganizationTargetGauge";
+import TeamPerformanceTrendChart from "./TeamPerformanceTrendChart";
+import TeamActivityHeatmap from "./TeamActivityHeatmap";
 import AdvancedTeamFilters, { AdvancedTeamFilter } from "./AdvancedTeamFilters";
 import TeamExportButtons from "./TeamExportButtons";
 import DetailedTeamView from "./DetailedTeamView";
+import ScheduleReportModal from "../_components/ScheduleReportModal";
 import { TeamReportData } from "../lib/export-reports";
 
 type TeamData = {
@@ -56,8 +60,10 @@ export default function TeamOrganizationsReportsPage() {
   const [teamData, setTeamData] = useState<TeamData[]>([]);
   const [sourceData, setSourceData] = useState<SourceData[]>([]);
   const [intentData, setIntentData] = useState<IntentData[]>([]);
+  const [trendData, setTrendData] = useState<{ teams: string[]; data: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDetailedView, setShowDetailedView] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [filter, setFilter] = useState<AdvancedTeamFilter>({
     dateRange: "this_month",
     selectedTeams: [],
@@ -74,9 +80,12 @@ export default function TeamOrganizationsReportsPage() {
     setLoading(true);
     try {
       const headers = authHeaders();
+      const windowParam = filter.dateRange === "custom" && filter.customDateStart && filter.customDateEnd
+        ? `${filter.customDateStart},${filter.customDateEnd}`
+        : filter.dateRange;
 
       // Fetch team performance metrics
-      const teamRes = await fetch(`${CRM_API_URL}/crm/reports/teams?window=${filter.dateRange}`, {
+      const teamRes = await fetch(`${CRM_API_URL}/crm/reports/teams?window=${windowParam}`, {
         headers,
         cache: "no-store",
       });
@@ -84,7 +93,7 @@ export default function TeamOrganizationsReportsPage() {
       const allTeams = (teamApiData.teams || []) as TeamData[];
 
       // Fetch lead source conversion data
-      const sourceRes = await fetch(`${CRM_API_URL}/crm/reports/lead-sources?window=${filter.dateRange}`, {
+      const sourceRes = await fetch(`${CRM_API_URL}/crm/reports/lead-sources?window=${windowParam}`, {
         headers,
         cache: "no-store",
       });
@@ -92,16 +101,25 @@ export default function TeamOrganizationsReportsPage() {
       const allSources = (sourceApiData.sources || []) as SourceData[];
 
       // Fetch lead intent data
-      const intentRes = await fetch(`${CRM_API_URL}/crm/reports/lead-intents?window=${filter.dateRange}`, {
+      const intentRes = await fetch(`${CRM_API_URL}/crm/reports/lead-intents?window=${windowParam}`, {
         headers,
         cache: "no-store",
       });
       const intentApiData = intentRes.ok ? await intentRes.json() : { intents: [] };
       const allIntents = (intentApiData.intents || []) as IntentData[];
 
+      // Fetch team trend data
+      const trendRes = await fetch(`${CRM_API_URL}/crm/reports/teams/trend?window=${windowParam}`, {
+        headers,
+        cache: "no-store",
+      });
+      const trendApiData = trendRes.ok ? await trendRes.json() : null;
+
+      // Mock Communication Data (since these endpoints might not exist yet)
       setTeamData(allTeams);
       setSourceData(allSources);
       setIntentData(allIntents);
+      setTrendData(trendApiData);
     } catch (error) {
       console.error("Error loading team data:", error);
       toast.error("Failed to load team reports");
@@ -205,8 +223,32 @@ export default function TeamOrganizationsReportsPage() {
         ]}
       />
 
-      {/* Advanced Report Filters */}
-      <div className="mb-6">
+      {/* Basic Filters & Advanced Report Filters */}
+      <div className="mb-6 space-y-4">
+        {/* Basic Filters */}
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm">
+          <select
+            value={filter.dateRange}
+            onChange={(e) => setFilter({ ...filter, dateRange: e.target.value as any })}
+            className="h-10 rounded-lg border border-[var(--border-color)] bg-[var(--surface-dim)] px-3 text-sm font-medium text-[var(--text-main)] outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all"
+          >
+            <option value="today">Today</option>
+            <option value="this_week">This week</option>
+            <option value="this_month">This month</option>
+            <option value="custom">Custom range</option>
+          </select>
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-3.5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search team names..."
+              value={filter.searchTerm || ""}
+              onChange={(e) => setFilter({ ...filter, searchTerm: e.target.value || undefined })}
+              className="h-10 w-full sm:w-64 rounded-lg border border-[var(--border-color)] bg-[var(--surface-dim)] pl-9 pr-3 text-sm font-medium text-[var(--text-main)] outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all"
+            />
+          </div>
+        </div>
+
         <AdvancedTeamFilters
           teams={teamData.map((t) => ({
             teamId: t.teamId,
@@ -230,23 +272,30 @@ export default function TeamOrganizationsReportsPage() {
       </div>
 
       {/* KPI Summary */}
-      <TeamPerformanceKPIs teamData={teamData} loading={loading} />
+      <TeamPerformanceKPIs teamData={filteredTeams} loading={loading} />
+
+      {/* Target & Trend Analytics */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
+        <OrganizationTargetGauge teams={filteredTeams} loading={loading} />
+        <TeamPerformanceTrendChart trendData={trendData} loading={loading} />
+      </div>
 
       {/* Team Comparison & Lead Source */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <TeamComparisonChart teamData={teamData} loading={loading} />
+        <TeamComparisonChart teamData={filteredTeams} loading={loading} />
         <LeadSourceConversionChart sourceData={sourceData} loading={loading} />
       </div>
 
-      {/* Lead Intent & WhatsApp */}
-      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Activity & Intent Analytics */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr]">
         <LeadIntentAnalytics intentData={intentData} loading={loading} />
-        <WhatsAppEngagementChart teamData={teamData} loading={loading} />
+        <TeamActivityHeatmap trendData={trendData} loading={loading} />
       </div>
 
-      {/* IVR Analytics */}
-      <div className="mb-6">
-        <IVRAnalyticsChart teamData={teamData} loading={loading} />
+      {/* WhatsApp & IVR Analytics */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <WhatsAppEngagementChart teamData={filteredTeams} loading={loading} />
+        <IVRAnalyticsChart teamData={filteredTeams} loading={loading} />
       </div>
 
       {/* Detailed Team Controls */}
@@ -262,7 +311,16 @@ export default function TeamOrganizationsReportsPage() {
             {showDetailedView ? "Hide Details" : "Show Details"}
           </button>
         </div>
-        <TeamExportButtons data={exportData} fileName={`Team_Report_${filter.dateRange}`} disabled={loading} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setScheduleModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+          >
+            <CalendarClock size={14} />
+            Schedule
+          </button>
+          <TeamExportButtons data={exportData} fileName={`Team_Report_${filter.dateRange}`} disabled={loading} />
+        </div>
       </div>
 
       {/* Detailed View or Table */}
@@ -342,6 +400,12 @@ export default function TeamOrganizationsReportsPage() {
           </table>
         </div>
       )}
+      <ScheduleReportModal
+        open={scheduleModalOpen}
+        onOpenChange={setScheduleModalOpen}
+        reportType="team"
+        currentFilters={filter}
+      />
     </div>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import { Clock, Zap } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Clock, Zap, Maximize2, Minimize2 } from "lucide-react";
+import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 
 interface ResponseTimeChartProps {
   agents: any[];
@@ -19,6 +20,8 @@ export default function ResponseTimeChart({
   agents,
   loading,
 }: ResponseTimeChartProps) {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   const responseData = useMemo(() => {
     if (loading || agents.length === 0) return [];
 
@@ -68,7 +71,11 @@ export default function ResponseTimeChart({
       .sort((a, b) => a.avgResponseTime - b.avgResponseTime);
   }, [agents, loading]);
 
-  if (loading || responseData.length === 0) return null;
+  if (loading) {
+    return <ReportChartSkeleton type="bar" height="350px" />;
+  }
+  
+  if (responseData.length === 0) return null;
 
   const avgOverall = Math.round(
     responseData.reduce((sum, a) => sum + a.avgResponseTime, 0) / responseData.length
@@ -96,12 +103,22 @@ export default function ResponseTimeChart({
   }
 
   return (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <div className="mb-6">
-        <h3 className="text-sm font-bold text-[var(--text-main)]">Response Time</h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Average response time to leads and inquiries
-        </p>
+    <div className={`rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 transition-all flex flex-col ${isFullScreen ? 'fixed inset-0 z-[100] m-4 overflow-auto shadow-2xl' : ''}`}>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--text-main)]">Response Time</h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Average response time to leads and inquiries
+          </p>
+        </div>
+        <button 
+          type="button" 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+          title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+        >
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
 
       {/* Summary Stats */}

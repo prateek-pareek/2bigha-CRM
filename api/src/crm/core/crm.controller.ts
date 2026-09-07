@@ -482,6 +482,12 @@ export class CRMController {
     return this.crmService.getAgentPerformanceLeaderboard(window || 'this_month');
   }
 
+  @Get('reports/agents/trend')
+  @Permissions('dashboard:read', 'leads:read')
+  async getAgentPerformanceTrend(@Query('window') window?: string) {
+    return this.crmService.getAgentPerformanceTrend(window || 'this_month');
+  }
+
   @Get('agent-targets')
   @Permissions('settings:admin')
   async getAgentTargets() {
@@ -502,6 +508,12 @@ export class CRMController {
   @Permissions('dashboard:read', 'leads:read')
   async getTeamPerformanceMetrics(@Query('window') window?: string) {
     return this.crmService.getTeamPerformanceMetrics(window || 'this_month');
+  }
+
+  @Get('reports/teams/trend')
+  @Permissions('dashboard:read', 'leads:read')
+  async getTeamPerformanceTrend(@Query('window') window?: string) {
+    return this.crmService.getTeamPerformanceTrend(window || 'this_month');
   }
 
   /** Lead source conversion tracking by channel. */
@@ -579,6 +591,28 @@ export class CRMController {
       window,
       sections,
     );
+  }
+
+  // --- Report Schedules ---
+  @Post('reports/schedules')
+  @Permissions('dashboard:read', 'leads:read')
+  async createReportSchedule(@Body() dto: any, @Request() req: any) {
+    if (!dto.reportType || !dto.frequency || !dto.emailRecipients) {
+      throw new BadRequestException('reportType, frequency, and emailRecipients are required');
+    }
+    return this.crmService.createReportSchedule(req.user.userId, dto);
+  }
+
+  @Get('reports/schedules')
+  @Permissions('dashboard:read', 'leads:read')
+  async getReportSchedules(@Request() req: any) {
+    return this.crmService.getReportSchedules(req.user.userId);
+  }
+
+  @Delete('reports/schedules/:scheduleId')
+  @Permissions('dashboard:read', 'leads:read')
+  async deleteReportSchedule(@Param('scheduleId') scheduleId: string, @Request() req: any) {
+    return this.crmService.deleteReportSchedule(req.user.userId, scheduleId);
   }
 
   // Export/Import
@@ -813,5 +847,12 @@ export class CRMController {
   @Permissions('settings:write')
   updateCrmWikiLinks(@Body('wikiLinks') wikiLinks: unknown) {
     return this.crmService.updateCrmWikiLinks(wikiLinks);
+  }
+
+  /** Read-only hand-off: 2Bigha lead views associated legal cases (legal status snapshot only). */
+  @Get('leads/:id/associated-legal-status')
+  @Permissions('leads:read')
+  getLeadAssociatedLegalStatus(@Param('id') id: string) {
+    return this.crmService.getLeadAssociatedLegalStatus(id);
   }
 }

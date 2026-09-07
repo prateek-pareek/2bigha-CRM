@@ -52,3 +52,4 @@ export type { CrmPersonSearchOption } from "./CrmPersonSearchSelect";
 export { CrmSubnav } from "./CrmSubnav";
 export type { CrmSubnavItem } from "./CrmSubnav";
 export { CrmTiIcon } from "./CrmTiIcon";
+export { ReportChartSkeleton } from "./ReportChartSkeleton";
