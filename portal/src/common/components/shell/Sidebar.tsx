@@ -285,11 +285,9 @@ const reportNavChildren = (() => {
 })();
 
 const DASHBOARD_NAV_ICONS: Record<string, typeof CrmNavIcon.Dashboard> = {
-    work: CrmNavIcon.Tasks,
-    summary: CrmNavIcon.Dashboard,
-    prospecting: CrmNavIcon.Leads,
-    growth: CrmNavIcon.BarChart,
-    calls: CrmNavIcon.Phone,
+    admin: CrmNavIcon.Dashboard,
+    team: CrmNavIcon.UsersGroup,
+    agent: CrmNavIcon.Contact,
 };
 
 const dashboardNavChildren = workspaceNavRoutes().map((r) => ({
@@ -326,6 +324,12 @@ const crmGroups = [
                         name: 'Team & Organizations',
                         href: '/crm/reports/team-organizations',
                         icon: CrmNavIcon.Analytics,
+                        permission: 'dashboard:read',
+                    },
+                    {
+                        name: 'Scheduled Reports',
+                        href: '/crm/reports/schedules',
+                        icon: CrmNavIcon.Calendar,
                         permission: 'dashboard:read',
                     },
                 ],

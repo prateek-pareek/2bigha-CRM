@@ -7468,4 +7468,90 @@ export class ReportingService {
       return { ...m, recordLabel, href };
     });
   }
+
+  // --- PHASE 3 LEADERBOARDS & ADVANCED METRICS ---
+
+  async getLeaderboardMetrics(window: string = 'this_week', teamId?: string) {
+    const { currentStart, currentEnd } = this.parseDateRange(window, 'previous');
+    
+    // Get all users (agents)
+    let userFilter: any = { is_archived: { $ne: true } };
+    if (teamId && teamId !== 'all') {
+      userFilter.team = new Types.ObjectId(teamId);
+    }
+    const agents = await this.hrmsUserModel.find(userFilter).select('_id firstName lastName').lean();
+
+    const leaderboards = await Promise.all(agents.map(async (agent) => {
+      const authorMatch = this.authorIdQueryValue([agent._id as Types.ObjectId]);
+      const agentIdStr = agent._id.toString();
+
+      // 1. Leads
+      const leads = await this.leadModel.countDocuments({
+        leadOwner: agentIdStr,
+        createdAt: { $gte: currentStart, $lt: currentEnd }
+      });
+
+      // 2. Calls & Tasks
+      const activities = await this.activityModel.aggregate([
+        { $match: { author: authorMatch, createdAt: { $gte: currentStart, $lt: currentEnd } } },
+        { $group: { _id: { type: '$type', status: '$status' }, count: { $sum: 1 } } }
+      ]);
+      
+      let calls = 0;
+      let completedTasks = 0;
+      let totalTasks = 0;
+      let properties = 0;
+      
+      activities.forEach(a => {
+        if (a._id.type === 'Call') calls += a.count;
+        if (a._id.type === 'Task') {
+          totalTasks += a.count;
+          if (a._id.status === 'Completed' || a._id.status === 'Done') completedTasks += a.count;
+        }
+        if (a._id.type === 'Property Share' || a._id.type === 'Site Visit') {
+          properties += a.count;
+        }
+      });
+      const taskCompletion = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+      // 3. Connected Calls
+      const connected = await this.callLogModel.countDocuments({
+        agentId: agentIdStr,
+        callStatus: 'answered',
+        createdAt: { $gte: currentStart, $lt: currentEnd }
+      });
+
+      // 5. Score (Formula: Leads*10 + Properties*20 + Connected*5 + TaskCompletion*2)
+      const score = (leads * 10) + (properties * 20) + (connected * 5) + (taskCompletion * 2);
+
+      return {
+        id: agent._id,
+        name: `${agent.firstName || ''} ${agent.lastName || ''}`.trim(),
+        leads,
+        calls,
+        connected,
+        properties,
+        taskCompletion,
+        score
+      };
+    }));
+
+    return leaderboards.sort((a, b) => b.score - a.score);
+  }
+
+  async getAdvancedTaskMetrics(window: string = 'this_week') {
+    const { currentStart, currentEnd } = this.parseDateRange(window, 'previous');
+    
+    const tasks = await this.activityModel.aggregate([
+      { $match: { type: 'Task', createdAt: { $gte: currentStart, $lt: currentEnd } } },
+      { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+    
+    return {
+      assigned: tasks.reduce((sum, t) => sum + t.count, 0),
+      completed: tasks.find(t => t._id === 'Completed' || t._id === 'Done')?.count || 0,
+      incomplete: tasks.find(t => t._id === 'Pending' || t._id === 'In Progress')?.count || 0,
+      noActivity: tasks.find(t => t._id === 'Not Started' || !t._id)?.count || 0,
+    };
+  }
 }
