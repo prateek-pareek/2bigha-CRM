@@ -324,6 +324,9 @@ export default function LeadsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [isMoreOptionsOpen, setIsMoreOptionsOpen] = useState(false);
+  const [isMobileVerticalDropdownOpen, setIsMobileVerticalDropdownOpen] = useState(false);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [isLeadPanelOpen, setIsLeadPanelOpen] = useState(false);
@@ -1122,16 +1125,36 @@ export default function LeadsPage() {
     setCfDragVisualIdx(null);
     setCfDragOverVisualIdx(null);
     if (fromIndex === null || fromIndex === overIndex) return;
-    const reordered = [...customFieldDefs];
+
+    // Reorder draftColumns directly
+    const reordered = [...draftColumns];
     const [moved] = reordered.splice(fromIndex, 1);
     reordered.splice(overIndex, 0, moved);
-    setCustomFieldDefs(reordered);
+    setDraftColumns(reordered);
+
+    // Extract only custom field definitions in new order for API
+    const customFieldsInOrder = reordered
+      .filter(col => col.key.startsWith('cf_'))
+      .map(col => customFieldDefs.find(f => f.key === col.key.replace('cf_', '')))
+      .filter((f): f is typeof customFieldDefs[0] => Boolean(f));
+
+    if (customFieldsInOrder.length === 0) return;
+
+    // Update customFieldDefs to match new order
+    setCustomFieldDefs(customFieldsInOrder);
+
     const token = localStorage.getItem('token');
     try {
+      const idsToSend = customFieldsInOrder
+        .map((f: any) => f._id || f.key)
+        .filter(Boolean);
+
+      if (idsToSend.length === 0) return;
+
       await fetch(`${CRM_API_URL}/custom-fields/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ ids: reordered.map((f: any) => f._id) })
+        body: JSON.stringify({ ids: idsToSend })
       });
       await fetchCustomFields();
       window.dispatchEvent(new CustomEvent('cf-reordered'));
@@ -1681,7 +1704,7 @@ export default function LeadsPage() {
   return (
     <div className={CRM_LIST_PAGE}>
       <div className="crm-list-content">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden space-y-3.5 px-4 sm:px-6 py-4 max-w-[1600px] mx-auto w-full">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden space-y-0 px-2 sm:px-4 py-3 w-full">
           <CrmPageHeader
             bordered={false}
             title="Leads"
@@ -1767,6 +1790,20 @@ export default function LeadsPage() {
                 exportMenu={
                   hasAccess('leads:export') ? (
                   <div className="absolute right-0 z-50 mt-2 w-56 animate-in slide-in-from-top-2 duration-200 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white p-2 shadow-[var(--crm-shadow-raised)]">
+                      <div className="flex items-center gap-2 px-2 py-1.5 mb-2">
+                        <Search size={14} className="text-[var(--text-muted)]" />
+                        <input
+                          type="text"
+                          placeholder="Search Keyword"
+                          value={search}
+                          onChange={(e) => {
+                            setSearch(e.target.value);
+                            setPage(1);
+                          }}
+                          className="flex-1 bg-transparent text-xs outline-none text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
+                        />
+                      </div>
+                      <div className="border-t border-[var(--border-color)]" />
                       <button
                         type="button"
                         disabled={exporting}
@@ -1792,61 +1829,95 @@ export default function LeadsPage() {
                 }}
                 collapsed={headerCollapsed}
                 trailing={
-                  <CrmButton
-                    type="button"
-                    variant="secondary"
-                    leftIcon={<Sparkles size={14} className="text-amber-500" />}
-                    onClick={() => router.push('/crm/leads/intent')}
-                  >
-                    Lead Intent
-                  </CrmButton>
+                  hasAccess('leads:write') && (
+                    <CrmButton
+                      variant="primary"
+                      onClick={() => setIsLeadPanelOpen(true)}
+                      leftIcon={<CrmIcon.AddFilled size={16} aria-hidden />}
+                    >
+                      Add Lead
+                    </CrmButton>
+                  )
                 }
               />
             }
           />
 
+          {/* TOOLBAR - Row 1: Filters, Row 2: View modes & Manage Columns */}
           <CrmListToolbar
             filter={
               <CRMFilterBar module="leads" filters={filters} onChange={setFilters} onClear={() => setFilters([])} onPropertiesReady={setFilterProperties} />
             }
-            searchProps={{
-              placeholder: 'Search Keyword',
-              'aria-label': 'Search leads',
-              value: search,
-              onChange: (e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              },
-            }}
+            searchProps={undefined}
             leftExtra={
               <>
-                <CRMSavedViews
-                  module="leads"
-                  currentFilters={filters}
-                  currentColumns={columns}
-                  onApplyView={handleApplyView}
-                  preferAllView
-                />
-                <CRMDateRangePicker onChange={setDateRange} compact />
-                <CrmScopeToggle
-                  allLabel="All Leads"
-                  mineLabel="My Leads"
-                  showMineOnly={showMyLeadsOnly}
-                  onShowAll={() => { setShowMyLeadsOnly(false); setPage(1); }}
-                  onShowMine={() => { setShowMyLeadsOnly(true); setPage(1); }}
-                  onClearAll={() => { setSearch(''); setFilters([]); setDateRange(null); }}
-                />
-                {viewMode === 'list' && hasAccess('leads:write') ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsColumnsOpen(true)}
-                    className={CRM_BTN_MANAGE_COLUMNS}
+                {/* Category Dropdown */}
+                <div className="relative h-[38px]">
+                  <select
+                    value={activeLeadVertical}
+                    onChange={(e) => {
+                      setActiveLeadVertical(e.target.value as "" | "property_listing" | "property_management");
+                      setPage(1);
+                    }}
+                    aria-label="Lead category"
+                    className={cn(CRM_TOOLBAR_SELECT, 'h-full w-full sm:w-auto px-2.5 text-xs')}
                   >
-                    <CrmIcon.Columns size={16} aria-hidden />
-                    Manage Columns
-                  </button>
-                ) : null}
-                <div className="relative">
+                    <option value="">Category: All Leads</option>
+                    <option value="property_listing">Property Listing</option>
+                    <option value="property_management">Property Management</option>
+                  </select>
+                  <CrmIcon.ChevronDown
+                    size={12}
+                    className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                  />
+                </div>
+
+                {/* Type Dropdown */}
+                {leadCategoryTabs.length > 0 && (
+                  <div className="relative h-[38px]">
+                    <select
+                      value={activeLeadCategory}
+                      onChange={(e) => {
+                        setActiveLeadCategory(e.target.value);
+                        setPage(1);
+                      }}
+                      aria-label="Lead type"
+                      className={cn(CRM_TOOLBAR_SELECT, 'h-full w-full sm:w-auto px-2.5 text-xs')}
+                    >
+                      <option value="">Type: All Types</option>
+                      {leadCategoryTabs.map((tab) => (
+                        <option key={tab._id} value={tab.label}>
+                          {tab.label}
+                        </option>
+                      ))}
+                    </select>
+                    <CrmIcon.ChevronDown
+                      size={12}
+                      className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                    />
+                  </div>
+                )}
+
+                {/* Search Input */}
+                <div className="relative w-full sm:w-[240px] h-[38px]">
+                  <Search
+                    size={14}
+                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                    aria-hidden
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full h-full rounded-[5px] border border-[var(--border-color)] bg-white px-3 pl-8 text-xs outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] dark:bg-black transition-colors"
+                  />
+                </div>
+
+                <div className="relative h-[38px]">
                   <CrmIcon.Activity
                     size={14}
                     className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
@@ -1859,8 +1930,8 @@ export default function LeadsPage() {
                       setPage(1);
                     }}
                     aria-label="Filter leads by last tracked or CRM email activity"
-                    className={cn(CRM_TOOLBAR_SELECT, 'min-w-[148px] max-w-[180px] pl-8 pr-7')}
-                    title="Last tracked or CRM email activity on the lead."
+                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[130px] max-w-[150px] pl-8 pr-7 text-xs')}
+                    title="Last tracked or CRM email activity"
                   >
                     <option value="all">Activity: Any</option>
                     <option value="today">Today</option>
@@ -1874,140 +1945,160 @@ export default function LeadsPage() {
                     className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                   />
                 </div>
-                {!(user as any)?.assignedLeadsPipeline ? (
-                  <div className="relative">
-                    <CrmIcon.GitBranch
-                      size={14}
-                      className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                    />
-                    <select
-                      value={selectedPipelineId}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setSelectedPipelineId(v);
-                        setPage(1);
-                        void fetchLeadsList(v || null);
-                      }}
-                      aria-label="Pipeline"
-                      className={cn(CRM_TOOLBAR_SELECT, 'min-w-[160px] max-w-[220px] pl-8 pr-7')}
+                <CRMSavedViews
+                  module="leads"
+                  currentFilters={filters}
+                  currentColumns={columns}
+                  onApplyView={handleApplyView}
+                  preferAllView
+                />
+              </>
+            }
+
+            right={undefined}
+            secondary={
+              <div className="flex items-center gap-2 w-full justify-between flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CrmScopeToggle
+                    allLabel="All Leads"
+                    mineLabel="My Leads"
+                    showMineOnly={showMyLeadsOnly}
+                    onShowAll={() => { setShowMyLeadsOnly(false); setPage(1); }}
+                    onShowMine={() => { setShowMyLeadsOnly(true); setPage(1); }}
+                    onClearAll={() => { setSearch(''); setFilters([]); setDateRange(null); }}
+                  />
+                  <CRMDateRangePicker onChange={setDateRange} compact />
+                  {!(user as any)?.assignedLeadsPipeline ? (
+                    <div className="relative">
+                      <CrmIcon.GitBranch
+                        size={14}
+                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                      />
+                      <select
+                        value={selectedPipelineId}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSelectedPipelineId(v);
+                          setPage(1);
+                          void fetchLeadsList(v || null);
+                        }}
+                        aria-label="Pipeline"
+                        className={cn(CRM_TOOLBAR_SELECT, 'min-w-[140px] max-w-[170px] pl-8 pr-7 text-xs')}
+                      >
+                        {pipelinesForActiveVertical.map((p) => (
+                          <option key={p._id} value={p._id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      <CrmIcon.ChevronDown
+                        size={12}
+                        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <CrmViewToggle
+                    value={viewMode}
+                    onChange={(mode) => {
+                      setViewMode(mode);
+                      setPage(1);
+                    }}
+                    modes={['list', 'grid', 'kanban', 'calendar']}
+                  />
+                  {viewMode === 'list' && hasAccess('leads:write') ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsColumnsOpen(true)}
+                      className={CRM_BTN_MANAGE_COLUMNS}
+                      title="Manage columns visibility and order"
                     >
-                      {pipelinesForActiveVertical.map((p) => (
+                      <CrmIcon.Columns size={16} aria-hidden />
+                      Manage Columns
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            }
+          />
+
+          {/* Floating Bulk Actions Bar */}
+          {selectedIds.size > 0 && (
+            <div className="sticky top-0 z-40 mb-3 flex items-center gap-2 rounded-[8px] border border-[var(--primary)] bg-[var(--primary)]/5 backdrop-blur-sm p-3 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex flex-1 items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Check size={18} className="text-[var(--primary)]" />
+                  <span className="text-sm font-semibold text-[var(--text-main)]">{selectedIds.size} selected</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {canMoveLeadsAcrossPipelines && (
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={bulkMovePipelineId}
+                      onChange={(e) => setBulkMovePipelineId(e.target.value)}
+                      aria-label="Target pipeline for bulk move"
+                      className={cn(CRM_TOOLBAR_SELECT, "min-w-[120px] max-w-[160px] px-2.5 text-xs")}
+                    >
+                      <option value="">Pipeline…</option>
+                      {pipelines.map((p: any) => (
                         <option key={p._id} value={p._id}>
                           {p.name}
                         </option>
                       ))}
                     </select>
-                    <CrmIcon.ChevronDown
-                      size={12}
-                      className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                    <CrmButton
+                      variant="icon"
+                      onClick={handleBulkMovePipeline}
+                      disabled={!bulkMovePipelineId || isBulkMoving}
+                      title={
+                        bulkMovePipelineId
+                          ? `Move ${selectedIds.size} selected lead(s) to the chosen pipeline`
+                          : 'Choose a pipeline, then move selected leads'
+                      }
+                      aria-label={`Move ${selectedIds.size} selected leads to pipeline`}
+                      leftIcon={
+                        isBulkMoving ? (
+                          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                        ) : (
+                          <CrmIcon.GitBranch size={14} aria-hidden />
+                        )
+                      }
                     />
                   </div>
-                ) : null}
-              </>
-            }
-
-            right={
-              <>
-                <CrmViewToggle
-                  value={viewMode}
-                  onChange={(mode) => {
-                    setViewMode(mode);
-                    setPage(1);
-                  }}
-                  modes={['list', 'grid', 'kanban', 'calendar']}
-                />
+                )}
                 {hasAccess('leads:write') && (
                   <CrmButton
-                    variant="primary"
-                    onClick={() => setIsLeadPanelOpen(true)}
-                    leftIcon={<CrmIcon.AddFilled size={16} aria-hidden />}
+                    variant="secondary"
+                    onClick={openAssignDialog}
+                    title={`Assign ${selectedIds.size} selected lead(s) to an owner`}
+                    aria-label={`Assign ${selectedIds.size} selected leads`}
+                    leftIcon={<Users className="h-3 w-3" aria-hidden />}
                   >
-                    Add Lead
+                    Assign
                   </CrmButton>
                 )}
-              </>
-            }
-          />
-
-          <div
-            className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar border-b border-slate-200 dark:border-slate-800"
-            role="tablist"
-            aria-label="Lead vertical"
-          >
-            {(
-              [
-                { value: '', label: 'All Leads' },
-                { value: 'property_listing', label: 'Property Listing' },
-                { value: 'property_management', label: 'Property Management' },
-              ] as const
-            ).map((tab) => {
-              const isActive = activeLeadVertical === tab.value;
-              return (
-                <button
-                  key={tab.value || '__all_verticals__'}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => {
-                    setActiveLeadVertical(tab.value);
-                    setPage(1);
-                  }}
-                  className={cn(
-                    'shrink-0 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors',
-                    isActive
-                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs'
-                      : 'text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)]',
-                  )}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              role="tab"
-              onClick={() => router.push('/crm/leads/intent')}
-              className="inline-flex items-center gap-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--primary)] transition-colors px-3 py-1.5 rounded-lg text-xs font-semibold ml-auto"
-            >
-              <Sparkles size={14} className="text-amber-500" />
-              <span>Lead Intent</span>
-              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                Pipeline
-              </span>
-            </button>
-          </div>
-
-          {leadCategoryTabs.length > 0 && (
-            <div
-              className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scrollbar"
-              role="tablist"
-              aria-label="Lead type"
-            >
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1 shrink-0">Type:</span>
-              {[{ _id: '__all__', label: 'All Types' }, ...leadCategoryTabs].map((tab) => {
-                const isAll = tab._id === '__all__';
-                const isActive = isAll ? !activeLeadCategory : activeLeadCategory === tab.label;
-                return (
-                  <button
-                    key={tab._id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => {
-                      setActiveLeadCategory(isAll ? '' : tab.label);
-                      setPage(1);
-                    }}
-                    className={cn(
-                      'shrink-0 rounded-lg px-3 py-1 text-xs font-semibold transition-all',
-                      isActive
-                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800',
-                    )}
+                {hasAccess('leads:delete') && (
+                  <CrmButton
+                    variant="danger"
+                    onClick={() => setShowConfirmDelete(true)}
+                    title={`Delete ${selectedIds.size} selected lead(s)`}
+                    aria-label={`Delete ${selectedIds.size} selected leads`}
+                    leftIcon={<CrmIcon.Trash size={14} aria-hidden />}
                   >
-                    {tab.label}
-                  </button>
-                );
-              })}
+                    Delete
+                  </CrmButton>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="rounded-[5px] px-2 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--surface-dim)] transition-colors"
+                  title="Clear selection"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
           )}
 
@@ -2120,22 +2211,22 @@ export default function LeadsPage() {
                                   </button>
                                   {(lead.mobileNo || lead.phone) ? (
                                     <CrmHoverActionIcon
-                                      icon={<CrmIcon.PhoneCall size={12} />}
+                                      icon={<CrmIcon.PhoneCall size={14} />}
                                       label="Call"
                                       value={(lead.mobileNo || lead.phone)!}
                                       tone="primary"
                                       onClick={() => setCallLead(lead)}
-                                      className="h-6 w-6 border-transparent shadow-none hover:bg-emerald-50 hover:text-emerald-600"
+                                      className="h-7 w-7 border-transparent shadow-none hover:bg-emerald-50 hover:text-emerald-600 flex-shrink-0"
                                     />
                                   ) : null}
                                   {contactWhatsappUrl(lead) ? (
                                     <CrmHoverActionIcon
-                                      icon={<CrmNavIcon.WhatsApp size={12} />}
+                                      icon={<CrmNavIcon.WhatsApp size={14} />}
                                       label="WhatsApp"
                                       value={(lead.mobileNo || lead.phone)!}
                                       tone="whatsapp"
                                       onClick={() => openLeadWhatsApp(lead)}
-                                      className="h-6 w-6 border-transparent shadow-none hover:bg-emerald-50"
+                                      className="h-7 w-7 border-transparent shadow-none hover:bg-green-50 hover:text-green-600 flex-shrink-0"
                                     />
                                   ) : null}
                                   <CrmTableActionMenu
@@ -2315,9 +2406,9 @@ export default function LeadsPage() {
                 />
               </div>
             ) : viewMode === 'list' ? (
-              <div className="crm-view-panel min-h-0 flex flex-1 flex-col">
-              <>
-              <CrmTableShell scrollClassName="custom-scrollbar overflow-x-auto">
+              <div className="crm-view-panel min-h-0 flex flex-1 flex-col gap-0 overflow-hidden">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <CrmTableShell scrollClassName="custom-scrollbar overflow-x-auto flex-1">
                   <CrmTable>
                     <thead>
                       <tr>
@@ -2327,9 +2418,6 @@ export default function LeadsPage() {
                             onChange={toggleSelectAll}
                             ariaLabel={isAllPaginatedSelected ? 'Deselect all' : 'Select all'}
                           />
-                        </th>
-                        <th className="crm-table-actions sticky top-0 z-10 text-left text-[13px] font-semibold text-[#1f2020]">
-                          Action
                         </th>
                         {visibleCols.map(col => (
                           <th
@@ -2389,11 +2477,14 @@ export default function LeadsPage() {
                             <span className="pointer-events-none">{col.label}</span>
                           </th>
                         ))}
+                        <th className="crm-table-actions sticky top-0 z-10 text-right text-[13px] font-semibold text-[#1f2020]">
+                          Action
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginated.length === 0 ? (
-                        <tr><td colSpan={visibleCols.length + 2} className="py-20 text-center text-sm font-medium text-[#707070]">No leads found</td></tr>
+                        <tr><td colSpan={visibleCols.length + 2} className="py-20 text-center text-sm font-medium text-[#707070] w-full">No leads found</td></tr>
                       ) : (
                         paginated.map(lead => (
                           <tr
@@ -2411,24 +2502,27 @@ export default function LeadsPage() {
                                 ariaLabel={selectedIds.has(lead._id) ? 'Deselect lead' : 'Select lead'}
                               />
                             </td>
+                            {visibleCols.map(col => <td key={col.key}>{renderCell(lead, col.key)}</td>)}
                             <td className="crm-table-actions">
-                              <div className="flex items-center justify-start gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 {(lead.mobileNo || lead.phone) ? (
                                   <CrmHoverActionIcon
-                                    icon={<CrmIcon.PhoneCall size={12} />}
+                                    icon={<CrmIcon.PhoneCall size={14} />}
                                     label="Call"
                                     value={(lead.mobileNo || lead.phone)!}
                                     tone="primary"
                                     onClick={() => setCallLead(lead)}
+                                    className="h-7 w-7 border-transparent shadow-none hover:bg-emerald-50 hover:text-emerald-600 flex-shrink-0"
                                   />
                                 ) : null}
                                 {contactWhatsappUrl(lead) ? (
                                   <CrmHoverActionIcon
-                                    icon={<CrmNavIcon.WhatsApp size={12} />}
+                                    icon={<CrmNavIcon.WhatsApp size={14} />}
                                     label="WhatsApp"
                                     value={(lead.mobileNo || lead.phone)!}
                                     tone="whatsapp"
                                     onClick={() => openLeadWhatsApp(lead)}
+                                    className="h-7 w-7 border-transparent shadow-none hover:bg-green-50 hover:text-green-600 flex-shrink-0"
                                   />
                                 ) : null}
                                 <CrmHoverActionIcon
@@ -2488,15 +2582,16 @@ export default function LeadsPage() {
                                 />
                               </div>
                             </td>
-                            {visibleCols.map(col => <td key={col.key}>{renderCell(lead, col.key)}</td>)}
                           </tr>
                         ))
                       )}
                     </tbody>
                   </CrmTable>
               </CrmTableShell>
-                <Pagination total={displayedTotal} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
-              </>
+              </div>
+                <div className="mt-auto">
+                  <Pagination total={displayedTotal} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+                </div>
               </div>
             ) : (
               <div className="crm-view-panel min-h-0 flex-1 overflow-auto custom-scrollbar">
@@ -2665,6 +2760,32 @@ export default function LeadsPage() {
           type="leads"
         />
       )}
+
+      {/* Filter Drawer Modal */}
+      {isFilterDrawerOpen && (
+        <div className="fixed inset-0 z-[999] flex items-start justify-end bg-black/40 p-4 sm:p-0">
+          <div
+            className="h-full w-full max-w-[380px] overflow-y-auto rounded-l-xl border-l border-[var(--border-color)] bg-[var(--card-bg)] shadow-lg animate-in slide-in-from-right duration-300 sm:rounded-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--card-bg)] p-4">
+              <h2 className="text-sm font-bold text-[var(--text-main)]">Filters</h2>
+              <button
+                type="button"
+                onClick={() => setIsFilterDrawerOpen(false)}
+                className="rounded-md p-1 text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] transition-colors"
+                aria-label="Close filters"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4">
+              <CRMFilterBar module="leads" filters={filters} onChange={setFilters} onClear={() => setFilters([])} onPropertiesReady={setFilterProperties} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <LeadActivityPopup
         open={!!activityLead}
         onClose={() => setActivityLead(null)}
@@ -2824,9 +2945,9 @@ export default function LeadsPage() {
         field={cfMergeDeleteField}
         module="leads"
         siblingCustomFields={customFieldDefs
-          .filter((f: { _id: string }) => f._id !== cfMergeDeleteField?._id)
-          .map((f: { _id: string; name: string; key: string }) => ({
-            _id: f._id,
+          .filter((f: { _id?: string; key?: string }) => cfMergeDeleteField && (f._id || f.key) !== (cfMergeDeleteField._id || cfMergeDeleteField.key))
+          .map((f: { _id?: string; name: string; key: string }) => ({
+            _id: f._id || f.key,
             name: f.name,
             key: f.key,
           }))}

@@ -41,7 +41,7 @@ export function CrmViewToggle({
   return (
     <div
       className={cn(
-        "view-icons inline-flex items-center gap-1 rounded-[5px] border border-[#e8e8e8] bg-white p-1 shadow-[var(--crm-shadow-input)]",
+        "view-icons inline-flex items-center gap-1 rounded-[5px] border border-[#e8e8e8] bg-white p-1 shadow-[var(--crm-shadow-input)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]",
         className,
       )}
       role="group"
@@ -61,7 +61,7 @@ export function CrmViewToggle({
               "inline-flex h-7 w-7 items-center justify-center rounded-[4px] border-0 text-sm transition-colors",
               active
                 ? "bg-[var(--teal,#0e9384)] text-white"
-                : "bg-transparent text-[#1f2020] hover:bg-[#f7f8f9]",
+                : "bg-transparent text-[#1f2020] hover:bg-[#f7f8f9] dark:text-[var(--text-main)] dark:hover:bg-[var(--surface-dim)]",
             )}
           >
             {mode.icon}

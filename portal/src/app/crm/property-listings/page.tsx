@@ -464,7 +464,7 @@ function PropertyListingsPageContent() {
     <div className="theme-crm-hubspot crm-list-page mx-auto w-full animate-in fade-in duration-500 pb-10">
       <CrmPageHeader
         bordered={false}
-        title="Property Listings"
+        title={bucket === "farm" ? "Farms" : bucket === "pm" ? "Property Management" : "Properties"}
         icon={bucket === "farm" ? <Sprout size={18} className="text-emerald-600" /> : bucket === "pm" ? <ShieldCheck size={18} className="text-blue-600" /> : <Building2 size={18} className="text-amber-600" />}
         badge={loading ? <span className="inline-block h-5 w-8 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" /> : <CrmCountBadge>{total}</CrmCountBadge>}
         description={
@@ -475,6 +475,7 @@ function PropertyListingsPageContent() {
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },
           { label: "Property Listings" },
+          { label: bucket === "farm" ? "Farms" : bucket === "pm" ? "Property Management" : "Properties" },
         ]}
         actions={
           <CrmHeaderTools
@@ -482,6 +483,15 @@ function PropertyListingsPageContent() {
               void load();
               void loadStats();
             }}
+            trailing={
+              <CrmButton
+                variant="primary"
+                onClick={() => router.push(newHref)}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {bucket === "pm" ? "Create PM" : "New listing"}
+              </CrmButton>
+            }
           />
         }
         className="mb-3"
@@ -575,18 +585,6 @@ function PropertyListingsPageContent() {
           )}
           <p className="text-[11px] text-slate-400">Estimated value</p>
         </div>
-      </div>
-
-      <div className="mb-3 overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white shadow-[var(--crm-shadow-card)]">
-        <SectionTabs
-          value={bucket}
-          onChange={changeBucket}
-          items={STREAM_TABS.map((tab) => ({
-            value: tab.value,
-            label: tab.label,
-            count: bucket === tab.value ? (loading ? undefined : total) : undefined,
-          }))}
-        />
       </div>
 
       <CrmListToolbar
@@ -691,7 +689,12 @@ function PropertyListingsPageContent() {
           )
         }
         right={
-          <>
+          <div className="flex items-center gap-2">
+            {marketplace ? (
+              <CrmViewToggle value={viewMode} onChange={changeViewMode} modes={["grid", "list"]} />
+            ) : (
+              <CrmViewToggle value={viewMode} onChange={changeViewMode} modes={["kanban", "list"]} />
+            )}
             {filtersActive ? (
               <button
                 type="button"
@@ -711,19 +714,7 @@ function PropertyListingsPageContent() {
                 <X size={13} /> Reset
               </button>
             ) : null}
-            {marketplace ? (
-              <CrmViewToggle value={viewMode} onChange={changeViewMode} modes={["grid", "list"]} />
-            ) : (
-              <CrmViewToggle value={viewMode} onChange={changeViewMode} modes={["kanban", "list"]} />
-            )}
-            <CrmButton
-              variant="primary"
-              onClick={() => router.push(newHref)}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              {bucket === "pm" ? "Create PM property" : "New listing"}
-            </CrmButton>
-          </>
+          </div>
         }
       />
 
@@ -1023,18 +1014,20 @@ function PropertyListingsPageContent() {
         </CrmTableShell>
       )}
 
-      <Pagination
-        total={total}
-        page={page}
-        pageSize={pageSize}
-        pageSizes={LISTING_PAGE_SIZES}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(Math.min(size, LISTING_PAGE_SIZE_MAX));
-          setPage(1);
-        }}
-        className="mt-3 rounded-[var(--crm-radius-ui)] border border-[#e2e8f0]"
-      />
+      <div className="mt-auto">
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          pageSizes={LISTING_PAGE_SIZES}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(Math.min(size, LISTING_PAGE_SIZE_MAX));
+            setPage(1);
+          }}
+          className="mt-3 rounded-[var(--crm-radius-ui)] border border-[#e2e8f0]"
+        />
+      </div>
 
       <CallLeadModal
         open={!!callProperty}
