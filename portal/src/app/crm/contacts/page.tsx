@@ -11,6 +11,7 @@ import CRMSavedViews, { SavedViewData } from '@/components/crm/segments/CRMSaved
 import SendEmailModal from '@/components/crm/email/composer/SendEmailModal';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
 import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
+import { useWhatsAppSideChatStore } from '@/portals/crm/stores/whatsappSideChatStore';
 import { BulkEmailToolbarButton } from '@/components/crm/email/composer/BulkEmailToolbarButton';
 import { buildBulkEmailRecipients } from '@/lib/crm/bulk-email';
 import Pagination from '@/components/suite/shell/Pagination';
@@ -780,7 +781,13 @@ export default function ContactsPage() {
                           contactWhatsappUrl(contact)
                             ? () => {
                                 const waId = contactWhatsappWaId(contact);
-                                if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
+                                if (waId) {
+                                  useWhatsAppSideChatStore.getState().openChat({
+                                    waId,
+                                    phone: contact.mobileNo || contact.phone,
+                                    contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Contact',
+                                  });
+                                }
                               }
                             : undefined
                         }
@@ -921,7 +928,13 @@ export default function ContactsPage() {
                           contactWhatsappUrl(contact)
                             ? () => {
                                 const waId = contactWhatsappWaId(contact);
-                                if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
+                                if (waId) {
+                                  useWhatsAppSideChatStore.getState().openChat({
+                                    waId,
+                                    phone: contact.mobileNo || contact.phone,
+                                    contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Contact',
+                                  });
+                                }
                               }
                             : undefined
                         }

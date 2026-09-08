@@ -17,6 +17,7 @@ import CRMContactRecordFields from '@/components/crm/records/forms/CRMContactRec
 import CRMFieldLayoutCustomizer from '@/components/crm/records/forms/CRMFieldLayoutCustomizer';
 import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
 import { contactWhatsappUrl, contactTelegramUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
+import { useWhatsAppSideChatStore } from '@/portals/crm/stores/whatsappSideChatStore';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import { CRMContactCompanySidebarCard } from '@/components/crm/records/associations/CRMCompanySidebarCard';
 import ContactAssociationsPanel from '@/components/crm/records/associations/ContactAssociationsPanel';
@@ -55,6 +56,7 @@ export default function ContactDetailPage() {
   const recordId = useMemo(() => crmRecordIdFromParams(id as string | string[]), [id]);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const openWhatsAppSideChat = useWhatsAppSideChatStore((s) => s.openChat);
   const { hasAccess } = usePermissions();
   const [contact, setContact] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
@@ -95,10 +97,9 @@ export default function ContactDetailPage() {
     [visibleRecordKeys]
   );
 
-  const whatsappUrl = useMemo(() => {
+  const whatsappWaId = useMemo(() => {
     if (!contact) return null;
-    const waId = contactWhatsappWaId(contact);
-    return waId ? `/crm/whatsapp?wa=${waId}` : null;
+    return contactWhatsappWaId(contact);
   }, [contact]);
 
   const isValidObjectId = (id: any) => {
@@ -320,19 +321,24 @@ export default function ContactDetailPage() {
     },
   ];
 
-  if (whatsappUrl) {
+  if (whatsappWaId) {
     quickActions.splice(2, 0, {
       id: 'whatsapp',
       label: 'WhatsApp',
       icon: <WhatsAppGlyph className="h-3.5 w-3.5" />,
-      href: whatsappUrl,
-      external: false,
-      title: 'Open WhatsApp',
+      onClick: () => {
+        openWhatsAppSideChat({
+          waId: whatsappWaId,
+          phone: contact?.mobileNo || contact?.phone,
+          contactName: contact?.name || `${contact?.firstName || ''} ${contact?.lastName || ''}`.trim() || 'Contact',
+        });
+      },
+      title: 'Open WhatsApp side chat',
     });
   }
 
   if (telegramUrl) {
-    quickActions.splice(whatsappUrl ? 3 : 2, 0, {
+    quickActions.splice(whatsappWaId ? 3 : 2, 0, {
       id: 'telegram',
       label: 'Telegram',
       icon: <TelegramGlyph className="h-3.5 w-3.5" />,

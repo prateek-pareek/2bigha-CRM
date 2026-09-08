@@ -84,6 +84,8 @@ export class CRMUsersController {
       crmPermissions: (dbUser as any)?.permissions || user.crmPermissions || [],
       role: dbUser?.role || user.role,
       agentMobile: dbUser?.agentMobile,
+      kommunoAgentId: dbUser?.kommunoAgentId,
+      kommunoSyncStatus: dbUser?.kommunoSyncStatus,
     };
   }
 
