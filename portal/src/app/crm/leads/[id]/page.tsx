@@ -26,6 +26,7 @@ import AddPropertyModal from '@/components/crm/records/detail/AddPropertyModal';
 import AddPmPropertyModal from '@/components/crm/records/detail/AddPmPropertyModal';
 import LeadWhatsAppPanel from '@/components/crm/records/associations/LeadWhatsAppPanel';
 import LinkWhatsAppModal from '@/components/crm/records/detail/LinkWhatsAppModal';
+import { useWhatsAppSideChatStore } from '@/portals/crm/stores/whatsappSideChatStore';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
@@ -62,6 +63,7 @@ export default function LeadDetailPage() {
   const recordId = useMemo(() => crmRecordIdFromParams(id as string | string[]), [id]);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const openWhatsAppSideChat = useWhatsAppSideChatStore((s) => s.openChat);
   /** "View" quick action (Lead Action Menu) — same detail page, edit entry points hidden. */
   const isReadOnlyView = searchParams.get('readonly') === '1';
   const { hasAccess } = usePermissions();
@@ -116,10 +118,9 @@ export default function LeadDetailPage() {
     return p?.name;
   }, [lead, pipelines]);
 
-  const whatsappUrl = useMemo(() => {
+  const whatsappWaId = useMemo(() => {
     if (!lead) return null;
-    const waId = contactWhatsappWaId(lead);
-    return waId ? `/crm/whatsapp?wa=${waId}` : null;
+    return contactWhatsappWaId(lead);
   }, [lead]);
 
   const fetchLead = async () => {
@@ -406,14 +407,20 @@ export default function LeadDetailPage() {
     },
   ];
 
-  if (whatsappUrl) {
+  if (whatsappWaId) {
     quickActions.push({
       id: 'whatsapp',
       label: 'WhatsApp',
       icon: <WhatsAppGlyph className="h-3.5 w-3.5 text-[#25d366]" />,
-      href: whatsappUrl,
-      external: false,
-      title: 'Open WhatsApp chat',
+      onClick: () => {
+        openWhatsAppSideChat({
+          waId: whatsappWaId,
+          phone: lead?.mobileNo || lead?.phone,
+          leadId: lead?._id || lead?.id,
+          leadName: lead?.name || `${lead?.firstName || ''} ${lead?.lastName || ''}`.trim() || 'Lead',
+        });
+      },
+      title: 'Open WhatsApp side chat',
     });
   }
 

@@ -30,6 +30,7 @@ import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
 import { CrmPageHeader, CrmButton } from "@/components/crm/ui";
 import { contactWhatsappUrl, contactWhatsappWaId } from "@/lib/crm/crm-messaging-links";
+import { useWhatsAppSideChatStore } from "@/portals/crm/stores/whatsappSideChatStore";
 import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
 import AddPropertyModal from "@/components/crm/records/detail/AddPropertyModal";
 import CallActivityFormModal from "@/components/crm/records/detail/CallActivityFormModal";
@@ -757,7 +758,14 @@ export default function LeadIntentListPage() {
                               type="button"
                               onClick={() => {
                                 const waId = contactWhatsappWaId(lead);
-                                if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
+                                if (waId) {
+                                  useWhatsAppSideChatStore.getState().openChat({
+                                    waId,
+                                    phone: lead.mobileNo || lead.phone,
+                                    leadId: lead._id,
+                                    leadName: `${lead.firstName || ""} ${lead.lastName || ""}`.trim() || "Lead",
+                                  });
+                                }
                               }}
                               title="Chat on WhatsApp"
                               className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-emerald-950 transition cursor-pointer"

@@ -61,6 +61,7 @@ import CallHistoryPanel from '@/components/crm/records/detail/CallHistoryPanel';
 import LeadUpdateHistoryPanel from '@/components/crm/records/detail/LeadUpdateHistoryPanel';
 import LeadActivityPopup from '@/components/crm/records/detail/LeadActivityPopup';
 import { contactWhatsappUrl, contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
+import { useWhatsAppSideChatStore } from '@/portals/crm/stores/whatsappSideChatStore';
 import LeadCreatePanel from '@/components/crm/records/create/LeadCreatePanel';
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
@@ -1223,7 +1224,14 @@ export default function LeadsPage() {
    *  instead of happening entirely outside the CRM. */
   const openLeadWhatsApp = (lead: Lead) => {
     const waId = contactWhatsappWaId(lead);
-    if (waId) router.push(`/crm/whatsapp?wa=${encodeURIComponent(waId)}`);
+    if (waId) {
+      useWhatsAppSideChatStore.getState().openChat({
+        waId,
+        phone: lead.mobileNo || lead.phone,
+        leadId: lead._id,
+        leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Lead',
+      });
+    }
   };
 
   const handleDelete = async (id: string) => {

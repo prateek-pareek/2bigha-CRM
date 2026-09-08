@@ -3,6 +3,7 @@
 import AppShell from "@/components/suite/shell/AppShell";
 import { usePermissions } from "@/hooks/usePermissions";
 import LazyGlobalEmailComposer from "@/components/crm/email/composer/LazyGlobalEmailComposer";
+import WhatsAppSideChatDrawer from "@/portals/crm/components/whatsapp/WhatsAppSideChatDrawer";
 // import { SalesCopilotWidget } from "@/components/crm/sales/SalesCopilotWidget"; // floating AI button hidden — see below
 import CrmPrefetch from "@/components/crm/shell/CrmPrefetch";
 import { CrmThemeCustomizer } from "@/components/crm/ui/CrmThemeCustomizer";
@@ -100,6 +101,7 @@ export default function CRMLayout({
       <AppShell>{children}</AppShell>
       <CrmPrefetch />
       <LazyGlobalEmailComposer />
+      <WhatsAppSideChatDrawer />
       {/* Sales Copilot floating AI button hidden for now — keep component, just don't render it */}
       {/* <SalesCopilotWidget /> */}
       <CrmThemeCustomizer />
