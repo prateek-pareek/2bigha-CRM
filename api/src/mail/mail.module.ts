@@ -8,24 +8,30 @@ import { MailService } from './mail.service';
   imports: [
     MailerModule.forRootAsync({
       useFactory: (config: ConfigService) => {
-        const port = config.get('SMTP_PORT');
+        const host =
+          config.get('SMTP_HOST') || config.get('MAIL_HOST') || undefined;
+        const port = config.get('SMTP_PORT') || config.get('MAIL_PORT') || 587;
         const isSecure = port === 465 || port === '465';
+        const user = config.get('SMTP_USER') || config.get('MAIL_USER');
+        const pass =
+          config.get('SMTP_PASS') ||
+          config.get('MAIL_PASSWORD') ||
+          config.get('MAIL_PASS');
 
         return {
           transport: {
-            host: config.get('SMTP_HOST'),
-            port: port,
+            host,
+            port,
             secure: isSecure,
-            auth: {
-              user: config.get('SMTP_USER'),
-              pass: config.get('SMTP_PASS'),
-            },
+            auth: user && pass ? { user, pass } : undefined,
             tls: {
               rejectUnauthorized: false,
             },
           },
           defaults: {
-            from: '"2Bigha CRM" <no-reply@2bigha.ai>',
+            from:
+              config.get('MAIL_FROM') ||
+              '"2Bigha CRM" <no-reply@2bigha.ai>',
           },
         };
       },

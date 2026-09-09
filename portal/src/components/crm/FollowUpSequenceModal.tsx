@@ -586,8 +586,9 @@ export default function FollowUpSequenceModal({
           <>
             {!hasTrackedOutreach ? (
               <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                Send a tracked email from CRM compose first. Follow-ups will not schedule
-                until the lead opens a tracked send.
+                Send a tracked email from CRM compose first. Until that exists, Schedule stays
+                disabled. After you schedule, Day 2 / 5 / 7 follow-ups only send once the lead
+                opens that tracked email.
               </p>
             ) : leadHasOpenedLatestOutreach ? (
               <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">

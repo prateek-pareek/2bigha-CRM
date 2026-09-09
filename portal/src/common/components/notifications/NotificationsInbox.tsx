@@ -40,6 +40,9 @@ function getTypeIcon(notification: AppNotification) {
   if (type.includes("email_clicked") || type.includes("link_clicked")) {
     return <MousePointerClick className="h-4 w-4 text-sky-600" />;
   }
+  if (type.includes("follow") || type === "follow_up") {
+    return <Inbox className="h-4 w-4 text-amber-600" />;
+  }
   if (type.includes("email") || type.includes("inbox")) {
     return <Mail className="h-4 w-4 text-[var(--hs-link)]" />;
   }
@@ -65,6 +68,7 @@ type NotificationsInboxProps = {
   onNavigate?: () => void;
   viewAllHref?: string;
   serverUnreadCount?: number;
+  hidePageHeader?: boolean;
 };
 
 export default function NotificationsInbox({
@@ -74,6 +78,7 @@ export default function NotificationsInbox({
   onNavigate,
   viewAllHref,
   serverUnreadCount,
+  hidePageHeader = false,
 }: NotificationsInboxProps) {
   const router = useRouter();
   // CRM page: default to CRM-only so admins are not staring at a mixed HRMS+email dump.
@@ -143,13 +148,24 @@ export default function NotificationsInbox({
           compact
         />
         {viewAllHref ? (
-          <Link
-            href={viewAllHref}
-            onClick={onNavigate}
-            className="block border-t border-[var(--border-color)] px-4 py-2.5 text-center text-xs font-semibold text-[var(--hs-link)] hover:bg-[var(--surface-dim)]"
-          >
-            View all notifications
-          </Link>
+          <div className="flex border-t border-[var(--border-color)]">
+            <Link
+              href={viewAllHref}
+              onClick={onNavigate}
+              className="block flex-1 px-3 py-2.5 text-center text-xs font-semibold text-[var(--hs-link)] hover:bg-[var(--surface-dim)]"
+            >
+              View all
+            </Link>
+            {product === "crm" ? (
+              <Link
+                href="/crm/notifications?tab=preferences"
+                onClick={onNavigate}
+                className="block flex-1 px-3 py-2.5 text-center text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-dim)]"
+              >
+                Preferences
+              </Link>
+            ) : null}
+          </div>
         ) : null}
       </div>
     );
@@ -157,16 +173,48 @@ export default function NotificationsInbox({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        subtitle={
-          product === "crm"
-            ? "Inbox replies, email opens, tasks, and CRM alerts in one place."
-            : "Leave updates, announcements, policies, and HR alerts."
-        }
-        unreadCount={serverUnreadCount ?? unreadCount}
-        onMarkAllRead={(serverUnreadCount ?? unreadCount) > 0 ? () => void markAllAsRead() : undefined}
-        onClearAll={notifications.length > 0 ? () => void clearAll() : undefined}
-      />
+      {hidePageHeader ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {unreadCount > 0 ? (
+            <span className="text-xs font-medium text-[var(--text-muted)]">
+              {serverUnreadCount ?? unreadCount} unread
+            </span>
+          ) : (
+            <span className="text-xs font-medium text-emerald-700">All caught up</span>
+          )}
+          {(serverUnreadCount ?? unreadCount) > 0 ? (
+            <button
+              type="button"
+              onClick={() => void markAllAsRead()}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[var(--border-color)] text-xs font-semibold hover:bg-[var(--surface-dim)]"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Mark all read
+            </button>
+          ) : null}
+          {notifications.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void clearAll()}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[var(--border-color)] text-xs font-semibold text-red-600 hover:bg-red-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear all
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <PageHeader
+          subtitle={
+            product === "crm"
+              ? "Inbox replies, email opens, tasks, and CRM alerts in one place."
+              : "Leave updates, announcements, policies, and HR alerts."
+          }
+          unreadCount={serverUnreadCount ?? unreadCount}
+          onMarkAllRead={(serverUnreadCount ?? unreadCount) > 0 ? () => void markAllAsRead() : undefined}
+          onClearAll={notifications.length > 0 ? () => void clearAll() : undefined}
+        />
+      )}
 
       <div className="rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] shadow-[0_1px_2px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[var(--surface-dim)] bg-[var(--surface-dim)]">

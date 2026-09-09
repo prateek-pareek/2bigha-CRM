@@ -25,6 +25,7 @@ const CANONICAL_CRM_PERMISSIONS: Array<{ name: string; module: string; descripti
   { name: 'legal:delete', module: 'Legal', description: 'Delete legal records' },
   { name: 'legal:move_pipeline', module: 'Legal', description: 'Move legal records across pipeline stages' },
   { name: 'admin:manage', module: 'Users', description: 'Full administrative access (RBAC bypass)' },
+  { name: 'settings:admin', module: 'settings', description: 'CRM admin settings / user grants' },
 ];
 
 async function seed() {
@@ -57,6 +58,7 @@ async function seed() {
         role: { type: String, default: 'user' },
         permissions: { type: [String], default: [] },
         isActive: { type: Boolean, default: true },
+        provisioningStatus: { type: String, default: 'manual' },
         accessibleEmailAccounts: { type: [String], default: [] },
       },
       { timestamps: true },
@@ -116,8 +118,9 @@ async function seed() {
           lastName: ADMIN_LAST_NAME,
           roleId: adminRole._id,
           role: 'Admin',
-          permissions: ['admin:manage'],
+          permissions: ['admin:manage', 'settings:admin'],
           isActive: true,
+          provisioningStatus: 'manual',
         },
       },
       { upsert: true, new: true },
@@ -134,7 +137,7 @@ async function seed() {
           lastName: ADMIN_LAST_NAME,
           role: 'CEO',
           permittedTools: ['CRM'],
-          crmPermissions: ['admin:manage'],
+          crmPermissions: ['admin:manage', 'settings:admin'],
           useRoleOverrides: true,
           permissions: [],
         },

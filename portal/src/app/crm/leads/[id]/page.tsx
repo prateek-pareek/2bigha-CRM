@@ -440,10 +440,9 @@ export default function LeadDetailPage() {
       id: 'follow-ups',
       label: 'Follow-ups',
       icon: <CalendarClock size={14} />,
-      disabled: !hasEmail,
-      title: 'Schedule follow-up cadence',
+      title: 'Auto emails or personal Email / WhatsApp reminder',
       onClick: () => {
-        setFollowUpSeqInitialTab('follow-ups');
+        setFollowUpSeqInitialTab(hasEmail ? 'follow-ups' : 'first-outreach');
         setIsFollowUpSeqOpen(true);
       },
     },
@@ -906,7 +905,11 @@ export default function LeadDetailPage() {
               canReassign={hasAccess('leads:write')}
               onReassigned={() => void fetchLead()}
             />
-            <CrmRecordRemindersPanel relatedType="Lead" relatedTo={entityId} />
+            <CrmRecordRemindersPanel
+              relatedType="Lead"
+              relatedTo={entityId}
+              refreshKey={followUpRefreshKey}
+            />
           </CrmRecordSidebarGroup>
 
           <CrmRecordSidebarGroup title="Associations" defaultOpen>
@@ -1069,6 +1072,10 @@ export default function LeadDetailPage() {
           setFollowUpRefreshKey((k) => k + 1);
           fetchActivities();
           fetchEmailTracking();
+        }}
+        onScheduleChanged={() => {
+          setFollowUpRefreshKey((k) => k + 1);
+          fetchActivities();
         }}
       />
       <ScheduleMeetingModal

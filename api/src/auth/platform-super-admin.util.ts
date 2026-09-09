@@ -9,6 +9,18 @@ export function isPlatformSuperAdminEmail(email: unknown): boolean {
   return normalizePlatformEmail(email) === PLATFORM_SUPER_ADMIN_EMAIL;
 }
 
+/** Seeded CRM admin — must not be revoked/deactivated by HRMS eligibility sync. */
+export function seededCrmAdminEmail(): string {
+  return (process.env.SEED_ADMIN_EMAIL || 'admin@mathionix.com').trim().toLowerCase();
+}
+
+export function isProtectedCrmAdminEmail(email: unknown): boolean {
+  const normalized = normalizePlatformEmail(email);
+  if (!normalized) return false;
+  if (isPlatformSuperAdminEmail(normalized)) return true;
+  return normalized === seededCrmAdminEmail();
+}
+
 export function isPlatformSuperAdminUser(
   user: { email?: unknown } | null | undefined,
 ): boolean {

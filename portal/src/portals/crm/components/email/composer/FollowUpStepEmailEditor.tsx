@@ -1,17 +1,17 @@
 "use client";
 
 import { useId } from "react";
-import { FileText, PenLine, Sparkles } from "lucide-react";
+import { FileText, PenLine } from "lucide-react";
 import RichTextEditor from '@/components/suite/editors/RichTextEditor';
 import EmailSpamWordCheckerPanel from "@/components/crm/email/deliverability/EmailSpamWordCheckerPanel";
 import EmailSubjectLineTesterPanel from "@/components/crm/email/deliverability/EmailSubjectLineTesterPanel";
 import { cn } from "@/lib/utils";
 import type { CadenceMilestone } from "@/lib/crm/follow-up-cadence";
-import { FollowUpAiDraftButton } from "@/components/crm/automation/playbooks/FollowUpAiDraftButton";
-import { CrmDropdown, type CrmDropdownOption } from "@/components/crm/ui";
+import { CrmDropdown } from "@/components/crm/ui";
 
 type TemplateOption = { _id: string; name: string };
 
+/** Kept for call-site compatibility; AI options were removed from follow-up UI. */
 export type FollowUpEmailAiDraftConfig = {
   entityType: "Lead" | "Contact";
   entityId: string;
@@ -28,6 +28,7 @@ type Props = {
   fieldIdPrefix?: string;
   /** Tighter layout when nested inside accordion rows. */
   compact?: boolean;
+  /** @deprecated AI follow-up options removed — ignored. */
   aiDraft?: FollowUpEmailAiDraftConfig;
 };
 
@@ -38,12 +39,11 @@ export function FollowUpStepEmailEditor({
   onChange,
   fieldIdPrefix = "follow-up-email",
   compact = false,
-  aiDraft,
 }: Props) {
   const uid = useId().replace(/:/g, "");
   const prefix = `${fieldIdPrefix}-${uid}`;
-  const isCustom = row.contentMode === "custom";
-  const isAiDraft = row.contentMode === "ai_draft";
+  // Legacy ai_draft steps render as custom so the editor stays usable.
+  const isCustom = row.contentMode === "custom" || row.contentMode === "ai_draft";
   const subjectId = `${prefix}-subject`;
   const bodyId = `${prefix}-body`;
   const templateId = `${prefix}-template`;
@@ -52,22 +52,6 @@ export function FollowUpStepEmailEditor({
     <div className="flex flex-col gap-3 w-full min-w-0">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-[var(--text-muted)]">Message</span>
-        {aiDraft ? (
-          <FollowUpAiDraftButton
-            entityType={aiDraft.entityType}
-            entityId={aiDraft.entityId}
-            contextInstructions={aiDraft.contextInstructions}
-            available={aiDraft.available}
-            disabled={disabled}
-            onDraft={(subject, bodyHtml) =>
-              onChange({
-                contentMode: "custom",
-                customSubject: subject,
-                customBodyHtml: bodyHtml,
-              })
-            }
-          />
-        ) : null}
         <div className="inline-flex rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-[var(--surface-dim)] p-0.5">
           <button
             type="button"
@@ -89,7 +73,7 @@ export function FollowUpStepEmailEditor({
             onClick={() => onChange({ contentMode: "template" })}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-[calc(var(--crm-radius-ui)-2px)] px-2.5 py-1.5 text-xs font-semibold transition-colors",
-              !isCustom && !isAiDraft
+              !isCustom
                 ? "bg-white text-[var(--text-main)] shadow-sm"
                 : "text-[var(--text-muted)] hover:text-[var(--text-main)]",
             )}
@@ -97,31 +81,10 @@ export function FollowUpStepEmailEditor({
             <FileText size={12} />
             Template
           </button>
-          {aiDraft ? (
-            <button
-              type="button"
-              disabled={disabled || aiDraft.available === false}
-              onClick={() => onChange({ contentMode: "ai_draft" })}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-[calc(var(--crm-radius-ui)-2px)] px-2.5 py-1.5 text-xs font-semibold transition-colors",
-                isAiDraft
-                  ? "bg-white text-[var(--text-main)] shadow-sm"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-main)]",
-              )}
-            >
-              <Sparkles size={12} />
-              AI at send
-            </button>
-          ) : null}
         </div>
       </div>
 
-      {isAiDraft ? (
-        <p className="text-xs leading-relaxed text-[var(--text-muted)] rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-[var(--surface-dim)] px-3 py-2.5">
-          AI drafts this email when the step runs (personalized from the lead/contact record).
-          You can still use <strong>Draft now</strong> above to preview copy before scheduling.
-        </p>
-      ) : isCustom ? (
+      {isCustom ? (
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label
