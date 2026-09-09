@@ -134,6 +134,11 @@ export class WorkflowsController {
       inboxAccountId?: string;
       overrideMailbox?: boolean;
       cancelOnReply?: boolean;
+      /**
+       * When true (default), follow-ups wait until tracked outreach is opened.
+       * When false, send on the configured schedule without waiting for open.
+       */
+      waitForOpen?: boolean;
       /** Latest tracked outreach token to bind open-wait jobs to. */
       trackingToken?: string;
       firstOutreachEngagement?: {
@@ -212,6 +217,7 @@ export class WorkflowsController {
         inboxAccountId: body.inboxAccountId,
         overrideMailbox: body.overrideMailbox === true,
         cancelOnReply: body.cancelOnReply !== false,
+        waitForOpen: body.waitForOpen !== false,
         trackingToken: body.trackingToken?.trim() || undefined,
         firstOutreachEngagement: body.firstOutreachEngagement
           ? {

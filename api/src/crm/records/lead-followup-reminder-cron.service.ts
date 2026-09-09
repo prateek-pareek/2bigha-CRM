@@ -41,10 +41,16 @@ export class LeadFollowUpReminderCronService {
     }
   }
 
-  private leadHint(lead: LeadDocument) {
+  /** Prefer the current lead owner; fall back to creator if owner cannot be resolved. */
+  private ownerHint(lead: LeadDocument) {
+    return {
+      label: String((lead as any).leadOwner || '').trim() || undefined,
+    };
+  }
+
+  private creatorHint(lead: LeadDocument) {
     return {
       userId: (lead as any).createdBy,
-      label: String((lead as any).leadOwner || '').trim() || undefined,
     };
   }
 
@@ -76,11 +82,10 @@ export class LeadFollowUpReminderCronService {
       .exec();
 
     const link = `/crm/leads/${lead._id}`;
-    const delivered = await this.crmNotify.notify({
+    const payload = {
       event,
       title,
       message,
-      recipient: this.leadHint(lead),
       link,
       metadata: {
         link,
@@ -88,11 +93,26 @@ export class LeadFollowUpReminderCronService {
         relatedType: 'Lead',
       },
       type: event.includes('overdue') ? 'OVERDUE_FOLLOWUP' : 'Reminder',
-    });
+    } as const;
+
+    const ownerLabel = String((lead as any).leadOwner || '').trim();
+    let delivered = ownerLabel
+      ? await this.crmNotify.notify({
+          ...payload,
+          recipient: this.ownerHint(lead),
+        })
+      : [];
+
+    if (!delivered.length) {
+      delivered = await this.crmNotify.notify({
+        ...payload,
+        recipient: this.creatorHint(lead),
+      });
+    }
 
     if (!delivered.length) {
       this.logger.warn(
-        `No HRMS recipient for lead ${lead._id} (${event}, owner="${(lead as any).leadOwner || ''}")`,
+        `No HRMS recipient for lead ${lead._id} (${event}, owner="${ownerLabel}")`,
       );
     }
   }

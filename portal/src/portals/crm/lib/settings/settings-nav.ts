@@ -169,7 +169,7 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
       {
         name: "2bigha platform sync",
         description: "Monitor client (platform user) and agent (admin) sync with 2bigha.",
-        href: "/crm/settings/twobigha-sync",
+        href: "/crm/settings/users?tab=twobigha-sync",
         icon: Database,
       },
       {

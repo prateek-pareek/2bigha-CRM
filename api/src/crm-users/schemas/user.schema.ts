@@ -107,8 +107,9 @@ export class CRMUser {
   /**
    * pending_access = synced from HRMS, not yet granted by CRM Admin (§2.3–2.4)
    * active = CRM Admin granted role/access
-   * revoked = HRMS made ineligible or employment ended
-   * hidden = Admin dismissed without delete
+   * revoked = HRMS made ineligible (§2.2) — must not appear in lists/pickers
+   * hidden = Admin dismissed without delete — must not appear in lists/pickers
+   * manual = created directly in CRM (not via HRMS sync)
    */
   @Prop({
     enum: ['pending_access', 'active', 'revoked', 'hidden', 'manual'],

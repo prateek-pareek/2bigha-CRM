@@ -86,6 +86,17 @@ export class RbacGuard implements CanActivate {
       }
     }
 
+    request.crmDbUser = dbUser;
+    if (request.user) {
+      request.user.crmDbUser = dbUser;
+    }
+
+    // JWT / CRM-role admins must not be locked out if HRMS marked their
+    // CRM profile pending/revoked (e.g. seeded admin@mathionix.com).
+    if (hasCrmAdminJwtBypass(user) || hasCrmAdminFromDbUser(dbUser)) {
+      return true;
+    }
+
     if (
       dbUser?.provisioningStatus === 'pending_access' ||
       dbUser?.provisioningStatus === 'revoked' ||
@@ -99,15 +110,6 @@ export class RbacGuard implements CanActivate {
     if (!dbUser?.isActive) {
       console.log(`RbacGuard: User ${user.email} is inactive`);
       throw new ForbiddenException('User is inactive');
-    }
-
-    request.crmDbUser = dbUser;
-    if (request.user) {
-      request.user.crmDbUser = dbUser;
-    }
-
-    if (hasCrmAdminJwtBypass(user) || hasCrmAdminFromDbUser(dbUser)) {
-      return true;
     }
 
     // Get permissions from both Token and DB (support name or key on populated Permission docs)

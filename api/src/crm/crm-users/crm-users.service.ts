@@ -14,6 +14,10 @@ import * as bcrypt from 'bcrypt';
 import { TrashService } from '../../trash/trash.service';
 import { User, UserDocument } from '../../users/schemas/user.schema';
 import { isPlatformSuperAdminEmail } from '../../auth/platform-super-admin.util';
+import {
+  collectRolePermissionNames,
+  serializeCrmRole,
+} from '../shared/crm-role-permissions.util';
 import { TwoBighaAgentService } from './twobigha-agent.service';
 import { KommunoAgentService } from './kommuno-agent.service';
 
@@ -84,6 +88,12 @@ const CANONICAL_CRM_PERMISSIONS: {
     name: 'legal:move_pipeline',
     module: 'crm',
     description: 'Move legal cases between pipelines and update stage',
+  },
+  { name: 'admin:manage', module: 'Users', description: 'Full administrative RBAC bypass' },
+  {
+    name: 'settings:admin',
+    module: 'settings',
+    description: 'CRM admin settings / user grants',
   },
 ];
 
@@ -176,9 +186,15 @@ export class CRMUsersService implements OnModuleInit {
       .exec();
   }
 
-  /** Admin directory — includes pending/revoked HRMS-synced users. */
+  /** Admin team directory — active + pending grant; excludes revoked/hidden (§2.2). */
   async findAllIncludingPending(): Promise<CRMUserDocument[]> {
-    return this.userModel.find().populate('roleId').sort({ updatedAt: -1 }).exec();
+    return this.userModel
+      .find({
+        provisioningStatus: { $nin: ['revoked', 'hidden'] },
+      })
+      .populate('roleId')
+      .sort({ updatedAt: -1 })
+      .exec();
   }
 
   async findAllWithCrmPortalAccess(): Promise<
@@ -211,8 +227,8 @@ export class CRMUsersService implements OnModuleInit {
   }
 
   /**
-   * People who can be picked as a task assignee: CRM portal users plus
-   * 2bigha staff/agents from getAllAdmins (and CRM user records linked to them).
+   * Assignee picker directory: active CRM users (§2.2-eligible granted) + 2bigha agents.
+   * Does not add HRMS portal-only users who are not CRM-eligible / not granted.
    */
   async listTaskAssigneeDirectory(): Promise<
     Array<{
@@ -228,7 +244,7 @@ export class CRMUsersService implements OnModuleInit {
   > {
     const [portalUsers, crmUsers, twoBigha] = await Promise.all([
       this.findAllWithCrmPortalAccess(),
-      this.findAll(),
+      this.findAssignableUsers(),
       this.twoBighaAgentService.fetchAgents({ isActive: true, fetchAll: true, limit: 100 }),
     ]);
 
@@ -287,7 +303,7 @@ export class CRMUsersService implements OnModuleInit {
       const existing = byKey.get(key);
       const roleDoc = u.roleId as { name?: string } | undefined;
       if (existing) {
-        existing.crmUserId = crmId;
+        existing.crmUserId = String(u._id);
         existing._id = crmId;
         if (!existing.firstName) existing.firstName = nameFirst;
         if (!existing.lastName) existing.lastName = nameLast;
@@ -302,29 +318,19 @@ export class CRMUsersService implements OnModuleInit {
         source: 'crm',
         roleLabel: roleDoc?.name || u.role || 'CRM team',
         twobighaAdminId: tbId,
-        crmUserId: crmId,
+        crmUserId: String(u._id),
       });
     }
 
+    // Portal users only enrich known CRM assignees — never introduce ineligible people.
     for (const u of portalUsers) {
       const key = keyFor(u.email, undefined, u._id);
-      if (byKey.has(key)) {
-        const row = byKey.get(key)!;
-        row.crmUserId = row.crmUserId || u._id;
-        if (row.source === 'twobigha' && Types.ObjectId.isValid(u._id)) {
-          row._id = u._id;
-        }
-        continue;
+      const row = byKey.get(key);
+      if (!row) continue;
+      row.crmUserId = row.crmUserId || u._id;
+      if (row.source === 'twobigha' && Types.ObjectId.isValid(u._id)) {
+        row._id = u._id;
       }
-      byKey.set(key, {
-        _id: u._id,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        email: u.email,
-        source: 'crm',
-        roleLabel: 'CRM team',
-        crmUserId: u._id,
-      });
     }
 
     return Array.from(byKey.values()).sort((a, b) => {
@@ -465,24 +471,76 @@ export class CRMUsersService implements OnModuleInit {
   }
 
   // Role Methods
-  async findAllRoles(): Promise<RoleDocument[]> {
-    return this.roleModel.find().populate('permissions').exec();
+  private async resolvePermissionIds(names: string[]): Promise<Types.ObjectId[]> {
+    const ids: Types.ObjectId[] = [];
+    for (const raw of names) {
+      const name = String(raw || '').trim();
+      if (!name) continue;
+      if (Types.ObjectId.isValid(name) && String(new Types.ObjectId(name)) === name) {
+        ids.push(new Types.ObjectId(name));
+        continue;
+      }
+      const [moduleName] = name.split(':');
+      const doc = await this.permissionModel.findOneAndUpdate(
+        { name },
+        {
+          $setOnInsert: {
+            name,
+            module: moduleName || 'crm',
+            description: name,
+          },
+        },
+        { upsert: true, new: true },
+      );
+      if (doc?._id) ids.push(doc._id as Types.ObjectId);
+    }
+    return ids;
   }
 
-  async findRoleById(id: string): Promise<RoleDocument | null> {
-    return this.roleModel.findById(id).populate('permissions').exec();
+  async findAllRoles(): Promise<any[]> {
+    const roles = await this.roleModel.find().populate('permissions').exec();
+    return roles.map(serializeCrmRole);
   }
 
-  async updateRole(id: string, roleDto: any): Promise<RoleDocument | null> {
-    return this.roleModel.findByIdAndUpdate(id, roleDto, { new: true }).exec();
+  async findRoleById(id: string): Promise<any> {
+    const role = await this.roleModel.findById(id).populate('permissions').exec();
+    return role ? serializeCrmRole(role) : null;
+  }
+
+  async updateRole(id: string, roleDto: any): Promise<any> {
+    const names = collectRolePermissionNames(roleDto);
+    const patch: Record<string, unknown> = {};
+    if (roleDto?.name !== undefined) patch.name = String(roleDto.name).trim();
+    if (roleDto?.description !== undefined) {
+      patch.description = String(roleDto.description).trim();
+    }
+    if (
+      names.length ||
+      Array.isArray(roleDto?.crmPermissions) ||
+      Array.isArray(roleDto?.permissions)
+    ) {
+      patch.permissions = await this.resolvePermissionIds(names);
+    }
+    const updated = await this.roleModel
+      .findByIdAndUpdate(id, patch, { new: true })
+      .populate('permissions')
+      .exec();
+    return updated ? serializeCrmRole(updated) : null;
   }
 
   async deleteRole(id: string): Promise<any> {
     return this.roleModel.findByIdAndDelete(id).exec();
   }
 
-  async createRole(roleDto: any): Promise<RoleDocument> {
-    return new this.roleModel(roleDto).save();
+  async createRole(roleDto: any): Promise<any> {
+    const names = collectRolePermissionNames(roleDto);
+    const created = await new this.roleModel({
+      name: String(roleDto?.name || '').trim(),
+      description: String(roleDto?.description || '').trim(),
+      isSystem: !!roleDto?.isSystem,
+      permissions: await this.resolvePermissionIds(names),
+    }).save();
+    return serializeCrmRole(await created.populate('permissions'));
   }
 
   async inviteUser(email: string, roleId: string): Promise<CRMUserDocument> {
@@ -587,7 +645,7 @@ export class CRMUsersService implements OnModuleInit {
   async findPendingHrmsUsers(): Promise<CRMUserDocument[]> {
     return this.userModel
       .find({
-        provisioningStatus: { $in: ['pending_access', 'revoked'] },
+        provisioningStatus: 'pending_access',
         hrmsEmployeeId: { $exists: true, $ne: '' },
       })
       .populate('roleId')

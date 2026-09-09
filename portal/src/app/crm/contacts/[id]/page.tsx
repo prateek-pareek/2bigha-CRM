@@ -28,6 +28,7 @@ import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/c
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
 import CrmRecordOwnerCard from '@/components/crm/records/detail/CrmRecordOwnerCard';
+import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
 import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
 import { crmRecordChrome } from '@/lib/crm/chrome';
@@ -566,6 +567,11 @@ export default function ContactDetailPage() {
           />
           <EmailEngagementPanel rows={emailTracking} />
           <CrmRecordOwnerCard ownerLabel={contact.leadOwner} />
+          <CrmRecordRemindersPanel
+            relatedType="Contact"
+            relatedTo={entityId}
+            refreshKey={followUpRefreshKey}
+          />
           <CRMContactCompanySidebarCard
             contact={contact}
             contactId={entityId}
@@ -623,6 +629,10 @@ export default function ContactDetailPage() {
           setFollowUpRefreshKey((k) => k + 1);
           fetchActivities();
           fetchEmailTracking();
+        }}
+        onScheduleChanged={() => {
+          setFollowUpRefreshKey((k) => k + 1);
+          fetchActivities();
         }}
       />
       <SendEmailModal

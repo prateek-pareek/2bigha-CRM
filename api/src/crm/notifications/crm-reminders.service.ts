@@ -1,19 +1,44 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserDocument } from '../../users/schemas/user.schema';
 import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
+import { Lead, LeadDocument } from '../records/schemas/lead.schema';
+import { Activity, ActivityDocument } from '../records/schemas/activity.schema';
+import { CallLog, CallLogDocument } from '../ivr/schemas/call-log.schema';
 import {
   CrmReminder,
   CrmReminderDocument,
+  CrmReminderMedium,
   CrmReminderRecurrence,
   CrmReminderRelatedType,
 } from './schemas/crm-reminder.schema';
+import { CrmNotifyService } from './crm-notify.service';
+
+export type TeamScheduleKind =
+  | 'custom'
+  | 'lead_follow_up'
+  | 'intent_follow_up'
+  | 'callback'
+  | 'task';
+
+export type TeamScheduleItem = {
+  kind: TeamScheduleKind;
+  title: string;
+  scheduledAt: Date;
+  status: 'upcoming' | 'due' | 'overdue';
+  ownerLabel?: string;
+  link: string;
+  relatedType?: string;
+  relatedTo?: string;
+};
 
 @Injectable()
 export class CrmRemindersService {
@@ -22,6 +47,14 @@ export class CrmRemindersService {
     private readonly reminderModel: Model<CrmReminderDocument>,
     @InjectModel(User.name)
     private readonly hrmsUserModel: Model<UserDocument>,
+    @InjectModel(Lead.name, 'crmConnection')
+    private readonly leadModel: Model<LeadDocument>,
+    @InjectModel(Activity.name, 'crmConnection')
+    private readonly activityModel: Model<ActivityDocument>,
+    @InjectModel(CallLog.name, 'crmConnection')
+    private readonly callLogModel: Model<CallLogDocument>,
+    @Inject(forwardRef(() => CrmNotifyService))
+    private readonly crmNotify: CrmNotifyService,
   ) {}
 
   private userOid(user?: any): Types.ObjectId | null {
@@ -81,6 +114,34 @@ export class CrmRemindersService {
     return next;
   }
 
+  private normalizeMedium(raw?: string): CrmReminderMedium | undefined {
+    const v = String(raw || '')
+      .trim()
+      .toLowerCase();
+    if (v === 'email' || v === 'whatsapp' || v === 'later') return v;
+    return undefined;
+  }
+
+  private mediumLabel(medium?: CrmReminderMedium | string | null): string {
+    if (medium === 'whatsapp') return 'WhatsApp';
+    if (medium === 'email') return 'Email';
+    if (medium === 'later') return 'decide later';
+    return '';
+  }
+
+  /** Resolve leadOwner display label to an HRMS user id when possible. */
+  private async resolveLeadOwnerUserId(
+    leadOwnerLabel?: string | null,
+  ): Promise<Types.ObjectId | null> {
+    const label = String(leadOwnerLabel || '').trim();
+    if (!label) return null;
+    const resolved = await this.crmNotify.resolveRecipient({ label });
+    if (resolved?.userId && Types.ObjectId.isValid(resolved.userId)) {
+      return new Types.ObjectId(resolved.userId);
+    }
+    return null;
+  }
+
   async create(
     body: {
       title?: string;
@@ -90,15 +151,18 @@ export class CrmRemindersService {
       scheduledAt?: string;
       recurrence?: string;
       assigneeUserId?: string;
+      medium?: string;
+      /** When true, notify the lead owner instead of the creator (default: creator). */
+      assignToLeadOwner?: boolean;
+      /** Also write Lead.nextFollowUpAt so list / cron stay aligned. */
+      syncLeadNextFollowUp?: boolean;
     },
     user?: any,
   ) {
     const createdBy = this.userOid(user);
     if (!createdBy) throw new ForbiddenException('Unauthorized');
 
-    const title = String(body.title || '').trim();
-    if (!title) throw new BadRequestException('Title is required');
-
+    const medium = this.normalizeMedium(body.medium);
     const relatedType = String(body.relatedType || '').trim() as CrmReminderRelatedType;
     if (!['Lead', 'Client', 'Contact', 'Task', 'Organization'].includes(relatedType)) {
       throw new BadRequestException('Invalid relatedType');
@@ -110,6 +174,34 @@ export class CrmRemindersService {
     if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
       throw new BadRequestException('scheduledAt is required');
     }
+    if (scheduledAt.getTime() < Date.now() - 60_000) {
+      throw new BadRequestException('Date & time must be at least now (or in the future)');
+    }
+
+    let recordLabel = `${relatedType}`;
+    let leadOwnerLabel: string | undefined;
+    if (relatedType === 'Lead') {
+      const lead = await this.leadModel
+        .findById(body.relatedTo)
+        .select('firstName lastName leadOwner email')
+        .lean()
+        .exec();
+      if (!lead) throw new NotFoundException('Lead not found');
+      recordLabel =
+        [lead.firstName, lead.lastName].filter(Boolean).join(' ').trim() ||
+        'Lead';
+      leadOwnerLabel = String((lead as any).leadOwner || '').trim() || undefined;
+    }
+
+    const mediumText = this.mediumLabel(medium);
+    let title = String(body.title || '').trim();
+    if (!title) {
+      if (!medium) throw new BadRequestException('Title is required');
+      title =
+        medium === 'later'
+          ? `Follow up (decide later): ${recordLabel}`
+          : `Follow up via ${mediumText}: ${recordLabel}`;
+    }
 
     const recurrence = (['none', 'daily', 'weekly', 'monthly'].includes(
       String(body.recurrence || 'none'),
@@ -118,23 +210,101 @@ export class CrmRemindersService {
       : 'none') as CrmReminderRecurrence;
 
     let assigneeUserId = createdBy;
+    // Prefer the employee who schedules the reminder (they need the popup).
+    // Only override when an assignee is passed explicitly.
     if (body.assigneeUserId && Types.ObjectId.isValid(String(body.assigneeUserId))) {
       assigneeUserId = new Types.ObjectId(String(body.assigneeUserId));
+    } else if (
+      body.assignToLeadOwner === true &&
+      relatedType === 'Lead' &&
+      leadOwnerLabel
+    ) {
+      const ownerId = await this.resolveLeadOwnerUserId(leadOwnerLabel);
+      if (ownerId) assigneeUserId = ownerId;
     }
 
-    return this.reminderModel.create({
+    const note = String(body.description || '').trim();
+    const description =
+      note ||
+      (medium === 'later'
+        ? `Remind to follow up with ${recordLabel} (channel TBD).`
+        : medium
+          ? `Remind to follow up with ${recordLabel} via ${mediumText}.`
+          : undefined);
+
+    const reminder = await this.reminderModel.create({
       title,
-      description: String(body.description || '').trim() || undefined,
+      description,
       relatedType,
       relatedTo: new Types.ObjectId(String(body.relatedTo)),
       scheduledAt,
       nextFireAt: scheduledAt,
       status: 'PENDING',
       recurrence,
+      ...(medium ? { medium } : {}),
       createdBy,
       assigneeUserId,
       createdByName: this.actorName(user),
     });
+
+    if (
+      relatedType === 'Lead' &&
+      body.syncLeadNextFollowUp === true &&
+      medium
+    ) {
+      // Keep list "Next follow-up" in sync, but suppress duplicate lead-field
+      // cron toasts — the CrmReminder (medium) owns the popup for this flow.
+      const suppressAt = new Date();
+      await this.leadModel
+        .updateOne(
+          { _id: new Types.ObjectId(String(body.relatedTo)) },
+          {
+            $set: {
+              nextFollowUpAt: scheduledAt,
+              followUpReminderSentAt: suppressAt,
+              followUpUpcomingReminderSentAt: suppressAt,
+              followUpOverdueReminderSentAt: suppressAt,
+            },
+          },
+        )
+        .exec();
+    }
+
+    const when = scheduledAt.toLocaleString('en-US', {
+      timeZone: process.env.CRM_REPORTING_TIMEZONE || 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+    void this.crmNotify.notify({
+      event: medium ? 'follow_up_reminder' : 'custom_reminder',
+      title: medium
+        ? medium === 'later'
+          ? 'Follow-up reminder set'
+          : `Follow-up reminder set (${mediumText})`
+        : 'Reminder scheduled',
+      message: medium
+        ? medium === 'later'
+          ? `You'll be reminded to follow up with ${recordLabel} on ${when} — pick Email or WhatsApp then.`
+          : `You'll be reminded to follow up with ${recordLabel} via ${mediumText} on ${when}.`
+        : `"${title}" is set for ${when}.`,
+      recipient: { userId: assigneeUserId },
+      link:
+        relatedType === 'Lead'
+          ? `/crm/leads/${body.relatedTo}`
+          : relatedType === 'Contact'
+            ? `/crm/contacts/${body.relatedTo}`
+            : '/crm/notifications',
+      metadata: {
+        reminderId: String(reminder._id),
+        relatedType,
+        entityId: String(body.relatedTo),
+        medium: medium || null,
+        scheduledAt: scheduledAt.toISOString(),
+      },
+      type: 'Reminder',
+    });
+
+    return reminder;
   }
 
   async listMine(
@@ -268,5 +438,222 @@ export class CrmRemindersService {
         nextFireAt: { $lte: now, $gte: graceStart },
       })
       .exec();
+  }
+
+  private scheduleStatus(at: Date, now: Date): 'upcoming' | 'due' | 'overdue' {
+    const diff = at.getTime() - now.getTime();
+    if (diff < -60 * 60 * 1000) return 'overdue';
+    if (diff <= 15 * 60 * 1000) return 'due';
+    return 'upcoming';
+  }
+
+  private memberLabels(
+    rows: Array<{ firstName?: string; lastName?: string; email?: string }>,
+  ) {
+    const labels: string[] = [];
+    for (const row of rows) {
+      const name = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+      if (name) labels.push(name);
+      if (row.email) labels.push(String(row.email).trim());
+    }
+    return [...new Set(labels.filter(Boolean))];
+  }
+
+  /**
+   * Unified follow-up / callback / task / custom reminder view for managers
+   * and team leads (spec §11.3).
+   */
+  async listTeamSchedule(user?: any, limit = 80) {
+    if (!this.canReadTeam(user)) {
+      return { canViewTeam: false, items: [] as TeamScheduleItem[] };
+    }
+
+    const perms = this.crmPermissionSet(user);
+    const allAccess =
+      hasCrmFullDataAccess(user) ||
+      perms.has('leads:read:all') ||
+      perms.has('tasks:read:all');
+
+    const selfId = this.userOid(user);
+    const reports = selfId
+      ? await this.hrmsUserModel
+          .find({ reportsTo: selfId })
+          .select('_id firstName lastName email')
+          .lean()
+          .exec()
+      : [];
+    const self = selfId
+      ? await this.hrmsUserModel
+          .findById(selfId)
+          .select('_id firstName lastName email')
+          .lean()
+          .exec()
+      : null;
+    const members = [self, ...reports].filter(Boolean) as Array<{
+      _id: Types.ObjectId;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    }>;
+    const ids = members.map((m) => m._id);
+    const labels = this.memberLabels(members);
+
+    const now = new Date();
+    const from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const to = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const cap = Math.min(Math.max(Number(limit) || 80, 1), 200);
+    const items: TeamScheduleItem[] = [];
+
+    const leadDateClause = {
+      $or: [
+        { nextFollowUpAt: { $gte: from, $lte: to } },
+        { leadIntentFollowUpAt: { $gte: from, $lte: to } },
+      ],
+    };
+    const leadOwnerClause = {
+      $or: [{ leadOwner: { $in: labels } }, { createdBy: { $in: ids } }],
+    };
+    const leads = await this.leadModel
+      .find({
+        isDeleted: { $ne: true },
+        $and: [leadDateClause, ...(allAccess ? [] : [leadOwnerClause])],
+      })
+      .select('firstName lastName leadOwner nextFollowUpAt leadIntentFollowUpAt')
+      .limit(cap)
+      .lean()
+      .exec();
+
+    for (const lead of leads) {
+      const name =
+        [lead.firstName, lead.lastName].filter(Boolean).join(' ').trim() ||
+        'Lead';
+      const follow = (lead as any).nextFollowUpAt
+        ? new Date((lead as any).nextFollowUpAt)
+        : null;
+      if (follow && !Number.isNaN(follow.getTime())) {
+        items.push({
+          kind: 'lead_follow_up',
+          title: `Follow-up: ${name}`,
+          scheduledAt: follow,
+          status: this.scheduleStatus(follow, now),
+          ownerLabel: String((lead as any).leadOwner || '') || undefined,
+          link: `/crm/leads/${lead._id}`,
+          relatedType: 'Lead',
+          relatedTo: String(lead._id),
+        });
+      }
+      const intent = (lead as any).leadIntentFollowUpAt
+        ? new Date((lead as any).leadIntentFollowUpAt)
+        : null;
+      if (intent && !Number.isNaN(intent.getTime())) {
+        items.push({
+          kind: 'intent_follow_up',
+          title: `Intent follow-up: ${name}`,
+          scheduledAt: intent,
+          status: this.scheduleStatus(intent, now),
+          ownerLabel: String((lead as any).leadOwner || '') || undefined,
+          link: `/crm/leads/${lead._id}`,
+          relatedType: 'Lead',
+          relatedTo: String(lead._id),
+        });
+      }
+    }
+
+    const taskFilter: Record<string, unknown> = {
+      type: { $in: ['Task', 'Meeting'] },
+      status: { $nin: ['Completed', 'Done', 'Cancelled'] },
+      isDeleted: { $ne: true },
+      'metadata.dueDate': { $exists: true, $ne: null },
+    };
+    if (!allAccess) {
+      taskFilter.$or = [{ assignee: { $in: ids } }, { author: { $in: ids } }];
+    }
+    const tasks = await this.activityModel
+      .find(taskFilter)
+      .select('title assignee metadata relatedTo relatedType')
+      .limit(cap)
+      .lean()
+      .exec();
+    for (const task of tasks) {
+      const dueRaw = (task as any).metadata?.dueDate;
+      const due = dueRaw ? new Date(dueRaw) : null;
+      if (!due || Number.isNaN(due.getTime())) continue;
+      if (due < from || due > to) continue;
+      items.push({
+        kind: 'task',
+        title: `Task: ${(task as any).title || 'Untitled'}`,
+        scheduledAt: due,
+        status: this.scheduleStatus(due, now),
+        ownerLabel: (task as any).metadata?.assigneeName,
+        link: '/crm/tasks',
+        relatedType: 'Task',
+        relatedTo: String(task._id),
+      });
+    }
+
+    const callbackFilter: Record<string, unknown> = {
+      callbackScheduledAt: { $gte: from, $lte: to },
+    };
+    if (!allAccess) {
+      callbackFilter.initiatedByUserId = { $in: ids };
+    }
+    const callbacks = await this.callLogModel
+      .find(callbackFilter)
+      .select(
+        'customerName customerNumber callbackScheduledAt relatedTo relatedType agentName',
+      )
+      .limit(cap)
+      .lean()
+      .exec();
+    for (const row of callbacks) {
+      const due = new Date((row as any).callbackScheduledAt);
+      if (Number.isNaN(due.getTime())) continue;
+      const relatedId = (row as any).relatedTo
+        ? String((row as any).relatedTo)
+        : '';
+      const relatedType = String((row as any).relatedType || '').toLowerCase();
+      let link = '/crm/ivr';
+      if (relatedId && relatedType === 'lead') link = `/crm/leads/${relatedId}`;
+      else if (relatedId && relatedType === 'contact')
+        link = `/crm/contacts/${relatedId}`;
+      else if (relatedId && relatedType === 'client')
+        link = `/crm/clients/${relatedId}`;
+      items.push({
+        kind: 'callback',
+        title: `Callback: ${String((row as any).customerName || (row as any).customerNumber || 'customer')}`,
+        scheduledAt: due,
+        status: this.scheduleStatus(due, now),
+        ownerLabel: (row as any).agentName,
+        link,
+        relatedType: (row as any).relatedType,
+        relatedTo: relatedId || undefined,
+      });
+    }
+
+    const custom = await this.listMine({ team: '1', limit: cap }, user);
+    for (const r of custom.items as any[]) {
+      const at = r.nextFireAt ? new Date(r.nextFireAt) : null;
+      if (!at || Number.isNaN(at.getTime())) continue;
+      items.push({
+        kind: 'custom',
+        title: r.title,
+        scheduledAt: at,
+        status: this.scheduleStatus(at, now),
+        ownerLabel: r.createdByName,
+        link:
+          r.relatedType === 'Lead'
+            ? `/crm/leads/${r.relatedTo}`
+            : r.relatedType === 'Client'
+              ? `/crm/clients/${r.relatedTo}`
+              : r.relatedType === 'Contact'
+                ? `/crm/contacts/${r.relatedTo}`
+                : '/crm/tasks',
+        relatedType: r.relatedType,
+        relatedTo: r.relatedTo ? String(r.relatedTo) : undefined,
+      });
+    }
+
+    items.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+    return { canViewTeam: true, items: items.slice(0, cap) };
   }
 }

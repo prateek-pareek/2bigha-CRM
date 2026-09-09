@@ -87,6 +87,7 @@ export function FollowUpAiDraftButton({
           entityId,
           instructions: combined || undefined,
           skipContextCheck: true,
+          purpose: "follow_up",
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
