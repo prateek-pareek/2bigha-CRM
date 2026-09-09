@@ -172,26 +172,30 @@ export default function CRMSavedViews({
   const savedViewsHint = `Saved views for ${label}. Click to pick a view, save the current filters and columns, or manage views.`;
 
   return (
-    <div className="relative">
+    <div className="relative flex-shrink-0">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled || loading}
         title={savedViewsHint}
         aria-label={savedViewsHint}
-        className={`flex items-center gap-2 px-4 h-10 rounded-[3px] text-sm font-bold transition-all border ${
+        className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 h-[38px] sm:h-10 rounded-[3px] text-xs sm:text-sm font-bold transition-all border ${
           activeView
             ? 'bg-primary/10 text-primary border-primary/20'
             : 'bg-card text-text-muted border-[#dfe1e6] hover:border-slate-300 hover:text-text-main'
         }`}
       >
-        <LayoutList size={16} strokeWidth={2.5} />
+        <LayoutList size={14} strokeWidth={2.5} className="sm:hidden flex-shrink-0" />
+        <LayoutList size={16} strokeWidth={2.5} className="hidden sm:block flex-shrink-0" />
         {loading ? (
-          <Loader2 size={14} className="animate-spin" />
+          <Loader2 size={14} className="animate-spin flex-shrink-0" />
         ) : (
           <>
-            {activeView ? activeView.name : `All ${label}`}
-            <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            <span className="hidden sm:inline truncate max-w-[120px] md:max-w-none">
+              {activeView ? activeView.name : `All ${label}`}
+            </span>
+            <ChevronDown size={12} className={`transition-transform flex-shrink-0 sm:hidden ${isOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown size={14} className={`transition-transform flex-shrink-0 hidden sm:block ${isOpen ? 'rotate-180' : ''}`} />
           </>
         )}
       </button>

@@ -6,6 +6,7 @@ import { CRM_API_URL } from "@/lib/crm/config";
 import { DashboardShell, DateRangeFilter } from "@/components/crm/dashboards/DashboardShell";
 import { ChartCard, CustomChartTooltip } from "@/components/crm/dashboards/ChartCard";
 import { LeaderboardTable } from "@/components/crm/dashboards/LeaderboardTable";
+import { TeamPerformanceTable } from "@/components/crm/dashboards/TeamPerformanceTable";
 import {
   AreaChart,
   Area,
@@ -298,10 +299,18 @@ export default function AdminDashboardPage() {
         </ChartCard>
       </div>
 
+      <div className="grid grid-cols-1 gap-6 mt-6">
+        <TeamPerformanceTable
+          title="Team-wise Performance"
+          data={data?.teamMetrics?.teams || []}
+          loading={loading}
+        />
+      </div>
+
       {/* Leaderboards */}
       <div className="grid grid-cols-1 gap-6 mt-6">
         <LeaderboardTable
-          title="Organization Agent Leaderboard"
+          title="Org-wide Leaderboard — Top Agents"
           data={leaderboardData}
           loading={loading}
         />

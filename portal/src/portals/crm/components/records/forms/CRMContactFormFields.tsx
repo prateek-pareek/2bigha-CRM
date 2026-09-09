@@ -474,12 +474,12 @@ export default function CRMContactFormFields({
   const groups: { section: string; keys: string[] }[] = [];
   for (const key of keys) {
     const sec = sectionForKey(key);
-    const last = groups[groups.length - 1];
-    if (last && last.section === sec) {
-      last.keys.push(key);
-    } else {
-      groups.push({ section: sec, keys: [key] });
+    let group = groups.find((g) => g.section === sec);
+    if (!group) {
+      group = { section: sec, keys: [] };
+      groups.push(group);
     }
+    group.keys.push(key);
   }
 
   return (

@@ -868,13 +868,15 @@ export class CRMController {
     const advancedTasks = await this.reportingService.getAdvancedTaskMetrics(window);
     const whatsapp = await this.reportingService.getWhatsAppEngagement(window);
     const ivr = await this.reportingService.getIVRAnalytics(window);
+    const teamMetrics = await this.reportingService.getTeamPerformanceMetrics(window, 'all');
     
     return { 
       dashboard, 
       health,
       advancedTasks,
       whatsapp,
-      ivr
+      ivr,
+      teamMetrics
     };
   }
 
@@ -887,17 +889,19 @@ export class CRMController {
   @Get('dashboard/team/leaderboard')
   @Permissions('leads:read')
   async getTeamLeaderboard(
+    @Request() req: any,
     @Query('window') window: string = 'last_30_days'
   ) {
-    return this.reportingService.getLeaderboardMetrics(window);
+    return this.reportingService.getLeaderboardMetrics(window, req.user?.userId);
   }
 
   @Get('dashboard/team')
   @Permissions('leads:read')
   async getTeamDashboardMetrics(
+    @Request() req: any,
     @Query('window') window: string = 'last_30_days',
   ) {
-    const metrics = await this.reportingService.getTeamPerformanceMetrics(window);
+    const metrics = await this.reportingService.getTeamPerformanceMetrics(window, req.user?.userId);
     const trend = await this.reportingService.getTeamPerformanceTrend(window);
     return { metrics, trend };
   }

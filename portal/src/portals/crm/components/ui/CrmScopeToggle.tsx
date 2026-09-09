@@ -27,7 +27,7 @@ export function CrmScopeToggle({
   className,
 }: CrmScopeToggleProps) {
   return (
-    <div className={cn("flex h-[38px] shrink-0 items-stretch gap-0.5", className)}>
+    <div className={cn("flex h-[38px] shrink-0 items-stretch gap-0.5 flex-wrap sm:flex-nowrap", className)}>
       <div
         className={cn(
           "flex min-h-[38px] shrink-0 items-stretch gap-0.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] p-0.5 shadow-[var(--crm-shadow-input)]",
@@ -38,7 +38,7 @@ export function CrmScopeToggle({
           type="button"
           onClick={onShowAll}
           className={cn(
-            "rounded-[var(--radius-sm)] px-3 text-sm font-medium transition-colors",
+            "rounded-[var(--radius-sm)] px-2 sm:px-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap",
             !showMineOnly
               ? "bg-[var(--primary-light)] text-[var(--primary)]"
               : "text-[var(--text-muted)] hover:text-[var(--text-main)]",
@@ -62,7 +62,7 @@ export function CrmScopeToggle({
         type="button"
         onClick={onShowMine}
         className={cn(
-          "h-[38px] rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-sm font-medium shadow-[var(--crm-shadow-input)] transition-colors",
+          "h-[38px] rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-2 sm:px-3 text-xs sm:text-sm font-medium shadow-[var(--crm-shadow-input)] transition-colors whitespace-nowrap",
           showMineOnly
             ? "bg-[var(--primary-light)] text-[var(--primary)] ring-1 ring-[var(--primary)]/15"
             : "text-[var(--text-muted)] hover:text-[var(--text-main)]",
