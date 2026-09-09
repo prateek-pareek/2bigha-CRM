@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar, Gavel, Loader2, Phone, Search, User } from "lucide-react";
 import { toast } from "sonner";
+import Pagination from "@/components/suite/shell/Pagination";
 import {
   CrmButton,
   CrmCountBadge,
@@ -89,6 +90,8 @@ function LegalVerificationDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<PropertyListingRecord[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "kanban">(() => {
     if (typeof window !== "undefined") {
@@ -106,6 +109,10 @@ function LegalVerificationDashboardContent() {
     if (typeof window !== "undefined") localStorage.setItem(VIEW_MODE_KEY, viewMode);
   }, [viewMode]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusParam, sortParam, rangeParam, assigneeParam, viewMode]);
+
   const legalRequestedAfter = useMemo(() => {
     if (rangeParam === "7d") return daysAgoIso(7);
     if (rangeParam === "30d") return daysAgoIso(30);
@@ -116,10 +123,8 @@ function LegalVerificationDashboardContent() {
     setLoading(true);
     try {
       const res = await fetchLegalVerificationQueue({
-        page: 1,
-        // Kanban shows every stage as its own column, so it needs the full queue
-        // regardless of the status pill filter (which only applies to the list view).
-        pageSize: viewMode === "kanban" ? 200 : 50,
+        page: viewMode === "kanban" ? 1 : page,
+        pageSize: viewMode === "kanban" ? 200 : pageSize,
         search: search.trim() || undefined,
         legalStatus: viewMode === "kanban" ? "queued" : statusParam,
         legalSort: sortParam,
@@ -135,7 +140,7 @@ function LegalVerificationDashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusParam, sortParam, legalRequestedAfter, assigneeParam, viewMode]);
+  }, [page, pageSize, search, statusParam, sortParam, legalRequestedAfter, assigneeParam, viewMode]);
 
   useEffect(() => {
     void load();
@@ -393,67 +398,79 @@ function LegalVerificationDashboardContent() {
               No legal verification requests in this filter.
             </div>
           ) : (
-            <CrmTable>
-              <thead>
-                <tr>
-                  <th>Property</th>
-                  <th>Owner / client</th>
-                  <th>Submitted</th>
-                  <th>Assignee</th>
-                  <th>Status</th>
-                  <th>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const legal = row.propertyLegal!;
-                  return (
-                    <tr
-                      key={row._id}
-                      className="cursor-pointer"
-                      onClick={() => router.push(`/crm/legal/verification/${row._id}`)}
-                    >
-                      <td>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-[var(--text-main)]">{row.title}</p>
-                          <p className="truncate text-xs text-[var(--text-muted)]">
-                            {formatAddress(row)} · {formatListingArea(row)}
-                          </p>
-                          <div className="mt-1">
-                            <CrmSoftBadge
-                              label={row.listingBucket.toUpperCase()}
-                              tone="secondary"
-                            />
+            <>
+              <CrmTable>
+                <thead>
+                  <tr>
+                    <th>Property</th>
+                    <th>Owner / client</th>
+                    <th>Submitted</th>
+                    <th>Assignee</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const legal = row.propertyLegal!;
+                    return (
+                      <tr
+                        key={row._id}
+                        className="cursor-pointer"
+                        onClick={() => router.push(`/crm/legal/verification/${row._id}`)}
+                      >
+                        <td>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[var(--text-main)]">{row.title}</p>
+                            <p className="truncate text-xs text-[var(--text-muted)]">
+                              {formatAddress(row)} · {formatListingArea(row)}
+                            </p>
+                            <div className="mt-1">
+                              <CrmSoftBadge
+                                label={row.listingBucket.toUpperCase()}
+                                tone="secondary"
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <p className="text-sm font-medium text-[var(--text-main)]">
-                          {row.contactName || "—"}
-                        </p>
-                        <p className="text-xs text-[var(--text-muted)]">
-                          {row.contactPhone || row.contactEmail || "—"}
-                        </p>
-                      </td>
-                      <td className="whitespace-nowrap text-sm text-[var(--text-muted)]">
-                        {new Date(legal.requestedAt).toLocaleString()}
-                      </td>
-                      <td className="text-xs text-[var(--text-muted)]">
-                        {legal.assignedTo || "Shared"}
-                      </td>
-                      <td>
-                        <CrmStatusBadge tone={legalStatusBadgeTone(legal.status)}>
-                          {legal.status}
-                        </CrmStatusBadge>
-                      </td>
-                      <td className="max-w-[220px] truncate text-xs text-[var(--text-muted)]">
-                        {legal.rejectionReason || legal.notes || "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </CrmTable>
+                        </td>
+                        <td>
+                          <p className="text-sm font-medium text-[var(--text-main)]">
+                            {row.contactName || "—"}
+                          </p>
+                          <p className="text-xs text-[var(--text-muted)]">
+                            {row.contactPhone || row.contactEmail || "—"}
+                          </p>
+                        </td>
+                        <td className="whitespace-nowrap text-sm text-[var(--text-muted)]">
+                          {new Date(legal.requestedAt).toLocaleString()}
+                        </td>
+                        <td className="text-xs text-[var(--text-muted)]">
+                          {legal.assignedTo || "Shared"}
+                        </td>
+                        <td>
+                          <CrmStatusBadge tone={legalStatusBadgeTone(legal.status)}>
+                            {legal.status}
+                          </CrmStatusBadge>
+                        </td>
+                        <td className="max-w-[220px] truncate text-xs text-[var(--text-muted)]">
+                          {legal.rejectionReason || legal.notes || "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </CrmTable>
+              <Pagination
+                total={total}
+                page={page}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+              />
+            </>
           )}
         </CrmTableShell>
       )}

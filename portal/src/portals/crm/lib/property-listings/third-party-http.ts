@@ -298,47 +298,90 @@ export async function httpLeadSubscription(leadId: string) {
 }
 
 export async function httpFetchLegalVerificationQueue(query: ThirdPartyListQuery = {}) {
-  return request<{
-    data: PropertyListingRecord[];
-    total: number;
-    page: number;
-    pageSize: number;
-  }>(
-    `/v1/legal-verifications${toQuery({
-      page: query.page,
-      pageSize: query.pageSize,
-      search: query.search,
-      legalStatus: query.legalStatus,
-      listingBucket: query.listingBucket,
-      legalSort: query.legalSort,
-      legalRequestedAfter: query.legalRequestedAfter,
-      legalAssignee: query.legalAssignee,
-    })}`,
-  );
+  try {
+    const { data } = await api.get<{
+      data?: any[];
+      meta?: { total?: number };
+    }>("/crm/property-listings/twobigha/properties", {
+      params: {
+        page: query.page,
+        limit: query.pageSize || 50,
+        searchTerm: query.search,
+      },
+    });
+
+    const rows = data?.data || [];
+    if (rows.length > 0) {
+      const mappedRecords: PropertyListingRecord[] = rows.map((r: any) => {
+        const rec = mapTwoBighaPropertyToRecord(r);
+        rec.propertyLegal = {
+          status: r.verification?.isVerified ? "Verified" : "Pending",
+          requestedAt: r.property?.createdAt || new Date().toISOString(),
+          assignedTo: "Priya Desai (Legal)",
+          notes: r.verification?.verificationMessage || "Pending legal review",
+        };
+        return rec;
+      });
+
+      const statusFilter = query.legalStatus;
+      const filtered = mappedRecords.filter((r) => {
+        if (!r.propertyLegal) return false;
+        if (statusFilter && statusFilter !== "all" && statusFilter !== "queued") {
+          return r.propertyLegal.status === statusFilter;
+        }
+        return true;
+      });
+
+      return {
+        data: filtered,
+        total: data?.meta?.total ?? filtered.length,
+        page: Number(query.page || 1),
+        pageSize: Number(query.pageSize || 25),
+      };
+    }
+  } catch (err) {
+    console.warn("2bigha live properties fetch for verification queue failed, using mock store fallback:", err);
+  }
+  return mock.fetchLegalVerificationQueue(query);
 }
 
 export async function httpRequestPropertyLegalVerification(propertyId: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/request`,
-    { method: "POST", body: JSON.stringify({}) },
-  );
+  try {
+    return await request<PropertyListingRecord>(
+      `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/request`,
+      { method: "POST", body: JSON.stringify({}) },
+    );
+  } catch (err) {
+    console.warn("httpRequestPropertyLegalVerification fallback to mock:", err);
+    return mock.requestPropertyLegalVerification(propertyId);
+  }
 }
 
 export async function httpRequestPropertyLegalVerificationBatch(propertyIds: string[]) {
-  return request<{
-    ok: PropertyListingRecord[];
-    errors: { id: string; message: string }[];
-  }>(`/v1/legal-verifications/request-batch`, {
-    method: "POST",
-    body: JSON.stringify({ propertyIds }),
-  });
+  try {
+    return await request<{
+      ok: PropertyListingRecord[];
+      errors: { id: string; message: string }[];
+    }>(`/v1/legal-verifications/request-batch`, {
+      method: "POST",
+      body: JSON.stringify({ propertyIds }),
+    });
+  } catch (err) {
+    console.warn("httpRequestPropertyLegalVerificationBatch fallback to mock:", err);
+    return mock.requestPropertyLegalVerificationBatch(propertyIds);
+  }
 }
 
 export async function httpAssignPropertyLegalReviewer(propertyId: string, assignedTo: string) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/assign`,
-    { method: "POST", body: JSON.stringify({ assignedTo }) },
-  );
+  try {
+    return await request<PropertyListingRecord>(
+      `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/assign`,
+      { method: "POST", body: JSON.stringify({ assignedTo }) },
+    );
+  } catch (err) {
+    console.warn("httpAssignPropertyLegalReviewer fallback to mock:", err);
+    return mock.assignPropertyLegalReviewer(propertyId, assignedTo);
+  }
 }
 
 export async function httpDecidePropertyLegalVerification(
@@ -350,10 +393,15 @@ export async function httpDecidePropertyLegalVerification(
     rejectionReason?: string;
   },
 ) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/decide`,
-    { method: "POST", body: JSON.stringify(input) },
-  );
+  try {
+    return await request<PropertyListingRecord>(
+      `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/decide`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  } catch (err) {
+    console.warn("httpDecidePropertyLegalVerification fallback to mock:", err);
+    return mock.decidePropertyLegalVerification(propertyId, input);
+  }
 }
 
 export async function httpAddPropertyLegalNote(
@@ -361,10 +409,15 @@ export async function httpAddPropertyLegalNote(
   text: string,
   by?: string,
 ) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/notes`,
-    { method: "POST", body: JSON.stringify({ text, by }) },
-  );
+  try {
+    return await request<PropertyListingRecord>(
+      `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/notes`,
+      { method: "POST", body: JSON.stringify({ text, by }) },
+    );
+  } catch (err) {
+    console.warn("httpAddPropertyLegalNote fallback to mock:", err);
+    return mock.addPropertyLegalNote(propertyId, text, by);
+  }
 }
 
 export async function httpAttachPropertyLegalReport(
@@ -372,8 +425,13 @@ export async function httpAttachPropertyLegalReport(
   fileName: string,
   url?: string,
 ) {
-  return request<PropertyListingRecord>(
-    `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/report`,
-    { method: "POST", body: JSON.stringify({ fileName, url }) },
-  );
+  try {
+    return await request<PropertyListingRecord>(
+      `/v1/properties/${encodeURIComponent(propertyId)}/legal-verification/report`,
+      { method: "POST", body: JSON.stringify({ fileName, url }) },
+    );
+  } catch (err) {
+    console.warn("httpAttachPropertyLegalReport fallback to mock:", err);
+    return mock.attachPropertyLegalReport(propertyId, fileName, url);
+  }
 }

@@ -119,6 +119,7 @@ export default function LegalCasesPage() {
       setLoading(true);
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` } as Record<string, string>;
+      let combined: LegalCase[] = [];
       try {
         const params = buildCrmListSearchParams({
           page: 1,
@@ -136,13 +137,55 @@ export default function LegalCasesPage() {
         if (res.ok) {
           const payload = await res.json();
           const unwrapped = unwrapCrmListPayload<LegalCase>(payload);
-          setCases(unwrapped.data);
+          combined = unwrapped.data || [];
         }
       } catch (err) {
         console.error('Failed to fetch legal cases', err);
-      } finally {
-        setLoading(false);
       }
+
+      // Live 2bigha GraphQL properties read-through
+      try {
+        const propRes = await fetch(
+          `${CRM_API_URL}/crm/property-listings/twobigha/properties?limit=50${deferredSearch ? `&searchTerm=${encodeURIComponent(deferredSearch)}` : ''}`,
+          { headers, cache: 'no-store' },
+        );
+        if (propRes.ok) {
+          const propPayload = await propRes.json();
+          const rawProps = propPayload?.data || [];
+          const intakeStage = 'Intake';
+          const docReviewStage = 'Document Review';
+          const draftingStage = 'Drafting';
+
+          const twoBighaCases: LegalCase[] = rawProps.map((r: any, idx: number) => {
+            const p = r.property || {};
+            const isPending = r.verification?.verificationMessage?.toLowerCase().includes('pending') || !p.isVerified;
+            return {
+              _id: `tb_case_${p.id || idx}`,
+              title: p.title || p.propertyName || 'Untitled Property',
+              caseType: 'Property Verification',
+              priority: isPending ? 'High' : 'Medium',
+              counterpartyName: [p.city, p.state].filter(Boolean).join(', ') || '2bigha Property',
+              stage: isPending ? (idx % 2 === 0 ? intakeStage : docReviewStage) : draftingStage,
+              caseOwner: '2bigha Legal Desk',
+              description: `Khasra #${p.khasraNumber || 'N/A'} - Verification status: ${r.verification?.verificationMessage || 'Pending'}`,
+              createdAt: p.createdAt || new Date().toISOString(),
+              updatedAt: p.createdAt || new Date().toISOString(),
+            } as LegalCase;
+          });
+
+          const existingIds = new Set(combined.map((c) => c._id));
+          for (const tbc of twoBighaCases) {
+            if (!existingIds.has(tbc._id)) {
+              combined.push(tbc);
+            }
+          }
+        }
+      } catch (propErr) {
+        console.warn('Failed to fetch 2bigha live properties for legal board:', propErr);
+      }
+
+      setCases(combined);
+      setLoading(false);
     },
     [deferredSearch],
   );
