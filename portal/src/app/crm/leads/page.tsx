@@ -348,6 +348,9 @@ export default function LeadsPage() {
   const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
   const [lastActivityFilter, setLastActivityFilter] = useState<'all' | 'today' | 'last7' | 'last30' | 'last90' | 'no-activity'>('all');
+  const [followUpFilter, setFollowUpFilter] = useState<
+    'all' | 'overdue' | 'today' | 'tomorrow' | 'this_week' | 'upcoming' | 'has_followup' | 'no_followup'
+  >('all');
   const [emailOpenFilterMode, setEmailOpenFilterMode] = useState<
     | 'all'
     | 'opened'
@@ -557,12 +560,13 @@ export default function LeadsPage() {
   }, []);
 
   const pipelineCacheKey = useCallback(
-    (pipelineId: string | null | undefined, opts?: { page?: number; pageSize?: number; search?: string; full?: boolean; filtersStr?: string; emailEngStr?: string; mine?: boolean }) => {
+    (pipelineId: string | null | undefined, opts?: { page?: number; pageSize?: number; search?: string; full?: boolean; filtersStr?: string; emailEngStr?: string; followUpStr?: string; mine?: boolean }) => {
       const base = isMongoObjectIdString(pipelineId) ? String(pipelineId).trim() : '__all__';
       const f = opts?.filtersStr ? `|f=${opts.filtersStr}` : '';
       const e = opts?.emailEngStr ? `|e=${opts.emailEngStr}` : '';
+      const fu = opts?.followUpStr ? `|fu=${opts.followUpStr}` : '';
       const m = opts?.mine ? `|m=1` : '';
-      const key = opts?.full ? `${base}|full${f}${e}${m}` : `${base}|p=${opts?.page || 1}|ps=${opts?.pageSize || 25}|q=${opts?.search || ''}${f}${e}${m}`;
+      const key = opts?.full ? `${base}|full${f}${e}${fu}${m}` : `${base}|p=${opts?.page || 1}|ps=${opts?.pageSize || 25}|q=${opts?.search || ''}${f}${e}${fu}${m}`;
       return `leads:${key}`;
     },
     [],
@@ -611,6 +615,7 @@ export default function LeadsPage() {
     const headers = { Authorization: `Bearer ${token}` } as Record<string, string>;
     const filtersStr = apiFilters.length ? JSON.stringify(apiFilters) : '';
     const emailEngStr = Object.values(emailEngagement).join(',');
+    const followUpStr = followUpFilter;
     const cacheKey = pipelineCacheKey(pipelineId, {
       page,
       pageSize,
@@ -618,6 +623,7 @@ export default function LeadsPage() {
       full: needsClientFullList,
       filtersStr,
       emailEngStr,
+      followUpStr,
       mine: showMyLeadsOnly,
     });
     const cached = readSharedLeadsCache(cacheKey);
@@ -640,6 +646,7 @@ export default function LeadsPage() {
             ? String(pipelineId).trim()
             : undefined,
           mine: showMyLeadsOnly ? '1' : undefined,
+          followUp: followUpFilter !== 'all' ? followUpFilter : undefined,
         },
       });
       const url = `${CRM_API_URL}/crm/leads?${params.toString()}`;
@@ -665,7 +672,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [pipelineCacheKey, page, pageSize, debouncedSearch, needsClientFullList, showMyLeadsOnly, apiFilters, emailEngagement, readSharedLeadsCache]);
+  }, [pipelineCacheKey, page, pageSize, debouncedSearch, needsClientFullList, showMyLeadsOnly, apiFilters, emailEngagement, followUpFilter, readSharedLeadsCache]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -711,6 +718,7 @@ export default function LeadsPage() {
 
       const filtersStr = apiFilters.length ? JSON.stringify(apiFilters) : '';
       const emailEngStr = Object.values(emailEngagement).join(',');
+      const followUpStr = followUpFilter;
       const leadListKey = pipelineCacheKey(initialPipelineId, {
         page,
         pageSize,
@@ -718,6 +726,7 @@ export default function LeadsPage() {
         full: needsClientFullList,
         filtersStr,
         emailEngStr,
+        followUpStr,
         mine: showMyLeadsOnly,
       });
       const cachedLeads = readSharedLeadsCache(leadListKey);
@@ -737,6 +746,7 @@ export default function LeadsPage() {
             ? initialPipelineId.trim()
             : undefined,
           mine: showMyLeadsOnly ? '1' : undefined,
+          followUp: followUpFilter !== 'all' ? followUpFilter : undefined,
         },
       });
       const leadsUrl = `${CRM_API_URL}/crm/leads?${leadParams.toString()}`;
@@ -763,6 +773,7 @@ export default function LeadsPage() {
             full: needsClientFullList,
             filtersStr,
             emailEngStr,
+            followUpStr,
             mine: showMyLeadsOnly,
           }),
           unwrapped.data,
@@ -773,7 +784,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [pipelineCacheKey, page, pageSize, debouncedSearch, needsClientFullList, showMyLeadsOnly, apiFilters, emailEngagement, readSharedLeadsCache]);
+  }, [pipelineCacheKey, page, pageSize, debouncedSearch, needsClientFullList, showMyLeadsOnly, apiFilters, emailEngagement, followUpFilter, readSharedLeadsCache]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -825,7 +836,16 @@ export default function LeadsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [selectedPipelineId, debouncedSearch, needsClientFullList, emailEngagement, showMyLeadsOnly]);
+  }, [selectedPipelineId, debouncedSearch, needsClientFullList, emailEngagement, showMyLeadsOnly, followUpFilter]);
+
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    void fetchLeadsList(selectedPipelineId || null);
+  }, [selectedPipelineId, page, pageSize, debouncedSearch, apiFilters, emailEngagement, showMyLeadsOnly, followUpFilter, fetchLeadsList]);
 
   useEffect(() => {
     if (viewMode === 'list' || isColumnsOpen) {
@@ -1947,6 +1967,38 @@ export default function LeadsPage() {
                     <option value="last30">Last 30 days</option>
                     <option value="last90">Last 90 days</option>
                     <option value="no-activity">No activity</option>
+                  </select>
+                  <CrmIcon.ChevronDown
+                    size={12}
+                    className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                  />
+                </div>
+
+                {/* Follow-up Reminder Filter */}
+                <div className="relative h-[38px]">
+                  <Timer
+                    size={14}
+                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                    aria-hidden
+                  />
+                  <select
+                    value={followUpFilter}
+                    onChange={(e) => {
+                      setFollowUpFilter(e.target.value as any);
+                      setPage(1);
+                    }}
+                    aria-label="Filter leads by follow-up reminder date"
+                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[150px] max-w-[195px] pl-8 pr-7 text-xs font-medium')}
+                    title="Filter leads by follow-up reminder date"
+                  >
+                    <option value="all">Follow-up: All</option>
+                    <option value="overdue">Overdue Reminders</option>
+                    <option value="today">Due Today</option>
+                    <option value="tomorrow">Due Tomorrow</option>
+                    <option value="this_week">Due This Week</option>
+                    <option value="upcoming">Upcoming Reminders</option>
+                    <option value="has_followup">Has Scheduled Follow-up</option>
+                    <option value="no_followup">No Follow-up Scheduled</option>
                   </select>
                   <CrmIcon.ChevronDown
                     size={12}

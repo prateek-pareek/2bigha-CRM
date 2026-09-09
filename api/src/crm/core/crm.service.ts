@@ -2640,6 +2640,9 @@ export class CRMService {
       filters?: CrmFilterCriterion[];
       emailEngagement?: CrmEmailEngagementListFilter | null;
       includeConverted?: boolean;
+      followUp?: string;
+      followUpFrom?: string;
+      followUpTo?: string;
     },
   ): Promise<ScalableListResult<Lead>> {
     const normalized = {
@@ -2675,6 +2678,9 @@ export class CRMService {
       filters?: CrmFilterCriterion[];
       emailEngagement?: CrmEmailEngagementListFilter | null;
       includeConverted?: boolean;
+      followUp?: string;
+      followUpFrom?: string;
+      followUpTo?: string;
     },
   ): Promise<ScalableListResult<Lead>> {
     // Equivalent to "not converted yet" while remaining index-friendly.
@@ -2790,6 +2796,73 @@ export class CRMService {
       'leads',
       listOpts?.emailEngagement,
     );
+
+    if (listOpts?.followUp && listOpts.followUp !== 'all') {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const startOfTomorrow = new Date(startOfToday.getTime() + 86400000);
+      const endOfTomorrow = new Date(endOfToday.getTime() + 86400000);
+      const endOfWeek = new Date(startOfToday.getTime() + 7 * 86400000);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      let dateFilter: Record<string, unknown> | null = null;
+      switch (listOpts.followUp) {
+        case 'overdue':
+          dateFilter = { $lt: now };
+          break;
+        case 'today':
+          dateFilter = { $gte: startOfToday, $lte: endOfToday };
+          break;
+        case 'tomorrow':
+          dateFilter = { $gte: startOfTomorrow, $lte: endOfTomorrow };
+          break;
+        case 'this_week':
+          dateFilter = { $gte: startOfToday, $lte: endOfWeek };
+          break;
+        case 'upcoming':
+          dateFilter = { $gte: now };
+          break;
+        case 'has_followup':
+          dateFilter = { $exists: true, $ne: null };
+          break;
+        case 'custom':
+          if (listOpts.followUpFrom || listOpts.followUpTo) {
+            const from = listOpts.followUpFrom ? new Date(listOpts.followUpFrom) : undefined;
+            const to = listOpts.followUpTo ? new Date(listOpts.followUpTo) : undefined;
+            if (from && to) dateFilter = { $gte: from, $lte: to };
+            else if (from) dateFilter = { $gte: from };
+            else if (to) dateFilter = { $lte: to };
+          }
+          break;
+      }
+
+      if (listOpts.followUp === 'no_followup') {
+        filter = {
+          $and: [
+            filter,
+            {
+              $and: [
+                { $or: [{ nextFollowUpAt: { $exists: false } }, { nextFollowUpAt: null }] },
+                { $or: [{ leadIntentFollowUpAt: { $exists: false } }, { leadIntentFollowUpAt: null }] },
+              ],
+            },
+          ],
+        };
+      } else if (dateFilter) {
+        filter = {
+          $and: [
+            filter,
+            {
+              $or: [
+                { nextFollowUpAt: dateFilter },
+                { leadIntentFollowUpAt: dateFilter },
+              ],
+            },
+          ],
+        };
+      }
+    }
 
     const page = Math.max(1, listOpts?.page ?? CRM_DEFAULT_PAGE);
     const pageSize = clampPageSize(

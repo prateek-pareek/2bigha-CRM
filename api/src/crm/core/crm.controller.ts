@@ -103,6 +103,9 @@ export class CRMController {
     @Query('emailReply') emailReply?: string,
     @Query('emailSent') emailSent?: string,
     @Query('includeConverted') includeConverted?: string,
+    @Query('followUp') followUp?: string,
+    @Query('followUpFrom') followUpFrom?: string,
+    @Query('followUpTo') followUpTo?: string,
   ) {
     const parsed = resolveListPagination(
       { page, pageSize, search },
@@ -133,6 +136,9 @@ export class CRMController {
       emailEngagement,
       includeConverted:
         includeConverted === '1' || includeConverted === 'true',
+      followUp,
+      followUpFrom,
+      followUpTo,
     });
   }
 
