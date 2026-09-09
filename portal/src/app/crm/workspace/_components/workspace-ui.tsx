@@ -463,7 +463,7 @@ export function Dropdown({ value, onChange, options, widthClass = "min-w-[160px]
         type="button"
         onClick={() => setOpen((p) => !p)}
         className={`h-9 w-full inline-flex items-center gap-2 bg-[var(--card-bg)] border rounded-md px-4 text-sm font-medium text-[var(--text-main)] shadow-sm transition-colors whitespace-nowrap justify-between ${
-          open ? 'border-[var(--hs-link)] ring-1 ring-[var(--hs-link)]/30' : 'border-[var(--border-color)] hover:border-[var(--text-muted)]'
+          open ? 'border-primary ring-1 ring-primary/30' : 'border-[var(--border-color)] hover:border-[var(--text-muted)]'
         }`}
       >
         <span className="truncate">{formatWorkspaceWindowLabel(value, options)}</span>
@@ -471,7 +471,7 @@ export function Dropdown({ value, onChange, options, widthClass = "min-w-[160px]
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1.5 z-[9999] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md shadow-lg min-w-full overflow-hidden flex flex-col max-h-[80vh]">
+        <div className="absolute top-full right-0 sm:left-0 sm:right-auto mt-1.5 z-[9999] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md shadow-lg min-w-[260px] overflow-hidden flex flex-col max-h-[80vh]">
           <div className="py-1 flex-shrink-0 overflow-y-auto">
             {options.map((opt) => (
               <button
@@ -480,12 +480,12 @@ export function Dropdown({ value, onChange, options, widthClass = "min-w-[160px]
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 className={`w-full flex items-center justify-between px-4 py-2 text-sm transition-colors text-left ${
                   opt.value === value
-                    ? 'bg-[var(--accent)] text-[var(--hs-link)] font-semibold dark:bg-[color-mix(in_srgb,var(--hs-link)_18%,var(--card-bg))]'
+                    ? 'bg-primary/10 text-primary font-semibold'
                     : 'text-[var(--text-main)] font-medium hover:bg-[var(--background)]'
                 }`}
               >
                 <span className="truncate pr-3">{opt.label}</span>
-                {opt.value === value && <Check size={13} className="text-[var(--hs-link)] shrink-0" />}
+                {opt.value === value && <Check size={13} className="text-primary shrink-0" />}
               </button>
             ))}
           </div>
@@ -507,7 +507,7 @@ export function Dropdown({ value, onChange, options, widthClass = "min-w-[160px]
                     size="sm" 
                     onClick={handleApplySpecific} 
                     disabled={!specificDate}
-                    className="h-8 text-xs font-semibold bg-[var(--hs-link)] text-white hover:bg-[var(--hs-link-hover)] rounded-md shrink-0"
+                    className="h-8 px-4 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 rounded-md shrink-0"
                   >
                     Apply
                   </Button>
@@ -536,7 +536,7 @@ export function Dropdown({ value, onChange, options, widthClass = "min-w-[160px]
                   size="sm" 
                   onClick={handleApplyCustom} 
                   disabled={!customFrom || !customTo}
-                  className="w-full h-8 text-xs font-semibold bg-[var(--hs-link)] text-white hover:bg-[var(--hs-link-hover)] rounded-md mt-1"
+                  className="w-full h-8 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 rounded-md mt-2"
                 >
                   Apply Custom Range
                 </Button>

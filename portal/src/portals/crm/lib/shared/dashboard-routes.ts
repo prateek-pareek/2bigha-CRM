@@ -6,22 +6,46 @@
  */
 export const WORKSPACE_ROUTES = [
   {
+    slug: "admin",
+    label: "Admin Dashboard",
+    href: "/crm/workspace/admin",
+    section: "admin",
+    permission: "dashboard:read",
+  },
+  {
+    slug: "team",
+    label: "Team Lead Dashboard",
+    href: "/crm/workspace/team",
+    section: "team",
+    permission: "dashboard:read",
+  },
+  {
+    slug: "agent",
+    label: "Agent Dashboard",
+    href: "/crm/workspace/agent",
+    section: "agent",
+    permission: "dashboard:read",
+  },
+  {
     slug: "work",
     label: "Work Dashboard",
     href: "/crm/workspace/work",
     section: "work",
+    legacy: true,
     permission: "workspace-work:read",
   },
   {
     slug: "summary",
     label: "Sales Overview",
     href: "/crm/workspace/summary",
+    legacy: true,
     permission: "workspace-summary:read",
   },
   {
     slug: "prospecting",
     label: "Leads Dashboard",
     href: "/crm/workspace/prospecting",
+    legacy: true,
     permission: "workspace-prospecting:read",
   },
   {
@@ -29,6 +53,7 @@ export const WORKSPACE_ROUTES = [
     label: "Growth Dashboard",
     href: "/crm/workspace/growth",
     section: "growth",
+    legacy: true,
     permission: "workspace-growth:read",
   },
   {
@@ -36,6 +61,7 @@ export const WORKSPACE_ROUTES = [
     label: "Call Workspace",
     href: "/crm/workspace/calls",
     section: "calls",
+    legacy: true,
     permission: "workspace-calls:read",
   },
   /** Still routable for deep links / Engage nav; not listed under Dashboard. */
@@ -112,6 +138,7 @@ export type LeadReportVariant = (typeof LEAD_REPORT_SECTIONS)[number]["variant"]
 export const REPORT_ROUTES = [
   { slug: "agents", label: "Agent Performance", href: "/crm/reports/agents", permission: "dashboard:read" },
   { slug: "teams", label: "Team & Organizations", href: "/crm/reports/team-organizations", permission: "dashboard:read" },
+  { slug: "schedules", label: "Scheduled Reports", href: "/crm/reports/schedules", permission: "dashboard:read" },
 ] as const;
 
 export type ReportRouteSlug = (typeof REPORT_ROUTES)[number]["slug"];
@@ -120,6 +147,7 @@ export type ReportRouteSlug = (typeof REPORT_ROUTES)[number]["slug"];
 export const REPORT_SECTION_DESCRIPTIONS: Record<string, string> = {
   agents: "Comprehensive agent performance analytics — calls made, leads conversion, follow-up adherence, response time, properties listed, and target achievement.",
   teams: "Team-level analytics with lead source/intent conversion tracking, WhatsApp engagement rates, and IVR call metrics for managers and team leads.",
+  schedules: "Manage automated email deliveries for your performance reports.",
 };
 
 export function reportSectionTitle(slug: string): string {

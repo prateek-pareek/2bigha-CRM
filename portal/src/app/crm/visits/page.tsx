@@ -558,83 +558,85 @@ function VisitsPageContent() {
           }
         />
 
-        {/* Filter Controls Row */}
-        <div className="flex flex-wrap items-center gap-2.5 p-3 border-t border-slate-100 bg-slate-50/30 dark:border-slate-800/60 dark:bg-slate-900/40">
-          {/* Status Filter */}
-          <select
-            value={status}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-          >
-            <option value="">All Statuses</option>
+        {/* Filter Controls Row - Standardized Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 border-t border-slate-100 bg-slate-50/30 dark:border-slate-800/60 dark:bg-slate-900/40">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Status Filter */}
+            <select
+              value={status}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-[38px] rounded-[5px] border border-[var(--border-color)] bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            >
+              <option value="">All Statuses</option>
+              {tab === "visits" ? (
+                <>
+                  <option value="SCHEDULED">Scheduled</option>
+                  <option value="AGENT_ON_WAY">On The Way</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="MISSED">Missed</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </>
+              ) : (
+                <>
+                  <option value="PENDING">Pending</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="SCHEDULED">Scheduled</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="CLOSED">Closed</option>
+                </>
+              )}
+            </select>
+
+            {/* Category / Purpose Filter */}
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="h-[38px] rounded-[5px] border border-[var(--border-color)] bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            >
+              <option value="">All Categories / Purpose</option>
+              {VISIT_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {formatVisitCategory(c)}
+                </option>
+              ))}
+            </select>
+
+            {/* Date Filter (for visits) */}
             {tab === "visits" ? (
               <>
-                <option value="SCHEDULED">Scheduled</option>
-                <option value="AGENT_ON_WAY">On The Way</option>
-                <option value="IN_PROGRESS">In Progress</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="MISSED">Missed</option>
-                <option value="CANCELLED">Cancelled</option>
+                <select
+                  value={datePreset}
+                  onChange={(e) => setDatePreset(e.target.value as DatePreset)}
+                  className="h-[38px] rounded-[5px] border border-[var(--border-color)] bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                >
+                  <option value="">All Dates</option>
+                  <option value="today">Today</option>
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                </select>
+
+                <select
+                  value={reportFilter}
+                  onChange={(e) => setReportFilter(e.target.value as ReportFilter)}
+                  className="h-[38px] rounded-[5px] border border-[var(--border-color)] bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                >
+                  <option value="">All Reports</option>
+                  <option value="yes">Has Report</option>
+                  <option value="no">No Report</option>
+                </select>
               </>
-            ) : (
-              <>
-                <option value="PENDING">Pending</option>
-                <option value="APPROVED">Approved</option>
-                <option value="SCHEDULED">Scheduled</option>
-                <option value="REJECTED">Rejected</option>
-                <option value="CLOSED">Closed</option>
-              </>
-            )}
-          </select>
+            ) : null}
+          </div>
 
-          {/* Category / Purpose Filter */}
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-          >
-            <option value="">All Categories / Purpose</option>
-            {VISIT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {formatVisitCategory(c)}
-              </option>
-            ))}
-          </select>
-
-          {/* Date Filter (for visits) */}
-          {tab === "visits" ? (
-            <>
-              <select
-                value={datePreset}
-                onChange={(e) => setDatePreset(e.target.value as DatePreset)}
-                className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-              >
-                <option value="">All Dates</option>
-                <option value="today">Today</option>
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-              </select>
-
-              <select
-                value={reportFilter}
-                onChange={(e) => setReportFilter(e.target.value as ReportFilter)}
-                className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-              >
-                <option value="">All Reports</option>
-                <option value="yes">Has Report</option>
-                <option value="no">No Report</option>
-              </select>
-            </>
-          ) : null}
-
-          {/* Active Filter Counter & Reset */}
+          {/* Active Filter Counter & Reset - Right side */}
           {filtersActive ? (
             <button
               type="button"
               onClick={resetFilters}
-              className="inline-flex h-8.5 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-rose-600 shadow-xs hover:bg-rose-50 hover:border-rose-200 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-rose-950/30"
+              className="inline-flex h-[38px] items-center gap-1.5 rounded-[5px] border border-[var(--border-color)] bg-white px-3 text-xs font-semibold text-rose-600 shadow-xs hover:bg-rose-50 hover:border-rose-200 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-rose-950/30 flex-shrink-0"
             >
-              <X size={13} /> Reset Filters
+              <X size={13} /> Reset
             </button>
           ) : null}
         </div>
