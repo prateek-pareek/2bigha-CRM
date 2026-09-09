@@ -579,7 +579,44 @@ export class PropertyListingsService {
         `Invalid approval-queue bucket "${bucket}" — expected one of ${APPROVAL_QUEUE_BUCKETS.join(', ')}`,
       );
     }
-    return this.twoBighaService.listApprovalQueue(bucket as ApprovalQueueBucket, params);
+    const result = await this.twoBighaService.listApprovalQueue(bucket as ApprovalQueueBucket, params);
+    if (result?.data && Array.isArray(result.data) && result.data.length > 0) {
+      const propertyIds = result.data
+        .map((item: any) => item?.property?.id)
+        .filter((id): id is string => typeof id === 'string' && Boolean(id));
+
+      if (propertyIds.length > 0) {
+        const validMongoIds = propertyIds.filter((id) => Types.ObjectId.isValid(id));
+        const localListings = await this.listingModel
+          .find({
+            $or: [
+              { twobighaPropertyId: { $in: propertyIds } },
+              { _id: { $in: validMongoIds } },
+            ],
+          })
+          .select('_id twobighaPropertyId createdBy')
+          .exec();
+
+        const listingMap = new Map<string, string>();
+        for (const loc of localListings) {
+          if (loc.createdBy) {
+            const creatorStr = String(loc.createdBy);
+            if (loc.twobighaPropertyId) listingMap.set(String(loc.twobighaPropertyId), creatorStr);
+            listingMap.set(String(loc._id), creatorStr);
+          }
+        }
+
+        for (const item of result.data as any[]) {
+          const propId = item?.property?.id;
+          if (propId && listingMap.has(String(propId))) {
+            if (item.property) {
+              item.property.createdBy = listingMap.get(String(propId));
+            }
+          }
+        }
+      }
+    }
+    return result;
   }
 
   async findAll(query: PropertyListingListQuery = {}): Promise<{
@@ -924,6 +961,7 @@ export class PropertyListingsService {
     id: string,
     status: 'Approved' | 'Rejected',
     message?: string,
+    userId?: string,
   ): Promise<any> {
     const isMongoId = Types.ObjectId.isValid(id);
     let listing: PropertyListingDocument | null = null;
@@ -936,6 +974,11 @@ export class PropertyListingsService {
     }
 
     if (listing) {
+      if (userId && listing.createdBy && String(listing.createdBy) === String(userId)) {
+        throw new ForbiddenException(
+          'You cannot approve or reject your own property listing submission. It must be reviewed by another team member.',
+        );
+      }
       listing.approvalStatus = status;
       if (message) listing.approvalMessage = message;
       await listing.save();

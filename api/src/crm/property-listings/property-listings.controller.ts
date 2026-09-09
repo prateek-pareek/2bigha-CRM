@@ -244,9 +244,10 @@ export class PropertyListingsController {
   @Post('approval-decision')
   @Permissions('property_listings:write')
   decideApproval(
+    @Request() req: any,
     @Body() body: { id: string; status: 'Approved' | 'Rejected'; message?: string },
   ) {
-    return this.listingsService.decideApproval(body.id, body.status, body.message);
+    return this.listingsService.decideApproval(body.id, body.status, body.message, req.user?.userId);
   }
 
   /** Manual retry for a listing whose last sync to 2bigha failed (or is still mock-only). */

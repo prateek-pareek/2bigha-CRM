@@ -65,6 +65,7 @@ export interface ApprovalQueueProperty {
     createdAt?: string;
     updatedAt?: string;
     publishedAt?: string;
+    createdBy?: string;
   };
   seo?: { slug?: string };
 }

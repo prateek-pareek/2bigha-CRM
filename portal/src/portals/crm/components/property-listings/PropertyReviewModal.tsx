@@ -23,6 +23,7 @@ interface PropertyReviewModalProps {
   item: ApprovalQueueProperty | null;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  isSelfSubmission?: boolean;
 }
 
 function formatDate(value?: string) {
@@ -43,6 +44,7 @@ export function PropertyReviewModal({
   item,
   onApprove,
   onReject,
+  isSelfSubmission = false,
 }: PropertyReviewModalProps) {
   if (!item) return null;
 
@@ -292,6 +294,19 @@ export function PropertyReviewModal({
           </div>
         ) : null}
 
+        {/* Self approval prohibition alert */}
+        {isSelfSubmission && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+            <p className="font-semibold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+              <XCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              Self-Approval Restricted
+            </p>
+            <p className="mt-1">
+              You submitted this property listing. Another team member or reviewer must approve or reject this submission.
+            </p>
+          </div>
+        )}
+
         {/* Modal Action Bar */}
         <div className="flex items-center justify-between border-t border-[var(--border-color)] pt-3.5">
           <CrmButton variant="ghost" onClick={onClose}>
@@ -300,21 +315,27 @@ export function PropertyReviewModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              disabled={isSelfSubmission}
               onClick={() => {
+                if (isSelfSubmission) return;
                 onClose();
                 onReject(p.id);
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors"
+              title={isSelfSubmission ? "You cannot reject your own property submission" : undefined}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-rose-50 transition-colors"
             >
               <XCircle className="h-4 w-4" /> Reject Submission
             </button>
             <button
               type="button"
+              disabled={isSelfSubmission}
               onClick={() => {
+                if (isSelfSubmission) return;
                 onClose();
                 onApprove(p.id);
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+              title={isSelfSubmission ? "You cannot approve your own property submission" : undefined}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600 transition-colors"
             >
               <CheckCircle2 className="h-4 w-4" /> Approve Listing
             </button>

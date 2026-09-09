@@ -42,6 +42,7 @@ import {
 } from "@/lib/crm/property-listings/approval-queue-api";
 import { PropertyRejectionModal } from "@/components/crm/property-listings/PropertyRejectionModal";
 import { PropertyReviewModal } from "@/components/crm/property-listings/PropertyReviewModal";
+import { useAuthStore } from "@/store/pm/auth-store";
 
 const BUCKET_KEY = "crm_property_approval_bucket_v1";
 
@@ -96,6 +97,9 @@ function PropertyApprovalQueuePageContent() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<CrmViewMode>("list");
+  const { user } = useAuthStore();
+
+  const currentUserId = user?.id || user?.userId;
 
   // Selection state for bulk actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -252,17 +256,31 @@ function PropertyApprovalQueuePageContent() {
 
   const handleBulkApprove = async () => {
     if (selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
+    const selectedRows = rows.filter((r) => selectedIds.has(r.property.id));
+    const validRowsToApprove = selectedRows.filter(
+      (r) => !currentUserId || !r.property.createdBy || String(r.property.createdBy) !== String(currentUserId),
+    );
+    const selfCount = selectedRows.length - validRowsToApprove.length;
+
+    if (validRowsToApprove.length === 0) {
+      toast.error("Self-approval prohibited: You cannot approve your own submissions.");
+      return;
+    }
+
     let successCount = 0;
-    for (const id of ids) {
+    for (const r of validRowsToApprove) {
       try {
-        await decidePropertyApproval({ id, status: "Approved" });
+        await decidePropertyApproval({ id: r.property.id, status: "Approved" });
         successCount++;
-      } catch {
-        /* proceed with rest */
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || err?.message || `Failed to approve ${r.property.title}`);
       }
     }
-    toast.success(`Approved ${successCount} property submission(s)`);
+    if (selfCount > 0) {
+      toast.warning(`Approved ${successCount} property submission(s). Skipped ${selfCount} self-submission(s).`);
+    } else {
+      toast.success(`Approved ${successCount} property submission(s)`);
+    }
     setSelectedIds(new Set());
     void load();
   };
@@ -447,6 +465,9 @@ function PropertyApprovalQueuePageContent() {
           {filteredRows.map((row) => {
             const p = row.property;
             const isSelected = selectedIds.has(p.id);
+            const isSelfSubmission = Boolean(
+              currentUserId && p.createdBy && String(p.createdBy) === String(currentUserId),
+            );
             return (
               <div
                 key={p.id}
@@ -459,15 +480,23 @@ function PropertyApprovalQueuePageContent() {
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <CrmStatusBadge tone={crmStatusToneFromLabel(p.approvalStatus || bucket)}>
-                      {p.approvalStatus || bucketMeta.label}
-                    </CrmStatusBadge>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <CrmStatusBadge tone={crmStatusToneFromLabel(p.approvalStatus || bucket)}>
+                        {p.approvalStatus || bucketMeta.label}
+                      </CrmStatusBadge>
+                      {isSelfSubmission && (
+                        <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/40">
+                          Self Submission
+                        </span>
+                      )}
+                    </div>
                     {bucket === "pending" && (
                       <input
                         type="checkbox"
+                        disabled={isSelfSubmission}
                         checked={isSelected}
                         onChange={() => toggleSelectOne(p.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
                       />
                     )}
                   </div>
@@ -533,8 +562,14 @@ function PropertyApprovalQueuePageContent() {
                     {bucket !== "approved" && (
                       <button
                         type="button"
+                        disabled={isSelfSubmission}
                         onClick={() => handleApprove(p.id)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                        title={
+                          isSelfSubmission
+                            ? "Self-approval disabled: Another reviewer must approve this listing"
+                            : "Approve listing"
+                        }
+                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600 transition-colors"
                       >
                         <CheckCircle2 size={12} /> Approve
                       </button>
@@ -542,8 +577,14 @@ function PropertyApprovalQueuePageContent() {
                     {bucket !== "rejected" && (
                       <button
                         type="button"
+                        disabled={isSelfSubmission}
                         onClick={() => handleRejectClick(p.id, p.title || p.propertyName)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors"
+                        title={
+                          isSelfSubmission
+                            ? "Self-approval disabled: Another reviewer must reject this listing"
+                            : "Reject listing"
+                        }
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-rose-50 transition-colors"
                       >
                         <XCircle size={12} /> Reject
                       </button>
@@ -585,6 +626,9 @@ function PropertyApprovalQueuePageContent() {
                 const p = row.property;
                 const location = [p.city, p.state].filter(Boolean).join(", ") || "—";
                 const isSelected = selectedIds.has(p.id);
+                const isSelfSubmission = Boolean(
+                  currentUserId && p.createdBy && String(p.createdBy) === String(currentUserId),
+                );
 
                 return (
                   <tr
@@ -599,9 +643,10 @@ function PropertyApprovalQueuePageContent() {
                       <td className="text-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
+                          disabled={isSelfSubmission}
                           checked={isSelected}
                           onChange={() => toggleSelectOne(p.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
                         />
                       </td>
                     )}
@@ -619,6 +664,11 @@ function PropertyApprovalQueuePageContent() {
                           {p.isVerified && (
                             <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                               Verified
+                            </span>
+                          )}
+                          {isSelfSubmission && (
+                            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/40">
+                              Self Submission
                             </span>
                           )}
                         </div>
@@ -679,8 +729,14 @@ function PropertyApprovalQueuePageContent() {
                         {bucket !== "approved" && (
                           <button
                             type="button"
+                            disabled={isSelfSubmission}
                             onClick={() => handleApprove(p.id)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                            title={
+                              isSelfSubmission
+                                ? "Self-approval disabled: Another reviewer must approve this listing"
+                                : "Approve listing"
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600 transition-colors"
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Approve
@@ -690,8 +746,14 @@ function PropertyApprovalQueuePageContent() {
                         {bucket !== "rejected" && (
                           <button
                             type="button"
+                            disabled={isSelfSubmission}
                             onClick={() => handleRejectClick(p.id, p.title || p.propertyName)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400"
+                            title={
+                              isSelfSubmission
+                                ? "Self-approval disabled: Another reviewer must reject this listing"
+                                : "Reject listing"
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-rose-50 transition-colors dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400"
                           >
                             <XCircle className="h-3.5 w-3.5" />
                             Reject
@@ -724,6 +786,11 @@ function PropertyApprovalQueuePageContent() {
         isOpen={!!reviewItem}
         onClose={() => setReviewItem(null)}
         item={reviewItem}
+        isSelfSubmission={Boolean(
+          currentUserId &&
+            reviewItem?.property?.createdBy &&
+            String(reviewItem.property.createdBy) === String(currentUserId),
+        )}
         onApprove={handleApprove}
         onReject={(id) => {
           const title = reviewItem?.property?.title || reviewItem?.property?.propertyName;
