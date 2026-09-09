@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { CheckSquare, MessageSquare, History, ArrowUpRight, Check, Loader2 } from "lucide-react";
+import CrmRecordRemindersPanel from "@/components/crm/records/detail/CrmRecordRemindersPanel";
 import { cn } from "@/lib/utils";
 import { formatCrmUserLabel, taskAssigneeOptionValue, type CrmPortalUserOption } from "@/components/crm/inbox/ActivityLogger";
 import { CrmPersonSearchSelect } from "@/components/crm/ui/CrmPersonSearchSelect";
@@ -389,6 +390,8 @@ export function TaskDetailBody({
           </div>
         ) : null}
       </section>
+
+      <CrmRecordRemindersPanel relatedType="Task" relatedTo={task._id} />
 
       <section className="space-y-2">
         <h3 className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)]">

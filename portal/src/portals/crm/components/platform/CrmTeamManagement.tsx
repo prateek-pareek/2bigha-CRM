@@ -229,6 +229,11 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
         fetchEmailAccounts();
         fetchCrmPortalUsers();
         fetchCustomRoles();
+        const onChanged = () => {
+            fetchUsers();
+        };
+        window.addEventListener("crm-users-changed", onChanged);
+        return () => window.removeEventListener("crm-users-changed", onChanged);
     }, []);
 
     const filteredUsers = useMemo(() => {
@@ -524,8 +529,14 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                             </div>
                                         </td>
                                         <td className="px-5 py-3.5">
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${roleColor(user.role)}`}>
-                                                {user.role}
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${roleColor(
+                                                typeof user.roleId === "object" && user.roleId?.name
+                                                    ? user.roleId.name
+                                                    : user.role
+                                            )}`}>
+                                                {typeof user.roleId === "object" && user.roleId?.name
+                                                    ? user.roleId.name
+                                                    : user.role || "Unassigned"}
                                             </span>
                                         </td>
                                         <td className="px-5 py-3.5">

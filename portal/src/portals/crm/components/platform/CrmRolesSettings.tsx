@@ -68,10 +68,28 @@ export function CrmRolesSettings() {
   });
 
   const load = async () => {
+    if (!canManage) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data } = await api.get("/crm-users/roles");
-      setRoles(Array.isArray(data) ? data : []);
+      const rows = Array.isArray(data) ? data : [];
+      setRoles(
+        rows.map((r: RoleDoc & { permissions?: unknown[] }) => {
+          const fromPerms = Array.isArray(r.permissions)
+            ? r.permissions
+                .map((p) => (typeof p === "string" ? p : (p as { name?: string })?.name || ""))
+                .filter(Boolean)
+            : [];
+          const crm =
+            Array.isArray(r.crmPermissions) && r.crmPermissions.length
+              ? r.crmPermissions
+              : fromPerms;
+          return { ...r, crmPermissions: crm, permissions: fromPerms };
+        }),
+      );
     } catch (e) {
       console.error("Failed to load roles:", e);
     } finally {
@@ -81,7 +99,7 @@ export function CrmRolesSettings() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [canManage]);
 
   const selected = useMemo(
     () => roles.find((r) => r._id === selectedId) || null,

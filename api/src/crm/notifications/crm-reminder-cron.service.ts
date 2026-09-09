@@ -30,12 +30,36 @@ export class CrmReminderCronService {
           else if (t === 'Organization') link = `/crm/organizations/${relatedId}`;
           else if (t === 'Task') link = `/crm/tasks`;
 
+          const medium = String((reminder as any).medium || '').toLowerCase();
+          const mediumLabel =
+            medium === 'whatsapp'
+              ? 'WhatsApp'
+              : medium === 'email'
+                ? 'Email'
+                : medium === 'later'
+                  ? 'decide later'
+                  : '';
+          const isFollowUpReminder =
+            medium === 'email' || medium === 'whatsapp' || medium === 'later';
+          const dueMessage = isFollowUpReminder
+            ? medium === 'later'
+              ? `Time to follow up — choose Email or WhatsApp${
+                  reminder.description ? ` — ${reminder.description}` : ''
+                }`
+              : `Time to follow up via ${mediumLabel}${
+                  reminder.description ? ` — ${reminder.description}` : ''
+                }`
+            : reminder.description ||
+              `Reminder for ${reminder.relatedType}: ${reminder.title}`;
+
           await this.crmNotify.notify({
-            event: 'custom_reminder',
-            title: reminder.title,
-            message:
-              reminder.description ||
-              `Reminder for ${reminder.relatedType}: ${reminder.title}`,
+            event: isFollowUpReminder ? 'follow_up_reminder' : 'custom_reminder',
+            title: isFollowUpReminder
+              ? medium === 'later'
+                ? 'Follow up now'
+                : `Follow up via ${mediumLabel}`
+              : reminder.title,
+            message: dueMessage,
             recipient: {
               userId: reminder.assigneeUserId || reminder.createdBy,
             },
@@ -44,6 +68,7 @@ export class CrmReminderCronService {
               reminderId: String(reminder._id),
               relatedType: reminder.relatedType,
               entityId: relatedId,
+              medium: medium || null,
               link,
             },
             type: 'Reminder',

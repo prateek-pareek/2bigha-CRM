@@ -31,10 +31,22 @@ export class CrmRemindersController {
       scheduledAt?: string;
       recurrence?: string;
       assigneeUserId?: string;
+      medium?: 'email' | 'whatsapp' | 'later' | string;
+      assignToLeadOwner?: boolean;
+      syncLeadNextFollowUp?: boolean;
     },
     @Request() req: any,
   ) {
     return this.service.create(body || {}, req.user);
+  }
+
+  @Get('team-schedule')
+  @Permissions('leads:read', 'tasks:read')
+  teamSchedule(@Query('limit') limit?: string, @Request() req?: any) {
+    return this.service.listTeamSchedule(
+      req.user,
+      limit ? Number(limit) : undefined,
+    );
   }
 
   @Get()

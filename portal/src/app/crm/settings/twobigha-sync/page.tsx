@@ -1,16 +1,13 @@
 "use client";
 
-import { CrmPageHeader } from "@/components/crm/ui";
-import TwoBighaSyncHub from "@/components/crm/platform/TwoBighaSyncHub";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
+/** Kept for bookmarks — 2bigha sync now lives under Users & access. */
 export default function TwoBighaSyncSettingsPage() {
-  return (
-    <div className="space-y-5 p-5">
-      <CrmPageHeader
-        title="2bigha platform sync"
-        description="Monitor and reconcile CRM clients (platform users) and agents (admins) with the 2bigha platform. Sync is env-configured — not part of the integrations marketplace."
-      />
-      <TwoBighaSyncHub />
-    </div>
-  );
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/crm/settings/users?tab=twobigha-sync");
+  }, [router]);
+  return null;
 }

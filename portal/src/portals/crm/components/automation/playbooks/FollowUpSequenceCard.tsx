@@ -321,14 +321,13 @@ export default function FollowUpSequenceCard({
       ) : (
         <div className="space-y-3">
           <p className="text-xs font-medium text-slate-500 leading-relaxed">
-            Day 2, 5, 7… with custom copy like compose. Stops if they reply.
+            Auto emails (Day 2, 5, 7…) or a personal reminder to follow up via Email / WhatsApp.
           </p>
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100">
             <button
               type="button"
-              disabled={!hasEmail}
               onClick={onScheduleClick}
-              className="inline-flex h-8 items-center rounded-lg bg-[#eff6ff] border border-[#2563eb]/20 px-3 text-xs font-bold text-[#2563eb] transition-colors hover:bg-[#dbeafe] disabled:opacity-40"
+              className="inline-flex h-8 items-center rounded-lg bg-[#eff6ff] border border-[#2563eb]/20 px-3 text-xs font-bold text-[#2563eb] transition-colors hover:bg-[#dbeafe]"
             >
               Set up follow-ups
             </button>

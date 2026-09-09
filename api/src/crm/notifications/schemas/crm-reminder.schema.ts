@@ -18,6 +18,9 @@ export type CrmReminderStatus =
 
 export type CrmReminderRecurrence = 'none' | 'daily' | 'weekly' | 'monthly';
 
+/** How the assignee should follow up with the contact when the reminder fires. */
+export type CrmReminderMedium = 'email' | 'whatsapp' | 'later';
+
 @Schema({ timestamps: true, collection: 'crm_reminders' })
 export class CrmReminder {
   @Prop({ required: true, trim: true })
@@ -58,6 +61,13 @@ export class CrmReminder {
     enum: ['none', 'daily', 'weekly', 'monthly'],
   })
   recurrence: CrmReminderRecurrence;
+
+  /**
+   * Follow-up medium chosen by the employee (email or WhatsApp).
+   * When set, this is a follow-up reminder (notify assignee — do not auto-send).
+   */
+  @Prop({ enum: ['email', 'whatsapp', 'later'], index: true })
+  medium?: CrmReminderMedium;
 
   /** HRMS user who created the reminder. */
   @Prop({ type: Types.ObjectId, required: true, index: true })

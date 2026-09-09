@@ -1,12 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { CRMUser, CRMUserDocument } from '../../crm-users/schemas/user.schema';
+import { Role, RoleDocument } from '../../crm-users/schemas/role.schema';
 import { User, UserDocument } from '../../../users/schemas/user.schema';
 import { Lead, LeadDocument } from '../../records/schemas/lead.schema';
 import { Activity, ActivityDocument } from '../../records/schemas/activity.schema';
 import { CrmNotifyService } from '../../notifications/crm-notify.service';
+import { isProtectedCrmAdminEmail } from '../../../auth/platform-super-admin.util';
 import {
   HrmsSyncEventLog,
   HrmsSyncEventLogDocument,
@@ -27,6 +29,8 @@ export class HrmsIntegrationService {
   constructor(
     @InjectModel(CRMUser.name, 'crmConnection')
     private readonly crmUserModel: Model<CRMUserDocument>,
+    @InjectModel(Role.name, 'crmConnection')
+    private readonly roleModel: Model<RoleDocument>,
     @InjectModel(User.name)
     private readonly platformUserModel: Model<UserDocument>,
     @InjectModel(Lead.name, 'crmConnection')
@@ -133,11 +137,15 @@ export class HrmsIntegrationService {
       (await this.crmUserModel.findOne({ hrmsEmployeeId }).exec()) ||
       (await this.crmUserModel.findOne({ email }).exec());
 
+    const protectAdmin =
+      isProtectedCrmAdminEmail(email) || isProtectedCrmAdminEmail(existing?.email);
+
     const wasPendingOrNew =
-      !existing ||
-      existing.provisioningStatus === 'pending_access' ||
-      existing.provisioningStatus === 'revoked' ||
-      existing.provisioningStatus === 'hidden';
+      !protectAdmin &&
+      (!existing ||
+        existing.provisioningStatus === 'pending_access' ||
+        existing.provisioningStatus === 'revoked' ||
+        existing.provisioningStatus === 'hidden');
 
     const identitySet: Record<string, unknown> = {
       firstName: employee.firstName || existing?.firstName || 'Employee',
@@ -157,15 +165,30 @@ export class HrmsIntegrationService {
       identitySet.agentMobile = employee.phone;
     }
 
-    // Never overwrite an active granted user's role/activation from HRMS.
-    if (!existing || existing.provisioningStatus !== 'active') {
+    // Never overwrite an active/manual granted user's role/activation from HRMS.
+    const keepGranted =
+      protectAdmin ||
+      (existing &&
+        (existing.provisioningStatus === 'active' ||
+          existing.provisioningStatus === 'manual' ||
+          (existing.isActive && existing.roleId)));
+
+    if (protectAdmin) {
+      identitySet.provisioningStatus =
+        existing?.provisioningStatus === 'active' ? 'active' : 'manual';
+      identitySet.isActive = true;
+    } else if (!keepGranted) {
       identitySet.provisioningStatus = 'pending_access';
       identitySet.isActive = false;
-      // Clear role so Admin must assign deliberately
       if (!existing?.roleId) {
         identitySet.role = 'Unassigned';
         identitySet.roleId = null;
       }
+    } else if (
+      existing &&
+      (existing.provisioningStatus === 'manual' || !existing.provisioningStatus)
+    ) {
+      identitySet.provisioningStatus = existing.provisioningStatus || 'manual';
     } else {
       identitySet.provisioningStatus = 'active';
     }
@@ -191,8 +214,13 @@ export class HrmsIntegrationService {
       )
       .exec();
 
-    // Keep platform User in sync for JWT identity, but leave inactive until grant
-    await this.upsertPlatformUser(doc, employee, doc.provisioningStatus === 'active');
+    // Keep platform User in sync for JWT identity, but leave inactive until grant.
+    // Protected/manual CRM admins must keep the CRM tool even when status isn't "active".
+    const grantPlatformCrm =
+      protectAdmin ||
+      doc.provisioningStatus === 'active' ||
+      doc.provisioningStatus === 'manual';
+    await this.upsertPlatformUser(doc, employee, grantPlatformCrm);
 
     if (wasPendingOrNew && doc.provisioningStatus === 'pending_access') {
       await this.notifyAdmins({
@@ -219,16 +247,27 @@ export class HrmsIntegrationService {
         : null;
     if (!query) return;
 
+    const existing = await this.crmUserModel.findOne(query).exec();
+    if (!existing) return;
+    if (isProtectedCrmAdminEmail(existing.email)) {
+      this.logger.warn(
+        `Skipping HRMS ineligible revoke for protected CRM admin ${existing.email}`,
+      );
+      return;
+    }
+
     const doc = await this.crmUserModel
       .findOneAndUpdate(
-        query,
+        { _id: existing._id },
         {
           $set: {
+            // §2.2 — ineligible employees must not appear in CRM lists/pickers.
             provisioningStatus: 'revoked',
             isActive: false,
             hrmsSyncStatus: 'synced',
             hrmsSyncedAt: new Date(),
             employmentStatus: employee.employmentStatus || undefined,
+            hrmsSyncError: employee.reason || undefined,
           },
         },
         { new: true },
@@ -251,9 +290,9 @@ export class HrmsIntegrationService {
     await this.notifyAdmins({
       event: 'hrms_user_revoked',
       title: 'CRM eligibility revoked (HRMS)',
-      message: `${doc.firstName} ${doc.lastName || ''} is no longer CRM-eligible${employee.reason ? `: ${employee.reason}` : ''}.`.trim(),
+      message: `${doc.firstName} ${doc.lastName || ''} is no longer CRM-eligible and was removed from CRM lists${employee.reason ? `: ${employee.reason}` : ''}.`.trim(),
       link: '/crm/settings/users?tab=hrms-pending',
-      metadata: { hrmsEmployeeId: doc.hrmsEmployeeId, email: doc.email },
+      metadata: { hrmsEmployeeId: doc.hrmsEmployeeId, email: doc.email, reason: employee.reason },
       alsoEmail: doc.email,
     });
   }
@@ -343,16 +382,43 @@ export class HrmsIntegrationService {
     opts: { roleId: string; reportsToUserId?: string; activate?: boolean },
   ): Promise<CRMUserDocument> {
     if (!Types.ObjectId.isValid(crmUserId)) {
-      throw new Error('Invalid CRM user id');
+      throw new BadRequestException('Invalid CRM user id');
     }
     if (!opts?.roleId || !Types.ObjectId.isValid(opts.roleId)) {
-      throw new Error('A valid roleId is required');
+      throw new BadRequestException('A valid roleId is required');
     }
     const doc = await this.crmUserModel.findById(crmUserId).exec();
-    if (!doc) throw new Error('CRM user not found');
+    if (!doc) throw new BadRequestException('CRM user not found');
+
+    // §2.2 / §2.4 — only HRMS-eligible pending users can be granted; revoked must re-sync from HRMS first.
+    if (
+      doc.provisioningStatus === 'revoked' ||
+      doc.provisioningStatus === 'hidden'
+    ) {
+      throw new BadRequestException(
+        'This employee is not CRM-eligible in HRMS. Re-enable their department/member access in HRMS, then grant again.',
+      );
+    }
+    if (
+      doc.hrmsEmployeeId &&
+      doc.provisioningStatus &&
+      doc.provisioningStatus !== 'pending_access' &&
+      doc.provisioningStatus !== 'active' &&
+      doc.provisioningStatus !== 'manual'
+    ) {
+      throw new BadRequestException(
+        `Cannot grant access while provisioning status is ${doc.provisioningStatus}`,
+      );
+    }
+
+    const role = await this.roleModel.findById(opts.roleId).select('name').lean().exec();
+    if (!role?.name) {
+      throw new BadRequestException('CRM role not found');
+    }
 
     doc.roleId = new Types.ObjectId(opts.roleId);
-    doc.role = 'user';
+    // Team table displays `role` string — keep it in sync with the Role name
+    doc.role = role.name;
     doc.provisioningStatus = 'active';
     doc.isActive = opts.activate !== false;
     await doc.save();
@@ -369,13 +435,21 @@ export class HrmsIntegrationService {
       opts.reportsToUserId,
     );
 
-    return doc;
+    const populated = await this.crmUserModel
+      .findById(doc._id)
+      .populate('roleId')
+      .exec();
+    return (populated || doc) as CRMUserDocument;
   }
 
+  /**
+   * §2.3 — pending (eligible, not yet granted) only.
+   * Revoked/ineligible users must not appear in any CRM list (§2.2).
+   */
   async listPendingHrmsUsers() {
     return this.crmUserModel
       .find({
-        provisioningStatus: { $in: ['pending_access', 'revoked'] },
+        provisioningStatus: 'pending_access',
         hrmsEmployeeId: { $exists: true, $ne: '' },
       })
       .populate('roleId')

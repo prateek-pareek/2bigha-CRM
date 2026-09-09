@@ -74,6 +74,13 @@ export class WorkflowDelayedJob {
   @Prop()
   cancelOnReply?: boolean;
 
+  /**
+   * Follow-up sequence: wait for tracked outreach open before cadence (default true).
+   * When false, cadence delays/scheduledAt run from schedule click.
+   */
+  @Prop()
+  waitForOpen?: boolean;
+
   @Prop()
   cancelReason?: string;
 

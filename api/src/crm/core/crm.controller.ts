@@ -22,6 +22,7 @@ import { resolveListPagination, CRM_MAX_BOARD_PAGE_SIZE, CRM_MAX_PAGE_SIZE } fro
 import { parseCrmFiltersQuery } from '../shared/crm-list-filters';
 import { parseCrmEmailEngagementQuery } from '../email/crm-email-engagement-filter.service';
 import { CRMService } from './crm.service';
+import { ReportingService } from '../reporting/reporting.service';
 import { CrmEmailEngagementBatchService } from '../email/crm-email-engagement-batch.service';
 import { CrmCalendarSyncService } from '../calendar/crm-calendar-sync.service';
 import { InboxOAuthService } from '../inbox/inbox-oauth.service';
@@ -38,6 +39,7 @@ export class CRMController {
     private readonly crmCalendarSyncService: CrmCalendarSyncService,
     private readonly inboxOAuthService: InboxOAuthService,
     private readonly crmEmailEngagementBatchService: CrmEmailEngagementBatchService,
+    private readonly reportingService: ReportingService,
   ) {}
 
   @Get('distinct-values')
@@ -854,5 +856,61 @@ export class CRMController {
   @Permissions('leads:read')
   getLeadAssociatedLegalStatus(@Param('id') id: string) {
     return this.crmService.getLeadAssociatedLegalStatus(id);
+  }
+
+  // --- ROLE-BASED DASHBOARD ENDPOINTS ---
+
+  @Get('dashboard/admin')
+  @Permissions('admin:manage')
+  async getAdminDashboardMetrics(@Query('window') window: string = 'last_30_days') {
+    const dashboard = await this.reportingService.getDashboardData(window);
+    const health = await this.reportingService.getSalesDepartmentHealth(window);
+    const advancedTasks = await this.reportingService.getAdvancedTaskMetrics(window);
+    const whatsapp = await this.reportingService.getWhatsAppEngagement(window);
+    const ivr = await this.reportingService.getIVRAnalytics(window);
+    
+    return { 
+      dashboard, 
+      health,
+      advancedTasks,
+      whatsapp,
+      ivr
+    };
+  }
+
+  @Get('dashboard/admin/leaderboard')
+  @Permissions('admin:manage')
+  async getAdminLeaderboards(@Query('window') window: string = 'last_30_days') {
+    return this.reportingService.getLeaderboardMetrics(window, 'all');
+  }
+
+  @Get('dashboard/team/leaderboard')
+  @Permissions('leads:read')
+  async getTeamLeaderboard(
+    @Query('window') window: string = 'last_30_days'
+  ) {
+    return this.reportingService.getLeaderboardMetrics(window);
+  }
+
+  @Get('dashboard/team')
+  @Permissions('leads:read')
+  async getTeamDashboardMetrics(
+    @Query('window') window: string = 'last_30_days',
+  ) {
+    const metrics = await this.reportingService.getTeamPerformanceMetrics(window);
+    const trend = await this.reportingService.getTeamPerformanceTrend(window);
+    return { metrics, trend };
+  }
+
+  @Get('dashboard/agent')
+  @Permissions('leads:read')
+  async getAgentDashboardMetrics(
+    @Request() req: any,
+    @Query('window') window: string = 'last_30_days'
+  ) {
+    const agentId = req.user._id.toString();
+    const summary = await this.reportingService.getAgentPerformanceSummary(agentId);
+    const activity = await this.reportingService.getActivityTrends(agentId);
+    return { summary, activity };
   }
 }

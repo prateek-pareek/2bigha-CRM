@@ -45,10 +45,29 @@ export function isCrmNotification(notification: AppNotification): boolean {
   const type = String(notification?.type || "").toLowerCase();
   const metadata = notification?.metadata || {};
   const module = String(metadata.module || "").toLowerCase();
+  const event = String(metadata.event || "").toLowerCase();
 
   if (metadata.inboxEmailId) return true;
   if (type.startsWith("crm_")) return true;
-  if (type === "reminder") return true;
+  if (
+    type === "reminder" ||
+    type.includes("followup") ||
+    type.includes("follow_up") ||
+    type === "follow_up" ||
+    type.includes("callback") ||
+    type.startsWith("lead_")
+  ) {
+    return true;
+  }
+  if (
+    event.startsWith("lead_") ||
+    event.startsWith("task_") ||
+    event.startsWith("follow_up_") ||
+    event === "callback_due" ||
+    event === "custom_reminder"
+  ) {
+    return true;
+  }
   if (
     [
       "leads",
@@ -56,6 +75,8 @@ export function isCrmNotification(notification: AppNotification): boolean {
       "clients",
       "organizations",
       "inbox",
+      "platformopportunities",
+      "platform_opportunities",
     ].includes(module)
   ) {
     return true;
@@ -67,6 +88,8 @@ export function isCrmNotification(notification: AppNotification): boolean {
       "contact",
       "client",
       "organization",
+      "task",
+      "platformopportunity",
     ].includes(relatedType)
   ) {
     return true;
@@ -240,7 +263,9 @@ export function resolveNotificationLink(
   if (metadata.inboxEmailId) return "/crm/inbox";
 
   if (type.startsWith("crm_")) return "/crm/inbox";
-  if (type === "reminder") return "/crm/tasks";
+  if (type === "reminder" || type.includes("followup") || type.includes("callback")) {
+    return "/crm/notifications";
+  }
 
   if (type === "announcement") return "/hrms/announcements";
   if (type === "leave") return "/hrms/leaves";

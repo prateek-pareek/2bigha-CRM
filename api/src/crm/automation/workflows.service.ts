@@ -72,6 +72,13 @@ import { EmailTrackingService } from '../email/email-tracking.service';
 import { LeadEngagementAutomationService } from './lead-engagement-automation.service';
 import { CrmSegmentsService } from '../segments/crm-segments.service';
 import { CrmAiService } from '../ai/crm-ai.service';
+import { CrmNotifyService } from '../notifications/crm-notify.service';
+import type { CrmNotifyEvent } from '../notifications/crm-notification-events';
+import {
+  describeNextFollowUpSend,
+  formatFollowUpAbsoluteWhen,
+  formatFollowUpRelativeWhen,
+} from '../notifications/crm-follow-up-notify.util';
 import {
   WORKFLOW_CANVAS_START_ID,
   WORKFLOW_EMAIL_WAIT_OPEN_END_ID,
@@ -237,11 +244,16 @@ function resolveFollowUpStepDelayMs(
   });
 }
 
-/** Mutable per-run state (threaded through actions and persisted on delayed jobs). */
+  /** Mutable per-run state (threaded through actions and persisted on delayed jobs). */
 export type WorkflowRunContext = {
   lastEmailTrackingToken?: string;
   sequenceStartedAt?: Date;
   cancelOnReply?: boolean;
+  /**
+   * Follow-up sequence: when false, cadence runs on schedule without waiting for open.
+   * Default/undefined = wait for open (legacy behavior).
+   */
+  waitForOpen?: boolean;
   /** Follow-up sequence: force all sends through this inbox account. */
   lockedInboxAccountId?: string;
   /** Active MongoDB delayed-job row (resume after deploy). */
@@ -384,6 +396,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     private readonly leadEngagementAutomation: LeadEngagementAutomationService,
     @Inject(forwardRef(() => CrmSegmentsService))
     private readonly segmentsService: CrmSegmentsService,
+    private readonly crmNotify: CrmNotifyService,
   ) {}
 
   /** CRM Settings → Workflows: delayed job runner on/off (default on when unset). */
@@ -780,12 +793,14 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
   private resolveFollowUpEditableConfigFromJobs(
     jobs: Array<{
       cancelOnReply?: boolean;
+      waitForOpen?: boolean;
       emailWait?: WorkflowDelayedJob['emailWait'];
       followUpCadenceSteps?: unknown[];
       engagementAlternateSteps?: unknown[];
     }>,
   ): {
     cancelOnReply: boolean;
+    waitForOpen: boolean;
     firstOutreachEngagement: FirstOutreachEngagementDto | null;
     steps: FollowUpSequenceStepDto[];
   } | null {
@@ -934,6 +949,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
   ): Promise<{
     hasSchedule: boolean;
     cancelOnReply: boolean;
+    waitForOpen: boolean;
     steps: Array<{
       scheduledAt: string;
       kind: 'email' | 'task' | 'wait';
@@ -946,6 +962,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     pendingJobCount: number;
     editableConfig: {
       cancelOnReply: boolean;
+      waitForOpen: boolean;
       firstOutreachEngagement: FirstOutreachEngagementDto | null;
       steps: FollowUpSequenceStepDto[];
     } | null;
@@ -965,6 +982,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     }> = [];
     const emptyEditableConfig = null as {
       cancelOnReply: boolean;
+      waitForOpen: boolean;
       firstOutreachEngagement: FirstOutreachEngagementDto | null;
       steps: FollowUpSequenceStepDto[];
     } | null;
@@ -973,6 +991,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       return {
         hasSchedule: false,
         cancelOnReply: true,
+        waitForOpen: true,
         steps: emptySteps,
         nextScheduledAt: null,
         pendingJobCount: 0,
@@ -1002,6 +1021,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       return {
         hasSchedule: false,
         cancelOnReply: editableConfig?.cancelOnReply ?? true,
+        waitForOpen: editableConfig?.waitForOpen ?? true,
         steps: emptySteps,
         nextScheduledAt: null,
         pendingJobCount: 0,
@@ -1045,6 +1065,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         return {
           hasSchedule: false,
           cancelOnReply: editableConfig?.cancelOnReply ?? true,
+          waitForOpen: editableConfig?.waitForOpen ?? true,
           steps: emptySteps,
           nextScheduledAt: null,
           pendingJobCount: 0,
@@ -1057,6 +1078,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     const jobs = pendingJobs;
 
     let cancelOnReply = true;
+    let waitForOpen = editableConfig?.waitForOpen ?? true;
     const projected: Array<{
       scheduledAt: string;
       kind: 'email' | 'task' | 'wait';
@@ -1074,6 +1096,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
 
     for (const job of jobs) {
       if (job.cancelOnReply === false) cancelOnReply = false;
+      if (job.waitForOpen === false) waitForOpen = false;
       const ew = job.emailWait as WorkflowDelayedJob['emailWait'] | undefined;
       if (ew?.branchMode && ew.deadlineAt) {
         projected.push({
@@ -1164,6 +1187,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     return {
       hasSchedule: jobs.length > 0,
       cancelOnReply,
+      waitForOpen,
       steps,
       nextScheduledAt: steps[0]?.scheduledAt ?? firstJobRun,
       pendingJobCount: jobs.length,
@@ -1177,12 +1201,14 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
   private buildEditableFollowUpConfigFromPendingJobs(
     jobs: Array<{
       cancelOnReply?: boolean;
+      waitForOpen?: boolean;
       emailWait?: WorkflowDelayedJob['emailWait'];
       followUpCadenceSteps?: unknown[];
       engagementAlternateSteps?: unknown[];
     }>,
   ): {
     cancelOnReply: boolean;
+    waitForOpen: boolean;
     firstOutreachEngagement: FirstOutreachEngagementDto | null;
     steps: FollowUpSequenceStepDto[];
   } | null {
@@ -1194,6 +1220,10 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
           Array.isArray(j.followUpCadenceSteps) && j.followUpCadenceSteps.length > 0,
       ) || jobs[0];
     const cancelOnReply = source.cancelOnReply !== false;
+    const waitForOpen =
+      source.waitForOpen !== undefined
+        ? source.waitForOpen !== false
+        : !!(source.emailWait?.branchMode || source.emailWait?.firstOutreachGate);
     const cadenceRaw = Array.isArray(source.followUpCadenceSteps)
       ? source.followUpCadenceSteps
       : [];
@@ -1286,7 +1316,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     if (!steps.length && !firstOutreachEngagement) {
       return null;
     }
-    return { cancelOnReply, firstOutreachEngagement, steps };
+    return { cancelOnReply, waitForOpen, firstOutreachEngagement, steps };
   }
 
   /** Walk pending job steps and estimate email + task times (branch-mode sequences). */
@@ -1678,6 +1708,11 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       inboxAccountId?: string;
       overrideMailbox?: boolean;
       cancelOnReply?: boolean;
+      /**
+       * When true (default), follow-up cadence waits until tracked outreach is opened.
+       * When false, cadence sends on the configured delays / scheduledAt from now.
+       */
+      waitForOpen?: boolean;
       /** Explicit tracking token for the outreach email this sequence should watch. */
       trackingToken?: string;
       /** Wait on manual first outreach; if not opened, chained alternate emails before follow-ups. */
@@ -1692,7 +1727,10 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Invalid entity id');
     }
     const steps = dto.steps || [];
-    const engagement = this.normalizeFirstOutreachEngagement(dto);
+    const waitForOpen = dto.waitForOpen !== false;
+    const engagement = waitForOpen
+      ? this.normalizeFirstOutreachEngagement(dto)
+      : null;
     if (!steps.length && !engagement) {
       throw new BadRequestException(
         'Add at least one follow-up step or configure open-tracking alternate steps',
@@ -1792,6 +1830,15 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         overrideMailbox: dto.overrideMailbox,
       },
     );
+    const fallbackMailboxId =
+      defaultSendAccountId ||
+      mailboxHint.accounts.find((a) => Types.ObjectId.isValid(a._id))?._id;
+
+    if (steps.length > 0 && !waitForOpen && !fallbackMailboxId) {
+      throw new BadRequestException(
+        'Connect a mailbox in Inbox before scheduling follow-ups that send on schedule.',
+      );
+    }
 
     const resolveStepSendAccountId = (
       s: FollowUpSequenceStepDto,
@@ -1803,7 +1850,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
           return raw;
         }
       }
-      return defaultSendAccountId;
+      return fallbackMailboxId;
     };
 
     const stepAccountIds = steps
@@ -1857,7 +1904,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     let outreachToken: string | null = null;
     let outreachAlreadyOpened = false;
 
-    if (steps.length > 0) {
+    if (steps.length > 0 && waitForOpen) {
       outreachToken =
         dto.trackingToken?.trim() ||
         mailboxHint.latestTrackingToken ||
@@ -1875,6 +1922,15 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       outreachAlreadyOpened = !!(
         trk?.lastOpenedAt || (Number(trk?.openCount) || 0) > 0
       );
+    } else if (steps.length > 0 && !waitForOpen) {
+      outreachToken =
+        dto.trackingToken?.trim() ||
+        mailboxHint.latestTrackingToken ||
+        (await this.emailTrackingService.findLatestTrackingTokenForEntity(
+          dto.entityId,
+          trackingSince,
+          false,
+        ));
     }
 
     if (engagement) {
@@ -1907,17 +1963,21 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     );
 
     if (steps.length > 0) {
-      const deferCadenceUntilOpen = !!engagement || !outreachAlreadyOpened;
-      if (deferCadenceUntilOpen && !engagement) {
-        workflowSteps.push({
-          type: 'wait_email_open',
-          waitDays: 14,
-          waitHours: 0,
-          waitMinutes: 0,
-          onTimeoutSteps: [],
-        });
-      } else if (!engagement && outreachAlreadyOpened) {
+      if (!waitForOpen) {
         workflowSteps.push(...followUpCadenceSteps);
+      } else {
+        const deferCadenceUntilOpen = !!engagement || !outreachAlreadyOpened;
+        if (deferCadenceUntilOpen && !engagement) {
+          workflowSteps.push({
+            type: 'wait_email_open',
+            waitDays: 14,
+            waitHours: 0,
+            waitMinutes: 0,
+            onTimeoutSteps: [],
+          });
+        } else if (!engagement && outreachAlreadyOpened) {
+          workflowSteps.push(...followUpCadenceSteps);
+        }
       }
     }
 
@@ -1934,6 +1994,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       undefined,
       dto.cancelOnReply !== false,
     );
+    ctx.waitForOpen = waitForOpen;
     const boundOutreachToken =
       dto.trackingToken?.trim() ||
       outreachToken ||
@@ -1948,7 +2009,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       ctx.lastEmailTrackingToken = boundOutreachToken;
     }
     if (steps.length > 0) {
-      ctx.cadenceStartsAfterOpen = true;
+      ctx.cadenceStartsAfterOpen = waitForOpen;
       ctx.followUpSequenceStepDtos = steps;
     }
     if (!ctx.lastEmailTrackingToken) {
@@ -2012,6 +2073,14 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       dto.entityType,
       dto.entityId,
     );
+    if (scheduled || pending.length > 0) {
+      void this.notifyFollowUpSequenceScheduled({
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        event,
+        pendingJobCount: pending.length,
+      });
+    }
     if (
       !scheduled &&
       dto.entityType === 'Lead' &&
@@ -2029,6 +2098,8 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         message = 'Open tracking and follow-ups scheduled.';
       } else if (hasEngagement) {
         message = 'Open tracking scheduled.';
+      } else if (!waitForOpen) {
+        message = 'Follow-ups scheduled to send on time (no wait for open).';
       } else {
         message = 'Follow-up sequence scheduled.';
       }
@@ -3059,6 +3130,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
   private sequenceJobFields(ctx: WorkflowRunContext): {
     sequenceStartedAt?: Date;
     cancelOnReply: boolean;
+    waitForOpen?: boolean;
     lockedInboxAccountId?: Types.ObjectId;
   } {
     const locked =
@@ -3071,6 +3143,9 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         ? { sequenceStartedAt: ctx.sequenceStartedAt }
         : {}),
       cancelOnReply: ctx.cancelOnReply !== false,
+      ...(ctx.waitForOpen !== undefined
+        ? { waitForOpen: ctx.waitForOpen !== false }
+        : {}),
       ...(locked ? { lockedInboxAccountId: locked } : {}),
     };
   }
@@ -5175,16 +5250,24 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
           results.push(r);
           if (
             branchLabel === 'Follow-up sequence' &&
-            event.entityType === 'Lead' &&
             step.action.type === 'send_email_template' &&
             /^Email sent/i.test(r)
           ) {
             const stepNum =
               this.leadEngagementAutomation.countFollowUpEmailsSent(results);
-            void this.leadEngagementAutomation.onLeadFollowUpEmailSent(
-              String(event.entityId),
+            if (event.entityType === 'Lead') {
+              void this.leadEngagementAutomation.onLeadFollowUpEmailSent(
+                String(event.entityId),
+                stepNum,
+              );
+            }
+            void this.notifyFollowUpEmailSent({
+              entityType: event.entityType,
+              entityId: String(event.entityId),
+              event,
               stepNum,
-            );
+              draftedWithAi: step.action.sendMode === 'ai_draft',
+            });
           }
         } catch (e: any) {
           const reason = e?.message || String(e);
@@ -5636,6 +5719,23 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
           );
           subject = draft.subject;
           body = draft.bodyHtml;
+          if (ctx?.followUpSequenceStepDtos || ctx?.cadenceStartsAfterOpen) {
+            void this.notifyFollowUpLifecycle({
+              event: 'follow_up_email_drafted',
+              entityType,
+              entityId: String(entityId),
+              title: 'Follow-up email drafted (AI)',
+              message: [
+                `AI drafted follow-up email for ${this.entityDisplayName(event.record as Record<string, unknown>)}.`,
+                draft.subject ? `Subject: ${draft.subject}` : '',
+                'It will send on this scheduled step. After send, you will get the next-send timing (e.g. in 24 hours / 2 days).',
+              ]
+                .filter(Boolean)
+                .join('\n'),
+              eventUser: event.user,
+              record: event.record as Record<string, unknown>,
+            });
+          }
         } else if (sendMode === 'custom') {
           if (!action.subject?.trim() || !action.body?.trim()) {
             throw new Error('Custom email step is missing subject or body');
@@ -6674,6 +6774,215 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         cancelledJobCount: cancelledCount,
       },
     }).save();
+    if (this.shouldNotifyFollowUpCancel(reason)) {
+      void this.notifyFollowUpLifecycle({
+        event: 'follow_up_sequence_stopped',
+        entityType,
+        entityId: String(entityId),
+        title: this.isDeclineStyleCancelReason(reason)
+          ? 'Follow-up stopped (declined / no reply path)'
+          : 'Follow-up sequence cancelled',
+        message: [
+          this.isDeclineStyleCancelReason(reason)
+            ? `Follow-up email sequence stopped: ${reason}.`
+            : `Follow-up email sequence cancelled (${cancelledCount} pending step${cancelledCount === 1 ? '' : 's'}).`,
+          `Reason: ${reason}`,
+        ].join('\n'),
+      });
+    }
+  }
+
+  private shouldNotifyFollowUpCancel(reason: string): boolean {
+    const r = String(reason || '').toLowerCase();
+    // Replacing a sequence with a new one is not a user-facing "stopped" event.
+    if (r.includes('new follow-up sequence')) return false;
+    return true;
+  }
+
+  private isDeclineStyleCancelReason(reason: string): boolean {
+    const r = String(reason || '').toLowerCase();
+    return (
+      r.includes('replied') ||
+      r.includes('declin') ||
+      r.includes('not opened') ||
+      r.includes('timeout') ||
+      r.includes('stopped')
+    );
+  }
+
+  private entityRecordLink(
+    entityType: WorkflowEntityType,
+    entityId: string,
+  ): string {
+    if (entityType === 'Lead') return `/crm/leads/${entityId}`;
+    if (entityType === 'Contact') return `/crm/contacts/${entityId}`;
+    if (entityType === 'Organization') return `/crm/organizations/${entityId}`;
+    return '/crm/notifications';
+  }
+
+  private entityDisplayName(record: Record<string, unknown> | null | undefined): string {
+    if (!record) return 'this record';
+    const first = String(record.firstName || '').trim();
+    const last = String(record.lastName || '').trim();
+    const name = [first, last].filter(Boolean).join(' ').trim();
+    if (name) return name;
+    return (
+      String(record.name || record.organization || record.email || '').trim() ||
+      'this record'
+    );
+  }
+
+  private async resolveFollowUpNotifyRecipient(
+    entityType: WorkflowEntityType,
+    entityId: string,
+    event?: WorkflowDispatchEvent,
+  ) {
+    const record =
+      (event?.record as Record<string, unknown> | undefined) ||
+      (await this.fetchEntityRecord(entityType, new Types.ObjectId(entityId)));
+    const ownerLabel = String(
+      (record as any)?.leadOwner ||
+        (record as any)?.owner ||
+        (record as any)?.caseOwner ||
+        '',
+    ).trim();
+    return {
+      record,
+      recipient: {
+        userId: event?.user?.userId || event?.user?._id || (record as any)?.createdBy,
+        label: ownerLabel || undefined,
+        email: event?.user?.email || String((record as any)?.email || '') || undefined,
+      },
+      alsoNotify: event?.user
+        ? [
+            {
+              userId: event.user.userId || event.user._id,
+              email: event.user.email,
+            },
+          ]
+        : undefined,
+    };
+  }
+
+  private async notifyFollowUpLifecycle(opts: {
+    event: CrmNotifyEvent;
+    entityType: WorkflowEntityType;
+    entityId: string;
+    title: string;
+    message: string;
+    eventUser?: WorkflowDispatchEvent['user'];
+    record?: Record<string, unknown> | null;
+  }): Promise<void> {
+    try {
+      const resolved = await this.resolveFollowUpNotifyRecipient(
+        opts.entityType,
+        opts.entityId,
+        opts.eventUser
+          ? ({
+              user: opts.eventUser,
+              record: opts.record || undefined,
+            } as WorkflowDispatchEvent)
+          : opts.record
+            ? ({ record: opts.record } as WorkflowDispatchEvent)
+            : undefined,
+      );
+      const link = this.entityRecordLink(opts.entityType, opts.entityId);
+      await this.crmNotify.notify({
+        event: opts.event,
+        title: opts.title,
+        message: opts.message,
+        recipient: resolved.recipient,
+        alsoNotify: resolved.alsoNotify,
+        link,
+        metadata: {
+          link,
+          entityId: opts.entityId,
+          relatedType: opts.entityType,
+          event: opts.event,
+        },
+        type: 'FOLLOW_UP',
+      });
+    } catch (err: any) {
+      this.logger.warn(
+        `[FollowUpNotify] ${opts.event} failed: ${err?.message || err}`,
+      );
+    }
+  }
+
+  private async notifyFollowUpSequenceScheduled(opts: {
+    entityType: WorkflowEntityType;
+    entityId: string;
+    event: WorkflowDispatchEvent;
+    pendingJobCount: number;
+  }): Promise<void> {
+    const schedule = await this.getFollowUpScheduleForEntity(
+      opts.entityType,
+      opts.entityId,
+    );
+    const name = this.entityDisplayName(
+      opts.event.record as Record<string, unknown>,
+    );
+    const emailSteps = schedule.steps.filter((s) => s.kind === 'email');
+    const nextEmail = emailSteps[0]?.scheduledAt || schedule.nextScheduledAt;
+    const lines = [
+      `Follow-up email sequence scheduled for ${name}.`,
+      `${schedule.pendingJobCount || opts.pendingJobCount} pending step(s).`,
+      describeNextFollowUpSend(nextEmail),
+    ];
+    if (emailSteps.length > 1) {
+      const more = emailSteps.slice(1, 4).map((s) => {
+        const rel = formatFollowUpRelativeWhen(s.scheduledAt);
+        return `- ${rel || formatFollowUpAbsoluteWhen(s.scheduledAt)}: ${s.templateName || s.label || 'Email'}`;
+      });
+      lines.push('Upcoming sends:', ...more);
+    }
+    if (schedule.cancelOnReply) {
+      lines.push('Sequence stops if the recipient replies (declined / replied).');
+    }
+    await this.notifyFollowUpLifecycle({
+      event: 'follow_up_sequence_scheduled',
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+      title: `Follow-up sequence scheduled: ${name}`,
+      message: lines.join('\n'),
+      eventUser: opts.event.user,
+      record: opts.event.record as Record<string, unknown>,
+    });
+  }
+
+  private async notifyFollowUpEmailSent(opts: {
+    entityType: WorkflowEntityType;
+    entityId: string;
+    event: WorkflowDispatchEvent;
+    stepNum: number;
+    draftedWithAi?: boolean;
+  }): Promise<void> {
+    const schedule = await this.getFollowUpScheduleForEntity(
+      opts.entityType,
+      opts.entityId,
+    );
+    const name = this.entityDisplayName(
+      opts.event.record as Record<string, unknown>,
+    );
+    const nextEmail =
+      schedule.steps.find((s) => s.kind === 'email')?.scheduledAt ||
+      schedule.nextScheduledAt;
+    const lines = [
+      `Follow-up email #${opts.stepNum || 1} was sent to ${name}.`,
+      describeNextFollowUpSend(nextEmail),
+    ];
+    if (opts.draftedWithAi) {
+      lines.unshift('AI drafted the follow-up email, then it was sent.');
+    }
+    await this.notifyFollowUpLifecycle({
+      event: 'follow_up_email_sent',
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+      title: `Follow-up email sent: ${name}`,
+      message: lines.join('\n'),
+      eventUser: opts.event.user,
+      record: opts.event.record as Record<string, unknown>,
+    });
   }
 
   private async logExecutionToTimeline(p: {

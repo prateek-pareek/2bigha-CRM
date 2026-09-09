@@ -232,31 +232,31 @@ export default function AgentPerformancePage() {
       </div>
 
       {/* KPI Summary Cards */}
-      <AgentPerformanceKPIs agents={agents} loading={loading} />
+      <AgentPerformanceKPIs agents={filteredAgents} loading={loading} />
 
       {/* Core Performance Visualizations */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <AgentPerformanceTrendChart trendData={trendData} loading={loading} />
-        <AgentComparisonChart agents={agents} loading={loading} />
+        <AgentComparisonChart agents={filteredAgents} loading={loading} />
       </div>
 
       {/* Advanced Skill & Pipeline Visualizations */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <AgentSkillRadarChart agents={agents} loading={loading} />
-        <ConversionFunnelChart agents={agents} loading={loading} />
+        <AgentSkillRadarChart agents={filteredAgents} loading={loading} />
+        <ConversionFunnelChart agents={filteredAgents} loading={loading} />
       </div>
 
       {/* Follow-up, Response, & Portfolio Analytics */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <FollowUpAdherenceChart agents={agents} loading={loading} />
-        <ResponseTimeChart agents={agents} loading={loading} />
-        <AgentPropertiesChart agents={agents} propertyCounts={propertyCounts} loading={loading} />
+        <FollowUpAdherenceChart agents={filteredAgents} loading={loading} />
+        <ResponseTimeChart agents={filteredAgents} loading={loading} />
+        <AgentPropertiesChart agents={filteredAgents} propertyCounts={propertyCounts} loading={loading} />
       </div>
 
       {/* Revenue & Target Attribution */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <RevenueAttributionChart agents={agents} loading={loading} />
-        <TargetVsActualChart agents={agents} loading={loading} />
+        <RevenueAttributionChart agents={filteredAgents} loading={loading} />
+        <TargetVsActualChart agents={filteredAgents} loading={loading} />
       </div>
 
       {/* Detailed Performance Controls */}

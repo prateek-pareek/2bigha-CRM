@@ -18,6 +18,7 @@ import { CrmContractAiSettingsService } from '../proposals/crm-contract-ai-setti
 import { UpdateCrmOutreachAiSettingsDto } from '../dto/update-crm-outreach-ai-settings.dto';
 import { UpdateCrmProposalAiSettingsDto } from '../dto/update-crm-proposal-ai-settings.dto';
 import { UpdateCrmContractAiSettingsDto } from '../dto/update-crm-contract-ai-settings.dto';
+import { CrmNotifyService } from '../notifications/crm-notify.service';
 
 @Controller('crm/ai')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -27,6 +28,7 @@ export class CrmAiController {
     private readonly outreachAiSettingsService: CrmOutreachAiSettingsService,
     private readonly proposalAiSettingsService: CrmProposalAiSettingsService,
     private readonly contractAiSettingsService: CrmContractAiSettingsService,
+    private readonly crmNotify: CrmNotifyService,
   ) {}
 
   @Get('settings')
@@ -211,6 +213,8 @@ export class CrmAiController {
       requiredContextFields?: string[];
       missingContextAction?: 'skip' | 'draft_anyway' | 'create_task';
       skipContextCheck?: boolean;
+      /** When true / follow_up — in-app notify that a follow-up draft is ready. */
+      purpose?: string;
     },
   ) {
     const mod = String(body.module || '')
@@ -223,17 +227,51 @@ export class CrmAiController {
     if (!entityId) {
       throw new BadRequestException('entityId is required');
     }
-    return this.crmAiService.draftPersonOutreachEmail(
-      req.user,
-      mod as 'leads' | 'contacts',
-      entityId,
-      body.instructions,
-      {
-        requiredContextFields: body.requiredContextFields as never,
-        missingContextAction: body.missingContextAction,
-        skipContextCheck: body.skipContextCheck === true,
-      },
-    );
+    return this.crmAiService
+      .draftPersonOutreachEmail(
+        req.user,
+        mod as 'leads' | 'contacts',
+        entityId,
+        body.instructions,
+        {
+          requiredContextFields: body.requiredContextFields as never,
+          missingContextAction: body.missingContextAction,
+          skipContextCheck: body.skipContextCheck === true,
+        },
+      )
+      .then(async (draft) => {
+        const purpose = String(body.purpose || '').toLowerCase();
+        if (
+          purpose.includes('follow') ||
+          purpose === 'follow_up' ||
+          purpose === 'follow-up'
+        ) {
+          const link =
+            mod === 'leads' ? `/crm/leads/${entityId}` : `/crm/contacts/${entityId}`;
+          void this.crmNotify
+            .notify({
+              event: 'follow_up_email_drafted',
+              title: 'Follow-up email drafted',
+              message:
+                'An AI follow-up email draft is ready. Review it in the follow-up & email section, then schedule or send.\n' +
+                (draft?.subject ? `Subject: ${draft.subject}` : ''),
+              recipient: {
+                userId: req.user?.userId || req.user?._id,
+                email: req.user?.email,
+              },
+              link,
+              metadata: {
+                link,
+                entityId,
+                relatedType: mod === 'leads' ? 'Lead' : 'Contact',
+                event: 'follow_up_email_drafted',
+              },
+              type: 'FOLLOW_UP',
+            })
+            .catch(() => null);
+        }
+        return draft;
+      });
   }
 
   /** Generate a short personalized X/Twitter cold-DM (manual copy + send on X). */

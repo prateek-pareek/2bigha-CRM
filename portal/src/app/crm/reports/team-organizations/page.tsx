@@ -223,32 +223,8 @@ export default function TeamOrganizationsReportsPage() {
         ]}
       />
 
-      {/* Basic Filters & Advanced Report Filters */}
-      <div className="mb-6 space-y-4">
-        {/* Basic Filters */}
-        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4 shadow-sm">
-          <select
-            value={filter.dateRange}
-            onChange={(e) => setFilter({ ...filter, dateRange: e.target.value as any })}
-            className="h-10 rounded-lg border border-[var(--border-color)] bg-[var(--surface-dim)] px-3 text-sm font-medium text-[var(--text-main)] outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all"
-          >
-            <option value="today">Today</option>
-            <option value="this_week">This week</option>
-            <option value="this_month">This month</option>
-            <option value="custom">Custom range</option>
-          </select>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-3.5 text-[var(--text-muted)]" />
-            <input
-              type="text"
-              placeholder="Search team names..."
-              value={filter.searchTerm || ""}
-              onChange={(e) => setFilter({ ...filter, searchTerm: e.target.value || undefined })}
-              className="h-10 w-full sm:w-64 rounded-lg border border-[var(--border-color)] bg-[var(--surface-dim)] pl-9 pr-3 text-sm font-medium text-[var(--text-main)] outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all"
-            />
-          </div>
-        </div>
-
+      {/* Advanced Report Filters */}
+      <div className="mb-6">
         <AdvancedTeamFilters
           teams={teamData.map((t) => ({
             teamId: t.teamId,

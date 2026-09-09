@@ -294,8 +294,8 @@ export class CrmNotifyService {
             );
         }
 
-        if (prefs.email && resolved.email) {
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        if (prefs.email && resolved.email && this.emailService.isConfigured()) {
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
           const actionUrl = payload.link
             ? payload.link.startsWith('http')
               ? payload.link
@@ -333,6 +333,9 @@ export class CrmNotifyService {
   }
 
   private defaultType(event: CrmNotifyEvent): string {
+    if (event.startsWith('follow_up_') || event === 'lead_follow_up_scheduled') {
+      return 'FOLLOW_UP';
+    }
     if (event.startsWith('task_')) return 'CRM_TASK';
     if (event.startsWith('lead_') && event.includes('assign')) return 'LEAD_ASSIGNED';
     if (event.includes('transfer')) return 'LEAD_TRANSFERRED';

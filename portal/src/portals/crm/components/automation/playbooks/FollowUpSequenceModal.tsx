@@ -12,7 +12,9 @@ import {
   buildFollowUpStepAiInstructions,
   cadenceFromApiSteps,
   cadenceToApiSteps,
+  datetimeLocalToIso,
   defaultCadenceMilestones,
+  defaultDatetimeLocalMinutesFromNow,
   defaultFirstOutreachEngagement,
   firstOutreachEngagementFromApiPayload,
   isFirstOutreachEngagementActive,
@@ -30,16 +32,21 @@ import {
   ChevronDown,
   ChevronRight,
   EyeOff,
+  HelpCircle,
   Loader2,
+  Mail,
+  MessageCircle,
   Plus,
   Trash2,
   X,
+  XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CrmDropdown, type CrmDropdownOption } from "@/components/crm/ui";
 
-type ScheduleTab = "first-outreach" | "follow-ups";
+type ScheduleTab = "first-outreach" | "follow-ups" | "reminder";
+type ReminderMedium = "email" | "whatsapp" | "later";
 
 type PendingJob = {
   _id: string;
@@ -51,6 +58,7 @@ type PendingJob = {
 type FollowUpScheduleResponse = {
   hasSchedule: boolean;
   cancelOnReply: boolean;
+  waitForOpen?: boolean;
   pendingJobCount: number;
   nextScheduledAt?: string | null;
   steps?: Array<{
@@ -63,6 +71,7 @@ type FollowUpScheduleResponse = {
   }>;
   editableConfig?: {
     cancelOnReply: boolean;
+    waitForOpen?: boolean;
     firstOutreachEngagement: FirstOutreachEngagementApiPayload | null;
     steps: FollowUpCadenceApiStep[];
   } | null;
@@ -128,6 +137,7 @@ export default function FollowUpSequenceModal({
     defaultCadenceMilestones(),
   );
   const [cancelOnReply, setCancelOnReply] = useState(true);
+  const [waitForOpen, setWaitForOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState<PendingJob[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
@@ -141,6 +151,13 @@ export default function FollowUpSequenceModal({
     useState<FirstOutreachEngagementConfig>(defaultFirstOutreachEngagement);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [reminderAt, setReminderAt] = useState(
+    defaultDatetimeLocalMinutesFromNow(60),
+  );
+  const [reminderMedium, setReminderMedium] =
+    useState<ReminderMedium>("email");
+  const [reminderNote, setReminderNote] = useState("");
   const loadTemplates = useCallback(async () => {
     const t = localStorage.getItem("token");
     if (!t) return;
@@ -217,11 +234,58 @@ export default function FollowUpSequenceModal({
         firstOutreachEngagementFromApiPayload(editable.firstOutreachEngagement || null),
       );
       setCancelOnReply(editable.cancelOnReply !== false);
+      setWaitForOpen(editable.waitForOpen !== false);
       setExpandedStepId(loadedMilestones.find((m) => m.enabled)?.id ?? null);
     } catch {
       // no-op: keep defaults when schedule details cannot be loaded
     }
   }, [entityType, entityId]);
+
+  const handleCancelSequence = useCallback(async () => {
+    if (
+      !confirm(
+        "Cancel all scheduled follow-up emails and wait-for-open jobs for this record?",
+      )
+    ) {
+      return;
+    }
+    const t = localStorage.getItem("token");
+    if (!t) {
+      toast.error("Not signed in");
+      return;
+    }
+    setCancelling(true);
+    try {
+      const res = await fetch(
+        `${CRM_API_URL}/crm/workflows/follow-up-sequence/cancel`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${t}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ entityType, entityId }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message || "Could not cancel sequence");
+        return;
+      }
+      toast.success(
+        data?.cancelled
+          ? `Cancelled ${data.cancelled} scheduled job(s)`
+          : "Sequence cancelled",
+      );
+      setScheduleSnapshot(null);
+      setPending([]);
+      void loadPending();
+      void loadSchedule();
+      onScheduleChanged?.();
+    } finally {
+      setCancelling(false);
+    }
+  }, [entityType, entityId, loadPending, loadSchedule, onScheduleChanged]);
 
   useEffect(() => {
     if (!open) return;
@@ -234,6 +298,10 @@ export default function FollowUpSequenceModal({
     setFirstOutreachEngagement(defaultFirstOutreachEngagement());
     setActiveTab(initialTab);
     setCancelOnReply(true);
+    setWaitForOpen(true);
+    setReminderAt(defaultDatetimeLocalMinutesFromNow(60));
+    setReminderMedium("email");
+    setReminderNote("");
     setExpandedStepId(defaults.find((m) => m.enabled)?.id ?? null);
   }, [open, initialTab, loadTemplates, loadPending, loadMailboxHint, loadSchedule]);
 
@@ -301,9 +369,9 @@ export default function FollowUpSequenceModal({
     const engagementPayload = buildFirstOutreachEngagementApiPayload(
       firstOutreachEngagement,
     );
-    const hasEngagement = !!engagementPayload;
+    const hasEngagement = waitForOpen && !!engagementPayload;
 
-    if (hasEngagement) {
+    if (hasEngagement && engagementPayload) {
       const outreachErr = validateFirstOutreachEngagement(
         firstOutreachEngagement,
         hasTrackedOutreach,
@@ -319,18 +387,25 @@ export default function FollowUpSequenceModal({
     const apiSteps = cadenceToApiSteps(milestones);
     if (!hasEngagement && !apiSteps.length) {
       toast.error(
-        "Add alternate open-tracking steps or enable at least one follow-up step",
+        waitForOpen
+          ? "Add alternate open-tracking steps or enable at least one follow-up step"
+          : "Enable at least one follow-up step",
       );
-      if (!hasEngagement) setActiveTab("first-outreach");
+      if (!hasEngagement) setActiveTab("follow-ups");
       else setActiveTab("follow-ups");
       return;
     }
 
     if (apiSteps.length) {
-      if (!hasTrackedOutreach) {
+      if (waitForOpen && !hasTrackedOutreach) {
         toast.error(
           "Send a tracked email from CRM compose first. Follow-ups start only after the lead opens it.",
         );
+        setActiveTab("follow-ups");
+        return;
+      }
+      if (!waitForOpen && !(mailboxHint?.accounts?.length)) {
+        toast.error("Connect a mailbox in Inbox before scheduling follow-ups.");
         setActiveTab("follow-ups");
         return;
       }
@@ -360,12 +435,15 @@ export default function FollowUpSequenceModal({
         entityType,
         entityId,
         cancelOnReply,
+        waitForOpen,
         overrideMailbox: hasPerStepMailboxOverride,
         steps: apiSteps,
         ...(mailboxHint?.latestTrackingToken
           ? { trackingToken: mailboxHint.latestTrackingToken }
           : {}),
-        ...(engagementPayload ? { firstOutreachEngagement: engagementPayload } : {}),
+        ...(waitForOpen && engagementPayload
+          ? { firstOutreachEngagement: engagementPayload }
+          : {}),
       };
 
       const res = await fetch(`${CRM_API_URL}/crm/workflows/follow-up-sequence/start`, {
@@ -391,6 +469,68 @@ export default function FollowUpSequenceModal({
       onStarted?.();
       onScheduleChanged?.();
       void loadPending();
+      onClose();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScheduleReminder = async () => {
+    const iso = datetimeLocalToIso(reminderAt);
+    if (!iso) {
+      toast.error("Pick a valid date and time");
+      return;
+    }
+    if (new Date(iso).getTime() < Date.now() - 60_000) {
+      toast.error("Follow-up time must be now or in the future");
+      return;
+    }
+    const t = localStorage.getItem("token");
+    if (!t) {
+      toast.error("Not signed in");
+      return;
+    }
+    setLoading(true);
+    try {
+      const mediumLabel =
+        reminderMedium === "whatsapp"
+          ? "WhatsApp"
+          : reminderMedium === "later"
+            ? "decide later"
+            : "Email";
+      const res = await fetch(`${CRM_API_URL}/crm/reminders`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${t}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          relatedType: entityType,
+          relatedTo: entityId,
+          scheduledAt: iso,
+          medium: reminderMedium,
+          description: reminderNote.trim() || undefined,
+          syncLeadNextFollowUp: entityType === "Lead",
+          recurrence: "none",
+          title: entityLabel
+            ? reminderMedium === "later"
+              ? `Follow up (decide later): ${entityLabel}`
+              : `Follow up via ${mediumLabel}: ${entityLabel}`
+            : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message || "Could not schedule follow-up reminder");
+        return;
+      }
+      toast.success(
+        reminderMedium === "later"
+          ? "Reminder set — you'll get a popup to follow up (pick channel then)"
+          : `Reminder set — you'll get a popup to follow up via ${mediumLabel}`,
+      );
+      onStarted?.();
+      onScheduleChanged?.();
       onClose();
     } finally {
       setLoading(false);
@@ -439,27 +579,74 @@ export default function FollowUpSequenceModal({
       footer={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-            <label className="flex items-center gap-2 text-xs text-[var(--text-muted)] cursor-pointer">
-              <input
-                type="checkbox"
-                checked={cancelOnReply}
-                onChange={(e) => setCancelOnReply(e.target.checked)}
-                className="rounded border-border h-3.5 w-3.5"
-              />
-              Stop if they reply
-            </label>
-            <span className="text-xs text-[var(--text-muted)]">{footerSummary}</span>
+            {activeTab === "reminder" ? (
+              <span className="text-xs text-[var(--text-muted)]">
+                Reminder for you — does not auto-send to the lead
+              </span>
+            ) : (
+              <>
+                <label className="flex items-center gap-2 text-xs text-[var(--text-muted)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={waitForOpen}
+                    onChange={(e) => setWaitForOpen(e.target.checked)}
+                    className="rounded border-border h-3.5 w-3.5"
+                  />
+                  Wait for open
+                </label>
+                <label className="flex items-center gap-2 text-xs text-[var(--text-muted)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={cancelOnReply}
+                    onChange={(e) => setCancelOnReply(e.target.checked)}
+                    className="rounded border-border h-3.5 w-3.5"
+                  />
+                  Stop if they reply
+                </label>
+                <span className="text-xs text-[var(--text-muted)]">{footerSummary}</span>
+              </>
+            )}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
+            {scheduleSnapshot?.hasSchedule && activeTab !== "reminder" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={cancelling || loading}
+                onClick={() => void handleCancelSequence()}
+                className="h-9 gap-1.5 rounded-[var(--crm-radius-ui)] px-4 text-sm font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              >
+                {cancelling ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <XCircle size={14} />
+                )}
+                Cancel sequence
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
               onClick={onClose}
               className="h-9 rounded-[var(--crm-radius-ui)] px-4 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-dim)]"
             >
-              Cancel
+              Close
             </Button>
-            {activeTab === "first-outreach" ? (
+            {activeTab === "reminder" ? (
+              <Button
+                type="button"
+                disabled={loading || !reminderAt}
+                onClick={() => void handleScheduleReminder()}
+                className="h-9 gap-1.5 rounded-[var(--crm-radius-ui)] bg-[var(--primary)] px-4 text-sm font-bold text-white shadow-[var(--crm-shadow-button-hover)] hover:bg-[var(--primary-dark)]"
+              >
+                {loading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <CalendarClock size={14} />
+                )}
+                Set reminder
+              </Button>
+            ) : activeTab === "first-outreach" ? (
               <>
                 {engagementActive ? (
                   <Button
@@ -501,13 +688,20 @@ export default function FollowUpSequenceModal({
                 type="button"
                 disabled={
                   loading ||
-                  (enabledCount === 0 && !engagementActive) ||
-                  (enabledCount > 0 && !hasTrackedOutreach)
+                  (enabledCount === 0 && !(waitForOpen && engagementActive)) ||
+                  (enabledCount > 0 && waitForOpen && !hasTrackedOutreach) ||
+                  (enabledCount > 0 &&
+                    !waitForOpen &&
+                    !(mailboxHint?.accounts?.length))
                 }
                 title={
-                  enabledCount > 0 && !hasTrackedOutreach
+                  enabledCount > 0 && waitForOpen && !hasTrackedOutreach
                     ? "Send a tracked email from compose first"
-                    : undefined
+                    : enabledCount > 0 &&
+                        !waitForOpen &&
+                        !(mailboxHint?.accounts?.length)
+                      ? "Connect a mailbox in Inbox first"
+                      : undefined
                 }
                 onClick={() => void handleStart()}
                 className="h-9 gap-1.5 rounded-[var(--crm-radius-ui)] bg-[var(--primary)] px-4 text-sm font-bold text-white shadow-[var(--crm-shadow-button-hover)] hover:bg-[var(--primary-dark)]"
@@ -533,10 +727,9 @@ export default function FollowUpSequenceModal({
     >
       <div className="space-y-4 -mx-1">
         <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-          Send a{" "}
-          <strong className="font-semibold text-[var(--text-main)]">tracked</strong> email
-          from compose first. Day 2 / 5 / 7 follow-ups only run after the lead opens a
-          tracked send — not if it stays unopened or lands in spam.
+          Automate tracked emails, or set a{" "}
+          <strong className="font-semibold text-[var(--text-main)]">reminder</strong> so
+          you get a popup to follow up yourself via Email or WhatsApp.
         </p>
 
         <div
@@ -549,7 +742,7 @@ export default function FollowUpSequenceModal({
             role="tab"
             aria-selected={activeTab === "first-outreach"}
             onClick={() => setActiveTab("first-outreach")}
-            className={`flex-1 min-w-[9rem] rounded-[calc(var(--crm-radius-ui)-2px)] px-3 py-2 text-xs font-semibold transition-colors ${
+            className={`flex-1 min-w-[7.5rem] rounded-[calc(var(--crm-radius-ui)-2px)] px-3 py-2 text-xs font-semibold transition-colors ${
               activeTab === "first-outreach"
                 ? "bg-white text-[var(--text-main)] shadow-sm"
                 : "text-[var(--text-muted)] hover:text-[var(--text-main)]"
@@ -562,17 +755,108 @@ export default function FollowUpSequenceModal({
             role="tab"
             aria-selected={activeTab === "follow-ups"}
             onClick={() => setActiveTab("follow-ups")}
-            className={`flex-1 min-w-[9rem] rounded-[calc(var(--crm-radius-ui)-2px)] px-3 py-2 text-xs font-semibold transition-colors ${
+            className={`flex-1 min-w-[7.5rem] rounded-[calc(var(--crm-radius-ui)-2px)] px-3 py-2 text-xs font-semibold transition-colors ${
               activeTab === "follow-ups"
                 ? "bg-white text-[var(--text-main)] shadow-sm"
                 : "text-[var(--text-muted)] hover:text-[var(--text-main)]"
             }`}
           >
-            Follow-ups ({enabledCount})
+            Auto emails ({enabledCount})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "reminder"}
+            onClick={() => setActiveTab("reminder")}
+            className={`flex-1 min-w-[7.5rem] rounded-[calc(var(--crm-radius-ui)-2px)] px-3 py-2 text-xs font-semibold transition-colors ${
+              activeTab === "reminder"
+                ? "bg-white text-[var(--text-main)] shadow-sm"
+                : "text-[var(--text-muted)] hover:text-[var(--text-main)]"
+            }`}
+          >
+            Reminder
           </button>
         </div>
 
-        {activeTab === "first-outreach" ? (
+        {activeTab === "reminder" ? (
+          <div className="space-y-4 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              Pick when <strong className="font-semibold text-[var(--text-main)]">you</strong> want
+              to be reminded. At that time you&apos;ll get a toast + bell notification (and email if
+              enabled). This does not auto-send to the lead. View all reminders under{" "}
+              <span className="font-semibold text-[var(--text-main)]">
+                Notifications → Reminders
+              </span>
+              .
+            </p>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text-muted)]">
+                Date &amp; time
+              </label>
+              <input
+                type="datetime-local"
+                value={reminderAt}
+                onChange={(e) => setReminderAt(e.target.value)}
+                className="h-11 w-full rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white px-3 text-sm font-medium text-[var(--text-main)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text-muted)]">
+                Follow-up medium
+              </label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => setReminderMedium("email")}
+                  className={`flex h-11 items-center justify-center gap-2 rounded-[var(--crm-radius-ui)] border text-sm font-semibold transition-colors ${
+                    reminderMedium === "email"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-[var(--border-color)] text-[var(--text-muted)] hover:border-primary/40"
+                  }`}
+                >
+                  <Mail size={16} />
+                  Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReminderMedium("whatsapp")}
+                  className={`flex h-11 items-center justify-center gap-2 rounded-[var(--crm-radius-ui)] border text-sm font-semibold transition-colors ${
+                    reminderMedium === "whatsapp"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-[var(--border-color)] text-[var(--text-muted)] hover:border-primary/40"
+                  }`}
+                >
+                  <MessageCircle size={16} />
+                  WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReminderMedium("later")}
+                  className={`flex h-11 items-center justify-center gap-2 rounded-[var(--crm-radius-ui)] border text-sm font-semibold transition-colors ${
+                    reminderMedium === "later"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-[var(--border-color)] text-[var(--text-muted)] hover:border-primary/40"
+                  }`}
+                >
+                  <HelpCircle size={16} />
+                  Decide later
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text-muted)]">
+                Note (optional)
+              </label>
+              <textarea
+                value={reminderNote}
+                onChange={(e) => setReminderNote(e.target.value)}
+                rows={3}
+                placeholder="e.g. Ask about site visit availability"
+                className="w-full rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white px-3 py-2 text-sm text-[var(--text-main)]"
+              />
+            </div>
+          </div>
+        ) : activeTab === "first-outreach" ? (
           <FirstOutreachNotOpenedPanel
             config={firstOutreachEngagement}
             templates={templates}
@@ -587,10 +871,17 @@ export default function FollowUpSequenceModal({
           />
         ) : (
           <>
-            {!hasTrackedOutreach ? (
+            {!waitForOpen ? (
+              <p className="text-sm text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
+                <strong className="font-semibold">Send on schedule</strong> — follow-ups
+                will send at the times you set. They will <em>not</em> wait for the lead to
+                open a previous email.
+              </p>
+            ) : !hasTrackedOutreach ? (
               <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                Send a tracked email from CRM compose first. Follow-ups will not schedule
-                until the lead opens a tracked send.
+                Send a tracked email from CRM compose first. Until that exists, Schedule stays
+                disabled while <strong className="font-semibold">Wait for open</strong> is on.
+                Or turn off Wait for open to send on the clock time instead.
               </p>
             ) : leadHasOpenedLatestOutreach ? (
               <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
@@ -599,11 +890,12 @@ export default function FollowUpSequenceModal({
               </p>
             ) : (
               <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                Waiting for an open before follow-ups run. If they never open, Day 2 / 5 /
-                7 will not send.
+                Waiting for an open before follow-ups run. Turn off{" "}
+                <strong className="font-semibold">Wait for open</strong> if you want emails
+                to send at the scheduled time even if they never open.
               </p>
             )}
-            {isFirstOutreachEngagementActive(firstOutreachEngagement) ? (
+            {waitForOpen && isFirstOutreachEngagementActive(firstOutreachEngagement) ? (
               <p className="text-xs text-text-muted rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
                 With open-tracking alternates enabled, follow-ups send from the mailbox
                 they <strong className="text-text-main">opened</strong> (first outreach or
@@ -865,6 +1157,10 @@ export default function FollowUpSequenceModal({
                 {scheduleSnapshot.pendingJobCount === 1 ? "" : "s"})
               </p>
               <p className="text-[11px] text-(--text-muted)">
+                {scheduleSnapshot.waitForOpen === false
+                  ? "Sends on schedule"
+                  : "Waits for open"}
+                {" · "}
                 {scheduleSnapshot.cancelOnReply
                   ? "Stops if they reply"
                   : "Keeps running after replies"}
@@ -901,6 +1197,19 @@ export default function FollowUpSequenceModal({
                 No projected steps available yet.
               </p>
             )}
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={() => void handleCancelSequence()}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:underline disabled:opacity-40 pt-1"
+            >
+              {cancelling ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <XCircle size={12} />
+              )}
+              Cancel sequence
+            </button>
           </div>
         ) : null}
       </div>

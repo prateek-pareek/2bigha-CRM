@@ -128,6 +128,11 @@ import { ExportQuotaService } from '../admin/export-quota.service';
 import { TwoBighaLeadService } from '../records/twobigha-lead.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { CrmNotifyService } from '../notifications/crm-notify.service';
+import {
+  describeNextFollowUpSend,
+  formatFollowUpAbsoluteWhen,
+  formatFollowUpRelativeWhen,
+} from '../notifications/crm-follow-up-notify.util';
 import { CRMUsersService } from '../crm-users/crm-users.service';
 
 type ImportDuplicateStrategy = 'create' | 'skip' | 'merge' | 'replace';
@@ -254,7 +259,7 @@ export class CRMService {
     });
     // Keep Teams DM as a secondary channel for assignees with linked Teams.
     if (opts.email) {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
       const dm = await this.teamsBotService.sendProactiveDM(
         opts.email,
         opts.title,
@@ -3191,11 +3196,13 @@ export class CRMService {
       const leadLabel =
         `${updated.firstName || ''} ${updated.lastName || ''}`.trim() || 'a lead';
       const link = `/crm/leads/${updated._id}`;
+      const previousOwner = String((oldLead as any).leadOwner || '').trim();
+      const assignEvent = previousOwner ? 'lead_reassigned' : 'lead_assigned';
       void this.crmNotify
         .notify({
-          event: 'lead_reassigned',
+          event: assignEvent,
           title: 'Lead assigned to you',
-          message: `${leadLabel} has been assigned to you${(oldLead as any).leadOwner ? ` (from ${(oldLead as any).leadOwner})` : ''}.`,
+          message: `${leadLabel} has been assigned to you${previousOwner ? ` (from ${previousOwner})` : ''}.`,
           recipient: { label: String(dto.leadOwner || '') },
           link,
           metadata: {
@@ -3209,13 +3216,13 @@ export class CRMService {
         .catch((err) =>
           console.error('[CRMService] Lead owner notify failed:', err?.message || err),
         );
-      if ((oldLead as any).leadOwner) {
+      if (previousOwner) {
         void this.crmNotify
           .notify({
             event: 'lead_reassigned',
             title: 'Lead reassigned',
             message: `${leadLabel} has been reassigned to ${dto.leadOwner}.`,
-            recipient: { label: String((oldLead as any).leadOwner) },
+            recipient: { label: previousOwner },
             link,
             metadata: {
               link,
@@ -3224,6 +3231,102 @@ export class CRMService {
               action: 'lead_owner_changed_out',
             },
             type: 'LEAD_ASSIGNED',
+          })
+          .catch(() => null);
+      }
+    }
+    if (
+      updated &&
+      oldLead &&
+      dto.nextFollowUpAt !== undefined &&
+      String((oldLead as any).nextFollowUpAt || '') !==
+        String((updated as any).nextFollowUpAt || '')
+    ) {
+      const leadLabel =
+        `${updated.firstName || ''} ${updated.lastName || ''}`.trim() || 'a lead';
+      const link = `/crm/leads/${updated._id}`;
+      const nextAt = (updated as any).nextFollowUpAt
+        ? new Date((updated as any).nextFollowUpAt)
+        : null;
+      if (nextAt && !Number.isNaN(nextAt.getTime())) {
+        const relative = formatFollowUpRelativeWhen(nextAt);
+        const absolute = formatFollowUpAbsoluteWhen(nextAt);
+        void this.crmNotify
+          .notify({
+            event: 'lead_follow_up_scheduled',
+            title: `Follow-up scheduled: ${leadLabel}`,
+            message: [
+              `A follow-up was scheduled for ${leadLabel}.`,
+              `Due ${relative} (${absolute}).`,
+              describeNextFollowUpSend(nextAt),
+            ].join('\n'),
+            recipient: {
+              label: String((updated as any).leadOwner || '').trim() || undefined,
+              userId: user?.userId || user?._id,
+              email: user?.email,
+            },
+            alsoNotify: user
+              ? [{ userId: user.userId || user._id, email: user.email }]
+              : undefined,
+            link,
+            metadata: {
+              link,
+              entityId: String(updated._id),
+              relatedType: 'Lead',
+              nextFollowUpAt: nextAt.toISOString(),
+              event: 'lead_follow_up_scheduled',
+            },
+            type: 'FOLLOW_UP',
+          })
+          .catch((err) =>
+            console.error(
+              '[CRMService] Follow-up schedule notify failed:',
+              err?.message || err,
+            ),
+          );
+      }
+    }
+    if (
+      updated &&
+      oldLead &&
+      dto.leadIntentFollowUpAt !== undefined &&
+      String((oldLead as any).leadIntentFollowUpAt || '') !==
+        String((updated as any).leadIntentFollowUpAt || '')
+    ) {
+      const leadLabel =
+        `${updated.firstName || ''} ${updated.lastName || ''}`.trim() || 'a lead';
+      const link = `/crm/leads/${updated._id}`;
+      const nextAt = (updated as any).leadIntentFollowUpAt
+        ? new Date((updated as any).leadIntentFollowUpAt)
+        : null;
+      if (nextAt && !Number.isNaN(nextAt.getTime())) {
+        const relative = formatFollowUpRelativeWhen(nextAt);
+        const absolute = formatFollowUpAbsoluteWhen(nextAt);
+        void this.crmNotify
+          .notify({
+            event: 'lead_follow_up_scheduled',
+            title: `Intent follow-up scheduled: ${leadLabel}`,
+            message: [
+              `A lead-intent follow-up was scheduled for ${leadLabel}.`,
+              `Due ${relative} (${absolute}).`,
+            ].join('\n'),
+            recipient: {
+              label: String((updated as any).leadOwner || '').trim() || undefined,
+              userId: user?.userId || user?._id,
+              email: user?.email,
+            },
+            alsoNotify: user
+              ? [{ userId: user.userId || user._id, email: user.email }]
+              : undefined,
+            link,
+            metadata: {
+              link,
+              entityId: String(updated._id),
+              relatedType: 'Lead',
+              leadIntentFollowUpAt: nextAt.toISOString(),
+              event: 'lead_follow_up_scheduled',
+            },
+            type: 'FOLLOW_UP',
           })
           .catch(() => null);
       }
@@ -4519,7 +4622,7 @@ export class CRMService {
           const author = populated.author as any;
           if (author?.email) {
             const frontendUrl =
-              process.env.FRONTEND_URL || 'http://localhost:3000';
+              process.env.FRONTEND_URL || 'http://localhost:3001';
             const link = `${frontendUrl}/crm/tasks`;
             const dm = await this.teamsBotService.sendProactiveDM(
               author.email,
@@ -5324,11 +5427,14 @@ export class CRMService {
       after: { leadOwner: ownerName, ids: oids },
     });
 
+    const hadPrevious = previousOwners.some(
+      (l: any) => String(l.leadOwner || '').trim(),
+    );
     void this.crmNotify
       .notify({
-        event: 'lead_reassigned',
+        event: hadPrevious ? 'lead_reassigned' : 'lead_assigned',
         title: 'Leads assigned to you',
-        message: `${previousOwners.length} lead(s) were reassigned to you.`,
+        message: `${previousOwners.length} lead(s) were assigned to you.`,
         recipient: { label: ownerName },
         link: '/crm/leads',
         metadata: {
@@ -5341,6 +5447,30 @@ export class CRMService {
       .catch((err) =>
         console.error('[CRMService] Bulk assign notify failed:', err?.message || err),
       );
+
+    const previousLabels = [
+      ...new Set(
+        previousOwners
+          .map((l: any) => String(l.leadOwner || '').trim())
+          .filter((name) => name && name !== ownerName),
+      ),
+    ];
+    for (const prev of previousLabels) {
+      void this.crmNotify
+        .notify({
+          event: 'lead_reassigned',
+          title: 'Leads reassigned',
+          message: `One or more of your leads were reassigned to ${ownerName}.`,
+          recipient: { label: prev },
+          link: '/crm/leads',
+          metadata: {
+            link: '/crm/leads',
+            action: 'bulk_assign_out',
+          },
+          type: 'LEAD_ASSIGNED',
+        })
+        .catch(() => null);
+    }
 
     return {
       ownerName,
