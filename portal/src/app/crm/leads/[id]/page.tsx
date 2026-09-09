@@ -466,18 +466,8 @@ export default function LeadDetailPage() {
       icon: <Building2 size={14} />,
       title: 'Add a sell listing linked to this lead',
       onClick: () => {
-        const phone = lead?.mobileNo || lead?.phone || '';
-        const name =
-          lead?.fullName ||
-          lead?.name ||
-          [lead?.firstName, lead?.lastName].filter(Boolean).join(' ') ||
-          '';
-        const email = lead?.email || '';
         const params = new URLSearchParams();
         if (recordId) params.set('leadId', recordId);
-        if (name) params.set('ownerName', name);
-        if (phone) params.set('ownerPhone', phone);
-        if (email) params.set('ownerEmail', email);
         router.push(`/crm/property-listings/new?${params.toString()}`);
       },
     },
@@ -931,18 +921,8 @@ export default function LeadDetailPage() {
                 leadId={entityId}
                 refreshKey={propertiesRefreshKey}
                 onAddClick={() => {
-                  const phone = lead?.mobileNo || lead?.phone || '';
-                  const name =
-                    lead?.fullName ||
-                    lead?.name ||
-                    [lead?.firstName, lead?.lastName].filter(Boolean).join(' ') ||
-                    '';
-                  const email = lead?.email || '';
                   const params = new URLSearchParams();
                   if (entityId) params.set('leadId', entityId);
-                  if (name) params.set('ownerName', name);
-                  if (phone) params.set('ownerPhone', phone);
-                  if (email) params.set('ownerEmail', email);
                   router.push(`/crm/property-listings/new?${params.toString()}`);
                 }}
                 onRefresh={() => setPropertiesRefreshKey((k) => k + 1)}

@@ -74,10 +74,9 @@ export default function AddPropertyModal({
     if (!open) return;
     const params = new URLSearchParams();
     if (leadId) params.set("leadId", leadId);
-    if (leadName) params.set("ownerName", leadName);
     router.push(`/crm/property-listings/new?${params.toString()}`);
     onClose();
-  }, [open, leadId, leadName, router, onClose]);
+  }, [open, leadId, router, onClose]);
 
   if (!open) return null;
 

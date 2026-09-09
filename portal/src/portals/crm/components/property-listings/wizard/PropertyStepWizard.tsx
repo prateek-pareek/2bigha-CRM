@@ -95,25 +95,27 @@ export function PropertyStepWizard({
     let active = true;
     (async () => {
       try {
-        const { data } = await api.get<any>(`/crm/leads/${leadId}`);
+        const res = await api.get<any>(`/crm/leads/${leadId}`);
+        const data = res?.data?.data || res?.data;
         if (active && data) {
           const resolvedName =
-            data.fullName || data.name || [data.firstName, data.lastName].filter(Boolean).join(" ");
+            data.fullName ||
+            data.name ||
+            [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ") ||
+            "";
           const resolvedPhone = data.mobileNo || data.phone || "";
           const resolvedEmail = data.email || "";
 
           setLeadData({ name: resolvedName, phone: resolvedPhone });
           setDraft((prev) => ({
             ...prev,
-            ownerName: prev.ownerName || resolvedName || "",
-            phoneNumber:
-              prev.phoneNumber ||
-              (resolvedPhone
-                ? resolvedPhone.startsWith("+")
-                  ? resolvedPhone
-                  : `+91 ${resolvedPhone.replace(/[^\d]/g, "")}`
-                : ""),
-            email: prev.email || resolvedEmail || "",
+            ownerName: resolvedName || prev.ownerName || "",
+            phoneNumber: resolvedPhone
+              ? resolvedPhone.startsWith("+")
+                ? resolvedPhone
+                : `+91 ${resolvedPhone.replace(/[^\d]/g, "")}`
+              : prev.phoneNumber || "",
+            email: resolvedEmail || prev.email || "",
             isLeadContact: true,
           }));
         }

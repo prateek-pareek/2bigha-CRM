@@ -789,12 +789,8 @@ export default function WhatsAppChatsPage() {
                     disabled={isReadOnly}
                     onClick={() => {
                       const leadIdVal = linkedLead?.leadId || "";
-                      const name = linkedLead?.leadName || "";
-                      const phone = selectedWaId || "";
                       const params = new URLSearchParams();
                       if (leadIdVal) params.set("leadId", leadIdVal);
-                      if (name) params.set("ownerName", name);
-                      if (phone) params.set("ownerPhone", phone);
                       router.push(`/crm/property-listings/new?${params.toString()}`);
                     }}
                     className="h-8 gap-1.5 border-none bg-white/15 px-3 text-xs text-white hover:bg-white/25 disabled:opacity-45"
