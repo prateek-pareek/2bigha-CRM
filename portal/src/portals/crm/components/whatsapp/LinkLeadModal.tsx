@@ -84,7 +84,7 @@ export default function LinkLeadModal({ open, onClose, waId, onSuccess }: Props)
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md overflow-hidden rounded-[var(--radius-md)] border border-border bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h3 className="text-sm font-bold text-text-main">Link to a lead</h3>

@@ -131,7 +131,7 @@ export default function CallLeadModal({
   // Loading state
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
         <div className="flex w-full max-w-md items-center justify-center rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white p-8 shadow-xl">
           <Loader2 className="h-6 w-6 animate-spin text-[var(--primary)]" />
         </div>
@@ -142,7 +142,7 @@ export default function CallLeadModal({
   // Warning modal when agent is not synced/added
   if (!isAgentSynced) {
     return (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
         <div className="w-full max-w-md overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
             <div className="flex items-center gap-2">
@@ -209,7 +209,7 @@ export default function CallLeadModal({
 
   // Direct Call Confirmation Modal (Agent is synced/added)
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
           <div className="flex items-center gap-2">

@@ -33,7 +33,7 @@ export default function SharedMediaPanel({ open, onClose, waId, onPreviewMedia }
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-black/30">
+    <div className="fixed inset-0 z-[1000] flex justify-end bg-black/30">
       <div className="flex h-full w-full max-w-sm flex-col bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
           <h3 className="text-sm font-semibold text-[var(--text-main)]">Shared media</h3>
