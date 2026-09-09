@@ -119,6 +119,8 @@ export default function WhatsAppChatsPage() {
   const [hasMoreContacts, setHasMoreContacts] = useState(true);
   const [fetchingMoreContacts, setFetchingMoreContacts] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
+  const contactSearchRef = useRef(contactSearch);
+  contactSearchRef.current = contactSearch;
   const [selectedWaId, setSelectedWaId] = useState<string | null>(
     searchParams.get("wa") || null,
   );
@@ -228,59 +230,67 @@ export default function WhatsAppChatsPage() {
     );
   }, [currentUser, linkedLead]);
 
-  const loadContacts = useCallback(async (page = 1, assigneeFilter = filterAssigneeId) => {
-    if (page === 1) {
-      if (!hasLoadedContactsRef.current) {
-        setContactsLoading(true);
-      }
-    } else {
-      setFetchingMoreContacts(true);
-    }
-    const token = localStorage.getItem("token");
-    try {
-      let url = `${CRM_API_URL}/crm/whatsapp/contacts?page=${page}&pageSize=20`;
-      if (assigneeFilter) {
-        url += `&assigneeId=${encodeURIComponent(assigneeFilter)}`;
-      }
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error("Failed to load conversations");
-        return;
-      }
-      const list = Array.isArray(data) ? data : (data.contacts || []);
-      const total = typeof data === "object" && "total" in data ? data.total : list.length;
-
-      setContacts((prev) => {
-        hasLoadedContactsRef.current = true;
-        if (page === 1) {
-          setHasMoreContacts(list.length < total);
-          setContactsPage(1);
-          if (prev.length <= 20) {
-            return list;
-          } else {
-            const updatedIds = new Set(list.map((c: any) => c.waId));
-            const remaining = prev.filter((c: any) => !updatedIds.has(c.waId));
-            return [...list, ...remaining];
-          }
-        } else {
-          const existing = new Set(prev.map((c) => c.waId));
-          const filtered = list.filter((c: any) => !existing.has(c.waId));
-          const nextList = [...prev, ...filtered];
-          setHasMoreContacts(nextList.length < total);
-          setContactsPage(page);
-          return nextList;
+  const loadContacts = useCallback(
+    async (page = 1, assigneeFilter = filterAssigneeId, search?: string) => {
+      if (page === 1) {
+        if (!hasLoadedContactsRef.current) {
+          setContactsLoading(true);
         }
-      });
-    } catch {
-      toast.error("Failed to load conversations");
-    } finally {
-      setContactsLoading(false);
-      setFetchingMoreContacts(false);
-    }
-  }, [filterAssigneeId]);
+      } else {
+        setFetchingMoreContacts(true);
+      }
+      const token = localStorage.getItem("token");
+      try {
+        const activeSearch = search !== undefined ? search : contactSearchRef.current;
+        const trimmedSearch = (activeSearch ?? "").trim();
+        let url = `${CRM_API_URL}/crm/whatsapp/contacts?page=${page}&pageSize=50`;
+        if (assigneeFilter) {
+          url += `&assigneeId=${encodeURIComponent(assigneeFilter)}`;
+        }
+        if (trimmedSearch) {
+          url += `&search=${encodeURIComponent(trimmedSearch)}`;
+        }
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error("Failed to load conversations");
+          return;
+        }
+        const list = Array.isArray(data) ? data : (data.contacts || []);
+        const total = typeof data === "object" && "total" in data ? data.total : list.length;
+
+        setContacts((prev) => {
+          hasLoadedContactsRef.current = true;
+          if (page === 1) {
+            setHasMoreContacts(list.length < total);
+            setContactsPage(1);
+            if (trimmedSearch || prev.length <= 20) {
+              return list;
+            } else {
+              const updatedIds = new Set(list.map((c: any) => c.waId));
+              const remaining = prev.filter((c: any) => !updatedIds.has(c.waId));
+              return [...list, ...remaining];
+            }
+          } else {
+            const existing = new Set(prev.map((c) => c.waId));
+            const filtered = list.filter((c: any) => !existing.has(c.waId));
+            const nextList = [...prev, ...filtered];
+            setHasMoreContacts(nextList.length < total);
+            setContactsPage(page);
+            return nextList;
+          }
+        });
+      } catch {
+        toast.error("Failed to load conversations");
+      } finally {
+        setContactsLoading(false);
+        setFetchingMoreContacts(false);
+      }
+    },
+    [filterAssigneeId],
+  );
 
   const loadThread = useCallback(async (waId: string, page = 1) => {
     if (page === 1) {
@@ -352,8 +362,11 @@ export default function WhatsAppChatsPage() {
   }, []);
 
   useEffect(() => {
-    void loadContacts(1, filterAssigneeId);
-  }, [loadContacts, filterAssigneeId]);
+    const timer = setTimeout(() => {
+      void loadContacts(1, filterAssigneeId, contactSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [contactSearch, filterAssigneeId, loadContacts]);
 
   useEffect(() => {
     if (!isAdminUser) return;
@@ -465,7 +478,12 @@ export default function WhatsAppChatsPage() {
   const filteredContacts = useMemo(() => {
     const q = contactSearch.trim().toLowerCase();
     if (!q) return contacts;
-    return contacts.filter((c) => c.waId.toLowerCase().includes(q));
+    return contacts.filter((c) => {
+      const waIdMatch = c.waId?.toLowerCase().includes(q);
+      const leadNameMatch = c.leadName?.toLowerCase().includes(q);
+      const lastMsgMatch = c.lastMessageText?.toLowerCase().includes(q);
+      return Boolean(waIdMatch || leadNameMatch || lastMsgMatch);
+    });
   }, [contacts, contactSearch]);
 
   const careWindow = useMemo(() => getWhatsAppCareWindow(messages, nowMs), [messages, nowMs]);
@@ -507,8 +525,8 @@ export default function WhatsAppChatsPage() {
   const handleSidebarScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
     if (target.scrollHeight - target.scrollTop <= target.clientHeight + 50) {
-      if (hasMoreContacts && !contactsLoading && !fetchingMoreContacts && !contactSearch.trim()) {
-        void loadContacts(contactsPage + 1);
+      if (hasMoreContacts && !contactsLoading && !fetchingMoreContacts) {
+        void loadContacts(contactsPage + 1, filterAssigneeId, contactSearch);
       }
     }
   };
@@ -570,8 +588,18 @@ export default function WhatsAppChatsPage() {
                 value={contactSearch}
                 onChange={(e) => setContactSearch(e.target.value)}
                 placeholder="Search or start a new chat"
-                className="h-9 w-full rounded-lg border-none bg-[#f0f2f5] pl-9 pr-3 text-sm text-[#111b21] outline-none placeholder:text-[#667781]"
+                className="h-9 w-full rounded-lg border-none bg-[#f0f2f5] pl-9 pr-8 text-sm text-[#111b21] outline-none placeholder:text-[#667781]"
               />
+              {contactSearch && (
+                <button
+                  type="button"
+                  onClick={() => setContactSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#54656f] hover:text-[#111b21]"
+                  title="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
             {isAdminUser && (
               <div className="flex items-center gap-2 bg-[#f0f2f5] px-2.5 py-1.5 rounded-lg border border-[#e9edef]">
@@ -603,8 +631,16 @@ export default function WhatsAppChatsPage() {
             ) : filteredContacts.length === 0 ? (
               <div className="p-8 text-center">
                 <MessageCircle className="mx-auto mb-2 text-[#667781] opacity-40" size={24} />
-                <p className="text-xs font-semibold text-[#111b21]">No conversations yet</p>
-                <p className="mt-1 text-xs text-[#667781]">Start a new chat to get going.</p>
+                <p className="text-xs font-semibold text-[#111b21]">
+                  {contactSearch.trim()
+                    ? `No chats or leads matching "${contactSearch.trim()}"`
+                    : "No conversations yet"}
+                </p>
+                <p className="mt-1 text-xs text-[#667781]">
+                  {contactSearch.trim()
+                    ? "Try searching with a different name or phone number."
+                    : "Start a new chat to get going."}
+                </p>
               </div>
             ) : (
               <>

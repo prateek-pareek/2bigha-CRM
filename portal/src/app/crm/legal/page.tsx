@@ -162,8 +162,8 @@ export default function LegalCasesPage() {
             return {
               _id: `tb_case_${p.id || idx}`,
               title: p.title || p.propertyName || 'Untitled Property',
-              caseType: 'Property Verification',
-              priority: isPending ? 'High' : 'Medium',
+              caseType: 'compliance',
+              priority: isPending ? 'high' : 'medium',
               counterpartyName: [p.city, p.state].filter(Boolean).join(', ') || '2bigha Property',
               stage: isPending ? (idx % 2 === 0 ? intakeStage : docReviewStage) : draftingStage,
               caseOwner: '2bigha Legal Desk',

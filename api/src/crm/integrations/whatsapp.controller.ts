@@ -49,11 +49,13 @@ export class WhatsAppController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('assigneeId') assigneeId?: string,
+    @Query('search') search?: string,
   ) {
     return this.whatsappService.getUniqueContacts(req.user, {
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       assigneeId,
+      search,
     });
   }
 

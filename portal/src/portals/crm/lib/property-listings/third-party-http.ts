@@ -33,6 +33,7 @@ import {
   THIRD_PARTY_LISTINGS_API_URL,
   thirdPartyListingsAuthHeaders,
 } from "./third-party-config";
+import * as mock from "./mock-third-party";
 import type {
   CreateThirdPartyPropertyInput,
   ThirdPartyListQuery,

@@ -1088,7 +1088,7 @@ export class WhatsAppService {
 
   async getUniqueContacts(
     user?: any,
-    options: { page?: number; pageSize?: number; assigneeId?: string } = {},
+    options: { page?: number; pageSize?: number; assigneeId?: string; search?: string } = {},
   ): Promise<{ contacts: any[]; total: number }> {
     let resolvedAssigneeId: string | null = null;
     if (options.assigneeId) {
@@ -1146,7 +1146,73 @@ export class WhatsAppService {
       matchQuery.waId = { $nin: forbidden };
     }
     if (assignedWaIds !== null) {
-      matchQuery.waId = { ...matchQuery.waId, $in: assignedWaIds };
+      matchQuery.waId = { ...(matchQuery.waId || {}), $in: assignedWaIds };
+    }
+
+    const search = options.search?.trim();
+    let matchingLeads: any[] = [];
+    if (search) {
+      const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+      matchingLeads = await this.leadModel
+        .find({
+          isDeleted: { $ne: true },
+          $or: [
+            { firstName: searchRegex },
+            { lastName: searchRegex },
+            { middleName: searchRegex },
+            { phone: searchRegex },
+            { mobileNo: searchRegex },
+            { email: searchRegex },
+          ],
+        })
+        .select('_id phone mobileNo firstName middleName lastName updatedAt createdAt')
+        .lean()
+        .exec();
+
+      const matchingLeadIds = matchingLeads.map((l) => l._id);
+
+      const matchingLinks = await this.linkModel
+        .find({
+          $or: [
+            { leadId: { $in: matchingLeadIds } },
+            { waId: searchRegex },
+          ],
+        })
+        .select('waId')
+        .lean()
+        .exec();
+
+      const waOrConditions: any[] = [
+        { waId: searchRegex },
+        { body: searchRegex },
+      ];
+
+      for (const l of matchingLinks) {
+        if (l.waId) waOrConditions.push({ waId: l.waId });
+      }
+
+      for (const lead of matchingLeads) {
+        const p1 = lead.mobileNo ? String(lead.mobileNo).replace(/\D/g, '') : '';
+        const p2 = lead.phone ? String(lead.phone).replace(/\D/g, '') : '';
+        if (p1.length >= 10) {
+          waOrConditions.push({ waId: new RegExp(p1.slice(-10) + '$') });
+        } else if (p1) {
+          waOrConditions.push({ waId: p1 });
+        }
+        if (p2.length >= 10) {
+          waOrConditions.push({ waId: new RegExp(p2.slice(-10) + '$') });
+        } else if (p2) {
+          waOrConditions.push({ waId: p2 });
+        }
+      }
+
+      if (matchQuery.$or) {
+        matchQuery.$and = [{ $or: matchQuery.$or }, { $or: waOrConditions }];
+        delete matchQuery.$or;
+      } else {
+        matchQuery.$or = waOrConditions;
+      }
     }
 
     const matchStage = Object.keys(matchQuery).length > 0 ? { $match: matchQuery } : null;
@@ -1183,38 +1249,67 @@ export class WhatsAppService {
     );
 
     const agg = await this.messageModel.aggregate(pipeline).exec();
-    const total = agg.length;
 
+    // If search was provided, also include matching CRM leads who don't have WhatsApp messages yet
+    let allContacts = [...agg];
+    if (search && matchingLeads.length > 0) {
+      const existingWaSuffixes = new Set(
+        agg.map((a) => (a.waId ? String(a.waId).replace(/\D/g, '').slice(-10) : '')).filter(Boolean)
+      );
+      for (const lead of matchingLeads) {
+        const rawPhone = String(lead.mobileNo || lead.phone || '').replace(/\D/g, '');
+        const suffix = rawPhone.slice(-10);
+        if (suffix.length >= 10 && !existingWaSuffixes.has(suffix)) {
+          existingWaSuffixes.add(suffix);
+          const fullName = [lead.firstName, lead.middleName, lead.lastName].filter(Boolean).join(' ').trim();
+          allContacts.push({
+            waId: rawPhone,
+            lastMessageAt: lead.updatedAt ? new Date(lead.updatedAt).toISOString() : new Date().toISOString(),
+            lastMessageText: 'Lead from CRM • Click to start chat',
+            unreadCount: 0,
+            leadName: fullName || 'Lead',
+            leadId: String(lead._id),
+          });
+        }
+      }
+    }
+
+    const total = allContacts.length;
     const page = options.page ?? 1;
-    const pageSize = options.pageSize ?? 20;
+    const pageSize = options.pageSize ?? (options.search ? 50 : 20);
     const skip = (page - 1) * pageSize;
 
-    const paginated = agg.slice(skip, skip + pageSize);
+    const paginated = allContacts.slice(skip, skip + pageSize);
 
     // Batch resolve Lead/Link details for each contact
     const contactsWithLeads = await Promise.all(
       paginated.map(async (c) => {
+        if (c.leadName) {
+          return c;
+        }
         const waId = c.waId;
         const link = await this.linkModel
           .findOne({ waId })
-          .populate('leadId', 'firstName lastName')
+          .populate('leadId', 'firstName middleName lastName')
           .lean()
           .exec();
 
         if (link && link.leadId) {
           const lead = link.leadId as any;
+          const name = [lead.firstName, lead.middleName, lead.lastName].filter(Boolean).join(' ').trim();
           return {
             ...c,
-            leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
+            leadName: name || 'Lead',
             leadId: String(lead._id),
           };
         }
 
         // Fallback: search Lead collection
-        const localNumber = waId.slice(-10);
+        const localNumber = String(waId).replace(/\D/g, '').slice(-10);
         if (localNumber.length >= 10) {
           const lead = await this.leadModel
             .findOne({
+              isDeleted: { $ne: true },
               $or: [
                 { mobileNo: new RegExp(localNumber + '$') },
                 { phone: new RegExp(localNumber + '$') },
@@ -1222,14 +1317,15 @@ export class WhatsAppService {
                 { phone: waId },
               ],
             })
-            .select('firstName lastName')
+            .select('firstName middleName lastName')
             .lean()
             .exec();
 
           if (lead) {
+            const name = [lead.firstName, lead.middleName, lead.lastName].filter(Boolean).join(' ').trim();
             return {
               ...c,
-              leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
+              leadName: name || 'Lead',
               leadId: String(lead._id),
             };
           }
