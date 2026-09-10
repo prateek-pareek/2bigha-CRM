@@ -18,7 +18,11 @@ type Props = {
   disabled?: boolean;
 };
 
-/** Compact person picker for Admin / Team Lead dashboard drill-down. */
+/**
+ * Compact person picker for Admin / Team Lead dashboard drill-down.
+ * Label sits beside the control — never inside the same bordered box —
+ * so native select text cannot overlap the label (Windows Chrome issue).
+ */
 export function DashboardPersonSelect({
   label,
   value,
@@ -29,19 +33,16 @@ export function DashboardPersonSelect({
   disabled,
 }: Props) {
   return (
-    <label
-      className={cn(
-        "inline-flex h-[38px] items-center gap-2 rounded-[5px] border border-[var(--border-color)] bg-white px-2.5 shadow-[var(--crm-shadow-input)] dark:bg-black dark:border-white/10",
-        className,
-      )}
-    >
-      <span className="shrink-0 text-xs font-medium text-[var(--text-muted)]">{label}</span>
+    <div className={cn("inline-flex items-center gap-2", className)}>
+      <span className="shrink-0 text-xs font-medium text-[var(--text-muted)] whitespace-nowrap">
+        {label}
+      </span>
       <select
         value={value}
         disabled={disabled || options.length === 0}
         onChange={(e) => onChange(e.target.value)}
-        className="h-[34px] min-w-[160px] max-w-[240px] cursor-pointer appearance-none border-0 bg-transparent pr-1 text-sm font-medium text-[var(--text-main)] outline-none disabled:opacity-60"
         aria-label={label}
+        className="h-[38px] min-w-[170px] max-w-[260px] cursor-pointer appearance-none rounded-[5px] border border-[var(--border-color)] bg-white px-3 pr-8 text-sm font-medium text-[var(--text-main)] shadow-[var(--crm-shadow-input)] outline-none disabled:opacity-60 dark:bg-black dark:border-white/10"
       >
         <option value="">{placeholder}</option>
         {options.map((o) => (
@@ -50,6 +51,6 @@ export function DashboardPersonSelect({
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }

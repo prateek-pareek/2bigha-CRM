@@ -42,6 +42,11 @@ export class FormFieldDto {
   placeholder?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  helpText?: string;
+
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(100)
   @IsString({ each: true })

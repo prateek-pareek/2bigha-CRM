@@ -67,6 +67,10 @@ export class FormField {
   @Prop({ trim: true })
   placeholder?: string;
 
+  /** Short hint shown under the question on the public form. */
+  @Prop({ trim: true })
+  helpText?: string;
+
   /** For select / multiselect / radio. */
   @Prop({ type: [String], default: [] })
   options: string[];

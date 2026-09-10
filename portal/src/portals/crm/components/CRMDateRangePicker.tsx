@@ -77,7 +77,7 @@ export default function CRMDateRangePicker({
   const [customTo, setCustomTo] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, maxHeight: 520 });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -98,10 +98,15 @@ export default function CRMDateRangePicker({
       const el = containerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      const width = window.innerWidth;
+      const pad = 12;
       const menuWidth = 256;
-      const left = Math.min(r.left, Math.max(8, width - menuWidth - 8));
-      setMenuPos({ top: r.bottom + 8, left });
+      const spaceBelow = window.innerHeight - r.bottom - pad;
+      const spaceAbove = r.top - pad;
+      const openUp = spaceBelow < 420 && spaceAbove > spaceBelow;
+      const maxHeight = Math.min(560, Math.max(280, openUp ? spaceAbove : spaceBelow));
+      const left = Math.min(r.left, Math.max(pad, window.innerWidth - menuWidth - pad));
+      const top = openUp ? Math.max(pad, r.top - maxHeight - 8) : r.bottom + 8;
+      setMenuPos({ top, left, maxHeight });
     };
     updatePosition();
     window.addEventListener('scroll', updatePosition, true);
@@ -181,8 +186,8 @@ export default function CRMDateRangePicker({
         createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9999] w-56 sm:w-64 bg-card rounded-[24px] border border-border/50 shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[350px]"
-          style={{ top: menuPos.top, left: menuPos.left }}
+          className="fixed z-[9999] w-56 sm:w-64 bg-card rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] shadow-[var(--crm-shadow-raised)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
+          style={{ top: menuPos.top, left: menuPos.left, maxHeight: menuPos.maxHeight }}
         >
           <div className="p-3 sm:p-4 border-b border-border/40 bg-surface-dim/30 shrink-0">
             <span className="text-xs font-black text-text-muted pl-1">Filter by Period</span>
@@ -193,9 +198,10 @@ export default function CRMDateRangePicker({
               {PREDEFINED_RANGES.map((range) => (
                 <button
                   key={range.label}
+                  type="button"
                   onClick={() => handleSelectRange(range)}
                   className={cn(
-                    "w-full px-3 sm:px-5 py-2 sm:py-3 text-left text-xs sm:text-sm font-bold transition-all flex items-center justify-between group",
+                    "w-full px-3 sm:px-5 py-2 text-left text-xs sm:text-sm font-bold transition-all flex items-center justify-between group",
                     selectedLabel === range.label ? "bg-primary/5 text-primary" : "text-text-main hover:bg-surface-dim"
                   )}
                 >
@@ -204,43 +210,43 @@ export default function CRMDateRangePicker({
                 </button>
               ))}
             </div>
+          </div>
 
-            <div className="p-3 sm:p-4 border-t border-border/40 bg-surface-dim/30 space-y-2 sm:space-y-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Clock size={12} className="text-text-muted" />
-                <span className="text-xs font-black text-text-muted">Custom Range</span>
-              </div>
-              <div className="space-y-2 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
-                <div className="space-y-1">
-                  <span className="text-[9px] font-bold text-text-muted uppercase pl-1">From</span>
-                  <DatePickerField
-                    value={customFrom}
-                    onChange={setCustomFrom}
-                    placeholder="Start"
-                    disableFuture
-                    buttonClassName="h-8 sm:h-9 w-full justify-start rounded-[3px] border-border/60 bg-white dark:bg-[var(--card-bg)] dark:text-[var(--text-main)] px-2 text-xs font-bold"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[9px] font-bold text-text-muted uppercase pl-1">To</span>
-                  <DatePickerField
-                    value={customTo}
-                    onChange={setCustomTo}
-                    placeholder="End"
-                    disableFuture
-                    buttonClassName="h-8 sm:h-9 w-full justify-start rounded-[3px] border-border/60 bg-white dark:bg-[var(--card-bg)] dark:text-[var(--text-main)] px-2 text-xs font-bold"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleApplyCustom}
-                disabled={!customFrom || !customTo}
-                className="w-full py-2 sm:py-2.5 bg-[var(--hs-link)] text-white text-xs font-semibold rounded-[3px] mt-1 sm:mt-2 disabled:opacity-50 hover:bg-[var(--hs-link-hover)] transition-all shadow-sm"
-              >
-                Apply Filter
-              </button>
+          <div className="p-3 sm:p-4 border-t border-border/40 bg-surface-dim/30 space-y-2 sm:space-y-3 shrink-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock size={12} className="text-text-muted" />
+              <span className="text-xs font-black text-text-muted">Custom Range</span>
             </div>
+            <div className="space-y-2 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
+              <div className="space-y-1">
+                <span className="text-[9px] font-bold text-text-muted uppercase pl-1">From</span>
+                <DatePickerField
+                  value={customFrom}
+                  onChange={setCustomFrom}
+                  placeholder="Start"
+                  disableFuture
+                  buttonClassName="h-8 sm:h-9 w-full justify-start rounded-[3px] border-border/60 bg-white dark:bg-[var(--card-bg)] dark:text-[var(--text-main)] px-2 text-xs font-bold"
+                />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[9px] font-bold text-text-muted uppercase pl-1">To</span>
+                <DatePickerField
+                  value={customTo}
+                  onChange={setCustomTo}
+                  placeholder="End"
+                  disableFuture
+                  buttonClassName="h-8 sm:h-9 w-full justify-start rounded-[3px] border-border/60 bg-white dark:bg-[var(--card-bg)] dark:text-[var(--text-main)] px-2 text-xs font-bold"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleApplyCustom}
+              disabled={!customFrom || !customTo}
+              className="w-full py-2 sm:py-2.5 bg-[var(--hs-link)] text-white text-xs font-semibold rounded-[3px] mt-1 sm:mt-2 disabled:opacity-50 hover:bg-[var(--hs-link-hover)] transition-all shadow-sm"
+            >
+              Apply Filter
+            </button>
           </div>
         </div>,
         document.body,

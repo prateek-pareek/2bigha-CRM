@@ -230,6 +230,50 @@
   box-shadow: none !important;
 }
 
+/* Form editor title — heading, not a boxed field (global input border is !important) */
+.theme-crm-hubspot input.crm-inline-title-input,
+.theme-crm-hubspot input.crm-inline-title-input:hover,
+.theme-crm-hubspot input.crm-inline-title-input:focus,
+.theme-crm-hubspot input.crm-inline-title-input:active,
+.theme-crm-hubspot input.crm-inline-title-input:focus-visible:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]) {
+  border: 0 !important;
+  border-bottom: 1px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+.theme-crm-hubspot input.crm-inline-title-input:hover {
+  border-bottom-color: var(--border-color) !important;
+}
+.theme-crm-hubspot input.crm-inline-title-input:focus,
+.theme-crm-hubspot input.crm-inline-title-input:focus-visible:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]) {
+  border-bottom-color: var(--text-main) !important;
+}
+
+/* Form builder — softer field focus so inputs don't look like errors */
+.theme-crm-hubspot .crm-form-editor input:focus,
+.theme-crm-hubspot .crm-form-editor textarea:focus,
+.theme-crm-hubspot .crm-form-editor select:focus,
+.theme-crm-hubspot .crm-form-editor input:focus-visible:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+.theme-crm-hubspot .crm-form-editor textarea:focus-visible,
+.theme-crm-hubspot .crm-form-editor select:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color)) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent) !important;
+}
+
+/* Form submissions toolbar — same softer focus as list pages */
+.theme-crm-hubspot .crm-form-submissions-toolbar input:focus,
+.theme-crm-hubspot .crm-form-submissions-toolbar select:focus,
+.theme-crm-hubspot .crm-form-submissions-toolbar input:focus-visible:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+.theme-crm-hubspot .crm-form-submissions-toolbar select:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color)) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent) !important;
+}
+
 /* List toolbars — softer focus so Search / selects don't look like error borders */
 .theme-crm-hubspot .crm-list-page input:focus,
 .theme-crm-hubspot .crm-list-page textarea:focus,

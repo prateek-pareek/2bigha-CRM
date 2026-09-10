@@ -57,7 +57,6 @@ export default function AgentDashboardInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [agentOptions, setAgentOptions] = useState<DashboardPersonOption[]>([]);
-  const [agentNameQuery, setAgentNameQuery] = useState("");
   const [selectedAgentId, setSelectedAgentId] = useState(
     () => searchParams.get("agent") || "",
   );
@@ -115,12 +114,6 @@ export default function AgentDashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, canPickAgent, dateRange]);
 
-  const filteredAgentOptions = useMemo(() => {
-    const q = agentNameQuery.trim().toLowerCase();
-    if (!q) return agentOptions;
-    return agentOptions.filter((o) => o.label.toLowerCase().includes(q));
-  }, [agentOptions, agentNameQuery]);
-
   const load = useCallback(() => {
     let active = true;
     setLoading(true);
@@ -164,7 +157,7 @@ export default function AgentDashboardInner() {
 
   const description = useMemo(() => {
     if (isTeamLead || canPickAgent) {
-      return "Filter by agent name to view that agent’s individual dashboard.";
+      return "Select an agent to view their individual dashboard.";
     }
     return "Your leads, calls, properties and tasks — your data only.";
   }, [isTeamLead, canPickAgent]);
@@ -177,34 +170,13 @@ export default function AgentDashboardInner() {
       setDateRange={setDateRange}
       extraFilters={
         canPickAgent ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex h-[38px] items-center gap-2 rounded-[5px] border border-[var(--border-color)] bg-white px-2.5 shadow-[var(--crm-shadow-input)] dark:bg-black dark:border-white/10">
-              <span className="shrink-0 text-xs font-medium text-[var(--text-muted)]">
-                Agent name
-              </span>
-              <input
-                type="search"
-                value={agentNameQuery}
-                onChange={(e) => setAgentNameQuery(e.target.value)}
-                placeholder="Search…"
-                className="h-[34px] w-[120px] border-0 bg-transparent text-sm font-medium text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)]"
-                aria-label="Filter agents by name"
-              />
-            </label>
-            <DashboardPersonSelect
-              label="Agent"
-              value={selectedAgentId}
-              options={filteredAgentOptions}
-              onChange={setAgent}
-              placeholder={
-                filteredAgentOptions.length
-                  ? "Select agent…"
-                  : agentNameQuery.trim()
-                    ? "No match"
-                    : "Loading…"
-              }
-            />
-          </div>
+          <DashboardPersonSelect
+            label="Agent"
+            value={selectedAgentId}
+            options={agentOptions}
+            onChange={setAgent}
+            placeholder={agentOptions.length ? "Select agent…" : "Loading…"}
+          />
         ) : undefined
       }
     >
@@ -213,7 +185,7 @@ export default function AgentDashboardInner() {
           <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-sm font-medium text-card-foreground">Select an agent</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Search or choose an agent above to load their dashboard.
+            Choose an agent above to load their dashboard.
           </p>
         </div>
       ) : error ? (

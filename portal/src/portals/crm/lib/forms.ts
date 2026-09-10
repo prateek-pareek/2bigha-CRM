@@ -55,9 +55,16 @@ export type FormField = {
   type: FormFieldType;
   required: boolean;
   placeholder?: string;
+  helpText?: string;
   options?: string[];
   mapsTo?: FormFieldLeadTarget;
   order: number;
+};
+
+export type FormLeadDefaults = {
+  pipeline?: string;
+  leadCategory?: string;
+  group?: string;
 };
 
 export type FormDefinition = {
@@ -71,10 +78,19 @@ export type FormDefinition = {
   successMessage: string;
   redirectUrl?: string;
   accentColor?: string;
+  leadDefaults?: FormLeadDefaults;
   submissionCount: number;
   lastSubmissionAt?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type FormSubmissionStatus = "created_lead" | "merged_into_existing" | "failed";
+
+export const FORM_SUBMISSION_STATUS_LABELS: Record<FormSubmissionStatus, string> = {
+  created_lead: "New lead",
+  merged_into_existing: "Merged",
+  failed: "Failed",
 };
 
 export type FormSubmission = {
@@ -83,7 +99,7 @@ export type FormSubmission = {
   formName?: string;
   answers: Record<string, unknown>;
   leadId?: string;
-  status: "created_lead" | "merged_into_existing" | "failed";
+  status: FormSubmissionStatus;
   error?: string;
   referrer?: string;
   utm?: Record<string, string>;
@@ -94,10 +110,72 @@ export type PublicForm = {
   _id: string;
   name: string;
   description?: string;
-  fields: Array<Pick<FormField, "key" | "label" | "type" | "required" | "placeholder" | "options">>;
+  fields: Array<
+    Pick<FormField, "key" | "label" | "type" | "required" | "placeholder" | "helpText" | "options">
+  >;
   submitButtonLabel: string;
   accentColor?: string;
 };
+
+export type FormSubmissionsQuery = {
+  page?: number;
+  limit?: number;
+  status?: FormSubmissionStatus | "";
+  q?: string;
+  from?: string;
+  to?: string;
+  utmSource?: string;
+};
+
+export type FormSubmissionsResult = {
+  items: FormSubmission[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export function leadPipelineId(pipeline?: unknown): string {
+  if (!pipeline) return "";
+  if (typeof pipeline === "string") return pipeline;
+  if (typeof pipeline === "object" && pipeline !== null) {
+    if ("_id" in pipeline) return String((pipeline as { _id: unknown })._id);
+    if ("$oid" in pipeline) return String((pipeline as { $oid: unknown }).$oid);
+  }
+  const asString = String(pipeline);
+  return asString === "[object Object]" ? "" : asString;
+}
+
+export function normalizeLeadDefaults(defaults?: FormLeadDefaults | null): FormLeadDefaults {
+  return {
+    pipeline: leadPipelineId(defaults?.pipeline) || undefined,
+    leadCategory: defaults?.leadCategory || undefined,
+    group: defaults?.group || undefined,
+  };
+}
+
+export const FORM_STARTER_FIELDS: Array<Omit<FormField, "key" | "order">> = [
+  {
+    label: "Full name",
+    type: "text",
+    required: true,
+    placeholder: "Your full name",
+    mapsTo: "fullName",
+  },
+  {
+    label: "Email",
+    type: "email",
+    required: true,
+    placeholder: "you@example.com",
+    mapsTo: "email",
+  },
+  {
+    label: "Phone",
+    type: "phone",
+    required: true,
+    placeholder: "+91 …",
+    mapsTo: "phone",
+  },
+];
 
 export async function listForms(): Promise<FormDefinition[]> {
   const res = await api.get("/crm/forms");
@@ -125,11 +203,24 @@ export async function deleteForm(id: string): Promise<void> {
 
 export async function listSubmissions(
   id: string,
-  page = 1,
-  limit = 25,
-): Promise<{ items: FormSubmission[]; total: number }> {
-  const res = await api.get(`/crm/forms/${id}/submissions`, { params: { page, limit } });
-  return res.data;
+  query: FormSubmissionsQuery = {},
+): Promise<FormSubmissionsResult> {
+  const params: Record<string, string | number> = {
+    page: query.page ?? 1,
+    limit: query.limit ?? 25,
+  };
+  if (query.status) params.status = query.status;
+  if (query.q?.trim()) params.q = query.q.trim();
+  if (query.from) params.from = query.from;
+  if (query.to) params.to = query.to;
+  if (query.utmSource?.trim()) params.utmSource = query.utmSource.trim();
+  const res = await api.get(`/crm/forms/${id}/submissions`, { params });
+  return {
+    items: res.data?.items || [],
+    total: res.data?.total ?? 0,
+    page: res.data?.page ?? params.page,
+    limit: res.data?.limit ?? params.limit,
+  };
 }
 
 // --- Public (unauthenticated) endpoints — used by the hosted /forms/[id] page ---
@@ -143,8 +234,9 @@ export async function submitPublicForm(
   id: string,
   answers: Record<string, unknown>,
   utm?: Record<string, string>,
+  honeypot?: string,
 ): Promise<{ success: true; successMessage: string; redirectUrl?: string }> {
-  const res = await api.post(`/forms/public/${id}/submit`, { answers, utm });
+  const res = await api.post(`/forms/public/${id}/submit`, { answers, utm, _hp: honeypot || undefined });
   return res.data;
 }
 
@@ -163,4 +255,42 @@ export function slugifyFieldKey(label: string, existingKeys: string[] = []): str
     key = `${base}_${i++}`;
   }
   return key;
+}
+
+export function formatAnswerValue(value: unknown): string {
+  if (value == null || value === "") return "—";
+  if (Array.isArray(value)) return value.map((v) => String(v)).filter(Boolean).join(", ") || "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+export function submissionsToCsv(fields: FormField[], submissions: FormSubmission[]): string {
+  const headers = [
+    "Submitted",
+    "Status",
+    ...fields.map((f) => f.label),
+    "Lead ID",
+    "UTM source",
+    "UTM medium",
+    "UTM campaign",
+    "Referrer",
+    "Error",
+  ];
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const rows = submissions.map((s) =>
+    [
+      new Date(s.createdAt).toISOString(),
+      FORM_SUBMISSION_STATUS_LABELS[s.status] || s.status,
+      ...fields.map((f) => formatAnswerValue(s.answers?.[f.key])),
+      s.leadId ? String(s.leadId) : "",
+      s.utm?.source || "",
+      s.utm?.medium || "",
+      s.utm?.campaign || "",
+      s.referrer || "",
+      s.error || "",
+    ]
+      .map((cell) => escape(String(cell)))
+      .join(","),
+  );
+  return [headers.map(escape).join(","), ...rows].join("\n");
 }

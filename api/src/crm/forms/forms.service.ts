@@ -7,6 +7,31 @@ import { CreateFormDto } from './dto/create-form.dto';
 import { UpdateFormDto } from './dto/update-form.dto';
 import { DEFAULT_LEAD_WORKSPACE_MODULE } from '../shared/crm-workspace-module.util';
 
+const SUBMISSION_STATUSES = ['created_lead', 'merged_into_existing', 'failed'] as const;
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseDayBound(value: string | undefined, endOfDay: boolean): Date | undefined {
+  if (!value?.trim()) return undefined;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return undefined;
+  if (endOfDay) d.setUTCHours(23, 59, 59, 999);
+  else d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+export type ListSubmissionsOpts = {
+  page?: number;
+  limit?: number;
+  status?: string;
+  q?: string;
+  from?: string;
+  to?: string;
+  utmSource?: string;
+};
+
 /** CRUD for form definitions — the authenticated "Form Builder" side (see FormSubmissionsService for public intake). */
 @Injectable()
 export class FormsService {
@@ -40,8 +65,19 @@ export class FormsService {
     return form;
   }
 
+  private sanitizeLeadDefaults(dto: CreateFormDto | UpdateFormDto): void {
+    if (!dto.leadDefaults) return;
+    const pipeline = String(dto.leadDefaults.pipeline || '').trim();
+    dto.leadDefaults = {
+      pipeline: pipeline || undefined,
+      leadCategory: String(dto.leadDefaults.leadCategory || '').trim() || undefined,
+      group: String(dto.leadDefaults.group || '').trim() || undefined,
+    } as any;
+  }
+
   async create(dto: CreateFormDto, user?: any): Promise<FormDefinition> {
     this.assertUniqueFieldKeys(dto.fields);
+    this.sanitizeLeadDefaults(dto);
     const fields = (dto.fields || []).map((f, i) => ({ ...f, order: f.order ?? i }));
     const created = await new this.formModel({
       ...dto,
@@ -54,11 +90,21 @@ export class FormsService {
 
   async update(id: string, dto: UpdateFormDto): Promise<FormDefinition> {
     this.assertUniqueFieldKeys(dto.fields);
+    this.sanitizeLeadDefaults(dto);
     const form = await this.findOne(id);
     if (dto.fields) {
       dto.fields = dto.fields.map((f, i) => ({ ...f, order: f.order ?? i })) as any;
     }
-    Object.assign(form, dto);
+    const { leadDefaults, ...rest } = dto;
+    Object.assign(form, rest);
+    if (leadDefaults !== undefined) {
+      (form as any).leadDefaults = {
+        pipeline: leadDefaults.pipeline || undefined,
+        leadCategory: leadDefaults.leadCategory || undefined,
+        group: leadDefaults.group || undefined,
+      };
+      form.markModified('leadDefaults');
+    }
     await form.save();
     return form.toObject();
   }
@@ -76,12 +122,98 @@ export class FormsService {
 
   async listSubmissions(
     formId: string,
-    opts: { page?: number; limit?: number } = {},
-  ): Promise<{ items: FormSubmission[]; total: number }> {
+    opts: ListSubmissionsOpts = {},
+  ): Promise<{ items: FormSubmission[]; total: number; page: number; limit: number }> {
     await this.findOne(formId); // 404s if the form doesn't exist
     const page = Math.max(1, opts.page || 1);
     const limit = Math.min(100, Math.max(1, opts.limit || 25));
-    const filter = { formId: new Types.ObjectId(formId) };
+
+    const and: Record<string, unknown>[] = [{ formId: new Types.ObjectId(formId) }];
+
+    if (opts.status && (SUBMISSION_STATUSES as readonly string[]).includes(opts.status)) {
+      and.push({ status: opts.status });
+    }
+
+    const createdAt: Record<string, Date> = {};
+    const from = parseDayBound(opts.from, false);
+    const to = parseDayBound(opts.to, true);
+    if (from) createdAt.$gte = from;
+    if (to) createdAt.$lte = to;
+    if (Object.keys(createdAt).length) and.push({ createdAt });
+
+    if (opts.utmSource?.trim()) {
+      and.push({ 'utm.source': new RegExp(escapeRegExp(opts.utmSource.trim()), 'i') });
+    }
+
+    const q = opts.q?.trim();
+    if (q) {
+      const rx = new RegExp(escapeRegExp(q), 'i');
+      and.push({
+        $or: [
+          { error: rx },
+          { referrer: rx },
+          { 'utm.source': rx },
+          { 'utm.medium': rx },
+          { 'utm.campaign': rx },
+          {
+            $expr: {
+              $gt: [
+                {
+                  $size: {
+                    $filter: {
+                      input: { $objectToArray: { $ifNull: ['$answers', {}] } },
+                      as: 'pair',
+                      cond: {
+                        $regexMatch: {
+                          input: {
+                            $cond: {
+                              if: { $isArray: '$$pair.v' },
+                              then: {
+                                $reduce: {
+                                  input: '$$pair.v',
+                                  initialValue: '',
+                                  in: {
+                                    $concat: [
+                                      '$$value',
+                                      ' ',
+                                      {
+                                        $convert: {
+                                          input: '$$this',
+                                          to: 'string',
+                                          onError: '',
+                                          onNull: '',
+                                        },
+                                      },
+                                    ],
+                                  },
+                                },
+                              },
+                              else: {
+                                $convert: {
+                                  input: '$$pair.v',
+                                  to: 'string',
+                                  onError: '',
+                                  onNull: '',
+                                },
+                              },
+                            },
+                          },
+                          regex: escapeRegExp(q),
+                          options: 'i',
+                        },
+                      },
+                    },
+                  },
+                },
+                0,
+              ],
+            },
+          },
+        ],
+      });
+    }
+
+    const filter = and.length === 1 ? and[0] : { $and: and };
     const [items, total] = await Promise.all([
       this.submissionModel
         .find(filter)
@@ -92,6 +224,6 @@ export class FormsService {
         .exec(),
       this.submissionModel.countDocuments(filter).exec(),
     ]);
-    return { items, total };
+    return { items, total, page, limit };
   }
 }

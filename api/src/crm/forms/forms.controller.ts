@@ -41,10 +41,20 @@ export class FormsController {
     @Param('id') id: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('utmSource') utmSource?: string,
   ) {
     return this.formsService.listSubmissions(id, {
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
+      status,
+      q,
+      from,
+      to,
+      utmSource,
     });
   }
 

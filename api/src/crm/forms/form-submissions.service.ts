@@ -22,6 +22,7 @@ export type PublicFormView = {
     type: string;
     required: boolean;
     placeholder?: string;
+    helpText?: string;
     options: string[];
   }>;
   submitButtonLabel: string;
@@ -76,6 +77,7 @@ export class FormSubmissionsService {
           type: f.type,
           required: !!f.required,
           placeholder: f.placeholder,
+          helpText: f.helpText,
           options: f.options || [],
         })),
       submitButtonLabel: form.submitButtonLabel || 'Submit',

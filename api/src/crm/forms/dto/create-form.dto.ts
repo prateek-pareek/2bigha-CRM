@@ -4,14 +4,33 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsMongoId,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { CRM_WORKSPACE_MODULES, CrmWorkspaceModule } from '../../shared/crm-workspace-module.util';
 import { FormFieldDto } from './form-field.dto';
+
+export class FormLeadDefaultsDto {
+  @IsOptional()
+  @ValidateIf((_, v) => !!v)
+  @IsMongoId()
+  pipeline?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  leadCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  group?: string;
+}
 
 export class CreateFormDto {
   @IsString()
@@ -58,4 +77,9 @@ export class CreateFormDto {
   @IsString()
   @MaxLength(20)
   accentColor?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FormLeadDefaultsDto)
+  leadDefaults?: FormLeadDefaultsDto;
 }

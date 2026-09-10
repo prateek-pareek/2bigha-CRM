@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { getPublicForm, submitPublicForm, type PublicForm } from "@/lib/crm/forms";
+import { FormPublicFieldInput } from "@/components/crm/forms/FormPublicFields";
 
 /**
  * Public, unauthenticated hosted form — this is what gets embedded via
@@ -24,6 +25,7 @@ export default function PublicFormPage() {
   const [submitted, setSubmitted] = useState<{ successMessage: string; redirectUrl?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string | string[]>>({});
+  const [honeypot, setHoneypot] = useState("");
 
   const utm = useMemo(() => {
     if (typeof window === "undefined") return {};
@@ -67,7 +69,7 @@ export default function PublicFormPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await submitPublicForm(form._id, values, utm);
+      const res = await submitPublicForm(form._id, values, utm, honeypot);
       setSubmitted(res);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Something went wrong — please try again.");
@@ -89,7 +91,7 @@ export default function PublicFormPage() {
   if (notFound || !form) {
     return (
       <Shell>
-        <p className="text-center text-gray-500 py-16">This form isn't available.</p>
+        <p className="text-center text-gray-500 py-16">This form isn&apos;t available.</p>
       </Shell>
     );
   }
@@ -112,7 +114,7 @@ export default function PublicFormPage() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {form.fields.map((field) => (
-          <FieldInput
+          <FormPublicFieldInput
             key={field.key}
             field={field}
             value={values[field.key]}
@@ -127,8 +129,8 @@ export default function PublicFormPage() {
           name="_hp"
           tabIndex={-1}
           autoComplete="off"
-          value={(values._hp as string) || ""}
-          onChange={(e) => handleChange("_hp", e.target.value)}
+          value={honeypot}
+          onChange={(e) => setHoneypot(e.target.value)}
           className="absolute -left-[9999px] w-px h-px opacity-0"
           aria-hidden="true"
         />
@@ -154,149 +156,6 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="w-full max-w-md bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8">
         {children}
       </div>
-    </div>
-  );
-}
-
-function FieldInput({
-  field,
-  value,
-  onChange,
-  accent,
-}: {
-  field: PublicForm["fields"][number];
-  value: string | string[] | undefined;
-  onChange: (v: string | string[]) => void;
-  accent: string;
-}) {
-  const baseClass =
-    "w-full h-10 rounded-md border border-gray-300 px-3 text-sm text-gray-900 outline-none focus:ring-2 transition-shadow placeholder:text-gray-400";
-  const focusStyle = { boxShadow: "none" } as React.CSSProperties;
-
-  const label = (
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      {field.label}
-      {field.required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
-
-  if (field.type === "textarea") {
-    return (
-      <div>
-        {label}
-        <textarea
-          required={field.required}
-          placeholder={field.placeholder}
-          value={(value as string) || ""}
-          onChange={(e) => onChange(e.target.value)}
-          className={`${baseClass} h-24 py-2`}
-          style={focusStyle}
-        />
-      </div>
-    );
-  }
-
-  if (field.type === "select") {
-    return (
-      <div>
-        {label}
-        <select
-          required={field.required}
-          value={(value as string) || ""}
-          onChange={(e) => onChange(e.target.value)}
-          className={baseClass}
-        >
-          <option value="" disabled>
-            Select…
-          </option>
-          {(field.options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-
-  if (field.type === "radio") {
-    return (
-      <div>
-        {label}
-        <div className="space-y-1.5">
-          {(field.options || []).map((opt) => (
-            <label key={opt} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="radio"
-                name={field.key}
-                required={field.required}
-                checked={value === opt}
-                onChange={() => onChange(opt)}
-                style={{ accentColor: accent }}
-              />
-              {opt}
-            </label>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (field.type === "multiselect") {
-    const selected = Array.isArray(value) ? value : [];
-    const toggle = (opt: string) => {
-      onChange(selected.includes(opt) ? selected.filter((o) => o !== opt) : [...selected, opt]);
-    };
-    return (
-      <div>
-        {label}
-        <div className="space-y-1.5">
-          {(field.options || []).map((opt) => (
-            <label key={opt} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selected.includes(opt)}
-                onChange={() => toggle(opt)}
-                style={{ accentColor: accent }}
-              />
-              {opt}
-            </label>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (field.type === "checkbox") {
-    return (
-      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-        <input
-          type="checkbox"
-          required={field.required}
-          checked={value === "true"}
-          onChange={(e) => onChange(e.target.checked ? "true" : "")}
-          style={{ accentColor: accent }}
-        />
-        {field.label}
-        {field.required && <span className="text-red-500">*</span>}
-      </label>
-    );
-  }
-
-  const inputType = field.type === "email" ? "email" : field.type === "phone" ? "tel" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
-
-  return (
-    <div>
-      {label}
-      <input
-        type={inputType}
-        required={field.required}
-        placeholder={field.placeholder}
-        value={(value as string) || ""}
-        onChange={(e) => onChange(e.target.value)}
-        className={baseClass}
-        style={focusStyle}
-      />
     </div>
   );
 }
