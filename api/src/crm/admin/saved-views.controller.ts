@@ -35,6 +35,7 @@ export class SavedViewsController {
       name: string;
       filters?: { property: string; operator: string; value: string }[];
       columns?: { key: string; label: string; visible: boolean }[];
+      toolbar?: Record<string, unknown> | null;
       sortBy?: string;
       sortOrder?: 'asc' | 'desc';
       isDefault?: boolean;

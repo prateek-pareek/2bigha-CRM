@@ -52,9 +52,19 @@ export const KitButton = forwardRef<HTMLButtonElement, KitButtonProps>(
         className={cn(VARIANT[variant], className)}
         {...rest}
       >
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : leftIcon}
+      {loading ? (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+        ) : leftIcon ? (
+          <span className="inline-flex shrink-0 items-center justify-center [&_svg]:block">
+            {leftIcon}
+          </span>
+        ) : null}
         {children}
-        {!loading ? rightIcon : null}
+        {!loading && rightIcon ? (
+          <span className="inline-flex shrink-0 items-center justify-center [&_svg]:block">
+            {rightIcon}
+          </span>
+        ) : null}
       </button>
     );
   },

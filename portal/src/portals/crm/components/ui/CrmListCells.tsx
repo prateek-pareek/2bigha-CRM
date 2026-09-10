@@ -73,12 +73,17 @@ export function CrmSoftBadge({
 export function CrmListMutedText({
   children,
   className,
+  title,
 }: {
   children: ReactNode;
   className?: string;
+  title?: string;
 }) {
   return (
-    <span className={cn("crm-list-muted-text text-[14px] font-normal leading-[1.5] text-[#707070]", className)}>
+    <span
+      title={title}
+      className={cn("crm-list-muted-text text-[14px] font-normal leading-[1.5] text-[#707070]", className)}
+    >
       {children || "—"}
     </span>
   );

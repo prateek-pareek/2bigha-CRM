@@ -49,7 +49,7 @@ export const CRM_BTN_PRIMARY =
   "inline-flex h-[38px] items-center justify-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--primary)] px-3.5 text-sm font-medium text-[var(--primary-foreground)] shadow-sm transition-colors hover:bg-[var(--primary-dark)] disabled:pointer-events-none disabled:opacity-50";
 
 export const CRM_BTN_SECONDARY =
-  "inline-flex h-[38px] items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-2.5 text-sm font-medium text-[var(--text-main)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--background)] disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-[38px] items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-sm font-medium text-[var(--text-main)] shadow-[var(--crm-shadow-input)] transition-colors hover:bg-[var(--background)] disabled:pointer-events-none disabled:opacity-50";
 
 export const CRM_BTN_GHOST =
   "inline-flex h-[38px] items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-3 text-sm font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] disabled:pointer-events-none disabled:opacity-50";
@@ -69,7 +69,7 @@ export const CRM_SELECT = `${CRM_INPUT} appearance-none cursor-pointer`;
 
 /** Compact toolbar `<select>` (Last Email, Pipeline, …) — matches Filter/Search height */
 export const CRM_TOOLBAR_SELECT =
-  "h-[38px] min-w-[140px] appearance-none rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 text-sm font-medium text-[var(--text-main)] shadow-[var(--crm-shadow-input)] outline-none transition-[border-color,box-shadow] focus-visible:border-[var(--primary)] focus-visible:ring-1 focus-visible:ring-[var(--primary)]/20";
+  "h-[38px] min-w-[140px] appearance-none rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 pr-8 text-sm font-medium text-[var(--text-main)] shadow-[var(--crm-shadow-input)] outline-none transition-[border-color,box-shadow] focus-visible:border-[var(--primary)] focus-visible:ring-1 focus-visible:ring-[var(--primary)]/20";
 
 /** Segmented icon filter group — CRMS outline-light toolbar */
 export const CRM_TOOLBAR_ICON_GROUP =

@@ -1,348 +1,298 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { getCrmAuthToken } from "@/lib/crm/api";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { DashboardShell, DateRangeFilter } from "@/components/crm/dashboards/DashboardShell";
-import { ChartCard, CustomChartTooltip } from "@/components/crm/dashboards/ChartCard";
-import { LeaderboardTable } from "@/components/crm/dashboards/LeaderboardTable";
-import { TeamPerformanceTable } from "@/components/crm/dashboards/TeamPerformanceTable";
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
-import { Users, TrendingUp, Handshake, Target, CheckSquare, MessageSquare, PhoneCall } from "lucide-react";
-
-const COLORS = ["#0c66e4", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4"];
-
-// Utility function to calculate trend percentage
-const calculateTrend = (current: number, previous: number): number => {
-  const curr = Number(current) || 0;
-  const prev = Number(previous) || 0;
-  if (!prev || prev === 0) return 0;
-  const result = Math.round(((curr - prev) / prev) * 100);
-  return isNaN(result) ? 0 : result;
-};
+  Panel,
+  StatTile,
+  StatCell,
+  StatCellGrid,
+  SegmentBar,
+  TargetProgress,
+  MonthlyProgressChart,
+  DashboardSkeleton,
+  DashboardError,
+  fmt,
+  timeAgo,
+} from "@/components/crm/dashboards/wireframe";
+import {
+  Users,
+  Phone,
+  MessageSquare,
+  Gauge,
+  Home,
+  ShieldCheck,
+  Target as TargetIcon,
+  UserCog,
+  FileDown,
+  ChevronRight,
+} from "lucide-react";
 
 export default function AdminDashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeFilter>("this_week");
   const [data, setData] = useState<any>(null);
-  const [prevData, setPrevData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let active = true;
     setLoading(true);
     setError(null);
     const token = getCrmAuthToken();
     const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-
-    Promise.all([
-      fetch(`${CRM_API_URL}/crm/dashboard/admin?window=${dateRange}`, { headers })
-        .then(r => {
-          if (!r.ok) throw new Error(`Admin dashboard error: ${r.status}`);
-          return r.json();
-        }),
-      fetch(`${CRM_API_URL}/crm/dashboard/admin/leaderboard?window=${dateRange}`, { headers })
-        .then(r => {
-          if (!r.ok) throw new Error(`Leaderboard error: ${r.status}`);
-          return r.json();
-        })
-    ])
-      .then(([resDashboard, resLeaderboard]) => {
-        if (active) {
-          setData(resDashboard || {});
-          setLeaderboardData(Array.isArray(resLeaderboard) ? resLeaderboard : []);
-          setLoading(false);
-        }
+    fetch(`${CRM_API_URL}/crm/dashboard/admin?window=${dateRange}`, { headers })
+      .then((r) => {
+        if (!r.ok) throw new Error(`Admin dashboard error: ${r.status}`);
+        return r.json();
       })
-      .catch((err) => {
-        if (active) {
-          setError(err.message || "Failed to load dashboard data");
-          setLoading(false);
-          console.error("Dashboard fetch error:", err);
-        }
-      });
-    return () => { active = false; };
+      .then((res) => active && (setData(res || {}), setLoading(false)))
+      .catch((err) => active && (setError(err.message || "Failed to load"), setLoading(false)));
+    return () => {
+      active = false;
+    };
   }, [dateRange]);
 
-  const revenueData = React.useMemo(() => {
-    if (!Array.isArray(data?.dashboard?.revenueTrend)) return [];
-    return data.dashboard.revenueTrend.map((t: any) => ({
-      date: t.date || 'Unknown',
-      revenue: Number(t.revenue) || 0,
-      target: Number(t.target) || 0
-    }));
-  }, [data]);
+  useEffect(() => load(), [load]);
 
-  const sourceData = React.useMemo(() => {
-    if (!Array.isArray(data?.health?.sources)) return [];
-    return data.health.sources.map((s: any) => ({
-      name: s.source || s.name || 'Unknown',
-      value: Number(s.count) || Number(s.value) || 0
-    }));
-  }, [data]);
-
-  const teamData = React.useMemo(() => {
-    if (!Array.isArray(data?.dashboard?.teamPerformance)) return [];
-    return data.dashboard.teamPerformance.map((t: any) => ({
-      name: t.team || t.name || 'Unknown',
-      closed: Number(t.closed) || 0,
-      pending: Number(t.pending) || 0
-    }));
-  }, [data]);
-
-  // Calculate KPI values with proper formulas
-  const d = data?.dashboard || {};
-  const dp = prevData?.dashboard || {};
-
-  const totalRevenue = Number(d.totalRevenue) || 0;
-  const prevTotalRevenue = Number(dp.totalRevenue) || 0;
-  const revenueTrend = calculateTrend(totalRevenue, prevTotalRevenue);
-
-  const dealsClosed = Number(d.dealsClosed) || 0;
-  const prevDealsClosed = Number(dp.dealsClosed) || 0;
-  const dealsTrend = calculateTrend(dealsClosed, prevDealsClosed);
-
-  const newLeads = Number(d.totalLeads) || 0;
-  const prevNewLeads = Number(dp.totalLeads) || 0;
-  const leadsTrend = calculateTrend(newLeads, prevNewLeads);
-
-  // Conversion rate formula: (leadsConverted / totalLeads) * 100
-  const leadsConverted = Number(d.leadsConverted) || 0;
-  const conversionRate = newLeads > 0 ? Math.round((leadsConverted / newLeads) * 100) : 0;
-  const prevConversionRate = prevNewLeads > 0 && dp.leadsConverted ? Math.round((Number(dp.leadsConverted) / prevNewLeads) * 100) : 0;
-  const conversionTrend = calculateTrend(conversionRate, prevConversionRate);
-
-  const whatsappSent = Number(d.whatsappSent) || 0;
-  const prevWhatsappSent = Number(dp.whatsappSent) || 0;
-  const whatsappTrend = calculateTrend(whatsappSent, prevWhatsappSent);
-
-  const ivrAnswered = Number(d.ivrAnswered) || 0;
-  const prevIvrAnswered = Number(dp.ivrAnswered) || 0;
-  const ivrTrend = calculateTrend(ivrAnswered, prevIvrAnswered);
-
-  const tasksCompleted = Number(d.tasksCompleted) || 0;
-  const prevTasksCompleted = Number(dp.tasksCompleted) || 0;
-  const tasksTrend = calculateTrend(tasksCompleted, prevTasksCompleted);
-
-  if (error) {
-    return (
-      <DashboardShell
-        title="Admin Dashboard"
-        description="Organization-wide CRM metrics, revenue trends, and pipeline health."
-        dateRange={dateRange}
-        setDateRange={setDateRange}
-      >
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700 text-sm">
-          <p className="font-semibold mb-2">Error loading dashboard</p>
-          <p>{error}</p>
-          <button
-            onClick={() => {
-              setError(null);
-              setLoading(true);
-            }}
-            className="mt-3 px-3 py-1.5 bg-red-600 text-white rounded text-xs font-semibold hover:bg-red-700"
-          >
-            Retry
-          </button>
-        </div>
-      </DashboardShell>
-    );
-  }
+  const g = data?.glance || {};
+  const leads = data?.leads || {};
+  const props = data?.properties || {};
+  const calls = data?.calls || {};
+  const wa = data?.whatsapp || {};
+  const targets = data?.targets || {};
 
   return (
     <DashboardShell
       title="Admin Dashboard"
-      description="Organization-wide CRM metrics, revenue trends, and pipeline health."
+      description="Organization-wide CRM metrics across all teams. Admin only."
       dateRange={dateRange}
       setDateRange={setDateRange}
     >
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <KPICard
-          title="Total Revenue"
-          value={`₹${totalRevenue.toLocaleString()}`}
-          trend={`${revenueTrend > 0 ? '+' : ''}${revenueTrend}%`}
-          icon={TrendingUp}
-          trendDown={revenueTrend < 0}
-        />
-        <KPICard
-          title="Total Deals Closed"
-          value={dealsClosed}
-          trend={`${dealsTrend > 0 ? '+' : ''}${dealsTrend}%`}
-          icon={Handshake}
-          trendDown={dealsTrend < 0}
-        />
-        <KPICard
-          title="New Leads"
-          value={newLeads}
-          trend={`${leadsTrend > 0 ? '+' : ''}${leadsTrend}%`}
-          icon={Users}
-          trendDown={leadsTrend < 0}
-        />
-        <KPICard
-          title="Overall Conversion Rate"
-          value={`${conversionRate}%`}
-          trend={`${conversionTrend > 0 ? '+' : ''}${conversionTrend}%`}
-          icon={Target}
-          trendDown={conversionTrend < 0}
-        />
-      </div>
+      {error ? (
+        <DashboardError message={error} onRetry={load} />
+      ) : loading ? (
+        <DashboardSkeleton />
+      ) : (
+        <div className="space-y-6">
+          {/* At a glance */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <StatTile title="Total Leads" value={fmt(g.totalLeads)} delta={g.totalLeadsDeltaPct} sub="vs last period" icon={Users} />
+            <StatTile title="Total Calls" value={fmt(g.totalCalls)} sub={`${fmt(g.totalCallsToday)} today`} icon={Phone} />
+            <StatTile title="WhatsApp Reachout" value={fmt(g.whatsappReachout)} sub={`${fmt(g.whatsappReachoutToday)} today`} icon={MessageSquare} />
+            <StatTile title="Overall Org Score" value={`${g.orgScore || 0}%`} sub={`avg of ${g.teamCount || 0} teams`} icon={Gauge} tone="good" />
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <KPICard
-          title="WhatsApp Messages Sent"
-          value={whatsappSent}
-          trend={`${whatsappTrend > 0 ? '+' : ''}${whatsappTrend}%`}
-          icon={MessageSquare}
-          trendDown={whatsappTrend < 0}
-        />
-        <KPICard
-          title="Answered Calls (IVR)"
-          value={ivrAnswered}
-          trend={`${ivrTrend > 0 ? '+' : ''}${ivrTrend}%`}
-          icon={PhoneCall}
-          trendDown={ivrTrend < 0}
-        />
-        <KPICard
-          title="Tasks Completed"
-          value={tasksCompleted}
-          trend={`${tasksTrend > 0 ? '+' : ''}${tasksTrend}%`}
-          icon={CheckSquare}
-          trendDown={tasksTrend < 0}
-        />
-      </div>
+          <Panel title="Month-wise Progress — Leads & Calls">
+            <MonthlyProgressChart data={data?.monthly || []} />
+          </Panel>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-6">
-        {/* Revenue Trend Chart */}
-        <ChartCard
-          title="Revenue Trend"
-          description="Actual revenue vs target across the selected period."
-          className="xl:col-span-2 min-h-[350px]"
-          contentClassName="h-[300px]"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0c66e4" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#0c66e4" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} tickFormatter={(val) => `$${val / 1000}k`} />
-              <Tooltip content={<CustomChartTooltip />} />
-              <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#0c66e4" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-              <Area type="monotone" dataKey="target" name="Target" stroke="#cbd5e1" strokeDasharray="5 5" strokeWidth={2} fill="transparent" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartCard>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <Panel title="Lead Metrics">
+              <StatCellGrid>
+                <StatCell label="Total Leads" value={fmt(leads.total)} />
+                <StatCell label="Today's Leads" value={fmt(leads.today)} />
+                <StatCell label="Assigned" value={fmt(leads.assigned)} />
+                <StatCell label="Contacted" value={fmt(leads.contacted)} sub={`${leads.contactedPct || 0}%`} tone="good" />
+                <StatCell label="Not Contacted" value={fmt(leads.notContacted)} sub={`${leads.notContactedPct || 0}%`} tone="warn" />
+              </StatCellGrid>
+              <div className="mt-4">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">Lead Status Breakdown</div>
+                <SegmentBar segments={(leads.statusBreakdown || []).map((s: any) => ({ label: s.status, value: s.count }))} />
+              </div>
+            </Panel>
 
-        {/* Lead Sources */}
-        <ChartCard
-          title="Lead Sources"
-          description="Distribution of incoming leads by channel."
-          className="min-h-[350px]"
-          contentClassName="h-[300px]"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Tooltip content={<CustomChartTooltip />} />
-              <Pie
-                data={sourceData}
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={5}
-                dataKey="value"
-                stroke="none"
-              >
-                {sourceData.map((entry: any, index: number) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
+            <Panel title="Property Metrics" subtitle="Property + Farm combined">
+              <StatCellGrid cols={4}>
+                <StatCell label="Total Listed" value={fmt(props.total)} />
+                <StatCell label="Approved" value={fmt(props.approved)} tone="good" />
+                <StatCell label="Pending" value={fmt(props.pending)} tone="warn" />
+                <StatCell label="Rejected" value={fmt(props.rejected)} tone="bad" />
+                <StatCell label="Today's Listed" value={fmt(props.todayListed)} />
+                <StatCell label="Today's Approved" value={fmt(props.todayApproved)} tone="good" />
+                <StatCell label="Today's Rejected" value={fmt(props.todayRejected)} tone="bad" />
+              </StatCellGrid>
+              <div className="mt-4">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">Approval Status Breakdown</div>
+                <SegmentBar segments={(props.breakdown || []).map((s: any) => ({ label: s.status, value: s.count }))} showPct />
+              </div>
+            </Panel>
+          </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        <ChartCard
-          title="Team Performance Comparison"
-          description="Closed vs Pending deals across all teams."
-          className="min-h-[350px]"
-          contentClassName="h-[300px]"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={teamData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} />
-              <Tooltip content={<CustomChartTooltip />} />
-              <Bar dataKey="closed" name="Closed Deals" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={40} />
-              <Bar dataKey="pending" name="Pending Deals" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={40} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
+          <Panel title="IVR / Calls Metrics">
+            <StatCellGrid cols={4}>
+              <StatCell label="Total Calls" value={fmt(calls.total)} />
+              <StatCell label="Today's Calls" value={fmt(calls.today)} />
+              <StatCell label="Missed" value={fmt(calls.missed)} tone="bad" />
+              <StatCell label="Connected" value={fmt(calls.connected)} tone="good" />
+              <StatCell label="Not Connected" value={fmt(calls.notConnected)} tone="warn" />
+              <StatCell label="Total Follow-ups" value={fmt(calls.followUpsTotal)} />
+              <StatCell label="Upcoming Follow-ups" value={fmt(calls.followUpsUpcoming)} />
+              <StatCell label="Today's Follow-ups" value={fmt(calls.followUpsToday)} />
+            </StatCellGrid>
+            <div className="mt-4">
+              <div className="mb-2 text-xs font-medium text-muted-foreground">Call Outcome Breakdown</div>
+              <SegmentBar segments={(calls.outcomeBreakdown || []).map((s: any) => ({ label: s.name, value: s.count }))} />
+            </div>
+          </Panel>
 
-      <div className="grid grid-cols-1 gap-6 mt-6">
-        <TeamPerformanceTable
-          title="Team-wise Performance"
-          data={data?.teamMetrics?.teams || []}
-          loading={loading}
-        />
-      </div>
+          <Panel title="WhatsApp Metrics">
+            <StatCellGrid cols={4}>
+              <StatCell label="Total Reachout" value={fmt(wa.totalReachout)} />
+              <StatCell label="Today's Reachout" value={fmt(wa.todayReachout)} />
+              <StatCell label="New Messages" value={fmt(wa.newMessages)} tone="warn" />
+              <StatCell label="Avg Response Time" value={`${wa.avgResponseMins || 0} min`} />
+            </StatCellGrid>
+            {(wa.recent || []).length > 0 && (
+              <div className="mt-4">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">Recent WhatsApp Activity</div>
+                <ul className="divide-y divide-border/60">
+                  {(wa.recent || []).map((m: any, i: number) => (
+                    <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <div className="min-w-0">
+                        <span className="font-medium text-card-foreground">{m.contact}</span>
+                        <span className="ml-2 truncate text-muted-foreground">{m.preview}</span>
+                      </div>
+                      <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(m.at)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Panel>
 
-      {/* Leaderboards */}
-      <div className="grid grid-cols-1 gap-6 mt-6">
-        <LeaderboardTable
-          title="Org-wide Leaderboard — Top Agents"
-          data={leaderboardData}
-          loading={loading}
-        />
-      </div>
+          {/* Targets + Admin controls */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <Panel title="Team-wise Performance" className="xl:col-span-2 overflow-hidden">
+              <TeamTable rows={data?.teamPerformance || []} />
+            </Panel>
+            <div className="space-y-6">
+              <Panel title="Org Target Achievement">
+                <TargetProgress
+                  rows={[
+                    { label: "Leads", actual: targets.leads?.actual || 0, target: targets.leads?.target ?? null },
+                    { label: "Calls", actual: targets.calls?.actual || 0, target: targets.calls?.target ?? null },
+                    { label: "Property + Farm Listings", actual: targets.listings?.actual || 0, target: targets.listings?.target ?? null },
+                    { label: "Subscriptions (live)", actual: targets.subscriptions?.actual || 0, target: targets.subscriptions?.target ?? null },
+                  ]}
+                />
+              </Panel>
+              <Panel title="Admin Controls">
+                <div className="flex flex-col divide-y divide-border/60">
+                  <AdminLink href="/crm/settings/roles" icon={ShieldCheck} label="Manage Roles & Permissions" />
+                  <AdminLink href="/crm/reports/agents" icon={TargetIcon} label="Set Team & Org Targets" />
+                  <AdminLink href="/crm/settings/users" icon={UserCog} label="Dept. & Member CRM Access" />
+                  <AdminLink href="/crm/reports" icon={FileDown} label="Export Report (Excel / PDF)" />
+                </div>
+              </Panel>
+            </div>
+          </div>
+
+          <Panel title="Org-wide Leaderboard — Top Agents" className="overflow-hidden">
+            <LeaderTable rows={data?.leaderboard || []} />
+          </Panel>
+        </div>
+      )}
     </DashboardShell>
   );
 }
 
-function KPICard({ title, value, trend, icon: Icon, trendDown = false }: any) {
-  const trendStr = String(trend || "0").replace("%", "");
-  const trendNum = parseInt(trendStr) || 0;
-  const isNegative = trendNum < 0;
-  const shouldHighlightRed = (trendDown && trendNum > 0) || (!trendDown && isNegative);
-  const displayTrend = isNaN(trendNum) ? "0%" : `${trendNum > 0 ? '+' : ''}${trendNum}%`;
-
+function AdminLink({ href, icon: Icon, label }: { href: string; icon: React.ComponentType<{ className?: string }>; label: string }) {
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm font-medium text-muted-foreground">{title}</span>
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-      <div>
-        <h4 className="text-2xl font-bold text-card-foreground">{value ?? "N/A"}</h4>
-        <div className="flex items-center gap-1.5 mt-2">
-          <span className={`text-xs font-semibold ${shouldHighlightRed ? 'text-rose-500 bg-rose-50 dark:bg-rose-500/10' : 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10'} px-2 py-0.5 rounded-full`}>
-            {displayTrend}
-          </span>
-          <span className="text-xs text-muted-foreground">vs last period</span>
-        </div>
-      </div>
+    <Link href={href} className="flex items-center justify-between py-2.5 text-sm text-card-foreground transition-colors hover:text-primary">
+      <span className="flex items-center gap-2.5">
+        <Icon className="h-4 w-4 text-muted-foreground" />
+        {label}
+      </span>
+      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+    </Link>
+  );
+}
+
+function TeamTable({ rows }: { rows: any[] }) {
+  if (!rows.length) return <div className="py-6 text-center text-sm text-muted-foreground">No team data</div>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead className="text-xs uppercase text-muted-foreground">
+          <tr className="border-b border-border/60">
+            <th className="px-3 py-2">Team</th>
+            <th className="px-3 py-2">Team Lead</th>
+            <th className="px-3 py-2 text-right">Members</th>
+            <th className="px-3 py-2 text-right">Leads</th>
+            <th className="px-3 py-2 text-right">Calls</th>
+            <th className="px-3 py-2 text-right">Connected</th>
+            <th className="px-3 py-2 text-right">Props</th>
+            <th className="px-3 py-2 text-right">Task %</th>
+            <th className="px-3 py-2 text-right">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((t) => (
+            <tr key={t.teamId} className="border-b border-border/40 last:border-0">
+              <td className="px-3 py-2 font-medium text-card-foreground">{t.team}</td>
+              <td className="px-3 py-2 text-muted-foreground">{t.teamLead}</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{fmt(t.members)}</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{fmt(t.leads)}</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{fmt(t.calls)}</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{t.connected}%</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{fmt(t.properties)}</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{t.taskCompletion}%</td>
+              <td className="px-3 py-2 text-right font-semibold text-emerald-600 dark:text-emerald-400">{t.score}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LeaderTable({ rows }: { rows: any[] }) {
+  if (!rows.length) return <div className="py-6 text-center text-sm text-muted-foreground">No leaderboard data</div>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead className="text-xs uppercase text-muted-foreground">
+          <tr className="border-b border-border/60">
+            <th className="px-3 py-2 text-center">Rank</th>
+            <th className="px-3 py-2">Agent</th>
+            <th className="px-3 py-2">Team</th>
+            <th className="px-3 py-2 text-right">Leads</th>
+            <th className="px-3 py-2 text-right">Calls</th>
+            <th className="px-3 py-2 text-right">Properties</th>
+            <th className="px-3 py-2 text-right">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 15).map((a, i) => (
+            <tr key={a.id} className="border-b border-border/40 last:border-0">
+              <td className="px-3 py-2 text-center">
+                <span
+                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                    i === 0
+                      ? "bg-yellow-100 text-yellow-700"
+                      : i === 1
+                        ? "bg-gray-200 text-gray-700"
+                        : i === 2
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {i + 1}
+                </span>
+              </td>
+              <td className="px-3 py-2 font-medium text-card-foreground">{a.name}</td>
+              <td className="px-3 py-2 text-muted-foreground">{a.team}</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{fmt(a.leads)}</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{fmt(a.calls)}</td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{fmt(a.properties)}</td>
+              <td className="px-3 py-2 text-right font-semibold text-emerald-600 dark:text-emerald-400">{a.score}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -706,7 +706,6 @@ export default function ContactsPage() {
               showMineOnly={showMyContactsOnly}
               onShowAll={() => { setShowMyContactsOnly(false); setPage(1); }}
               onShowMine={() => { setShowMyContactsOnly(true); setPage(1); }}
-              onClearAll={() => { setSearch(''); setFilters([]); }}
             />
             <select
               value={lastActivityFilter}

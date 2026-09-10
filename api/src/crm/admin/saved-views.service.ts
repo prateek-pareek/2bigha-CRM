@@ -26,6 +26,7 @@ export class SavedViewsService {
       name: string;
       filters?: { property: string; operator: string; value: string }[];
       columns?: { key: string; label: string; visible: boolean }[];
+      toolbar?: Record<string, unknown> | null;
       sortBy?: string;
       sortOrder?: 'asc' | 'desc';
       isDefault?: boolean;
@@ -45,6 +46,7 @@ export class SavedViewsService {
       name: dto.name,
       filters: dto.filters || [],
       columns: dto.columns || [],
+      toolbar: dto.toolbar ?? null,
       sortBy: dto.sortBy || 'createdAt',
       sortOrder: dto.sortOrder || 'desc',
       isDefault: dto.isDefault ?? false,
@@ -59,6 +61,7 @@ export class SavedViewsService {
       name: string;
       filters: { property: string; operator: string; value: string }[];
       columns: { key: string; label: string; visible: boolean }[];
+      toolbar: Record<string, unknown> | null;
       sortBy: string;
       sortOrder: 'asc' | 'desc';
       isDefault: boolean;
@@ -84,6 +87,7 @@ export class SavedViewsService {
     if (dto.name !== undefined) view.name = dto.name;
     if (dto.filters !== undefined) view.filters = dto.filters;
     if (dto.columns !== undefined) view.columns = dto.columns;
+    if (dto.toolbar !== undefined) view.toolbar = dto.toolbar;
     if (dto.sortBy !== undefined) view.sortBy = dto.sortBy;
     if (dto.sortOrder !== undefined) view.sortOrder = dto.sortOrder;
     if (dto.isDefault !== undefined) view.isDefault = dto.isDefault;

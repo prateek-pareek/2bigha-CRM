@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronDown, Clock, Check } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { DatePickerField } from "@/components/ui/date-picker";
@@ -75,20 +76,41 @@ export default function CRMDateRangePicker({
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        const target = event.target as Element;
-        if (target?.closest?.('[data-radix-popper-content-wrapper]')) {
-          return;
-        }
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      const el = event.target as Element;
+      if (el?.closest?.('[data-radix-popper-content-wrapper]')) return;
+      setIsOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const updatePosition = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const width = window.innerWidth;
+      const menuWidth = 256;
+      const left = Math.min(r.left, Math.max(8, width - menuWidth - 8));
+      setMenuPos({ top: r.bottom + 8, left });
+    };
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen]);
 
   const handleSelectRange = (range: typeof PREDEFINED_RANGES[0]) => {
     const val = range.getValue();
@@ -124,7 +146,7 @@ export default function CRMDateRangePicker({
         className={cn(
           "flex items-center rounded-[3px] text-sm font-bold transition-all border shrink-0",
           compact
-            ? "h-9 justify-center gap-0.5 px-2"
+            ? "h-8 justify-center gap-0.5 px-2"
             : "gap-2 px-4 h-10",
           selectedLabel !== 'All Time'
             ? "bg-primary/10 text-primary border-primary/20 shadow-sm"
@@ -154,8 +176,14 @@ export default function CRMDateRangePicker({
         )}
       </button>
 
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-2 z-[999] w-56 sm:w-64 bg-card rounded-[24px] border border-border/50 shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[350px]">
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+        <div
+          ref={menuRef}
+          className="fixed z-[9999] w-56 sm:w-64 bg-card rounded-[24px] border border-border/50 shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[350px]"
+          style={{ top: menuPos.top, left: menuPos.left }}
+        >
           <div className="p-3 sm:p-4 border-b border-border/40 bg-surface-dim/30 shrink-0">
             <span className="text-xs font-black text-text-muted pl-1">Filter by Period</span>
           </div>
@@ -214,7 +242,8 @@ export default function CRMDateRangePicker({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
