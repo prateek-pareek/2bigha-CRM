@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Building2, Phone, EyeOff, ChevronDown, MapPin, Lock, ThumbsUp, CheckCircle2, History, ClipboardList } from 'lucide-react';
+import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Building2, Phone, EyeOff, ChevronDown, MapPin, Lock, ThumbsUp, CheckCircle2, History, ClipboardList, CreditCard } from 'lucide-react';
 import FollowUpSequenceModal from '@/components/crm/automation/playbooks/FollowUpSequenceModal';
 import FollowUpSequenceCard from '@/components/crm/automation/playbooks/FollowUpSequenceCard';
 import Timeline from '@/components/crm/inbox/Timeline';
@@ -39,6 +39,7 @@ import CrmRecordOwnerCard from '@/components/crm/records/detail/CrmRecordOwnerCa
 import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
 import LeadOnboardingChecklistCard from '@/components/crm/records/detail/LeadOnboardingChecklistCard';
 import LeadUpdateHistoryPanel from '@/components/crm/records/detail/LeadUpdateHistoryPanel';
+import LeadSubscriptionDetailsTab from '@/components/crm/records/detail/LeadSubscriptionDetailsTab';
 import CrmRecordPipelineStatus from '@/components/crm/records/detail/CrmRecordPipelineStatus';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
 import CrmRecordSidebarGroup from '@/components/crm/records/detail/CrmRecordSidebarGroup';
@@ -97,7 +98,7 @@ export default function LeadDetailPage() {
   const [layoutTickRecord, setLayoutTickRecord] = useState(0);
   const [isSharing, setIsSharing] = useState(false);
   const [emailTracking, setEmailTracking] = useState<CrmEmailTrackingRow[]>([]);
-  const [activeTab, setActiveTab] = useState<'Activity' | 'Details' | 'History'>('Activity');
+  const [activeTab, setActiveTab] = useState<'Activity' | 'Details' | 'Subscription' | 'History'>('Activity');
   const [recordMetaLoaded, setRecordMetaLoaded] = useState(false);
   const entityId = useMemo(
     () => String((lead?._id ?? recordId) || ''),
@@ -528,6 +529,7 @@ export default function LeadDetailPage() {
   const recordTabs = [
     { id: 'Activity' as const, label: 'Activity', icon: MessageSquare },
     { id: 'Details' as const, label: 'Details', icon: Info },
+    { id: 'Subscription' as const, label: 'Subscription Details', icon: CreditCard },
     { id: 'History' as const, label: 'History', icon: History },
   ];
 
@@ -851,6 +853,16 @@ export default function LeadDetailPage() {
                     pipelineName={pipelineName}
                     onApplyEmailFromFinder={applyEmailFromFinder}
                     layout="grid"
+                  />
+                </div>
+              )}
+
+              {activeTab === 'Subscription' && (
+                <div className="animate-in fade-in duration-300">
+                  <LeadSubscriptionDetailsTab
+                    leadId={entityId}
+                    refreshKey={propertiesRefreshKey}
+                    onRefresh={() => setPropertiesRefreshKey((n) => n + 1)}
                   />
                 </div>
               )}

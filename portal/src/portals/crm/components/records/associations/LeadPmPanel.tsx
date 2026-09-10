@@ -6,7 +6,6 @@ import { ClipboardList, Loader2, Plus, ArrowUpCircle, AlertOctagon } from "lucid
 import { cn } from "@/lib/utils";
 import { fetchLeadPmOverview } from "../../../lib/subscriptions/backend-api";
 import type { LeadPmOverview, LeadPmPropertyOverview } from "../../../lib/subscriptions/types";
-import PmCollectPaymentSection from "../../subscriptions/PmCollectPaymentSection";
 import PmPaymentHistorySection from "../../subscriptions/PmPaymentHistorySection";
 import PmActivityLogSection from "../../subscriptions/PmActivityLogSection";
 import UpgradePlanModal from "../../subscriptions/UpgradePlanModal";
@@ -56,10 +55,21 @@ export default function LeadPmPanel({
   const combinedStatus = overview?.combinedStatus;
   const primaryStage = pmProps[0]?.pmStage;
 
+  const boundSubscriptions = activePlans.length > 0
+    ? activePlans.map((p) => ({
+        id: p.userPropertyId,
+        planName: p.planName,
+        billingCycle: p.billingCycle,
+        status: p.status,
+        propertyTitle: pmProps.find((prop) => prop.userPropertyId === p.userPropertyId)?.title,
+        startDate: p.startDate,
+        endDate: p.endDate,
+      }))
+    : activeSubscriptions.filter((s) => s.status === "ACTIVE" && (s.propertyTitle || s.userPropertyId));
+
   const hasBoundSubscription =
-    activePlans.length > 0 ||
-    activeSubscriptions.some((s) => s.status === "ACTIVE") ||
-    pmProps.some((p) => p.subscriptionStatus === "ACTIVE");
+    boundSubscriptions.length > 0 ||
+    pmProps.some((p) => p.subscriptionStatus === "ACTIVE" && p.userPropertyId);
 
   const hasSuccessfulPayment = paymentHistory.some((p) => p.status === "SUCCESS");
   const needsPayment = !unboundSubs.length && !hasBoundSubscription && !hasSuccessfulPayment;
@@ -114,15 +124,7 @@ export default function LeadPmPanel({
             <p className="text-xs text-emerald-800">
               PM subscription is <strong>active and bound</strong> to a property — no further payment needed for this cycle.
             </p>
-            {(activeSubscriptions.length ? activeSubscriptions : activePlans.map((p) => ({
-              id: p.userPropertyId,
-              planName: p.planName,
-              billingCycle: p.billingCycle,
-              status: p.status,
-              propertyTitle: pmProps.find((prop) => prop.userPropertyId === p.userPropertyId)?.title,
-              startDate: p.startDate,
-              endDate: p.endDate,
-            }))).map((sub) => (
+            {boundSubscriptions.map((sub) => (
               <div
                 key={String(sub.id)}
                 className="space-y-1.5 text-sm rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2.5"
@@ -173,16 +175,11 @@ export default function LeadPmPanel({
             ))}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <p className="text-xs italic text-text-muted">
-              No active PM subscription on this lead yet.
+              No active PM subscription logged for this lead.
             </p>
-            {needsPayment && leadId ? (
-              <PmCollectPaymentSection
-                leadId={leadId}
-                onPaid={() => setPaymentRefresh((n) => n + 1)}
-              />
-            ) : hasSuccessfulPayment ? (
+            {hasSuccessfulPayment ? (
               <p className="text-xs text-amber-800 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
                 Payment recorded — sync or create the PM property to bind the subscription.
               </p>

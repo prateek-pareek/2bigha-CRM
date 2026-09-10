@@ -489,7 +489,7 @@ const crmGroups = [
             { name: 'Settings', href: '/crm/settings', icon: CrmNavIcon.Settings, permission: 'settings:read' },
             { name: 'Users & access', href: '/crm/settings/users', icon: CrmNavIcon.Users, permission: 'settings:admin' },
             { name: 'Roles', href: '/crm/settings/roles', icon: CrmNavIcon.UsersGroup, permission: 'settings:admin' },
-            { name: 'Subscriptions', href: '/crm/subscriptions', icon: CreditCard, permission: 'settings:admin' },
+            // { name: 'Subscriptions', href: '/crm/subscriptions', icon: CreditCard, permission: 'settings:admin' },
         ],
     },
 ];

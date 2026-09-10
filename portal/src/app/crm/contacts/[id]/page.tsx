@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { User, Mail, CalendarClock, ChevronLeft, Edit2, Trash2, Calendar, Share2, Settings2, MessageSquare, Info, Building2, Phone, EyeOff } from 'lucide-react';
+import { User, Mail, CalendarClock, ChevronLeft, Edit2, Trash2, Calendar, Share2, Settings2, MessageSquare, Info, Building2, Phone, EyeOff, CreditCard } from 'lucide-react';
 import FollowUpSequenceModal from '@/components/crm/automation/playbooks/FollowUpSequenceModal';
 import FollowUpSequenceCard from '@/components/crm/automation/playbooks/FollowUpSequenceCard';
 import Timeline from '@/components/crm/inbox/Timeline';
@@ -22,6 +22,7 @@ import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagem
 import { CRMContactCompanySidebarCard } from '@/components/crm/records/associations/CRMCompanySidebarCard';
 import ContactAssociationsPanel from '@/components/crm/records/associations/ContactAssociationsPanel';
 import LeadPmPanel from '@/components/crm/records/associations/LeadPmPanel';
+import LeadSubscriptionDetailsTab from '@/components/crm/records/detail/LeadSubscriptionDetailsTab';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForContact, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
@@ -78,7 +79,7 @@ export default function ContactDetailPage() {
   const [layoutTickRecord, setLayoutTickRecord] = useState(0);
   const [isSharing, setIsSharing] = useState(false);
   const [emailTracking, setEmailTracking] = useState<CrmEmailTrackingRow[]>([]);
-  const [activeTab, setActiveTab] = useState<'Activity' | 'Details'>('Activity');
+  const [activeTab, setActiveTab] = useState<'Activity' | 'Details' | 'Subscription'>('Activity');
   const [recordMetaLoaded, setRecordMetaLoaded] = useState(false);
   const [pmRefreshKey, setPmRefreshKey] = useState(0);
   const entityId = useMemo(
@@ -393,6 +394,7 @@ export default function ContactDetailPage() {
   const recordTabs = [
     { id: 'Activity' as const, label: 'Activity', icon: MessageSquare },
     { id: 'Details' as const, label: 'Details', icon: Info },
+    { id: 'Subscription' as const, label: 'Subscription Details', icon: CreditCard },
   ];
 
   return (
@@ -548,6 +550,16 @@ export default function ContactDetailPage() {
                     visibleKeys={recordFieldKeysForGrid}
                     customFieldDefs={customFieldDefs}
                     onApplyEmailFromFinder={applyEmailFromFinder}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'Subscription' && (
+                <div className="animate-in fade-in duration-300">
+                  <LeadSubscriptionDetailsTab
+                    leadId={entityId}
+                    refreshKey={pmRefreshKey}
+                    onRefresh={() => setPmRefreshKey((n) => n + 1)}
                   />
                 </div>
               )}
