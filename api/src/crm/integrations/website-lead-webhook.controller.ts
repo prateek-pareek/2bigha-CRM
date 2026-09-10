@@ -166,8 +166,9 @@ export class WebsiteLeadWebhookController {
 
     try {
       const lead = await this.crmService.createLead(dto);
-      this.logger.log(`Created CRM lead ${lead._id} from website form submission`);
-      return { success: true, leadId: String(lead._id) };
+      const leadId = String((lead as any)._id);
+      this.logger.log(`Created CRM lead ${leadId} from website form submission`);
+      return { success: true, leadId };
     } catch (e: any) {
       this.logger.error(`Failed to create CRM lead from website form: ${e?.message}`);
       res.status(HttpStatus.INTERNAL_SERVER_ERROR);
