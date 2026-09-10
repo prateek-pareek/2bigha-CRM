@@ -64,7 +64,7 @@ export default function CrmRecordProfileCard({
       </div>
 
       <div className="flex flex-col items-center px-5 pb-5 text-center">
-        <div className="-mt-9 flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-full border-4 border-[var(--card-bg)] bg-[var(--primary-light)] text-lg font-bold text-[var(--primary)] shadow-md">
+        <div className="relative z-10 -mt-9 flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-full border-4 border-[var(--card-bg)] bg-[var(--primary-light)] text-lg font-bold text-[var(--primary)] shadow-md">
           {initials}
         </div>
         <h2 className="mt-3 inline-flex max-w-full items-center gap-1.5 text-base font-bold leading-snug text-[var(--text-main)]">
