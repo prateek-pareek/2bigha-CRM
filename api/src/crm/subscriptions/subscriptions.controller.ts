@@ -18,6 +18,7 @@ import { Lead } from '../schemas/lead.schema';
 import { Client } from '../schemas/client.schema';
 import { Contact } from '../schemas/contact.schema';
 import { CreatePmOrderDto, VerifyPmPaymentDto } from './dto/pm-order.dto';
+import { CancelPmPlanDto, CreatePmUpgradeOrderDto } from './dto/pm-upgrade-cancel.dto';
 import { resolveTwobighaUserIdForLeadId } from '../shared/twobigha-lead-client.util';
 
 @Controller('crm/subscriptions')
@@ -159,6 +160,50 @@ export class SubscriptionsController {
   @Get('managed-property/:propertyId')
   async getManagedPropertyDetail(@Param('propertyId') propertyId: string) {
     return this.subscriptionsService.getManagedPropertyDetail(propertyId);
+  }
+
+  @Post('cancel')
+  async cancelPmPlan(@Body() dto: CancelPmPlanDto, @Req() req: any) {
+    const res = await this.subscriptionsService.cancelPmPlan(dto.userPropertyId, dto.reason);
+    void this.pmActivityLog.log({
+      leadId: dto.leadId,
+      authorId: req.user?.userId,
+      eventType: 'pm_subscription_cancelled',
+      title: 'PM Subscription Cancelled',
+      content: `PM subscription plan cancelled for property ${dto.userPropertyId}.${dto.reason ? ` Reason: ${dto.reason}` : ''}`,
+      metadata: { userPropertyId: dto.userPropertyId, reason: dto.reason, success: res.success },
+    });
+    return res;
+  }
+
+  @Get('proration-preview/:userPropertyId/:variantId')
+  async getProrationPreview(
+    @Param('userPropertyId') userPropertyId: string,
+    @Param('variantId') variantId: string,
+  ) {
+    return this.subscriptionsService.getProrationPreview(userPropertyId, Number(variantId));
+  }
+
+  @Post('pm-upgrade-order')
+  async createPmUpgradeOrder(@Body() dto: CreatePmUpgradeOrderDto, @Req() req: any) {
+    const order = await this.subscriptionsService.createPmUpgradeOrder(
+      dto.userPropertyId,
+      dto.targetVariantId,
+    );
+    void this.pmActivityLog.log({
+      leadId: dto.leadId,
+      authorId: req.user?.userId,
+      eventType: 'pm_upgrade_order_created',
+      title: 'PM Upgrade Order Created',
+      content: `Upgrade checkout order created for property ${dto.userPropertyId} (variant ${dto.targetVariantId}).`,
+      metadata: {
+        userPropertyId: dto.userPropertyId,
+        targetVariantId: dto.targetVariantId,
+        orderId: order.orderId,
+        amount: order.amount,
+      },
+    });
+    return order;
   }
 
   private resolveTwobighaUserId(leadId: string): Promise<string | null> {

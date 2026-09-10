@@ -4,6 +4,7 @@ import {
   Braces,
   Bell,
   Building2,
+  ClipboardList,
   Columns,
   Database,
   DollarSign,
@@ -109,6 +110,12 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         description: "Create dynamic properties for CRM modules.",
         href: "/crm/settings/custom-fields",
         icon: Layout,
+      },
+      {
+        name: "Forms",
+        description: "Build customizable lead-capture forms for Meta Ads, Google Ads, and your website.",
+        href: "/crm/settings/forms",
+        icon: ClipboardList,
       },
       {
         name: "Lead Type, Group & Checklist",

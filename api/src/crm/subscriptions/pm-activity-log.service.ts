@@ -5,8 +5,10 @@ import { Activity, ActivityDocument } from '../schemas/activity.schema';
 
 export type PmActivityEventType =
   | 'pm_payment_order_created'
+  | 'pm_upgrade_order_created'
   | 'pm_payment_verified'
   | 'pm_payment_failed'
+  | 'pm_subscription_cancelled'
   | 'pm_property_created'
   | 'pm_sync_success'
   | 'pm_sync_failed'

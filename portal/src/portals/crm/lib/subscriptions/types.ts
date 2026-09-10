@@ -222,3 +222,18 @@ export interface LeadPmOverview {
   properties: LeadPmPropertyOverview[];
   combinedStatus?: string;
 }
+
+export interface ProrationPreviewResult {
+  userPropertyId: string;
+  currentPlanName?: string;
+  newPlanName?: string;
+  upgradeCost: number;
+  creditRemaining: number;
+  netAmountDue: number;
+  currency: string;
+}
+
+export interface CancelPmPlanResult {
+  success: boolean;
+  message?: string;
+}

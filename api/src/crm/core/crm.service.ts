@@ -2594,6 +2594,18 @@ export class CRMService {
       recordId: String(lead._id),
       user,
     });
+    // Also fires the dedicated "Website lead converted" sales-agent trigger
+    // (settings.triggerOnWebsiteInbound) for any lead sourced from the
+    // website — currently WebsiteLeadWebhookController, but any lead created
+    // with source: 'Website' (e.g. picked manually) benefits the same way.
+    if (typeof dto.source === 'string' && dto.source.toLowerCase() === 'website') {
+      this.notifySalesAgent({
+        trigger: 'website_inbound',
+        recordType: 'Lead',
+        recordId: String(lead._id),
+        user,
+      });
+    }
     void this.leadEngagementAutomation.onLeadUpdated(String(lead._id));
     const fresh = await this.leadModel
       .findById(lead._id)

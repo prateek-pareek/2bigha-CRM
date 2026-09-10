@@ -110,6 +110,9 @@ export interface CreateBackendPropertyListingInput {
   mapCoordinates?: unknown;
   mapLocation?: unknown;
   leadId?: string;
+  listingBucket?: string;
+  pmPlan?: string;
+  pmStage?: string;
 }
 
 export async function fetchTwoBighaImageUploadUrls(

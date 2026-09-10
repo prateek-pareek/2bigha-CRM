@@ -1,41 +1,67 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, History } from "lucide-react";
+import { Loader2, History, ArrowUpCircle, AlertOctagon } from "lucide-react";
 import { CrmSectionCard, CrmStatusBadge } from "@/components/crm/ui";
 import { fetchActivePropertyPlan } from "../../lib/subscriptions/backend-api";
 import type { ActivePropertyPlan } from "../../lib/subscriptions/types";
 import PropertyPlanHistoryModal from "./PropertyPlanHistoryModal";
+import UpgradePlanModal from "../subscriptions/UpgradePlanModal";
+import CancelPlanModal from "../subscriptions/CancelPlanModal";
 
-export default function ActivePropertyPlanCard({ propertyId }: { propertyId: string }) {
+export default function ActivePropertyPlanCard({
+  propertyId,
+  leadId,
+}: {
+  propertyId: string;
+  leadId?: string;
+}) {
   const [plan, setPlan] = useState<ActivePropertyPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
 
-  useEffect(() => {
+  const loadPlan = () => {
     if (!propertyId) return;
-    let cancelled = false;
     setLoading(true);
     fetchActivePropertyPlan(propertyId)
-      .then((data) => {
-        if (!cancelled) setPlan(data);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then((data) => setPlan(data))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadPlan();
   }, [propertyId]);
 
   const headerActions = (
-    <button
-      onClick={() => setHistoryOpen(true)}
-      className="inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-600 px-3 text-xs font-medium text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-600"
-    >
-      <History size={14} />
-      View History
-    </button>
+    <div className="flex items-center gap-2">
+      {plan?.status === "ACTIVE" && (
+        <>
+          <button
+            onClick={() => setUpgradeOpen(true)}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-indigo-600 px-2.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-700"
+          >
+            <ArrowUpCircle size={13} />
+            Upgrade
+          </button>
+          <button
+            onClick={() => setCancelOpen(true)}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-red-500/10 border border-red-500/30 px-2.5 text-xs font-medium text-red-400 hover:bg-red-500/20"
+          >
+            <AlertOctagon size={13} />
+            Cancel
+          </button>
+        </>
+      )}
+      <button
+        onClick={() => setHistoryOpen(true)}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-600 px-3 text-xs font-medium text-white shadow-xs transition-colors hover:bg-emerald-700 focus-visible:outline-none"
+      >
+        <History size={14} />
+        View History
+      </button>
+    </div>
   );
 
   if (loading) {
@@ -124,6 +150,26 @@ export default function ActivePropertyPlanCard({ propertyId }: { propertyId: str
           propertyId={propertyId} 
           isOpen={historyOpen} 
           onClose={() => setHistoryOpen(false)} 
+        />
+      )}
+      {upgradeOpen && (
+        <UpgradePlanModal
+          isOpen={upgradeOpen}
+          onClose={() => setUpgradeOpen(false)}
+          leadId={leadId || ""}
+          userPropertyId={plan?.userPropertyId || propertyId}
+          currentPlanName={plan?.planName}
+          onSuccess={loadPlan}
+        />
+      )}
+      {cancelOpen && (
+        <CancelPlanModal
+          isOpen={cancelOpen}
+          onClose={() => setCancelOpen(false)}
+          leadId={leadId || ""}
+          userPropertyId={plan?.userPropertyId || propertyId}
+          planName={plan?.planName}
+          onSuccess={loadPlan}
         />
       )}
     </>

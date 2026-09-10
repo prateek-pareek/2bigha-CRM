@@ -225,6 +225,7 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
   { id: 'outreach', label: 'Outreach', routes: ['/crm/outreach', '/crm/campaigns'] },
   { id: 'workflows', label: 'Workflows & automation', routes: ['/crm/workflows'] },
   { id: 'property-listings', label: 'Property Listings', routes: ['/crm/property-listings'] },
+  { id: 'forms', label: 'Forms', routes: ['/crm/settings/forms'] },
   { id: 'visits', label: 'Visit Tracking', routes: ['/crm/visits'] },
   { id: 'contracts', label: 'Contracts', routes: ['/crm/contracts'] },
   { id: 'quotations', label: 'Quotations', routes: ['/crm/quotations'] },

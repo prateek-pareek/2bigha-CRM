@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ClipboardList, Loader2, Plus } from "lucide-react";
+import { ClipboardList, Loader2, Plus, ArrowUpCircle, AlertOctagon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchLeadPmOverview } from "../../../lib/subscriptions/backend-api";
 import type { LeadPmOverview, LeadPmPropertyOverview } from "../../../lib/subscriptions/types";
 import PmCollectPaymentSection from "../../subscriptions/PmCollectPaymentSection";
 import PmPaymentHistorySection from "../../subscriptions/PmPaymentHistorySection";
 import PmActivityLogSection from "../../subscriptions/PmActivityLogSection";
+import UpgradePlanModal from "../../subscriptions/UpgradePlanModal";
+import CancelPlanModal from "../../subscriptions/CancelPlanModal";
 import { pmStageBadgeTone } from "@/lib/crm/property-management/types";
 import { CrmStatusBadge } from "@/components/crm/ui";
 
@@ -27,6 +29,10 @@ export default function LeadPmPanel({
   const [overview, setOverview] = useState<LeadPmOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [paymentRefresh, setPaymentRefresh] = useState(0);
+  const [targetUserPropId, setTargetUserPropId] = useState<string | null>(null);
+  const [targetPlanName, setTargetPlanName] = useState<string | undefined>(undefined);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   const loadOverview = () => {
     if (!leadId) return;
@@ -139,6 +145,30 @@ export default function LeadPmPanel({
                       : ""}
                   </p>
                 ) : null}
+                {sub.status === "ACTIVE" && (
+                  <div className="flex items-center gap-2 pt-1 border-t border-emerald-200/80 mt-1.5">
+                    <button
+                      onClick={() => {
+                        setTargetUserPropId(String(sub.id));
+                        setTargetPlanName(sub.planName);
+                        setUpgradeOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded transition-colors"
+                    >
+                      <ArrowUpCircle size={12} /> Upgrade Plan
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTargetUserPropId(String(sub.id));
+                        setTargetPlanName(sub.planName);
+                        setCancelOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 hover:text-red-800 bg-red-50 border border-red-200 px-2 py-0.5 rounded transition-colors"
+                    >
+                      <AlertOctagon size={12} /> Cancel Plan
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -214,6 +244,34 @@ export default function LeadPmPanel({
           </div>
         )}
       </div>
+
+      {upgradeOpen && targetUserPropId && (
+        <UpgradePlanModal
+          isOpen={upgradeOpen}
+          onClose={() => {
+            setUpgradeOpen(false);
+            setTargetUserPropId(null);
+          }}
+          leadId={leadId}
+          userPropertyId={targetUserPropId}
+          currentPlanName={targetPlanName}
+          onSuccess={loadOverview}
+        />
+      )}
+
+      {cancelOpen && targetUserPropId && (
+        <CancelPlanModal
+          isOpen={cancelOpen}
+          onClose={() => {
+            setCancelOpen(false);
+            setTargetUserPropId(null);
+          }}
+          leadId={leadId}
+          userPropertyId={targetUserPropId}
+          planName={targetPlanName}
+          onSuccess={loadOverview}
+        />
+      )}
     </div>
   );
 }
