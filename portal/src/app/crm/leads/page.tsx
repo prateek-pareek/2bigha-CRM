@@ -49,7 +49,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
-import CRMSavedViews, { SavedViewData } from '@/components/crm/segments/CRMSavedViews';
+import CRMSavedViews, { SavedViewData, resolveSavedViewFilters } from '@/components/crm/segments/CRMSavedViews';
 import Pagination from '@/components/suite/shell/Pagination';
 import { usePermissions } from '@/hooks/usePermissions';
 import CRMCalendarView from '@/components/crm/calendar/CRMCalendarView';
@@ -1096,11 +1096,41 @@ export default function LeadsPage() {
   };
 
   const handleApplyView = (view: SavedViewData | null) => {
-    if (!view) { setFilters([]); return; }
-    setFilters(view.filters || []);
-    if (view.columns?.length) {
-      const viewColMap = new Map(view.columns.map(c => [c.key, c]));
-      const next = columns.map(c => ({ ...c, visible: viewColMap.has(c.key) ? viewColMap.get(c.key)!.visible : c.visible }));
+    const { filters: nextFilters, toolbar } = resolveSavedViewFilters(view);
+
+    setFilters(nextFilters);
+    setActiveLeadCategory(typeof toolbar.leadCategory === 'string' ? toolbar.leadCategory : '');
+    const vertical = toolbar.leadVertical;
+    setActiveLeadVertical(
+      vertical === 'property_listing' || vertical === 'property_management' ? vertical : '',
+    );
+    setShowMyLeadsOnly(Boolean(toolbar.showMineOnly));
+
+    const range = toolbar.dateRange;
+    if (range && typeof range === 'object' && typeof range.from === 'string' && typeof range.to === 'string') {
+      setDateRange({ from: range.from, to: range.to });
+    } else {
+      setDateRange(null);
+    }
+
+    if (typeof toolbar.followUpFilter === 'string' && toolbar.followUpFilter) {
+      setFollowUpFilter(toolbar.followUpFilter as typeof followUpFilter);
+    } else {
+      setFollowUpFilter('all');
+    }
+
+    if (typeof toolbar.lastActivityFilter === 'string' && toolbar.lastActivityFilter) {
+      setLastActivityFilter(toolbar.lastActivityFilter as typeof lastActivityFilter);
+    } else {
+      setLastActivityFilter('all');
+    }
+
+    if (view?.columns?.length) {
+      const viewColMap = new Map(view.columns.map((c) => [c.key, c]));
+      const next = columns.map((c) => ({
+        ...c,
+        visible: viewColMap.has(c.key) ? viewColMap.get(c.key)!.visible : c.visible,
+      }));
       setColumns(next);
       saveColumns(next);
     }
@@ -1676,8 +1706,28 @@ export default function LeadsPage() {
           />
         );
       }
-      case 'email': return <CrmListMutedText className="crm-cell-wrap block">{lead.email || '—'}</CrmListMutedText>;
-      case 'phone': return <CrmListMutedText className="crm-cell-wrap block">{lead.mobileNo || lead.phone || '—'}</CrmListMutedText>;
+      case 'email': {
+        const email = lead.email || '—';
+        return (
+          <CrmListMutedText
+            className="block max-w-[280px] truncate whitespace-nowrap"
+            title={lead.email || undefined}
+          >
+            {email}
+          </CrmListMutedText>
+        );
+      }
+      case 'phone': {
+        const phone = lead.mobileNo || lead.phone || '—';
+        return (
+          <CrmListMutedText
+            className="block whitespace-nowrap"
+            title={phone !== '—' ? phone : undefined}
+          >
+            {phone}
+          </CrmListMutedText>
+        );
+      }
       case 'priority': return <span className="text-sm text-[#707070]">{lead.priority || '—'}</span>;
       case 'leadOwner': return <CrmListOwnerCell name={lead.leadOwner || ''} />;
       case 'pipeline': {
@@ -1730,19 +1780,41 @@ export default function LeadsPage() {
   }, [pipelineNameById, customFieldDefs, leadEmailStatsById, leadListingCounts]);
 
   return (
-    <div className={CRM_LIST_PAGE}>
+    <div className={cn(CRM_LIST_PAGE, "crm-list-dense")}>
       <div className="crm-list-content">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden space-y-0 px-2 sm:px-4 py-3 w-full">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-0 pt-0 pb-0 w-full">
           <CrmPageHeader
             bordered={false}
+            compact
+            className="crm-list-page-header"
             title="Leads"
             badge={<CrmCountBadge>{displayedTotal}</CrmCountBadge>}
             breadcrumbs={[
               { label: 'Home', href: '/crm/workspace/summary' },
               { label: 'Leads' },
             ]}
+            middle={
+              <div className="relative h-8 w-full max-w-[280px]">
+                <Search
+                  size={13}
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                  aria-hidden
+                />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  className="h-full w-full rounded-[5px] border-0 bg-white px-3 pl-8 text-xs outline-none shadow-[var(--crm-shadow-input)] focus:shadow-[0_4px_8px_rgba(219,219,219,0.45)] dark:bg-black"
+                />
+              </div>
+            }
             actions={
-              <CrmHeaderTools
+                <CrmHeaderTools
+                className="gap-1.5"
                 leading={
                   <>
                 {selectedIds.size > 0 && canMoveLeadsAcrossPipelines && (
@@ -1856,31 +1928,61 @@ export default function LeadsPage() {
                   window.dispatchEvent(new CustomEvent('crm-header:toggle-collapse'));
                 }}
                 collapsed={headerCollapsed}
+                afterExport={
+                  <>
+                    <CrmScopeToggle
+                      compact
+                      allLabel="All Leads"
+                      mineLabel="My Leads"
+                      showMineOnly={showMyLeadsOnly}
+                      onShowAll={() => { setShowMyLeadsOnly(false); setPage(1); }}
+                      onShowMine={() => { setShowMyLeadsOnly(true); setPage(1); }}
+                      className="flex-shrink-0"
+                    />
+                    <CRMSavedViews
+                      module="leads"
+                      currentFilters={filters}
+                      currentColumns={columns}
+                      currentToolbar={{
+                        leadCategory: activeLeadCategory,
+                        leadVertical: activeLeadVertical,
+                        showMineOnly: showMyLeadsOnly,
+                        dateRange,
+                        followUpFilter,
+                        lastActivityFilter,
+                      }}
+                      onApplyView={handleApplyView}
+                      preferAllView
+                    />
+                  </>
+                }
                 trailing={
-                  hasAccess('leads:write') && (
-                    <CrmButton
-                      variant="primary"
-                      onClick={() => setIsLeadPanelOpen(true)}
-                      leftIcon={<CrmIcon.AddFilled size={16} aria-hidden />}
-                    >
-                      Add Lead
-                    </CrmButton>
-                  )
+                  <>
+                    <CRMDateRangePicker onChange={setDateRange} compact className="flex-shrink-0" />
+                    {hasAccess('leads:write') ? (
+                      <CrmButton
+                        variant="primary"
+                        onClick={() => setIsLeadPanelOpen(true)}
+                        className="inline-flex h-8 items-center justify-center px-3.5 text-xs leading-none"
+                      >
+                        Add Lead
+                      </CrmButton>
+                    ) : null}
+                  </>
                 }
               />
             }
           />
 
-          {/* TOOLBAR - Row 1: Filters, Row 2: View modes & Manage Columns */}
+          {/* TOOLBAR — filters + views/columns on one row */}
           <CrmListToolbar
-            filter={
-              <CRMFilterBar module="leads" filters={filters} onChange={setFilters} onClear={() => setFilters([])} onPropertiesReady={setFilterProperties} />
-            }
+            compact
+            filter={undefined}
             searchProps={undefined}
             leftExtra={
               <>
-                {/* Category Dropdown */}
-                <div className="relative h-[38px]">
+                <CRMFilterBar module="leads" filters={filters} onChange={setFilters} onClear={() => setFilters([])} onPropertiesReady={setFilterProperties} />
+                <div className="relative h-8 shrink-0">
                   <select
                     value={activeLeadVertical}
                     onChange={(e) => {
@@ -1888,7 +1990,7 @@ export default function LeadsPage() {
                       setPage(1);
                     }}
                     aria-label="Lead category"
-                    className={cn(CRM_TOOLBAR_SELECT, 'h-full w-full sm:w-auto px-2.5 text-xs')}
+                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[132px] w-auto px-2.5 text-xs')}
                   >
                     <option value="">Category: All Leads</option>
                     <option value="property_listing">Property Listing</option>
@@ -1899,10 +2001,8 @@ export default function LeadsPage() {
                     className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                   />
                 </div>
-
-                {/* Type Dropdown */}
                 {leadCategoryTabs.length > 0 && (
-                  <div className="relative h-[38px]">
+                  <div className="relative h-8 shrink-0">
                     <select
                       value={activeLeadCategory}
                       onChange={(e) => {
@@ -1910,7 +2010,7 @@ export default function LeadsPage() {
                         setPage(1);
                       }}
                       aria-label="Lead type"
-                      className={cn(CRM_TOOLBAR_SELECT, 'h-full w-full sm:w-auto px-2.5 text-xs')}
+                      className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[120px] w-auto px-2.5 text-xs')}
                     >
                       <option value="">Type: All Types</option>
                       {leadCategoryTabs.map((tab) => (
@@ -1925,29 +2025,9 @@ export default function LeadsPage() {
                     />
                   </div>
                 )}
-
-                {/* Search Input */}
-                <div className="relative w-full sm:w-[240px] h-[38px]">
-                  <Search
-                    size={14}
-                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                    aria-hidden
-                  />
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(1);
-                    }}
-                    className="w-full h-full rounded-[5px] border border-[var(--border-color)] bg-white px-3 pl-8 text-xs outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] dark:bg-black transition-colors"
-                  />
-                </div>
-
-                <div className="relative h-[38px]">
+                <div className="relative h-8 shrink-0">
                   <CrmIcon.Activity
-                    size={14}
+                    size={13}
                     className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                     aria-hidden
                   />
@@ -1958,7 +2038,7 @@ export default function LeadsPage() {
                       setPage(1);
                     }}
                     aria-label="Filter leads by last tracked or CRM email activity"
-                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[130px] max-w-[150px] pl-8 pr-7 text-xs')}
+                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[118px] max-w-[150px] pl-8 pr-7 text-xs')}
                     title="Last tracked or CRM email activity"
                   >
                     <option value="all">Activity: Any</option>
@@ -1973,11 +2053,9 @@ export default function LeadsPage() {
                     className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                   />
                 </div>
-
-                {/* Follow-up Reminder Filter */}
-                <div className="relative h-[38px]">
+                <div className="relative h-8 shrink-0">
                   <Timer
-                    size={14}
+                    size={13}
                     className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                     aria-hidden
                   />
@@ -1988,7 +2066,7 @@ export default function LeadsPage() {
                       setPage(1);
                     }}
                     aria-label="Filter leads by follow-up reminder date"
-                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[150px] max-w-[195px] pl-8 pr-7 text-xs font-medium')}
+                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[132px] max-w-[185px] pl-8 pr-7 text-xs font-medium')}
                     title="Filter leads by follow-up reminder date"
                   >
                     <option value="all">Follow-up: All</option>
@@ -2005,101 +2083,87 @@ export default function LeadsPage() {
                     className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                   />
                 </div>
-                <CRMSavedViews
-                  module="leads"
-                  currentFilters={filters}
-                  currentColumns={columns}
-                  onApplyView={handleApplyView}
-                  preferAllView
-                />
+                {!(user as any)?.assignedLeadsPipeline ? (
+                  <div className="relative grid shrink-0">
+                    <span
+                      aria-hidden
+                      className="invisible col-start-1 row-start-1 h-8 whitespace-nowrap pl-7 pr-6 text-xs font-medium"
+                    >
+                      {pipelinesForActiveVertical.find((p) => String(p._id) === String(selectedPipelineId))?.name
+                        || selectedPipeline?.name
+                        || 'Pipeline'}
+                    </span>
+                    <CrmIcon.GitBranch
+                      size={13}
+                      className="pointer-events-none absolute left-2 top-1/2 z-[1] -translate-y-1/2 text-[var(--text-muted)]"
+                    />
+                    <select
+                      value={selectedPipelineId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setSelectedPipelineId(v);
+                        setPage(1);
+                        void fetchLeadsList(v || null);
+                      }}
+                      aria-label="Pipeline"
+                      className={cn(
+                        CRM_TOOLBAR_SELECT,
+                        'col-start-1 row-start-1 h-8 w-full min-w-0 max-w-none whitespace-nowrap pl-7 pr-6 text-xs',
+                      )}
+                    >
+                      {pipelinesForActiveVertical.map((p) => (
+                        <option key={p._id} value={p._id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                    <CrmIcon.ChevronDown
+                      size={12}
+                      className="pointer-events-none absolute right-1.5 top-1/2 z-[1] -translate-y-1/2 text-[var(--text-muted)]"
+                    />
+                  </div>
+                ) : null}
               </>
             }
-
-            right={undefined}
-            secondary={
-              <div className="flex items-center gap-2 w-full justify-between overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 sm:gap-3 md:gap-4">
-                <div className="flex items-center gap-2 flex-nowrap sm:flex-wrap sm:gap-3 order-1 flex-shrink-0">
-                  <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap flex-shrink-0">
-                    <CrmScopeToggle
-                      allLabel="All Leads"
-                      mineLabel="My Leads"
-                      showMineOnly={showMyLeadsOnly}
-                      onShowAll={() => { setShowMyLeadsOnly(false); setPage(1); }}
-                      onShowMine={() => { setShowMyLeadsOnly(true); setPage(1); }}
-                      onClearAll={() => { setSearch(''); setFilters([]); setDateRange(null); }}
-                      className="flex-shrink-0"
-                    />
-                    <CRMDateRangePicker onChange={setDateRange} compact className="flex-shrink-0" />
-                  </div>
-                  {!(user as any)?.assignedLeadsPipeline ? (
-                    <div className="relative flex-shrink-0">
-                      <CrmIcon.GitBranch
-                        size={14}
-                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                      />
-                      <select
-                        value={selectedPipelineId}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setSelectedPipelineId(v);
-                          setPage(1);
-                          void fetchLeadsList(v || null);
-                        }}
-                        aria-label="Pipeline"
-                        className={cn(CRM_TOOLBAR_SELECT, 'h-[38px] w-auto sm:min-w-[140px] sm:max-w-[170px] pl-8 pr-7 text-xs')}
-                      >
-                        {pipelinesForActiveVertical.map((p) => (
-                          <option key={p._id} value={p._id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                      <CrmIcon.ChevronDown
-                        size={12}
-                        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                      />
-                    </div>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2 order-2 sm:order-2 flex-shrink-0">
-                  <CrmViewToggle
-                    value={viewMode}
-                    onChange={(mode) => {
-                      setViewMode(mode);
-                      setPage(1);
-                    }}
-                    modes={['list', 'grid', 'kanban', 'calendar']}
-                  />
-                  {viewMode === 'list' && hasAccess('leads:write') ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsColumnsOpen(true)}
-                      className={cn(CRM_BTN_MANAGE_COLUMNS, "whitespace-nowrap hidden sm:inline-flex")}
-                      title="Manage columns visibility and order"
-                    >
-                      <CrmIcon.Columns size={16} aria-hidden />
-                      Manage Columns
-                    </button>
-                  ) : null}
-                  {viewMode === 'list' && hasAccess('leads:write') ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsColumnsOpen(true)}
-                      className="inline-flex sm:hidden h-[38px] items-center justify-center rounded-[5px] border border-[var(--border-color)] bg-white px-2 text-xs font-medium text-[var(--text-main)] shadow-xs hover:bg-[var(--surface-dim)] transition-colors dark:bg-black dark:hover:bg-[var(--surface-hover)]"
-                      title="Manage columns visibility and order"
-                      aria-label="Manage columns"
-                    >
-                      <CrmIcon.Columns size={14} aria-hidden />
-                    </button>
-                  ) : null}
-                </div>
+            right={
+              <div className="flex shrink-0 items-center gap-1.5">
+                <CrmViewToggle
+                  value={viewMode}
+                  onChange={(mode) => {
+                    setViewMode(mode);
+                    setPage(1);
+                  }}
+                  modes={['list', 'grid', 'kanban', 'calendar']}
+                />
+                {viewMode === 'list' && hasAccess('leads:write') ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsColumnsOpen(true)}
+                    className={cn(CRM_BTN_MANAGE_COLUMNS, "h-8 whitespace-nowrap hidden sm:inline-flex px-2.5 text-xs")}
+                    title="Manage columns visibility and order"
+                  >
+                    <CrmIcon.Columns size={14} aria-hidden />
+                    Manage Columns
+                  </button>
+                ) : null}
+                {viewMode === 'list' && hasAccess('leads:write') ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsColumnsOpen(true)}
+                    className="inline-flex sm:hidden h-8 items-center justify-center rounded-[5px] bg-white px-2 text-xs font-medium text-[var(--text-main)] shadow-[var(--crm-shadow-input)] hover:bg-[var(--surface-dim)] transition-colors dark:bg-black dark:hover:bg-[var(--surface-hover)]"
+                    title="Manage columns visibility and order"
+                    aria-label="Manage columns"
+                  >
+                    <CrmIcon.Columns size={14} aria-hidden />
+                  </button>
+                ) : null}
               </div>
             }
           />
 
           {/* Floating Bulk Actions Bar */}
           {selectedIds.size > 0 && (
-            <div className="sticky top-0 z-40 mb-3 flex items-center gap-2 rounded-[8px] border border-[var(--primary)] bg-[var(--primary)]/5 backdrop-blur-sm p-3 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="sticky top-0 z-40 mb-2 flex items-center gap-2 rounded-[8px] border border-[var(--primary)] bg-[var(--primary)]/5 backdrop-blur-sm px-2.5 py-1.5 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="flex flex-1 items-center gap-3">
                 <div className="flex items-center gap-2">
                   <Check size={18} className="text-[var(--primary)]" />
@@ -2388,7 +2452,8 @@ export default function LeadsPage() {
               </CrmKanbanBoard>
               </div>
             ) : viewMode === 'grid' ? (
-              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-1 custom-scrollbar">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-1 custom-scrollbar">
                 {loading ? (
                   <CrmRecordCardSkeleton />
                 ) : paginated.length === 0 ? (
@@ -2471,7 +2536,9 @@ export default function LeadsPage() {
                     })}
                   </CrmRecordCardGrid>
                 )}
+                </div>
                 <Pagination
+                  compact
                   total={displayedTotal}
                   page={page}
                   pageSize={pageSize}
@@ -2663,8 +2730,8 @@ export default function LeadsPage() {
                   </CrmTable>
               </CrmTableShell>
               </div>
-                <div className="mt-auto">
-                  <Pagination total={displayedTotal} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+                <div className="mt-auto shrink-0">
+                  <Pagination compact total={displayedTotal} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
                 </div>
               </div>
             ) : (

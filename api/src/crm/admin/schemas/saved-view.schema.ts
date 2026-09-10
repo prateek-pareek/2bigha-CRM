@@ -21,6 +21,10 @@ export class SavedView {
   @Prop({ type: [Object], default: [] })
   columns: { key: string; label: string; visible: boolean }[];
 
+  /** Module-specific toolbar state (Type, Category, scope, dates, …). */
+  @Prop({ type: Object, default: null })
+  toolbar?: Record<string, unknown> | null;
+
   @Prop({ default: 'createdAt' })
   sortBy: string;
 

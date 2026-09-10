@@ -23,13 +23,19 @@ import { parseCrmFiltersQuery } from '../shared/crm-list-filters';
 import { parseCrmEmailEngagementQuery } from '../email/crm-email-engagement-filter.service';
 import { CRMService } from './crm.service';
 import { ReportingService } from '../reporting/reporting.service';
+import { RoleDashboardService } from '../reporting/role-dashboard.service';
 import { CrmEmailEngagementBatchService } from '../email/crm-email-engagement-batch.service';
 import { CrmCalendarSyncService } from '../calendar/crm-calendar-sync.service';
 import { InboxOAuthService } from '../inbox/inbox-oauth.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RbacGuard } from '../crm-users/rbac.guard';
 import { Permissions } from '../crm-users/permissions.decorator';
-import { canViewCrmRevenue, redactCrmRevenueForUser } from '../shared/crm-admin-access.util';
+import {
+  canViewCrmRevenue,
+  redactCrmRevenueForUser,
+  hasCrmAdminFromDbUser,
+  hasCrmAdminJwtBypass,
+} from '../shared/crm-admin-access.util';
 
 @Controller('crm')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -40,6 +46,7 @@ export class CRMController {
     private readonly inboxOAuthService: InboxOAuthService,
     private readonly crmEmailEngagementBatchService: CrmEmailEngagementBatchService,
     private readonly reportingService: ReportingService,
+    private readonly roleDashboardService: RoleDashboardService,
   ) {}
 
   @Get('distinct-values')
@@ -864,63 +871,75 @@ export class CRMController {
     return this.crmService.getLeadAssociatedLegalStatus(id);
   }
 
-  // --- ROLE-BASED DASHBOARD ENDPOINTS ---
+  // --- ROLE-BASED DASHBOARDS (CRM Role Dashboard Wireframe) ---
 
+  private isCallerAdmin(req: any): boolean {
+    return (
+      hasCrmAdminJwtBypass(req.user) || hasCrmAdminFromDbUser(req.crmDbUser)
+    );
+  }
+
+  /**
+   * Resolve which dashboard the caller lands on (admin / team / agent) and
+   * whether they may open the others. Drives the frontend nav + redirect.
+   */
+  @Get('dashboard/role')
+  @Permissions('dashboard:read', 'workspace-admin:read', 'workspace-team:read', 'workspace-agent:read')
+  async getDashboardRole(@Request() req: any) {
+    return this.roleDashboardService.resolveTier(
+      req.crmDbUser,
+      req.user,
+      this.isCallerAdmin(req),
+    );
+  }
+
+  /** Admin — org-wide. Only admins (bypass) or holders of workspace-admin:read. */
   @Get('dashboard/admin')
-  @Permissions('admin:manage')
-  async getAdminDashboardMetrics(@Query('window') window: string = 'last_30_days') {
-    const dashboard = await this.reportingService.getDashboardData(window);
-    const health = await this.reportingService.getSalesDepartmentHealth(window);
-    const advancedTasks = await this.reportingService.getAdvancedTaskMetrics(window);
-    const whatsapp = await this.reportingService.getWhatsAppEngagement(window);
-    const ivr = await this.reportingService.getIVRAnalytics(window);
-    const teamMetrics = await this.reportingService.getTeamPerformanceMetrics(window, 'all');
-    
-    return { 
-      dashboard, 
-      health,
-      advancedTasks,
-      whatsapp,
-      ivr,
-      teamMetrics
-    };
-  }
-
-  @Get('dashboard/admin/leaderboard')
-  @Permissions('admin:manage')
-  async getAdminLeaderboards(@Query('window') window: string = 'last_30_days') {
-    return this.reportingService.getLeaderboardMetrics(window, 'all');
-  }
-
-  @Get('dashboard/team/leaderboard')
-  @Permissions('leads:read')
-  async getTeamLeaderboard(
-    @Request() req: any,
-    @Query('window') window: string = 'last_30_days'
+  @Permissions('workspace-admin:read', 'dashboard:read')
+  async getAdminDashboardMetrics(
+    @Query('window') window: string = 'this_week',
+    @Query('team') team?: string,
   ) {
-    return this.reportingService.getLeaderboardMetrics(window, req.user?.userId);
+    return this.roleDashboardService.getAdminDashboard(window, team);
   }
 
+  /**
+   * Team Lead — scoped to the caller's own team (direct reports). An admin may
+   * pass ?teamLead=<id> to inspect any team; a team lead is always forced to self.
+   */
   @Get('dashboard/team')
-  @Permissions('leads:read')
+  @Permissions('workspace-team:read', 'dashboard:read')
   async getTeamDashboardMetrics(
     @Request() req: any,
-    @Query('window') window: string = 'last_30_days',
+    @Query('window') window: string = 'today',
+    @Query('teamLead') teamLead?: string,
   ) {
-    const metrics = await this.reportingService.getTeamPerformanceMetrics(window, req.user?.userId);
-    const trend = await this.reportingService.getTeamPerformanceTrend(window);
-    return { metrics, trend };
+    const self = String(req.user?.userId || req.user?._id || '');
+    const teamLeadId = this.isCallerAdmin(req) && teamLead ? teamLead : self;
+    return this.roleDashboardService.getTeamDashboard(window, teamLeadId);
   }
 
+  /**
+   * Agent — scoped to self. Admins, or a Team Lead viewing one of their own
+   * members, may pass ?agent=<id> (enforced: the target must be in the caller's team).
+   */
   @Get('dashboard/agent')
-  @Permissions('leads:read')
+  @Permissions('workspace-agent:read', 'workspace-team:read', 'dashboard:read')
   async getAgentDashboardMetrics(
     @Request() req: any,
-    @Query('window') window: string = 'last_30_days'
+    @Query('window') window: string = 'today',
+    @Query('agent') agent?: string,
   ) {
-    const agentId = req.user._id.toString();
-    const summary = await this.reportingService.getAgentPerformanceSummary(agentId);
-    const activity = await this.reportingService.getActivityTrends(agentId);
-    return { summary, activity };
+    const self = String(req.user?.userId || req.user?._id || '');
+    let agentId = self;
+    if (agent && agent !== self) {
+      if (this.isCallerAdmin(req)) {
+        agentId = agent;
+      } else {
+        const allowed = await this.roleDashboardService.isDirectReport(self, agent);
+        agentId = allowed ? agent : self;
+      }
+    }
+    return this.roleDashboardService.getAgentDashboard(window, agentId);
   }
 }

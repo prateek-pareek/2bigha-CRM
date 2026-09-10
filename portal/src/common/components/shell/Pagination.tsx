@@ -12,6 +12,8 @@ interface PaginationProps {
   className?: string;
   /** Override the default 10/25/50/100 page-size menu. */
   pageSizes?: number[];
+  /** Tighter footer bar for list pages. */
+  compact?: boolean;
 }
 
 /** CRMS DataTables-style: “Show N entries” + outline page chips */
@@ -25,6 +27,7 @@ export default function Pagination({
   onPageSizeChange,
   className,
   pageSizes = PAGE_SIZES,
+  compact = false,
 }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -46,14 +49,20 @@ export default function Pagination({
     return pages;
   };
 
+  const controlH = compact ? "h-7 min-w-7" : "h-8 min-w-8";
+  const iconBtn = compact
+    ? "inline-flex h-7 w-7 items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] transition-colors hover:bg-[#f7f8f9] disabled:cursor-not-allowed disabled:opacity-40"
+    : "inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] transition-colors hover:bg-[#f7f8f9] disabled:cursor-not-allowed disabled:opacity-40";
+
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-between gap-3 border-t border-[#e2e8f0] bg-white px-3 py-3 sm:flex-row",
+        "flex shrink-0 flex-col items-center justify-between border-t border-[#e2e8f0] bg-white sm:flex-row",
+        compact ? "gap-1.5 px-2.5 py-1.5" : "gap-3 px-3 py-3",
         className,
       )}
     >
-      <div className="flex flex-wrap items-center gap-2 text-sm text-[#707070]">
+      <div className={cn("flex flex-wrap items-center gap-1.5 text-[#707070]", compact ? "text-xs" : "text-sm")}>
         <span>Show</span>
         <select
           value={pageSize}
@@ -61,7 +70,10 @@ export default function Pagination({
             onPageSizeChange(Number(e.target.value));
             onPageChange(1);
           }}
-          className="h-8 rounded-[5px] border border-[#e2e8f0] bg-white px-2 text-sm font-medium text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] outline-none focus:border-[var(--primary)]"
+          className={cn(
+            "rounded-[5px] border border-[#e2e8f0] bg-white px-1.5 font-medium text-[#1f2020] outline-none focus:border-[var(--primary)]",
+            compact ? "h-7 text-xs" : "h-8 px-2 text-sm shadow-[0_4px_4px_0_rgba(219,219,219,0.25)]",
+          )}
           aria-label="Rows per page"
         >
           {pageSizes.map((s) => (
@@ -78,22 +90,22 @@ export default function Pagination({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         <button
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] transition-colors hover:bg-[#f7f8f9] disabled:cursor-not-allowed disabled:opacity-40"
+          className={iconBtn}
           title="Previous"
           aria-label="Previous page"
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft size={compact ? 13 : 14} />
         </button>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {getPageNumbers().map((p, i) =>
             p === "..." ? (
-              <span key={`ellipsis-${i}`} className="px-1 text-sm text-[#707070]">
+              <span key={`ellipsis-${i}`} className={cn("px-1 text-[#707070]", compact ? "text-xs" : "text-sm")}>
                 …
               </span>
             ) : (
@@ -102,10 +114,14 @@ export default function Pagination({
                 type="button"
                 onClick={() => onPageChange(p as number)}
                 className={cn(
-                  "inline-flex h-8 min-w-8 items-center justify-center rounded-[5px] border px-2 text-sm font-medium transition-colors",
+                  "inline-flex items-center justify-center rounded-[5px] border px-2 font-medium transition-colors",
+                  controlH,
+                  compact ? "text-xs" : "text-sm",
                   p === page
                     ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-                    : "border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] hover:bg-[#f7f8f9]",
+                    : compact
+                      ? "border-[#e2e8f0] bg-white text-[#1f2020] hover:bg-[#f7f8f9]"
+                      : "border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] hover:bg-[#f7f8f9]",
                 )}
               >
                 {p}
@@ -118,11 +134,11 @@ export default function Pagination({
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] transition-colors hover:bg-[#f7f8f9] disabled:cursor-not-allowed disabled:opacity-40"
+          className={iconBtn}
           title="Next"
           aria-label="Next page"
         >
-          <ChevronRight size={14} />
+          <ChevronRight size={compact ? 13 : 14} />
         </button>
       </div>
     </div>

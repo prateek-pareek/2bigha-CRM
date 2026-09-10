@@ -19,6 +19,8 @@ type CrmListToolbarProps = {
   secondary?: ReactNode;
   right?: ReactNode;
   className?: string;
+  /** Tighter two-row chrome so the list/table can occupy more of the screen. */
+  compact?: boolean;
 };
 
 /**
@@ -36,6 +38,7 @@ export function CrmListToolbar({
   secondary,
   right,
   className,
+  compact = false,
 }: CrmListToolbarProps) {
   const filterControl =
     filter ??
@@ -58,21 +61,41 @@ export function CrmListToolbar({
     ) : null);
 
   return (
-    <div className={cn("mb-2 shrink-0 space-y-2", className)}>
-      <div className={cn(CRM_TOOLBAR, "justify-between gap-3")}>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
-          <div className={cn("flex shrink items-center gap-2.5 flex-nowrap", searchControl ? "flex-1 min-w-[150px]" : "min-w-0")}>
+    <div
+      className={cn(
+        "crm-list-toolbar shrink-0",
+        compact
+          ? "relative z-30 mb-1.5 overflow-visible rounded-md bg-white shadow-[var(--crm-shadow-input)]"
+          : "mb-2 space-y-2",
+        className,
+      )}
+    >
+      <div className={cn(CRM_TOOLBAR, compact ? "justify-between gap-1.5 overflow-visible px-2 py-1" : "justify-between gap-3")}>
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 items-center overflow-visible",
+            compact ? "flex-nowrap gap-1.5" : "flex-wrap gap-2.5",
+          )}
+        >
+          <div className={cn("flex shrink items-center flex-nowrap", compact ? "gap-1.5" : "gap-2.5", searchControl ? "flex-1 min-w-[150px]" : "min-w-0")}>
             {filterControl ? <div className="shrink-0">{filterControl}</div> : null}
             {searchControl ? <div className="flex-1 min-w-[100px]">{searchControl}</div> : null}
           </div>
           {leftExtra}
         </div>
         {right ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2.5">{right}</div>
+          <div className={cn("flex shrink-0 flex-wrap items-center", compact ? "gap-1.5" : "gap-2.5")}>{right}</div>
         ) : null}
       </div>
       {secondary ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white px-3 py-2 shadow-[var(--crm-shadow-input)]">
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-2",
+            compact
+              ? "flex-nowrap overflow-visible bg-[var(--surface-dim)]/35 px-2 py-1 shadow-[inset_0_1px_0_rgba(0,0,0,0.04)]"
+              : "flex-wrap rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white px-3 py-2 shadow-[var(--crm-shadow-input)]",
+          )}
+        >
           {secondary}
         </div>
       ) : null}

@@ -356,6 +356,24 @@
 .theme-crm-hubspot .crm-app-main {
   background-color: var(--crm-shell-bg);
   font-size: var(--suite-font-body);
+  padding-top: 8px !important;
+}
+
+/* Keep every CRM page flush under the app header */
+[data-crm-app] .crm-app-main,
+[data-crm-theme="crms"] .crm-app-main {
+  padding-top: 8px !important;
+}
+
+.crm-list-page {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+.crm-list-page > .crm-list-content,
+.crm-list-page > .crm-list-content > :first-child {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
 }
 
 /* ---------- HubSpot-style cards & panels ---------- */
@@ -2788,6 +2806,143 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 .crm-list-content .crm-view-panel {
   min-height: 0;
   flex: 1;
+}
+
+/* Dense list chrome — compact header/toolbar/pagination, table fills leftover space */
+.crm-list-dense .crm-list-page-header {
+  margin-bottom: 0.625rem !important; /* ~10px — space above filter row */
+}
+
+.crm-list-dense .crm-list-toolbar {
+  margin-bottom: 0.625rem !important; /* ~10px — space above table */
+}
+
+.crm-list-dense .crm-list-toolbar > div:first-child {
+  padding-top: 0.375rem !important;
+  padding-bottom: 0.375rem !important;
+  gap: 0.5rem !important;
+}
+
+.crm-list-dense .crm-list-toolbar > div:first-child > div {
+  gap: 0.5rem !important;
+}
+
+.crm-list-dense .crm-list-toolbar button,
+.crm-list-dense .crm-list-toolbar select,
+.crm-list-dense .crm-list-toolbar input[type="text"] {
+  height: 32px !important;
+  min-height: 32px !important;
+  border-color: transparent !important;
+  box-shadow: var(--crm-shadow-input) !important;
+}
+
+/* Keep Filter label buttons from clipping leading icons */
+.crm-list-toolbar > div > div > div > button,
+.crm-list-page .crm-list-toolbar > div > div > div > button {
+  overflow: visible !important;
+}
+
+.crm-list-dense .crm-list-toolbar select {
+  padding-left: 0.625rem !important;
+  padding-right: 1.75rem !important;
+}
+
+.crm-list-dense .crm-list-page-header button,
+.crm-list-dense .crm-list-page-header select,
+.crm-list-dense .crm-list-page-header input[type="text"] {
+  border-color: transparent !important;
+  box-shadow: var(--crm-shadow-input) !important;
+}
+
+.crm-list-dense .crm-list-page-header input[type="text"] {
+  height: 32px !important;
+  min-height: 32px !important;
+}
+
+.crm-list-dense .crm-list-toolbar button:focus,
+.crm-list-dense .crm-list-toolbar button:focus-visible,
+.crm-list-dense .crm-list-toolbar select:focus,
+.crm-list-dense .crm-list-toolbar select:focus-visible,
+.crm-list-dense .crm-list-toolbar input:focus,
+.crm-list-dense .crm-list-toolbar input:focus-visible,
+.crm-list-dense .crm-list-page-header button:focus,
+.crm-list-dense .crm-list-page-header button:focus-visible,
+.crm-list-dense .crm-list-page-header select:focus,
+.crm-list-dense .crm-list-page-header select:focus-visible,
+.crm-list-dense .crm-list-page-header input:focus,
+.crm-list-dense .crm-list-page-header input:focus-visible {
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: 0 4px 8px rgba(219, 219, 219, 0.5), 0 0 0 3px rgba(15, 23, 42, 0.06) !important;
+}
+
+.crm-list-dense .crm-list-toolbar [class*="ring-1"],
+.crm-list-dense .crm-list-toolbar [class*="ring-[var(--primary)"] {
+  --tw-ring-color: transparent !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.crm-list-dense .crm-list-toolbar .crm-scope-toggle {
+  box-shadow: var(--crm-shadow-input) !important;
+}
+
+.crm-list-dense .crm-list-toolbar .crm-scope-toggle button {
+  height: 100% !important;
+  min-height: 0 !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.crm-list-dense .crm-list-toolbar .view-icons {
+  height: 32px;
+  padding: 2px;
+  border-color: transparent !important;
+  box-shadow: var(--crm-shadow-input) !important;
+}
+
+.crm-list-dense .crm-list-toolbar .view-icons button {
+  height: 26px !important;
+  width: 26px !important;
+  min-height: 26px !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.crm-list-dense .crm-list-toolbar .absolute button {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.crm-list-dense .crm-view-panel {
+  min-height: 0;
+  flex: 1 1 auto;
+  margin-top: 0.125rem;
+}
+
+.crm-list-dense .crm-list-page-header button {
+  height: 32px !important;
+  min-height: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+}
+
+.crm-list-dense .crm-list-page-header button[class*="w-[38px]"] {
+  width: 32px !important;
+}
+
+/* Filter dropdown controls — icons stay inside borders */
+.crm-filter-panel select,
+.crm-filter-panel button[role="combobox"] {
+  overflow: visible !important;
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+}
+
+.crm-filter-panel button[role="combobox"] svg:last-child {
+  flex-shrink: 0;
+  margin-left: 0.25rem;
 }
 
 /* Slightly tighter table row rhythm on dense lists */

@@ -124,20 +124,20 @@ export function FilterValueSelector({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="flex-1 min-w-[200px] max-w-[400px] justify-between h-auto min-h-10 py-1.5 px-3 bg-surface-dim border-[var(--border-color)] rounded-[var(--radius-md)] text-sm font-medium hover:bg-surface-dim hover:text-text-main"
+          className="flex h-auto min-h-10 min-w-[200px] max-w-[400px] flex-1 items-center justify-between gap-2 overflow-hidden rounded-[var(--radius-md)] border-[var(--border-color)] bg-surface-dim px-3 py-1.5 text-sm font-medium hover:bg-surface-dim hover:text-text-main"
         >
           {selectedValues.length > 0 ? (
-            <div className="flex flex-wrap gap-1 items-center">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden">
               {selectedValues.map((val) => (
                 <Badge
                   variant="secondary"
                   key={val}
-                  className="rounded-md font-semibold text-xs px-2 py-0 bg-primary/10 text-primary hover:bg-primary/20"
+                  className="max-w-full truncate rounded-md bg-primary/10 px-2 py-0 text-xs font-semibold text-primary hover:bg-primary/20"
                 >
                   {val}
                   {isMultiSelect && (
                     <span
-                      className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
+                      className="ml-1 cursor-pointer rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -155,9 +155,11 @@ export function FilterValueSelector({
               ))}
             </div>
           ) : (
-            <span className="text-text-muted font-normal">Select values...</span>
+            <span className="min-w-0 flex-1 truncate text-left font-normal text-text-muted">
+              Select values...
+            </span>
           )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0 rounded-[var(--radius-md)] shadow-lg border-[var(--border-color)]" align="start">

@@ -14,8 +14,8 @@ export const crmSuiteShellClassName =
 export const crmShellLayout = {
   shell: "crm-suite-shell flex h-full min-h-0 overflow-hidden bg-[var(--background)]",
   main: "crm-app-main flex-1 overflow-y-auto bg-[var(--background)]",
-  /** CRMS `.content` uses 20px padding on all sides */
-  mainPadded: "p-5",
+  /** Tight content inset — keep pages flush under the app header */
+  mainPadded: "px-4 pt-2 pb-3",
 } as const;
 
 /** Attribute markers for CSS scoping / future extract */

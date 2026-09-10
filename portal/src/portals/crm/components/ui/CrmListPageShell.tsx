@@ -64,7 +64,7 @@ export function CrmListPageShell({
         icon={icon}
         actions={actions}
         bordered={headerBordered}
-        className={headerBordered ? undefined : "mb-4"}
+        className={headerBordered ? undefined : "mb-2"}
       />
       {toolbar ? <div className={cn(CRM_TOOLBAR, "mb-4")}>{toolbar}</div> : null}
       {empty?.show ? (

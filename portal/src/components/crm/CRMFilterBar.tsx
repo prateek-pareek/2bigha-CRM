@@ -95,20 +95,20 @@ export default function CRMFilterBar({ module, filters, onChange, onClear, onPro
         onClick={() => setIsOpen(!isOpen)}
         title={filterButtonHint}
         aria-label={filterButtonHint}
-        className={`flex items-center gap-2 px-4 h-10 rounded-[3px] text-sm font-bold transition-all border ${
+        className={`flex items-center gap-2 overflow-visible px-3 h-10 rounded-[3px] text-sm font-bold transition-all border ${
           filters.length > 0
             ? 'bg-primary/10 text-primary border-primary/20'
             : 'bg-card text-text-muted border-[#dfe1e6] hover:border-slate-300 hover:text-text-main'
         }`}
       >
-        <Filter size={16} strokeWidth={2.5} />
+        <Filter size={16} strokeWidth={2.5} className="shrink-0" />
         Filters
         {filters.length > 0 && (
           <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full text-xs font-black">
             {filters.length}
           </span>
         )}
-        <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (

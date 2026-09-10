@@ -296,6 +296,11 @@ import {
   CustomObjectRecordsController,
 } from './custom-objects/custom-objects.controller';
 import { TwoBighaPmWorkflowService } from './property-listings/twobigha-pm-workflow.service';
+import {
+  PropertyListing,
+  PropertyListingSchema,
+} from './property-listings/schemas/property-listing.schema';
+import { RoleDashboardService } from './reporting/role-dashboard.service';
 import { SubscriptionsController } from './subscriptions/subscriptions.controller';
 import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscriptions.service';
 import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
@@ -390,6 +395,7 @@ import {
           name: SubscriptionNotificationTracker.name,
           schema: SubscriptionNotificationTrackerSchema,
         },
+        { name: PropertyListing.name, schema: PropertyListingSchema },
       ],
       'crmConnection',
     ),
@@ -478,6 +484,7 @@ import {
     GlobalSearchService,
     PipelinesService,
     ReportingService,
+    RoleDashboardService,
     ReportSchedulerService,
     TeamsIntegrationService,
     SlackIntegrationService,

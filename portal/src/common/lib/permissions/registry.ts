@@ -186,6 +186,12 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
       '/crm/agents',
     ],
   },
+  // Role-based dashboards (CRM Role Dashboard Wireframe) — one key per role tier.
+  // Grant `workspace-admin:read` to Admins, `workspace-team:read` to Team Leads,
+  // `workspace-agent:read` to Agents. `dashboard:read` (master) still unlocks all.
+  { id: 'workspace-admin', label: 'Dashboard · Admin (org-wide)', routes: ['/crm/workspace/admin'] },
+  { id: 'workspace-team', label: 'Dashboard · Team Lead', routes: ['/crm/workspace/team'] },
+  { id: 'workspace-agent', label: 'Dashboard · Agent', routes: ['/crm/workspace/agent'] },
   // Workspace dashboards — one module per page (longest route prefix wins).
   { id: 'workspace-work', label: 'Dashboard · Work', routes: ['/crm/workspace/work'] },
   { id: 'workspace-summary', label: 'Dashboard · Sales Overview', routes: ['/crm/workspace/summary'] },

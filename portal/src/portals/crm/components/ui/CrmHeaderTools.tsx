@@ -20,6 +20,8 @@ type CrmHeaderToolsProps = {
   collapsed?: boolean;
   /** Extra icon buttons after Collapse/Import (columns, …) */
   trailing?: ReactNode;
+  /** Rendered immediately after Export (saved views, …) */
+  afterExport?: ReactNode;
   className?: string;
   /** When set, Export becomes a dropdown with these items */
   exportMenu?: ReactNode;
@@ -45,6 +47,7 @@ export function CrmHeaderTools({
   onCollapse,
   collapsed,
   trailing,
+  afterExport,
   className,
   exportMenu,
   exportMenuOpen,
@@ -84,6 +87,7 @@ export function CrmHeaderTools({
           {exportLabel}
         </CrmButton>
       ) : null}
+      {afterExport}
       {onRefresh ? (
         <CrmButton
           variant="icon"

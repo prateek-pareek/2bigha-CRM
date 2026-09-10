@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { LayoutList, ChevronDown, Plus, Check, Trash2, Star, X, Loader2 } from 'lucide-react';
+import { LayoutList, ChevronDown, Plus, Check, Trash2, Star, Loader2 } from 'lucide-react';
 import { CRM_API_URL } from '@/lib/crm/config';
 import { FilterCriteria } from '@/lib/crm/filter-config';
 import { crmModalChrome } from '@/lib/crm/chrome';
@@ -10,11 +10,23 @@ import { CrmButton } from '@/components/crm/ui/CrmButton';
 import { CrmInput } from '@/components/crm/ui/CrmField';
 import { CRM_PANEL } from '@/lib/crm/ui';
 
+/** Toolbar / scope state persisted with a saved view (leads Type, Category, etc.). */
+export type SavedViewToolbar = {
+  leadCategory?: string;
+  leadVertical?: string;
+  showMineOnly?: boolean;
+  dateRange?: { from: string; to: string } | null;
+  followUpFilter?: string;
+  lastActivityFilter?: string;
+  [key: string]: unknown;
+};
+
 export interface SavedViewData {
   _id: string;
   name: string;
   filters: FilterCriteria[];
   columns: { key: string; label: string; visible: boolean }[];
+  toolbar?: SavedViewToolbar | null;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   isDefault?: boolean;
@@ -24,6 +36,8 @@ interface CRMSavedViewsProps {
   module: 'leads' | 'contacts' | 'organizations' | 'clients' | 'inbox' | 'activities';
   currentFilters: FilterCriteria[];
   currentColumns: { key: string; label: string; visible: boolean }[];
+  /** Current Type / Category / scope / date toolbar state to persist with the view. */
+  currentToolbar?: SavedViewToolbar | null;
   onApplyView: (view: SavedViewData | null) => void;
   disabled?: boolean;
   /** When true, do not auto-apply a user's default saved view on load — keep "All {module}" selected. */
@@ -39,10 +53,47 @@ const MODULE_LABELS: Record<string, string> = {
   activities: 'Activities',
 };
 
+const EQUALS_OPS = new Set(['equals', 'is', 'eq', 'equal']);
+
+/** Prefer toolbar Type/Category; else lift equals filters into toolbar and drop them from the list to avoid double-merge. */
+export function resolveSavedViewFilters(
+  view: SavedViewData | null,
+): { filters: FilterCriteria[]; toolbar: SavedViewToolbar } {
+  if (!view) {
+    return { filters: [], toolbar: {} };
+  }
+
+  const toolbar: SavedViewToolbar = { ...(view.toolbar || {}) };
+  let filters = [...(view.filters || [])];
+
+  if (!toolbar.leadCategory) {
+    const idx = filters.findIndex(
+      (f) => f.property === 'leadCategory' && EQUALS_OPS.has(String(f.operator || '').toLowerCase()),
+    );
+    if (idx >= 0) {
+      toolbar.leadCategory = filters[idx].value;
+      filters = filters.filter((_, i) => i !== idx);
+    }
+  }
+
+  if (!toolbar.leadVertical) {
+    const idx = filters.findIndex(
+      (f) => f.property === 'leadVertical' && EQUALS_OPS.has(String(f.operator || '').toLowerCase()),
+    );
+    if (idx >= 0) {
+      toolbar.leadVertical = filters[idx].value;
+      filters = filters.filter((_, i) => i !== idx);
+    }
+  }
+
+  return { filters, toolbar };
+}
+
 export default function CRMSavedViews({
   module,
   currentFilters,
   currentColumns,
+  currentToolbar = null,
   onApplyView,
   disabled = false,
   preferAllView = false,
@@ -64,7 +115,7 @@ export default function CRMSavedViews({
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`${CRM_API_URL}/crm/saved-views/${module}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
@@ -84,7 +135,7 @@ export default function CRMSavedViews({
   useEffect(() => {
     if (preferAllView || views.length === 0 || hasAppliedDefault.current) return;
     hasAppliedDefault.current = true;
-    const defaultView = views.find(v => v.isDefault);
+    const defaultView = views.find((v) => v.isDefault);
     if (defaultView) {
       setActiveViewId(defaultView._id);
       onApplyView(defaultView);
@@ -107,19 +158,20 @@ export default function CRMSavedViews({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           module,
           name,
           filters: currentFilters,
           columns: currentColumns,
+          toolbar: currentToolbar ?? null,
           isDefault: views.length === 0,
         }),
       });
       if (res.ok) {
         const newView = await res.json();
-        setViews(prev => [...prev, newView]);
+        setViews((prev) => [...prev, newView]);
         handleSelectView(newView);
         setSaveName('');
         setIsSaveOpen(false);
@@ -138,7 +190,7 @@ export default function CRMSavedViews({
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ isDefault: true }),
       });
@@ -154,10 +206,10 @@ export default function CRMSavedViews({
     try {
       const res = await fetch(`${CRM_API_URL}/crm/saved-views/${viewId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        setViews(prev => prev.filter(v => v._id !== viewId));
+        setViews((prev) => prev.filter((v) => v._id !== viewId));
         if (activeViewId === viewId) {
           setActiveViewId(null);
           onApplyView(null);
@@ -169,7 +221,7 @@ export default function CRMSavedViews({
     }
   };
 
-  const activeView = views.find(v => v._id === activeViewId);
+  const activeView = views.find((v) => v._id === activeViewId);
 
   const savedViewsHint = `Saved views for ${label}. Click to pick a view, save the current filters and columns, or manage views.`;
 
@@ -222,7 +274,7 @@ export default function CRMSavedViews({
               {!activeViewId && <Check size={16} strokeWidth={2} />}
               All {label}
             </button>
-            {views.map(v => (
+            {views.map((v) => (
               <button
                 key={v._id}
                 onClick={() => handleSelectView(v)}
@@ -238,14 +290,20 @@ export default function CRMSavedViews({
             ))}
             <div className="border-t border-[var(--border-color)] p-2 space-y-1">
               <button
-                onClick={() => { setIsSaveOpen(true); setIsOpen(false); }}
+                onClick={() => {
+                  setIsSaveOpen(true);
+                  setIsOpen(false);
+                }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-sm)] text-sm font-medium text-primary hover:bg-[var(--primary-light)] transition-all"
               >
                 <Plus size={16} />
                 Save current view
               </button>
               <button
-                onClick={() => { setIsManageOpen(true); setIsOpen(false); }}
+                onClick={() => {
+                  setIsManageOpen(true);
+                  setIsOpen(false);
+                }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-sm)] text-sm font-semibold text-text-muted hover:bg-surface-dim hover:text-text-main transition-all"
               >
                 <LayoutList size={16} />
@@ -264,17 +322,19 @@ export default function CRMSavedViews({
             <div className={crmModalChrome.centerHeader}>
               <div>
                 <h3 className={crmModalChrome.centerTitle}>Save current view</h3>
-                <p className={crmModalChrome.centerLead}>Save filters and columns for quick access.</p>
+                <p className={crmModalChrome.centerLead}>
+                  Saves filter rules, Type/Category, scope, and visible columns.
+                </p>
               </div>
             </div>
             <div className={crmModalChrome.centerBody}>
-            <CrmInput
-              type="text"
-              placeholder="View name (e.g. My Contacts)"
-              value={saveName}
-              onChange={e => setSaveName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSaveView()}
-            />
+              <CrmInput
+                type="text"
+                placeholder="View name (e.g. Reference leads)"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveView()}
+              />
             </div>
             <div className={cn(crmModalChrome.centerFooter, 'gap-2')}>
               <CrmButton variant="secondary" className="flex-1" onClick={() => setIsSaveOpen(false)}>
@@ -307,7 +367,7 @@ export default function CRMSavedViews({
               {views.length === 0 ? (
                 <p className="text-sm text-text-muted py-8 text-center">No saved views yet.</p>
               ) : (
-                views.map(v => (
+                views.map((v) => (
                   <div
                     key={v._id}
                     className={cn(CRM_PANEL, 'flex items-center justify-between gap-3 p-3')}

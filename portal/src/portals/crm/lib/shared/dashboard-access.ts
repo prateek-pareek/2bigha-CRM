@@ -16,6 +16,24 @@ export type CrmDashboardAccessItem = {
 /** Primary workspace dashboards shown in sidebar (same pages as reports pattern). */
 export const CRM_WORKSPACE_ACCESS_ITEMS: CrmDashboardAccessItem[] = [
   {
+    slug: "admin",
+    label: "Admin Dashboard",
+    href: "/crm/workspace/admin",
+    requiredPermission: "workspace-admin:read",
+  },
+  {
+    slug: "team",
+    label: "Team Lead Dashboard",
+    href: "/crm/workspace/team",
+    requiredPermission: "workspace-team:read",
+  },
+  {
+    slug: "agent",
+    label: "Agent Dashboard",
+    href: "/crm/workspace/agent",
+    requiredPermission: "workspace-agent:read",
+  },
+  {
     slug: "work",
     label: "Work Dashboard",
     href: "/crm/workspace/work",
