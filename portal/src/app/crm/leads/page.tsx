@@ -239,7 +239,7 @@ function formatLeadExportCell(
   ctx: {
     pipelineNameById: Map<string, string>;
     leadListingCounts: Record<string, { propertyCount?: number; farmCount?: number }>;
-    leadEmailStatsById: Record<string, { latestActivityIso?: string }>;
+    leadEmailStatsById: Record<string, CrmEmailEngagementStats>;
     customFieldDefs: Array<{ key: string; type?: string }>;
   },
 ): string {
