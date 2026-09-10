@@ -242,10 +242,10 @@ export default function PropertyListingDetailPage() {
             type="button"
             onClick={handleCopyLink}
             className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
-            title="Copy Listing URL"
+            title="Copy Listing Link"
           >
             {copiedLink ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-            {copiedLink ? "Copied" : "Copy ID"}
+            {copiedLink ? "Copied" : "Copy Link"}
           </button>
         </div>
       </div>
@@ -525,6 +525,7 @@ export default function PropertyListingDetailPage() {
                   <button
                     type="button"
                     onClick={() => setActiveImage((prev) => (prev > 0 ? prev - 1 : images.length - 1))}
+                    aria-label="Previous photo"
                     className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white transition-transform hover:scale-110"
                   >
                     <ChevronLeft size={20} />
@@ -532,6 +533,7 @@ export default function PropertyListingDetailPage() {
                   <button
                     type="button"
                     onClick={() => setActiveImage((prev) => (prev < images.length - 1 ? prev + 1 : 0))}
+                    aria-label="Next photo"
                     className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white transition-transform hover:scale-110"
                   >
                     <ChevronRight size={20} />
@@ -547,6 +549,8 @@ export default function PropertyListingDetailPage() {
                     key={src + i}
                     type="button"
                     onClick={() => setActiveImage(i)}
+                    aria-label={`View photo ${i + 1} of ${images.length}`}
+                    aria-current={i === activeImage}
                     className={cn(
                       "relative h-20 w-28 shrink-0 overflow-hidden rounded-md border-2 transition-all",
                       i === activeImage

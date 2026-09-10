@@ -9,15 +9,14 @@ import {
   ClipboardCheck,
   Clock3,
   Eye,
-  Filter,
   MapPin,
-  Search,
   ShieldAlert,
   ShieldCheck,
   X,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CRM_TOOLBAR_SELECT } from "@/lib/crm/ui";
 import { cn } from "@/lib/utils";
 import Pagination from "@/components/suite/shell/Pagination";
 import {
@@ -26,6 +25,7 @@ import {
   CrmEmptyState,
   CrmHeaderTools,
   CrmListMutedText,
+  CrmListToolbar,
   CrmPageHeader,
   CrmStatusBadge,
   CrmTable,
@@ -322,26 +322,27 @@ function PropertyApprovalQueuePageContent() {
               key={b.key}
               type="button"
               onClick={() => changeBucket(b.key)}
+              aria-pressed={isActive}
               className={cn(
-                "relative flex items-center justify-between rounded-2xl border p-4 text-left transition-all duration-200",
+                "relative flex items-center justify-between rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-[var(--card-bg)] p-4 text-left shadow-[var(--crm-shadow-card)] transition-all duration-200",
                 isActive
-                  ? "border-emerald-500 bg-white shadow-md ring-2 ring-emerald-500/20 dark:bg-slate-900"
-                  : "border-slate-200/80 bg-slate-50/50 hover:bg-white hover:shadow-sm dark:border-slate-800 dark:bg-slate-900/50",
+                  ? "border-[var(--primary)] ring-2 ring-[var(--primary)]/20 shadow-[var(--crm-shadow-raised)]"
+                  : "hover:border-[var(--primary)]/40 hover:shadow-[var(--crm-shadow-raised)]",
               )}
             >
               <div className="flex items-center gap-3">
-                <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", b.color)}>
+                <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", b.color)}>
                   <Icon size={20} />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{b.label} Submissions</p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-white">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{b.label} Submissions</p>
+                  <p className="text-lg font-bold text-[var(--text-main)]">
                     {isActive ? total : "Queue"}
                   </p>
                 </div>
               </div>
               {isActive && (
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500 ring-4 ring-emerald-100 dark:ring-emerald-950" />
+                <span className="flex h-2 w-2 shrink-0 rounded-full bg-[var(--primary)] ring-4 ring-[var(--primary-light)]" />
               )}
             </button>
           );
@@ -349,82 +350,71 @@ function PropertyApprovalQueuePageContent() {
       </div>
 
       {/* Toolbar & Search Bar */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by title, location, address, property ID..."
-            className="w-full rounded-xl border border-slate-200/90 bg-white py-2 pl-9 pr-8 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+      <CrmListToolbar
+        searchProps={{
+          placeholder: "Search by title, location, address, property ID…",
+          value: search,
+          onChange: (e) => setSearch(e.target.value),
+        }}
+        leftExtra={
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className={cn(CRM_TOOLBAR_SELECT, "min-w-[150px]")}
             >
-              <X size={14} />
-            </button>
-          )}
-        </div>
+              <option value="all">All Property Types</option>
+              <option value="Agricultural">Agricultural Land</option>
+              <option value="Plot">Plot / Land</option>
+              <option value="Farmhouse">Farmhouse</option>
+              <option value="Farmland">Farmland</option>
+              <option value="Commercial">Commercial</option>
+              <option value="Residential">Residential</option>
+            </select>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Property Type Filter */}
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-9 rounded-xl border border-slate-200/90 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-          >
-            <option value="all">All Property Types</option>
-            <option value="Agricultural">Agricultural Land</option>
-            <option value="Plot">Plot / Land</option>
-            <option value="Farmhouse">Farmhouse</option>
-            <option value="Farmland">Farmland</option>
-            <option value="Commercial">Commercial</option>
-            <option value="Residential">Residential</option>
-          </select>
-
-          {/* Market Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 rounded-xl border border-slate-200/90 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs outline-none focus:border-emerald-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-          >
-            <option value="all">All Market Statuses</option>
-            <option value="Available">Available</option>
-            <option value="Sold">Sold</option>
-            <option value="Under Offer">Under Offer</option>
-            <option value="Managed">Managed</option>
-          </select>
-
-          {(search || typeFilter !== "all" || statusFilter !== "all") && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setTypeFilter("all");
-                setStatusFilter("all");
-              }}
-              className="inline-flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-rose-950/30"
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className={cn(CRM_TOOLBAR_SELECT, "min-w-[150px]")}
             >
-              <X size={13} /> Reset
-            </button>
-          )}
+              <option value="all">All Market Statuses</option>
+              <option value="Available">Available</option>
+              <option value="Sold">Sold</option>
+              <option value="Under Offer">Under Offer</option>
+              <option value="Managed">Managed</option>
+            </select>
 
-          {selectedIds.size > 0 && bucket === "pending" && (
-            <button
-              type="button"
-              onClick={handleBulkApprove}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
-            >
-              <CheckCircle2 size={14} /> Approve Selected ({selectedIds.size})
-            </button>
-          )}
-          <CrmViewToggle value={viewMode} onChange={setViewMode} modes={["list", "grid"]} />
-        </div>
-      </div>
+            {(search || typeFilter !== "all" || statusFilter !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setTypeFilter("all");
+                  setStatusFilter("all");
+                }}
+                className="inline-flex h-[38px] items-center gap-1 rounded-[var(--radius-md)] px-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+              >
+                <X size={13} /> Reset
+              </button>
+            )}
+          </div>
+        }
+        right={
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && bucket === "pending" && (
+              <button
+                type="button"
+                onClick={handleBulkApprove}
+                className="inline-flex h-[38px] items-center gap-1.5 rounded-[var(--radius-md)] bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+              >
+                <CheckCircle2 size={14} /> Approve Selected ({selectedIds.size})
+              </button>
+            )}
+            <CrmViewToggle value={viewMode} onChange={setViewMode} modes={["list", "grid"]} />
+          </div>
+        }
+        className="mb-4"
+      />
 
       {/* Main Content Area */}
       {loading ? (
