@@ -31,10 +31,11 @@ import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmail
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
 import SalesAgentRecordPanel from '@/components/crm/sales/SalesAgentRecordPanel';
-import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
+import { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CallLeadModal from '@/components/crm/records/detail/CallLeadModal';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
+import CrmRecordProfileCard, { CrmRecordProfileSection } from '@/components/crm/records/detail/CrmRecordProfileCard';
 import CrmRecordOwnerCard from '@/components/crm/records/detail/CrmRecordOwnerCard';
 import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
 import LeadOnboardingChecklistCard from '@/components/crm/records/detail/LeadOnboardingChecklistCard';
@@ -597,183 +598,281 @@ export default function LeadDetailPage() {
         Back to Leads
       </button>
 
-      {/* Profile hero — CRMS contact-head */}
-      <div className={crmRecordChrome.hero}>
-        <div className={crmRecordChrome.heroBody}>
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <div className={crmRecordChrome.avatar}>{initials}</div>
-            <div className="min-w-0">
-              <h1 className={cn(crmRecordChrome.title, 'inline-flex flex-wrap items-center gap-2')}>
-                <span className="truncate">{displayName}</span>
-              </h1>
-              {locationLine ? (
-                <p className={cn(crmRecordChrome.metaLine, 'mt-0.5')}>
-                  <MapPin size={14} className="shrink-0 opacity-80" />
-                  <span className="truncate">{locationLine}</span>
-                </p>
-              ) : lead.email ? (
-                <p className={cn(crmRecordChrome.metaLine, 'mt-0.5')}>
-                  <Mail size={14} className="shrink-0 opacity-80" />
-                  <a href={`mailto:${lead.email}`} className="truncate hover:text-[var(--primary)] hover:underline">
-                    {lead.email}
-                  </a>
-                </p>
-              ) : null}
-              {(lead.phone || lead.mobileNo) ? (
-                <p className={cn(crmRecordChrome.metaLine, 'mt-0.5')}>
-                  <Phone size={14} className="shrink-0 opacity-80" />
-                  <a href={`tel:${lead.mobileNo || lead.phone}`} className="hover:text-[var(--primary)]">
-                    {lead.mobileNo || lead.phone}
-                  </a>
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className={cn(crmRecordChrome.actions, 'shrink-0 self-start pr-14 sm:pr-20 lg:pr-24')}>
-            <span className={crmRecordChrome.statusPrivate}>
-              <Lock size={12} />
-              Lead
-            </span>
-            {pipelineStages.length > 0 && hasAccess('leads:write') ? (
-              <div className="relative inline-flex" ref={stageMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setStageMenuOpen((v) => !v)}
-                  aria-haspopup="listbox"
-                  aria-expanded={stageMenuOpen}
-                  aria-label="Lead stage"
-                  className={cn(crmRecordChrome.statusStage, 'cursor-pointer pl-2.5 pr-2')}
-                >
-                  <ThumbsUp size={12} className="shrink-0" />
-                  <span className="truncate">{stage || 'Select stage'}</span>
-                  <ChevronDown
-                    size={12}
-                    className={cn('shrink-0 transition-transform', stageMenuOpen && 'rotate-180')}
-                  />
-                </button>
-                {stageMenuOpen && (
-                  <div
-                    role="listbox"
-                    aria-label="Lead stage options"
-                    className="absolute right-0 top-full z-[300] mt-1.5 min-w-[190px] overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white py-1 shadow-[var(--crm-shadow-card)]"
-                  >
-                    {pipelineStages.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        role="option"
-                        aria-selected={s === stage}
-                        onClick={() => {
-                          setStageMenuOpen(false);
-                          void updateLeadStage(s);
-                        }}
-                        className={cn(
-                          'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium transition-colors',
-                          s === stage
-                            ? 'bg-[var(--primary-light)] text-[var(--primary)]'
-                            : 'text-[var(--text-main)] hover:bg-[var(--surface-dim)]',
-                        )}
+      <div className={crmRecordChrome.bodyGrid}>
+        <aside className={crmRecordChrome.sidebar}>
+          {/* Profile card — CRMS contact-head, vertical */}
+          <CrmRecordProfileCard
+            initials={initials}
+            name={<span className="truncate">{displayName}</span>}
+            subtitle={
+              (locationLine || lead.email || lead.phone || lead.mobileNo) ? (
+                <div className="space-y-0.5">
+                  {locationLine ? (
+                    <p className="inline-flex w-full items-center justify-center gap-1.5">
+                      <MapPin size={13} className="shrink-0 opacity-70" />
+                      <span className="truncate">{locationLine}</span>
+                    </p>
+                  ) : lead.email ? (
+                    <p className="inline-flex w-full items-center justify-center gap-1.5">
+                      <Mail size={13} className="shrink-0 opacity-70" />
+                      <a href={`mailto:${lead.email}`} className="truncate hover:text-[var(--primary)] hover:underline">
+                        {lead.email}
+                      </a>
+                    </p>
+                  ) : null}
+                  {(lead.phone || lead.mobileNo) ? (
+                    <p className="inline-flex w-full items-center justify-center gap-1.5">
+                      <Phone size={13} className="shrink-0 opacity-70" />
+                      <a href={`tel:${lead.mobileNo || lead.phone}`} className="hover:text-[var(--primary)]">
+                        {lead.mobileNo || lead.phone}
+                      </a>
+                    </p>
+                  ) : null}
+                </div>
+              ) : undefined
+            }
+            badges={
+              <>
+                <span className={crmRecordChrome.statusPrivate}>
+                  <Lock size={12} />
+                  Lead
+                </span>
+                {pipelineStages.length > 0 && hasAccess('leads:write') ? (
+                  <div className="relative inline-flex" ref={stageMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setStageMenuOpen((v) => !v)}
+                      aria-haspopup="listbox"
+                      aria-expanded={stageMenuOpen}
+                      aria-label="Lead stage"
+                      className={cn(crmRecordChrome.statusStage, 'cursor-pointer pl-2.5 pr-2')}
+                    >
+                      <ThumbsUp size={12} className="shrink-0" />
+                      <span className="truncate">{stage || 'Select stage'}</span>
+                      <ChevronDown
+                        size={12}
+                        className={cn('shrink-0 transition-transform', stageMenuOpen && 'rotate-180')}
+                      />
+                    </button>
+                    {stageMenuOpen && (
+                      <div
+                        role="listbox"
+                        aria-label="Lead stage options"
+                        className="absolute left-1/2 top-full z-[300] mt-1.5 min-w-[190px] -translate-x-1/2 overflow-hidden rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white py-1 text-left shadow-[var(--crm-shadow-card)]"
                       >
-                        {s}
-                        {s === stage && <CheckCircle2 size={14} className="shrink-0" />}
-                      </button>
-                    ))}
+                        {pipelineStages.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            role="option"
+                            aria-selected={s === stage}
+                            onClick={() => {
+                              setStageMenuOpen(false);
+                              void updateLeadStage(s);
+                            }}
+                            className={cn(
+                              'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium transition-colors',
+                              s === stage
+                                ? 'bg-[var(--primary-light)] text-[var(--primary)]'
+                                : 'text-[var(--text-main)] hover:bg-[var(--surface-dim)]',
+                            )}
+                          >
+                            {s}
+                            {s === stage && <CheckCircle2 size={14} className="shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ) : stage ? (
-              <span className={crmRecordChrome.statusStage}>
-                <ThumbsUp size={12} />
-                {stage}
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowRecordCustomize(true)}
-          className={crmRecordChrome.gearBtn}
-          title="Customize layout"
-          aria-label="Customize layout"
-        >
-          <Settings2 size={16} />
-        </button>
-
-        <div className="border-t border-[var(--border-color)] px-4 pb-4 sm:px-5">
-          <CrmRecordQuickActions
-            actions={quickActions}
+                ) : stage ? (
+                  <span className={crmRecordChrome.statusStage}>
+                    <ThumbsUp size={12} />
+                    {stage}
+                  </span>
+                ) : null}
+              </>
+            }
+            quickActions={quickActions}
             secondaryActions={secondaryActions}
-            className="!mt-0 !border-0 !pt-3"
-          >
-            {hasAccess('leads:write') && (
-              <div className="relative inline-flex items-center">
-                <select
-                  value={lead.pipeline?._id || lead.pipeline || ''}
-                  onChange={async (e) => {
-                    const newPipelineId = e.target.value;
-                    if (!newPipelineId) return;
-                    try {
-                      const token = localStorage.getItem('token');
-                      const pipeRes = await fetch(`${CRM_API_URL}/crm/pipelines/${newPipelineId}`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                      });
-                      const pipeData = await pipeRes.json();
-                      const sortedStages = pipeData?.stages
-                        ? [...pipeData.stages].sort((a: any, b: any) => a.order - b.order)
-                        : [];
-                      const defaultStageName =
-                        sortedStages.find((s: any) => s.isDefault)?.name || sortedStages[0]?.name || '';
+            onSettingsClick={() => setShowRecordCustomize(true)}
+            quickActionsExtra={
+              hasAccess('leads:write') ? (
+                <div className="relative inline-flex items-center">
+                  <select
+                    value={lead.pipeline?._id || lead.pipeline || ''}
+                    onChange={async (e) => {
+                      const newPipelineId = e.target.value;
+                      if (!newPipelineId) return;
+                      try {
+                        const token = localStorage.getItem('token');
+                        const pipeRes = await fetch(`${CRM_API_URL}/crm/pipelines/${newPipelineId}`, {
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        const pipeData = await pipeRes.json();
+                        const sortedStages = pipeData?.stages
+                          ? [...pipeData.stages].sort((a: any, b: any) => a.order - b.order)
+                          : [];
+                        const defaultStageName =
+                          sortedStages.find((s: any) => s.isDefault)?.name || sortedStages[0]?.name || '';
 
-                      await fetch(`${CRM_API_URL}/crm/leads/${recordId}`, {
-                        method: 'PATCH',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          Authorization: `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({
-                          pipeline: newPipelineId,
-                          stage: defaultStageName || undefined,
-                        }),
-                      });
-                      toast.success('Pipeline updated successfully.');
-                      void fetchLead();
-                      void fetchActivities();
-                    } catch (err) {
-                      console.error('Failed to update pipeline:', err);
-                      toast.error('Failed to update pipeline.');
-                    }
-                  }}
-                  className="h-8 pl-2.5 pr-7 appearance-none rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white text-[11px] font-semibold hover:bg-[var(--surface-dim)] cursor-pointer outline-none focus:ring-1 focus:ring-primary/30 text-[var(--text-main)] transition-colors shadow-sm"
-                >
-                  <option value="" disabled>
-                    Change Pipeline...
-                  </option>
-                  {pipelines.map((p) => (
-                    <option key={p._id} value={p._id}>
-                      {p.name}
+                        await fetch(`${CRM_API_URL}/crm/leads/${recordId}`, {
+                          method: 'PATCH',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({
+                            pipeline: newPipelineId,
+                            stage: defaultStageName || undefined,
+                          }),
+                        });
+                        toast.success('Pipeline updated successfully.');
+                        void fetchLead();
+                        void fetchActivities();
+                      } catch (err) {
+                        console.error('Failed to update pipeline:', err);
+                        toast.error('Failed to update pipeline.');
+                      }
+                    }}
+                    className="h-8 pl-2.5 pr-7 appearance-none rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white text-[11px] font-semibold hover:bg-[var(--surface-dim)] cursor-pointer outline-none focus:ring-1 focus:ring-primary/30 text-[var(--text-main)] transition-colors shadow-sm"
+                  >
+                    <option value="" disabled>
+                      Change Pipeline...
                     </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2 h-3.5 w-3.5 text-[var(--text-muted)] pointer-events-none" />
-              </div>
-            )}
-          </CrmRecordQuickActions>
-        </div>
-      </div>
+                    {pipelines.map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 h-3.5 w-3.5 text-[var(--text-muted)] pointer-events-none" />
+                </div>
+              ) : null
+            }
+          >
+            <CrmRecordProfileSection title="Lead information">
+              <CRMLeadRecordFields
+                lead={lead}
+                visibleKeys={visibleRecordKeys}
+                customFieldDefs={customFieldDefs}
+                pipelineName={pipelineName}
+                onApplyEmailFromFinder={applyEmailFromFinder}
+                layout="sidebar"
+                hideEmpty
+              />
+            </CrmRecordProfileSection>
+          </CrmRecordProfileCard>
 
-      {pipelineStages.length > 0 ? (
-        <CrmRecordPipelineStatus
-          stages={pipelineStages}
-          currentStage={stage}
-          onSelect={hasAccess('leads:write') ? updateLeadStage : undefined}
-        />
-      ) : null}
+          <CrmRecordSidebarGroup title="Overview" defaultOpen>
+            {entityId ? (
+              <LeadOnboardingChecklistCard
+                leadId={entityId}
+                progress={lead.checklistProgress}
+                onUpdated={() => void fetchLead()}
+              />
+            ) : null}
+            <FollowUpSequenceCard
+              entityType="Lead"
+              entityId={entityId}
+              hasEmail={hasEmail}
+              onScheduleClick={() => {
+                setFollowUpSeqInitialTab('follow-ups');
+                setIsFollowUpSeqOpen(true);
+              }}
+              refreshKey={followUpRefreshKey}
+              onRetrySuccess={() => {
+                void fetchActivities();
+                void fetchEmailTracking();
+                setFollowUpRefreshKey((k) => k + 1);
+              }}
+            />
+            <EmailEngagementPanel rows={emailTracking} />
+            <CrmRecordOwnerCard
+              ownerLabel={lead.leadOwner}
+              leadId={entityId}
+              canReassign={hasAccess('leads:write')}
+              onReassigned={() => void fetchLead()}
+            />
+            <CrmRecordRemindersPanel
+              relatedType="Lead"
+              relatedTo={entityId}
+              refreshKey={followUpRefreshKey}
+            />
+          </CrmRecordSidebarGroup>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]">
+          <CrmRecordSidebarGroup title="Associations" defaultOpen>
+            {entityId ? (
+              <LeadAssociationsPanel
+                leadId={entityId}
+                lead={lead}
+                onUpdated={() => {
+                  void fetchLead();
+                  void fetchEmailTracking();
+                }}
+              />
+            ) : null}
+            {lead?.clientId ? (
+              <LeadLinkedClientPanel clientId={String((lead.clientId as any)?._id || lead.clientId)} />
+            ) : null}
+            {entityId ? (
+              <LeadPropertiesPanel
+                leadId={entityId}
+                refreshKey={propertiesRefreshKey}
+                onAddClick={() => {
+                  const params = new URLSearchParams();
+                  if (entityId) params.set('leadId', entityId);
+                  router.push(`/crm/property-listings/new?${params.toString()}`);
+                }}
+                onRefresh={() => setPropertiesRefreshKey((k) => k + 1)}
+              />
+            ) : null}
+            {entityId ? (
+              <LeadLegalVerificationPanel
+                leadId={entityId}
+                refreshKey={propertiesRefreshKey}
+                onRequested={() => setPropertiesRefreshKey((k) => k + 1)}
+              />
+            ) : null}
+            {entityId ? (
+              <LeadPmPanel
+                leadId={entityId}
+                refreshKey={propertiesRefreshKey}
+                onCreatePmClick={() => setIsAddPmModalOpen(true)}
+              />
+            ) : null}
+          </CrmRecordSidebarGroup>
+
+          <CrmRecordSidebarGroup title="Communication & tracking" defaultOpen={false}>
+            {entityId ? <TwoBighaVisitTrackingPanel leadId={entityId} /> : null}
+            {entityId ? (
+              <LeadWhatsAppPanel
+                leadId={entityId}
+                refreshKey={whatsappLinksRefreshKey}
+                onAttachClick={() => setIsLinkWhatsAppModalOpen(true)}
+              />
+            ) : null}
+            {entityId ? (
+              <CrmRecordSegmentsPanel
+                module="leads"
+                entityId={entityId}
+                recordLabel={displayName}
+              />
+            ) : null}
+            {entityId ? (
+              <SalesAgentRecordPanel recordType="Lead" recordId={entityId} />
+            ) : null}
+          </CrmRecordSidebarGroup>
+        </aside>
+
         <div className="min-w-0">
-          <div className={cn(crmRecordChrome.panel, 'flex min-h-[480px] flex-col')}>
+          {pipelineStages.length > 0 ? (
+            <CrmRecordPipelineStatus
+              stages={pipelineStages}
+              currentStage={stage}
+              onSelect={hasAccess('leads:write') ? updateLeadStage : undefined}
+            />
+          ) : null}
+          <div className={cn(crmRecordChrome.panel, 'flex min-h-[480px] flex-col', pipelineStages.length > 0 && 'mt-3')}>
             <CrmRecordDetailTabs
               tabs={recordTabs}
               activeTab={activeTab}
@@ -875,108 +974,6 @@ export default function LeadDetailPage() {
             </div>
           </div>
         </div>
-
-        <aside className={crmRecordChrome.sidebar}>
-          <CrmRecordSidebarGroup title="Overview" defaultOpen>
-            {entityId ? (
-              <LeadOnboardingChecklistCard
-                leadId={entityId}
-                progress={lead.checklistProgress}
-                onUpdated={() => void fetchLead()}
-              />
-            ) : null}
-            <FollowUpSequenceCard
-              entityType="Lead"
-              entityId={entityId}
-              hasEmail={hasEmail}
-              onScheduleClick={() => {
-                setFollowUpSeqInitialTab('follow-ups');
-                setIsFollowUpSeqOpen(true);
-              }}
-              refreshKey={followUpRefreshKey}
-              onRetrySuccess={() => {
-                void fetchActivities();
-                void fetchEmailTracking();
-                setFollowUpRefreshKey((k) => k + 1);
-              }}
-            />
-            <EmailEngagementPanel rows={emailTracking} />
-            <CrmRecordOwnerCard
-              ownerLabel={lead.leadOwner}
-              leadId={entityId}
-              canReassign={hasAccess('leads:write')}
-              onReassigned={() => void fetchLead()}
-            />
-            <CrmRecordRemindersPanel
-              relatedType="Lead"
-              relatedTo={entityId}
-              refreshKey={followUpRefreshKey}
-            />
-          </CrmRecordSidebarGroup>
-
-          <CrmRecordSidebarGroup title="Associations" defaultOpen>
-            {entityId ? (
-              <LeadAssociationsPanel
-                leadId={entityId}
-                lead={lead}
-                onUpdated={() => {
-                  void fetchLead();
-                  void fetchEmailTracking();
-                }}
-              />
-            ) : null}
-            {lead?.clientId ? (
-              <LeadLinkedClientPanel clientId={String((lead.clientId as any)?._id || lead.clientId)} />
-            ) : null}
-            {entityId ? (
-              <LeadPropertiesPanel
-                leadId={entityId}
-                refreshKey={propertiesRefreshKey}
-                onAddClick={() => {
-                  const params = new URLSearchParams();
-                  if (entityId) params.set('leadId', entityId);
-                  router.push(`/crm/property-listings/new?${params.toString()}`);
-                }}
-                onRefresh={() => setPropertiesRefreshKey((k) => k + 1)}
-              />
-            ) : null}
-            {entityId ? (
-              <LeadLegalVerificationPanel
-                leadId={entityId}
-                refreshKey={propertiesRefreshKey}
-                onRequested={() => setPropertiesRefreshKey((k) => k + 1)}
-              />
-            ) : null}
-            {entityId ? (
-              <LeadPmPanel
-                leadId={entityId}
-                refreshKey={propertiesRefreshKey}
-                onCreatePmClick={() => setIsAddPmModalOpen(true)}
-              />
-            ) : null}
-          </CrmRecordSidebarGroup>
-
-          <CrmRecordSidebarGroup title="Communication & tracking" defaultOpen={false}>
-            {entityId ? <TwoBighaVisitTrackingPanel leadId={entityId} /> : null}
-            {entityId ? (
-              <LeadWhatsAppPanel
-                leadId={entityId}
-                refreshKey={whatsappLinksRefreshKey}
-                onAttachClick={() => setIsLinkWhatsAppModalOpen(true)}
-              />
-            ) : null}
-            {entityId ? (
-              <CrmRecordSegmentsPanel
-                module="leads"
-                entityId={entityId}
-                recordLabel={displayName}
-              />
-            ) : null}
-            {entityId ? (
-              <SalesAgentRecordPanel recordType="Lead" recordId={entityId} />
-            ) : null}
-          </CrmRecordSidebarGroup>
-        </aside>
       </div>
 
       <EditModal

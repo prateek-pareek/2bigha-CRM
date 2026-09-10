@@ -26,9 +26,10 @@ import LeadSubscriptionDetailsTab from '@/components/crm/records/detail/LeadSubs
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForContact, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import CrmRecordActivityComposer from '@/components/crm/inbox/CrmRecordActivityComposer';
-import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
+import { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CrmRecordSegmentsPanel from '@/components/crm/segments/CrmRecordSegmentsPanel';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
+import CrmRecordProfileCard, { CrmRecordProfileSection } from '@/components/crm/records/detail/CrmRecordProfileCard';
 import CrmRecordOwnerCard from '@/components/crm/records/detail/CrmRecordOwnerCard';
 import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
@@ -36,6 +37,7 @@ import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
 import { crmRecordChrome } from '@/lib/crm/chrome';
 import { usePermissions } from '@/hooks/usePermissions';
 import { cn } from '@/lib/utils';
+import { CrmPageHeader } from '@/components/crm/ui';
 
 function WhatsAppGlyph({ className }: { className?: string }) {
   return (
@@ -398,85 +400,153 @@ export default function ContactDetailPage() {
   ];
 
   return (
-    <div className="space-y-6 sm:space-y-8 pb-12 animate-in fade-in duration-300 font-sans max-w-350 mx-auto">
+    <div className={cn(crmRecordChrome.page, 'animate-in fade-in duration-300')}>
+      <CrmPageHeader
+        title="Contacts"
+        bordered={false}
+        breadcrumbs={[
+          { label: 'Home', href: '/crm' },
+          { label: 'Contacts', href: '/crm/contacts' },
+          { label: displayName },
+        ]}
+        actions={
+          hasAccess('contacts:delete') ? (
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-[var(--crm-radius-ui)] border border-[var(--error)]/30 bg-[var(--error-light)] px-3.5 text-xs font-bold text-[var(--error)] transition-colors hover:bg-[var(--error)]/15"
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
+          ) : undefined
+        }
+      />
+
       <button
         type="button"
         onClick={() => router.back()}
-        className="inline-flex items-center gap-1.5 text-xs font-bold text-text-muted transition-colors hover:text-primary"
+        className={crmRecordChrome.backLink}
       >
         <ChevronLeft size={14} />
         Back to Contacts
       </button>
 
-      <div className="rounded-xl border border-border bg-card p-6 sm:p-7 shadow-[var(--crm-shadow-card)]">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 items-start gap-4 sm:gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-secondary text-xl font-extrabold text-primary shadow-xs sm:h-20 sm:w-20 sm:text-2xl">
-              {contact.firstName?.[0]}{contact.lastName?.[0]}
-            </div>
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <h1 className="text-2xl font-black tracking-tight text-text-primary sm:text-3xl">
-                {displayName}
-              </h1>
-              <div className="flex flex-wrap items-center gap-2">
-                {contact.organization ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-raised px-2.5 py-0.5 text-xs font-bold text-text-primary">
-                    <Building2 size={12} className="text-text-muted" />
-                    {contact.organization}
-                  </span>
-                ) : null}
-                {contact.status ? (
-                  <span className="inline-flex items-center rounded-md border border-primary/20 bg-secondary px-2.5 py-0.5 text-xs font-extrabold text-primary">
-                    {contact.status}
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs font-semibold text-text-muted pt-1">
-                {contact.email ? (
-                  <a
-                    href={`mailto:${contact.email}`}
-                    className="inline-flex items-center gap-1.5 font-bold text-primary hover:underline min-w-0"
-                  >
-                    <Mail size={13} className="shrink-0 opacity-75" />
-                    <span className="truncate">{contact.email}</span>
-                  </a>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 font-semibold text-text-muted">
-                    <Mail size={13} className="opacity-50" />
-                    No email on file
-                  </span>
-                )}
-                {contact.phone ? (
-                  <a
-                    href={`tel:${contact.phone}`}
-                    className="inline-flex items-center gap-1.5 text-text-primary font-bold hover:text-primary"
-                  >
-                    <Phone size={13} className="opacity-70" />
-                    {contact.phone}
-                  </a>
-                ) : null}
-              </div>
-              <CrmRecordQuickActions actions={quickActions} secondaryActions={secondaryActions} />
-            </div>
-          </div>
-          {hasAccess('contacts:delete') ? (
-            <div className="shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-destructive/20 bg-destructive/10 px-3.5 text-xs font-bold text-destructive transition-colors hover:bg-destructive/20"
-              >
-                <Trash2 size={14} />
-                Delete
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
+      <div className={crmRecordChrome.bodyGrid}>
+        <aside className={crmRecordChrome.sidebar}>
+          {/* Profile card — CRMS contact-head, vertical */}
+          <CrmRecordProfileCard
+            initials={`${contact.firstName?.[0] || ''}${contact.lastName?.[0] || ''}`.toUpperCase() || '?'}
+            name={<span className="truncate">{displayName}</span>}
+            subtitle={
+              (contact.organization || contact.email || contact.phone) ? (
+                <div className="space-y-0.5">
+                  {contact.organization ? (
+                    <p className="inline-flex w-full items-center justify-center gap-1.5">
+                      <Building2 size={13} className="shrink-0 opacity-70" />
+                      <span className="truncate">{contact.organization}</span>
+                    </p>
+                  ) : null}
+                  {contact.email ? (
+                    <p className="inline-flex w-full items-center justify-center gap-1.5">
+                      <Mail size={13} className="shrink-0 opacity-70" />
+                      <a href={`mailto:${contact.email}`} className="truncate hover:text-[var(--primary)] hover:underline">
+                        {contact.email}
+                      </a>
+                    </p>
+                  ) : null}
+                  {contact.phone ? (
+                    <p className="inline-flex w-full items-center justify-center gap-1.5">
+                      <Phone size={13} className="shrink-0 opacity-70" />
+                      <a href={`tel:${contact.phone}`} className="hover:text-[var(--primary)]">
+                        {contact.phone}
+                      </a>
+                    </p>
+                  ) : null}
+                </div>
+              ) : undefined
+            }
+            badges={
+              contact.status ? (
+                <span className="inline-flex items-center rounded-[var(--crm-radius-ui)] border border-[var(--primary)]/20 bg-[var(--primary-light)] px-2.5 py-1 text-xs font-bold text-[var(--primary)]">
+                  {contact.status}
+                </span>
+              ) : undefined
+            }
+            quickActions={quickActions}
+            secondaryActions={secondaryActions}
+            onSettingsClick={() => setShowRecordCustomize(true)}
+          >
+            <CrmRecordProfileSection title="Contact information">
+              <CRMContactRecordFields
+                contact={contact}
+                visibleKeys={recordFieldKeysForGrid}
+                customFieldDefs={customFieldDefs}
+                onApplyEmailFromFinder={applyEmailFromFinder}
+                layout="sidebar"
+                hideEmpty
+              />
+            </CrmRecordProfileSection>
+          </CrmRecordProfileCard>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
+          <FollowUpSequenceCard
+            entityType="Contact"
+            entityId={entityId}
+            hasEmail={hasEmail}
+            onScheduleClick={() => {
+              setFollowUpSeqInitialTab('follow-ups');
+              setIsFollowUpSeqOpen(true);
+            }}
+            refreshKey={followUpRefreshKey}
+            onRetrySuccess={() => {
+              void fetchActivities();
+              void fetchEmailTracking();
+              setFollowUpRefreshKey((k) => k + 1);
+            }}
+          />
+          <EmailEngagementPanel rows={emailTracking} />
+          <CrmRecordOwnerCard ownerLabel={contact.leadOwner} />
+          <CrmRecordRemindersPanel
+            relatedType="Contact"
+            relatedTo={entityId}
+            refreshKey={followUpRefreshKey}
+          />
+          <CRMContactCompanySidebarCard
+            contact={contact}
+            contactId={entityId}
+            showPrimaryField={visibleRecordKeys.includes('organization')}
+            onUpdated={() => {
+              fetchContact();
+              fetchEmailTracking();
+            }}
+          />
+          <ContactAssociationsPanel
+            contactId={entityId}
+            contact={contact}
+            hideCompaniesSection
+            onUpdated={() => {
+              fetchContact();
+              fetchEmailTracking();
+            }}
+          />
+          {primaryAssociatedLeadId ? (
+            <LeadPmPanel
+              leadId={primaryAssociatedLeadId}
+              refreshKey={pmRefreshKey}
+              onCreatePmClick={() => setPmRefreshKey((k) => k + 1)}
+            />
+          ) : null}
+          {entityId ? (
+            <CrmRecordSegmentsPanel
+              module="contacts"
+              entityId={entityId}
+              recordLabel={displayName}
+            />
+          ) : null}
+        </aside>
+
         <div className="min-w-0">
-          <div className="rounded-xl border border-border bg-card p-6 shadow-[var(--crm-shadow-card)] flex min-h-[580px] flex-col">
+          <div className={cn(crmRecordChrome.panel, 'flex min-h-[480px] flex-col')}>
             <CrmRecordDetailTabs
               tabs={recordTabs}
               activeTab={activeTab}
@@ -486,7 +556,7 @@ export default function ContactDetailPage() {
                   <button
                     type="button"
                     onClick={() => setShowRecordCustomize(true)}
-                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold text-text-muted hover:bg-surface-hover hover:text-text-primary transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-[var(--crm-radius-ui)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-dim)]"
                   >
                     <Settings2 size={13} />
                     Layout
@@ -494,7 +564,7 @@ export default function ContactDetailPage() {
                   <button
                     type="button"
                     onClick={() => setIsEditModalOpen(true)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-hover hover:text-primary transition-colors"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--crm-radius-ui)] text-[var(--text-muted)] hover:bg-[var(--surface-dim)] hover:text-[var(--hs-link)]"
                     title="Edit"
                   >
                     <Edit2 size={14} />
@@ -503,7 +573,7 @@ export default function ContactDetailPage() {
               }
             />
 
-            <div className="pt-6 flex-1">
+            <div className={cn(crmRecordChrome.tabBody, 'flex-1')}>
               {activeTab === 'Activity' && (
                 <div className="space-y-6 animate-in fade-in duration-300">
                   <CrmRecordActivityComposer
@@ -566,63 +636,6 @@ export default function ContactDetailPage() {
             </div>
           </div>
         </div>
-
-        <aside className="space-y-5 lg:min-w-0">
-          <FollowUpSequenceCard
-            entityType="Contact"
-            entityId={entityId}
-            hasEmail={hasEmail}
-            onScheduleClick={() => {
-              setFollowUpSeqInitialTab('follow-ups');
-              setIsFollowUpSeqOpen(true);
-            }}
-            refreshKey={followUpRefreshKey}
-            onRetrySuccess={() => {
-              void fetchActivities();
-              void fetchEmailTracking();
-              setFollowUpRefreshKey((k) => k + 1);
-            }}
-          />
-          <EmailEngagementPanel rows={emailTracking} />
-          <CrmRecordOwnerCard ownerLabel={contact.leadOwner} />
-          <CrmRecordRemindersPanel
-            relatedType="Contact"
-            relatedTo={entityId}
-            refreshKey={followUpRefreshKey}
-          />
-          <CRMContactCompanySidebarCard
-            contact={contact}
-            contactId={entityId}
-            showPrimaryField={visibleRecordKeys.includes('organization')}
-            onUpdated={() => {
-              fetchContact();
-              fetchEmailTracking();
-            }}
-          />
-          <ContactAssociationsPanel
-            contactId={entityId}
-            contact={contact}
-            hideCompaniesSection
-            onUpdated={() => {
-              fetchContact();
-              fetchEmailTracking();
-            }}
-          />
-          {primaryAssociatedLeadId ? (
-            <LeadPmPanel
-              leadId={primaryAssociatedLeadId}
-              refreshKey={pmRefreshKey}
-              onCreatePmClick={() => setPmRefreshKey((k) => k + 1)}
-            />
-          ) : null}
-          {entityId ? (
-            <CrmRecordSegmentsPanel
-              module="contacts"
-              entityId={entityId}
-              recordLabel={displayName}
-            />
-          ) : null}
-        </aside>
       </div>
 
       <EditModal

@@ -47,7 +47,7 @@ export const crmRecordChrome = {
   page: "crm-record-page mx-auto w-full max-w-[1400px] space-y-3 pb-6 md:pb-8",
   /** Ref: col-xl-4 (~360px) | fluid main */
   bodyGrid:
-    "grid grid-cols-1 gap-3 lg:gap-4 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start",
+    "grid grid-cols-1 gap-3 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-4 xl:grid-cols-[360px_minmax(0,1fr)]",
   backLink:
     "inline-flex items-center gap-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--primary)]",
   panel:
