@@ -143,6 +143,7 @@ export default function WhatsAppChatsPage() {
   const [linkedLead, setLinkedLead] = useState<{
     leadId?: string;
     leadName?: string;
+    leadOwner?: string;
     assignee?: { _id: string; name: string; email?: string; accessType?: "read" | "read_write" };
     temporaryGrants?: Array<{
       userId: string;
