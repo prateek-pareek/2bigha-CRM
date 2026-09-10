@@ -15,6 +15,7 @@ export const CRM_SETTINGS_ITEMS: CrmSettingsItem[] = [
   { name: "Pipelines", href: "/crm/settings/pipelines", requiredPermission: "settings-pipelines:read" },
   { name: "Sales agents", href: "/crm/settings/agents", requiredPermission: "settings:read" },
   { name: "Custom Fields", href: "/crm/settings/custom-fields", requiredPermission: "settings-custom-fields:read" },
+  { name: "Forms", href: "/crm/settings/forms", requiredPermission: "forms:read" },
   { name: "Lead Type, Group & Checklist", href: "/crm/settings/lead-picklists", requiredPermission: "settings:read" },
   { name: "Custom objects", href: "/crm/settings/custom-objects", requiredPermission: "settings:read" },
   { name: "Associations", href: "/crm/settings/associations", requiredPermission: "settings:read" },
