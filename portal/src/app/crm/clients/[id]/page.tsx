@@ -32,8 +32,9 @@ import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagem
 import ClientAssociationsPanel from '@/components/crm/records/associations/ClientAssociationsPanel';
 import TwoBighaClientPlatformPanel from '@/components/crm/platform/TwoBighaClientPlatformPanel';
 import TwoBighaVisitTrackingPanel from '@/components/crm/visits/TwoBighaVisitTrackingPanel';
-import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
+import { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
+import CrmRecordProfileCard, { CrmRecordProfileSection } from '@/components/crm/records/detail/CrmRecordProfileCard';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
 import CrmRecordSidebarGroup from '@/components/crm/records/detail/CrmRecordSidebarGroup';
 import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
@@ -324,69 +325,97 @@ export default function ClientDetailPage() {
         Back to Clients
       </button>
 
-      <div className={crmRecordChrome.hero}>
-        <div className={crmRecordChrome.heroBody}>
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <div className={crmRecordChrome.avatar}>{initials}</div>
-            <div className="min-w-0 flex-1">
-              <h1 className={cn(crmRecordChrome.title, 'truncate')}>{client.name}</h1>
-              {client.email ? (
-                <p className={cn(crmRecordChrome.metaLine, 'mt-0.5')}>
-                  <Mail size={14} className="shrink-0 opacity-80" />
-                  <a href={`mailto:${client.email}`} className="truncate hover:text-[var(--primary)] hover:underline">
-                    {client.email}
-                  </a>
-                </p>
-              ) : null}
-              {client.phone ? (
-                <p className={cn(crmRecordChrome.metaLine, 'mt-0.5')}>
-                  <Phone size={14} className="shrink-0 opacity-80" />
-                  <a href={`tel:${client.phone}`} className="hover:text-[var(--primary)]">
-                    {client.phone}
-                  </a>
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className={cn(crmRecordChrome.actions, 'shrink-0 self-start pr-14 sm:pr-20')}>
-            <span className={crmRecordChrome.statusPrivate}>
-              <Lock size={12} />
-              Client
-            </span>
-            <span
-              className={cn(
-                'inline-flex h-8 items-center rounded-[var(--crm-radius-ui)] px-2.5 text-xs font-semibold capitalize',
-                client.status === 'active'
-                  ? 'bg-[var(--success-light)] text-[var(--success)]'
-                  : 'bg-[var(--surface-dim)] text-[var(--text-muted)]',
-              )}
-            >
-              {client.status || 'unknown'}
-            </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowRecordCustomize(true)}
-          className={crmRecordChrome.gearBtn}
-          title="Customize layout"
-          aria-label="Customize layout"
-        >
-          <Settings2 size={16} />
-        </button>
-
-        <div className="border-t border-[var(--border-color)] px-4 pb-3 sm:px-5">
-          <CrmRecordQuickActions
-            actions={quickActions}
+      <div className={crmRecordChrome.bodyGrid}>
+        <aside className={crmRecordChrome.sidebar}>
+          {/* Profile card — CRMS contact-head, vertical */}
+          <CrmRecordProfileCard
+            initials={initials}
+            name={<span className="truncate">{client.name}</span>}
+            subtitle={
+              (client.email || client.phone) ? (
+                <div className="space-y-0.5">
+                  {client.email ? (
+                    <p className="inline-flex w-full items-center justify-center gap-1.5">
+                      <Mail size={13} className="shrink-0 opacity-70" />
+                      <a href={`mailto:${client.email}`} className="truncate hover:text-[var(--primary)] hover:underline">
+                        {client.email}
+                      </a>
+                    </p>
+                  ) : null}
+                  {client.phone ? (
+                    <p className="inline-flex w-full items-center justify-center gap-1.5">
+                      <Phone size={13} className="shrink-0 opacity-70" />
+                      <a href={`tel:${client.phone}`} className="hover:text-[var(--primary)]">
+                        {client.phone}
+                      </a>
+                    </p>
+                  ) : null}
+                </div>
+              ) : undefined
+            }
+            badges={
+              <>
+                <span className={crmRecordChrome.statusPrivate}>
+                  <Lock size={12} />
+                  Client
+                </span>
+                <span
+                  className={cn(
+                    'inline-flex h-8 items-center rounded-[var(--crm-radius-ui)] px-2.5 text-xs font-semibold capitalize',
+                    client.status === 'active'
+                      ? 'bg-[var(--success-light)] text-[var(--success)]'
+                      : 'bg-[var(--surface-dim)] text-[var(--text-muted)]',
+                  )}
+                >
+                  {client.status || 'unknown'}
+                </span>
+              </>
+            }
+            quickActions={quickActions}
             secondaryActions={secondaryActions}
-            className="!mt-0 !border-0 !pt-3"
-          />
-        </div>
-      </div>
+            onSettingsClick={() => setShowRecordCustomize(true)}
+          >
+            <CrmRecordProfileSection title="Client information">
+              <CRMClientRecordFields
+                client={client}
+                visibleKeys={visibleRecordKeys}
+                customFieldDefs={customFieldDefs}
+                layout="sidebar"
+                hideEmpty
+              />
+            </CrmRecordProfileSection>
+          </CrmRecordProfileCard>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]">
+          <CrmRecordSidebarGroup title="Engagement" defaultOpen>
+            <EmailEngagementPanel rows={emailTracking} />
+            <CrmRecordRemindersPanel relatedType="Client" relatedTo={recordId} />
+          </CrmRecordSidebarGroup>
+
+          <CrmRecordSidebarGroup title="Associations & platform" defaultOpen>
+            {recordId ? (
+              <ClientAssociationsPanel
+                clientId={recordId}
+                client={client}
+                onUpdated={() => {
+                  void fetchData();
+                }}
+              />
+            ) : null}
+
+            {recordId ? (
+              <TwoBighaClientPlatformPanel
+                clientId={recordId}
+                client={client}
+                onUpdated={() => {
+                  void fetchData();
+                }}
+              />
+            ) : null}
+
+            {recordId ? <TwoBighaVisitTrackingPanel clientId={recordId} /> : null}
+          </CrmRecordSidebarGroup>
+        </aside>
+
         <div className="min-w-0">
           <div className={cn(crmRecordChrome.panel, 'flex min-h-[480px] flex-col')}>
             <CrmRecordDetailTabs
@@ -461,37 +490,6 @@ export default function ClientDetailPage() {
             </div>
           </div>
         </div>
-
-        <aside className={crmRecordChrome.sidebar}>
-          <CrmRecordSidebarGroup title="Engagement" defaultOpen>
-            <EmailEngagementPanel rows={emailTracking} />
-            <CrmRecordRemindersPanel relatedType="Client" relatedTo={recordId} />
-          </CrmRecordSidebarGroup>
-
-          <CrmRecordSidebarGroup title="Associations & platform" defaultOpen>
-            {recordId ? (
-              <ClientAssociationsPanel
-                clientId={recordId}
-                client={client}
-                onUpdated={() => {
-                  void fetchData();
-                }}
-              />
-            ) : null}
-
-            {recordId ? (
-              <TwoBighaClientPlatformPanel
-                clientId={recordId}
-                client={client}
-                onUpdated={() => {
-                  void fetchData();
-                }}
-              />
-            ) : null}
-
-            {recordId ? <TwoBighaVisitTrackingPanel clientId={recordId} /> : null}
-          </CrmRecordSidebarGroup>
-        </aside>
       </div>
 
       <ClientModal
