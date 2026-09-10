@@ -283,7 +283,7 @@ export default function LeadSubscriptionDetailsTab({
           icon: MapPin,
         });
       }
-      if (variant?.preVerificationIncluded) {
+      if ((variant as any)?.preVerificationIncluded) {
         features.push({
           title: "Pre-Verification Land Audit Included",
           desc: "Initial legal checks & property title validation prior to onboarding.",
@@ -329,10 +329,10 @@ export default function LeadSubscriptionDetailsTab({
                   </span>
                 )}
               </h2>
-              {activeItem.propertyTitle ? (
+              {(activeItem as any).propertyTitle ? (
                 <p className="text-xs font-medium text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
                   <Building size={13} />
-                  Bound Property: {activeItem.propertyTitle}
+                  Bound Property: {(activeItem as any).propertyTitle}
                 </p>
               ) : activeItem.isUnbound ? (
                 <p className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1">
@@ -397,10 +397,10 @@ export default function LeadSubscriptionDetailsTab({
                 <Calendar size={12} /> Start / Purchased Date
               </span>
               <span className="font-medium text-text-main">
-                {activeItem.startDate
-                  ? new Date(activeItem.startDate).toLocaleDateString()
-                  : activeItem.purchasedAt
-                  ? new Date(activeItem.purchasedAt).toLocaleDateString()
+                {(activeItem as any).startDate
+                  ? new Date((activeItem as any).startDate).toLocaleDateString()
+                  : (activeItem as any).purchasedAt
+                  ? new Date((activeItem as any).purchasedAt).toLocaleDateString()
                   : "N/A"}
               </span>
             </div>
@@ -410,8 +410,8 @@ export default function LeadSubscriptionDetailsTab({
                 <Calendar size={12} /> Valid Until
               </span>
               <span className="font-medium text-text-main">
-                {activeItem.endDate
-                  ? new Date(activeItem.endDate).toLocaleDateString()
+                {(activeItem as any).endDate
+                  ? new Date((activeItem as any).endDate).toLocaleDateString()
                   : "Active Cycle"}
               </span>
             </div>
@@ -421,18 +421,18 @@ export default function LeadSubscriptionDetailsTab({
                 <MapPin size={12} /> Visits Allowance
               </span>
               <span className="font-medium text-text-main">
-                {activeItem.visitsAllowed != null ? `${activeItem.visitsAllowed} Visits` : "Included"}
+                {(activeItem as any).visitsAllowed != null ? `${(activeItem as any).visitsAllowed} Visits` : "Included"}
               </span>
             </div>
           </div>
 
           {/* Progress bar for Visits if bound */}
-          {activeItem.visitsRemaining != null && activeItem.visitsAllowed ? (
+          {(activeItem as any).visitsRemaining != null && (activeItem as any).visitsAllowed ? (
             <div className="mt-4 pt-3 border-t border-border/40">
               <div className="flex justify-between items-center text-[11px] text-text-muted mb-1 font-medium">
                 <span>Site Visits Usage</span>
                 <span>
-                  {activeItem.visitsUsed || 0} of {activeItem.visitsAllowed} visits used ({activeItem.visitsRemaining} remaining)
+                  {(activeItem as any).visitsUsed || 0} of {(activeItem as any).visitsAllowed} visits used ({(activeItem as any).visitsRemaining} remaining)
                 </span>
               </div>
               <div className="h-2 w-full bg-surface-dim rounded-full overflow-hidden border border-border/50">
@@ -443,7 +443,7 @@ export default function LeadSubscriptionDetailsTab({
                       100,
                       Math.max(
                         0,
-                        (((activeItem.visitsUsed || 0) / activeItem.visitsAllowed) * 100)
+                        ((((activeItem as any).visitsUsed || 0) / (activeItem as any).visitsAllowed) * 100)
                       )
                     )}%`,
                   }}
@@ -572,6 +572,7 @@ export default function LeadSubscriptionDetailsTab({
         <CancelPlanModal
           isOpen={cancelOpen}
           onClose={() => setCancelOpen(false)}
+          leadId={leadId}
           userPropertyId={targetUserPropId}
           planName={targetPlanName}
           onSuccess={handleRefresh}

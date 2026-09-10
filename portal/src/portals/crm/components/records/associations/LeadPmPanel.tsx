@@ -65,7 +65,7 @@ export default function LeadPmPanel({
         startDate: p.startDate,
         endDate: p.endDate,
       }))
-    : activeSubscriptions.filter((s) => s.status === "ACTIVE" && (s.propertyTitle || s.userPropertyId));
+    : activeSubscriptions.filter((s) => s.status === "ACTIVE" && (s.propertyTitle || (s as any).userPropertyId));
 
   const hasBoundSubscription =
     boundSubscriptions.length > 0 ||
