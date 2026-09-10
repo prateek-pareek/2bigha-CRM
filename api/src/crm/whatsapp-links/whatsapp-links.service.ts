@@ -68,13 +68,14 @@ export class WhatsAppLinksService {
     waId: string;
     leadId: string;
     leadName: string;
+    leadOwner?: string;
     assignee?: { _id: string; name: string; email?: string; accessType?: 'read' | 'read_write' };
     temporaryGrants?: any[];
   } | null> {
     const normWa = normalizeWaId(waId);
     const link = await this.linkModel
       .findOne({ waId: normWa })
-      .populate('leadId', 'firstName lastName')
+      .populate('leadId', 'firstName lastName leadOwner')
       .populate('assignee', 'firstName lastName email')
       .populate('temporaryGrants.userId', 'firstName lastName email')
       .lean()
@@ -89,6 +90,7 @@ export class WhatsAppLinksService {
         leadName: lead?.firstName
           ? `${lead.firstName || ''} ${lead.lastName || ''}`.trim()
           : '',
+        leadOwner: lead?.leadOwner || '',
         assignee: ass ? {
           _id: String(ass._id),
           name: `${ass.firstName || ''} ${ass.lastName || ''}`.trim() || ass.email,
@@ -132,7 +134,7 @@ export class WhatsAppLinksService {
             { phone: phoneDigits },
           ],
         })
-        .select('firstName lastName')
+        .select('firstName lastName leadOwner')
         .lean()
         .exec();
 
@@ -141,6 +143,7 @@ export class WhatsAppLinksService {
           waId: normWa,
           leadId: String(lead._id),
           leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
+          leadOwner: lead.leadOwner || '',
         };
       }
     }

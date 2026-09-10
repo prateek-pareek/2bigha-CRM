@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { isAdmin as isHrmsAdmin } from "@/lib/suite/auth";
 import {
   Check,
   CheckCheck,
@@ -15,6 +16,7 @@ import {
   Phone,
   Send,
   Share2,
+  UserCheck,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +25,7 @@ import { cn } from "@/lib/utils";
 import WhatsAppTemplatePicker from "@/components/crm/inbox/WhatsAppTemplatePicker";
 import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
 import SharePropertyModal from "@/components/crm/whatsapp/SharePropertyModal";
+import GrantAccessModal from "@/components/crm/whatsapp/GrantAccessModal";
 import { useWhatsAppSideChatStore } from "@/portals/crm/stores/whatsappSideChatStore";
 
 interface WhatsAppMessage {
@@ -77,16 +80,80 @@ export default function WhatsAppSideChatDrawer() {
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [callModalOpen, setCallModalOpen] = useState(false);
   const [sharePropertyModalOpen, setSharePropertyModalOpen] = useState(false);
+  const [grantAccessModalOpen, setGrantAccessModalOpen] = useState(false);
   const [activeMediaPreview, setActiveMediaPreview] = useState<{
     url: string;
     type: "image" | "video" | "audio" | "document";
     filename?: string;
   } | null>(null);
   const [fetchedName, setFetchedName] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [linkedLead, setLinkedLead] = useState<{
+    leadId?: string;
+    leadName?: string;
+    leadOwner?: string;
+    assignee?: { _id: string; name: string; email?: string; accessType?: "read" | "read_write" };
+    temporaryGrants?: Array<{
+      userId: string;
+      userName?: string;
+      userEmail?: string;
+      accessType: "read" | "read_write";
+      expiresAt: string;
+    }>;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const lastWaParamRef = useRef<string | null>(null);
 
   const waId = target?.waId || (target?.phone ? target.phone.replace(/\D/g, "") : "");
+
+  useEffect(() => {
+    if (!waId) {
+      setLinkedLead(null);
+      return;
+    }
+    const token = localStorage.getItem("token");
+    fetch(`${CRM_API_URL}/crm/whatsapp-links/by-wa/${encodeURIComponent(waId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        setLinkedLead(body ? {
+          leadId: body.leadId,
+          leadName: body.leadName,
+          leadOwner: body.leadOwner,
+          assignee: body.assignee,
+          temporaryGrants: body.temporaryGrants,
+        } : null);
+      })
+      .catch(() => setLinkedLead(null));
+  }, [waId]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const res = await fetch(`${CRM_API_URL}/crm-users/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data);
+        }
+      } catch (err) {}
+    };
+    void fetchProfile();
+  }, []);
+
+  const isAdminUser = useMemo(() => {
+    if (!currentUser) return false;
+    if (isHrmsAdmin(currentUser)) return true;
+    const roleKey = String(currentUser.role || "").trim().toUpperCase();
+    if (["ADMIN", "SUPERADMIN", "CEO", "CTO", "OWNER"].includes(roleKey)) return true;
+    const perms = Array.isArray(currentUser.crmPermissions) ? currentUser.crmPermissions : [];
+    if (perms.includes("admin:manage") || perms.includes("leads:read:all") || perms.includes("contacts:read:all")) return true;
+    return false;
+  }, [currentUser]);
 
   // Auto-dock when navigating away from /crm/whatsapp?wa=...
   useEffect(() => {
@@ -130,8 +197,28 @@ export default function WhatsAppSideChatDrawer() {
       .catch(() => {});
   }, [waId]);
 
+  const isPhone = (str?: string | null) => {
+    if (!str) return false;
+    const cleaned = str.replace(/\D/g, "");
+    return cleaned.length >= 7 && (str.startsWith("+") || !/\D/.test(str.trim()));
+  };
+
+  const targetName =
+    target?.leadName && !isPhone(target.leadName)
+      ? target.leadName
+      : target?.contactName && !isPhone(target.contactName)
+      ? target.contactName
+      : null;
+
+  const fetchedLeadName =
+    fetchedName && !isPhone(fetchedName) ? fetchedName : null;
+
   const displayName =
-    target?.leadName || target?.contactName || fetchedName || (waId ? `+${waId}` : "WhatsApp Chat");
+    (linkedLead?.leadName && !isPhone(linkedLead.leadName) ? linkedLead.leadName.trim() : null) ||
+    targetName ||
+    fetchedLeadName ||
+    (target?.leadName && target.leadName.trim()) ||
+    (waId ? `+${waId}` : "WhatsApp Chat");
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -355,6 +442,17 @@ export default function WhatsAppSideChatDrawer() {
           >
             <FileText size={13} /> Send Template
           </button>
+
+          {isAdminUser && (
+            <button
+              type="button"
+              onClick={() => setGrantAccessModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-medium text-white hover:bg-white/30 transition shrink-0"
+              title="Grant Access"
+            >
+              <UserCheck size={13} /> Grant Access
+            </button>
+          )}
         </div>
 
         {/* Message Thread List */}
@@ -616,6 +714,37 @@ export default function WhatsAppSideChatDrawer() {
           onClose={() => setTemplatePickerOpen(false)}
           onSent={() => {
             setTemplatePickerOpen(false);
+            fetchThread();
+          }}
+        />
+      )}
+
+      {/* Grant Access Modal */}
+      {grantAccessModalOpen && (
+        <GrantAccessModal
+          isOpen={grantAccessModalOpen}
+          waId={waId}
+          leadOwner={linkedLead?.leadOwner}
+          currentAssignee={linkedLead?.assignee}
+          temporaryGrants={linkedLead?.temporaryGrants}
+          onClose={() => setGrantAccessModalOpen(false)}
+          onSuccess={() => {
+            setGrantAccessModalOpen(false);
+            const token = localStorage.getItem("token");
+            fetch(`${CRM_API_URL}/crm/whatsapp-links/by-wa/${encodeURIComponent(waId)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+              .then((res) => (res.ok ? res.json() : null))
+              .then((body) => {
+                setLinkedLead(body ? {
+                  leadId: body.leadId,
+                  leadName: body.leadName,
+                  leadOwner: body.leadOwner,
+                  assignee: body.assignee,
+                  temporaryGrants: body.temporaryGrants,
+                } : null);
+              })
+              .catch(() => setLinkedLead(null));
             fetchThread();
           }}
         />

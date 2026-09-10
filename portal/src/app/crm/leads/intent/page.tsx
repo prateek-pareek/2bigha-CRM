@@ -852,11 +852,7 @@ export default function LeadIntentListPage() {
         leadId={callLead?._id}
         leadName={callLead ? fullName(callLead) : undefined}
         onSuccess={() => {
-          const lead = callLead;
-          setCallLead(null);
-          if (lead) {
-            setActivityLead(lead);
-          }
+          void load();
         }}
       />
       <AddPropertyModal

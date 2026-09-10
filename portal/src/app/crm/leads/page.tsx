@@ -1298,11 +1298,12 @@ export default function LeadsPage() {
   const openLeadWhatsApp = (lead: Lead) => {
     const waId = contactWhatsappWaId(lead);
     if (waId) {
+      const computedName = `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || (lead as any).organization || '';
       useWhatsAppSideChatStore.getState().openChat({
         waId,
         phone: lead.mobileNo || lead.phone,
         leadId: lead._id,
-        leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Lead',
+        ...(computedName ? { leadName: computedName } : {}),
       });
     }
   };
@@ -2950,11 +2951,7 @@ export default function LeadsPage() {
         leadName={`${callLead?.firstName || ''} ${callLead?.lastName || ''}`.trim()}
         relatedType="Lead"
         onSuccess={() => {
-          const lead = callLead;
-          setCallLead(null);
-          if (lead) {
-            setCallActivityLead(lead);
-          }
+          void fetchLeadsList(selectedPipelineId || null);
         }}
       />
       <AddPropertyModal

@@ -6,6 +6,7 @@ import { AlertTriangle, Loader2, Phone, Settings, X } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { CrmButton } from "@/components/crm/ui";
+import CallActivityFormModal from "./CallActivityFormModal";
 
 const AGENT_NUMBER_STORAGE_KEY = "crm_ivr_agent_number";
 
@@ -36,9 +37,14 @@ export default function CallLeadModal({
   const [isAdmin, setIsAdmin] = useState(false);
   const [calling, setCalling] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [showNotesForm, setShowNotesForm] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setShowNotesForm(false);
+      return;
+    }
+    setShowNotesForm(false);
     setToNumber(String(phone || "").trim());
     setStatusMsg(null);
     setLoading(true);
@@ -87,6 +93,24 @@ export default function CallLeadModal({
 
   if (!open) return null;
 
+  if (showNotesForm && leadId) {
+    return (
+      <CallActivityFormModal
+        open={showNotesForm}
+        onClose={() => {
+          setShowNotesForm(false);
+          onClose();
+        }}
+        leadId={leadId}
+        leadName={leadName}
+        onSuccess={() => {
+          setShowNotesForm(false);
+          onClose();
+        }}
+      />
+    );
+  }
+
   const handleCall = async () => {
     if (!toNumber.trim()) {
       toast.error("Enter a phone number");
@@ -121,6 +145,11 @@ export default function CallLeadModal({
       setStatusMsg(data.message || "Call started");
       toast.success(data.message || "Call started");
       onSuccess?.();
+      if (leadId) {
+        setShowNotesForm(true);
+      } else {
+        onClose();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Call failed");
     } finally {
