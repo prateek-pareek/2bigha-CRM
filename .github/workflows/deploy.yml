@@ -14,6 +14,8 @@ name: Build and deploy
 #                    ~/.ssh/authorized_keys (ssh-keygen -t ed25519, no passphrase)
 #   NEXT_PUBLIC_API_URL   e.g. https://crm.yourdomain.com (baked into the
 #                    frontend bundle at build time - must match .env on the VPS)
+#   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY  Google Maps JS API key
+#   GOOGLE_MAPS_API_KEY               Google Maps API key (fallback)
 #
 # Variables (Settings -> Variables, not secret - just not encrypted):
 #   VPS_DEPLOY_PATH  e.g. /opt/2bigha-CRM (where DEPLOY.md has you git clone)
@@ -87,6 +89,8 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_CRM_STANDALONE=true
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
+            GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
           tags: |
             ${{ steps.tags.outputs.frontend }}
             ${{ steps.tags.outputs.frontend_base }}:latest

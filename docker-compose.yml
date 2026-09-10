@@ -130,6 +130,8 @@ services:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set in .env}
         - NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL:-}
         - NEXT_PUBLIC_CRM_STANDALONE=true
+        - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
     container_name: 2bighacrm-frontend
     restart: always
     expose:
