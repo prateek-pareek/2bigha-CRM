@@ -13,6 +13,7 @@ import {
     AlertTriangle,
     ArrowUpRight,
     User,
+    Search,
 } from 'lucide-react';
 import CrmSlidePanelShell from '@/components/crm/shell/CrmSlidePanelShell';
 import { CRM_API_URL } from '@/lib/crm/config';
@@ -24,13 +25,13 @@ import { toast } from 'sonner';
 import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
 import {
-  CrmPageHeader,
-  CrmButton,
-  CrmCountBadge,
-  CrmListToolbar,
-  CrmKanbanBoard,
-  CrmKanbanColumn,
-  CrmKanbanAvatar,
+    CrmPageHeader,
+    CrmButton,
+    CrmCountBadge,
+    CrmListToolbar,
+    CrmKanbanBoard,
+    CrmKanbanColumn,
+    CrmKanbanAvatar,
 } from '@/components/crm/ui';
 import { CRM_LIST_PAGE } from '@/lib/crm/ui';
 import { crmStageAccent } from '@/lib/crm/stage-accent';
@@ -64,7 +65,7 @@ const TASK_COLUMNS = [
 
 type TaskPerson = CrmPortalUserOption & { fullName?: string; name?: string };
 
-interface Task extends CrmTask {}
+interface Task extends CrmTask { }
 
 function taskPersonLabel(p: TaskPerson | string | undefined, fallback?: string): string {
     if (!p) return fallback || '';
@@ -451,8 +452,8 @@ export default function TasksPage() {
             const res = await fetch(
                 `${CRM_API_URL}/crm/activities?type=Task${teamScope ? '&teamScope=1' : ''}${mineOnly && (user?._id || user?.id) ? `&assignee=${user._id || user.id}` : ''}`,
                 {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
             const data = await res.json();
             setTasks(Array.isArray(data) ? data : []);
         } catch (err) {
@@ -492,7 +493,7 @@ export default function TasksPage() {
                     .then((data) => {
                         if (Array.isArray(data)) setCrmUsers(data);
                     })
-                    .catch(() => {});
+                    .catch(() => { });
             });
         void fetch(`${CRM_API_URL}/crm/property-listings?listingBucket=pm&pageSize=50`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -504,7 +505,7 @@ export default function TasksPage() {
                     setPmListings(rows.map((row: any) => ({ _id: String(row._id), title: row.title })));
                 }
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     const filteredTasks = useMemo(
@@ -851,10 +852,10 @@ export default function TasksPage() {
                 prev.map((t) =>
                     t._id === taskId
                         ? {
-                              ...t,
-                              status: normalizeTaskStatus(t.status) === 'Done' ? 'Open' : t.status,
-                              metadata: nextMeta,
-                          }
+                            ...t,
+                            status: normalizeTaskStatus(t.status) === 'Done' ? 'Open' : t.status,
+                            metadata: nextMeta,
+                        }
                         : t,
                 ),
             );
@@ -905,12 +906,12 @@ export default function TasksPage() {
 
         const nextMeta = shouldClearFlags
             ? {
-                  ...(task.metadata || {}),
-                  escalated: false,
-                  escalatedAt: null,
-                  escalatedTo: null,
-                  markedOverdue: false,
-              }
+                ...(task.metadata || {}),
+                escalated: false,
+                escalatedAt: null,
+                escalatedTo: null,
+                markedOverdue: false,
+            }
             : undefined;
 
         const patchBody: Record<string, unknown> = { status: newStatus };
@@ -920,18 +921,18 @@ export default function TasksPage() {
             prev.map((t) =>
                 t._id === taskId
                     ? {
-                          ...t,
-                          status: newStatus,
-                          metadata: nextMeta
-                              ? {
-                                    ...(t.metadata || {}),
-                                    escalated: false,
-                                    escalatedAt: undefined,
-                                    escalatedTo: undefined,
-                                    markedOverdue: false,
-                                }
-                              : t.metadata,
-                      }
+                        ...t,
+                        status: newStatus,
+                        metadata: nextMeta
+                            ? {
+                                ...(t.metadata || {}),
+                                escalated: false,
+                                escalatedAt: undefined,
+                                escalatedTo: undefined,
+                                markedOverdue: false,
+                            }
+                            : t.metadata,
+                    }
                     : t,
             ),
         );
@@ -951,10 +952,10 @@ export default function TasksPage() {
                 prev.map((t) =>
                     t._id === taskId
                         ? {
-                              ...t,
-                              status: task.status,
-                              metadata: task.metadata,
-                          }
+                            ...t,
+                            status: task.status,
+                            metadata: task.metadata,
+                        }
                         : t,
                 ),
             );
@@ -964,7 +965,7 @@ export default function TasksPage() {
     };
 
     return (
-        <div className={cn(CRM_LIST_PAGE, "h-[calc(100vh-140px)] space-y-0")}>
+        <div className={cn(CRM_LIST_PAGE, "flex flex-col min-h-0 flex-1 space-y-0")}>
             <CrmPageHeader
                 bordered={false}
                 title="Tasks"
@@ -975,29 +976,39 @@ export default function TasksPage() {
                 ]}
                 description="Create, assign, and track CRM + Property Management work — list, board, and calendar"
                 actions={
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
                         <CrmViewToggle value={viewMode} onChange={setViewMode} modes={['list', 'kanban', 'calendar']} />
-                        <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)]">
-                            <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
+                        <label className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-main)]" title="Show only your assigned tasks">
+                            <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} className="cursor-pointer" />
                             My tasks
                         </label>
-                        <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)]">
-                            <input type="checkbox" checked={teamScope} onChange={(e) => setTeamScope(e.target.checked)} />
+                        <label className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-main)]" title="Show team tasks">
+                            <input type="checkbox" checked={teamScope} onChange={(e) => setTeamScope(e.target.checked)} className="cursor-pointer" />
                             Team view
                         </label>
-                    <CrmButton
-                        variant="primary"
-                        onClick={() => { setDefaultColumnForNew('Open'); setIsCreating(true); }}
-                        leftIcon={<Plus size={16} strokeWidth={2.5} />}
-                    >
-                        Create Task
-                    </CrmButton>
+                        <div className="sm:hidden flex items-center gap-1.5">
+                            <label className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--text-muted)] cursor-pointer" title="My tasks">
+                                <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} className="cursor-pointer" />
+                            </label>
+                            <label className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--text-muted)] cursor-pointer" title="Team view">
+                                <input type="checkbox" checked={teamScope} onChange={(e) => setTeamScope(e.target.checked)} className="cursor-pointer" />
+                            </label>
+                        </div>
+                        <CrmButton
+                            variant="primary"
+                            onClick={() => { setDefaultColumnForNew('Open'); setIsCreating(true); }}
+                            leftIcon={<Plus size={16} strokeWidth={2.5} />}
+                        >
+                            Create Task
+                        </CrmButton>
                     </div>
                 }
             />
 
-            <CrmListToolbar
-                filter={
+            {/* Unified Toolbar: Search, Filters, Show, Bulk Actions */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0 px-3 py-2 bg-white border-t border-b border-[var(--border-color)]">
+                {/* Left: Filter & Search */}
+                <div className="flex items-center gap-2 flex-nowrap flex-1 min-w-0">
                     <CRMFilterBar
                         module="activities"
                         filters={filters}
@@ -1005,95 +1016,120 @@ export default function TasksPage() {
                         onClear={() => setFilters([])}
                         onPropertiesReady={setFilterProperties}
                     />
-                }
-                searchProps={{
-                    placeholder: 'Search tasks…',
-                    value: search,
-                    onChange: (e) => setSearch(e.target.value),
-                }}
-            />
+                    <div className="relative h-[38px] flex-1 min-w-[100px] max-w-[200px]">
+                        <Search
+                            size={14}
+                            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                            aria-hidden
+                        />
+                        <input
+                            type="text"
+                            placeholder="Search…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="w-full h-full rounded-[5px] border border-[var(--border-color)] bg-white px-3 pl-8 text-xs outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] dark:bg-black transition-colors"
+                        />
+                    </div>
+                </div>
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0 px-0.5 pb-1">
-                <span className="text-xs font-semibold text-[var(--text-muted)]">Show</span>
-                {(
-                    [
-                        { id: 'all', label: 'All tasks' },
-                        { id: 'overdue', label: 'Overdue' },
-                        { id: 'escalated', label: 'Escalated' },
-                    ] as const
-                ).map((opt) => (
-                    <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => {
-                            setLaneFilter(opt.id);
-                            if (opt.id === 'all') setBulkStatus('Open');
-                            else setBulkStatus(opt.id === 'overdue' ? 'Overdue' : 'Escalated');
-                        }}
-                        className={cn(
-                            'rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors',
-                            laneFilter === opt.id
-                                ? opt.id === 'overdue'
-                                    ? 'border-rose-300 bg-rose-50 text-rose-700'
-                                    : opt.id === 'escalated'
-                                        ? 'border-orange-300 bg-orange-50 text-orange-700'
-                                        : 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]'
-                                : 'border-[var(--border-color)] bg-white text-[var(--text-main)] hover:bg-[var(--surface-dim)]',
-                        )}
-                    >
-                        {opt.label}
-                        {opt.id === 'overdue' ? ` (${tasks.filter(isTaskOverdue).length})` : ''}
-                        {opt.id === 'escalated' ? ` (${tasks.filter(isTaskEscalated).length})` : ''}
-                    </button>
-                ))}
+                {/* Center: Show Filters */}
+                <div className="flex items-center gap-1.5 flex-nowrap">
+                    {(
+                        [
+                            { id: 'all', label: 'All tasks', shortLabel: 'All' },
+                            { id: 'overdue', label: 'Overdue', shortLabel: 'Overdue' },
+                            { id: 'escalated', label: 'Escalated', shortLabel: 'Escalated' },
+                        ] as const
+                    ).map((opt) => (
+                        <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                                setLaneFilter(opt.id);
+                                if (opt.id === 'all') setBulkStatus('Open');
+                                else setBulkStatus(opt.id === 'overdue' ? 'Overdue' : 'Escalated');
+                            }}
+                            className={cn(
+                                'rounded-[5px] border px-2 sm:px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap flex-shrink-0 h-[38px] flex items-center justify-center min-w-max',
+                                laneFilter === opt.id
+                                    ? opt.id === 'overdue'
+                                        ? 'border-rose-300 bg-rose-50 text-rose-700'
+                                        : opt.id === 'escalated'
+                                            ? 'border-orange-300 bg-orange-50 text-orange-700'
+                                            : 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]'
+                                    : 'border-[var(--border-color)] bg-white text-[var(--text-main)] hover:bg-[var(--surface-dim)]',
+                            )}
+                            title={opt.label}
+                        >
+                            <span className="inline sm:hidden">{opt.shortLabel}</span>
+                            <span className="hidden sm:inline">{opt.label}</span>
+                            {opt.id === 'overdue' ? ` (${tasks.filter(isTaskOverdue).length})` : ''}
+                            {opt.id === 'escalated' ? ` (${tasks.filter(isTaskEscalated).length})` : ''}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Right: Bulk Actions (Admin only) */}
+                {isAdmin && (
+                    <div className="flex items-center gap-1.5 flex-wrap flex-shrink-0">
+                        <button
+                            type="button"
+                            onClick={toggleSelectAllFiltered}
+                            className="px-2 py-1 rounded-[5px] border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--surface-dim)] transition-colors flex-shrink-0 whitespace-nowrap h-[38px] flex items-center"
+                            title="Select or deselect all tasks on this page"
+                        >
+                            {filteredTaskIds.length > 0 && filteredTaskIds.every(id => selectedTaskIds.has(id))
+                                ? 'Clear'
+                                : 'Select'}
+                        </button>
+                        <span className="text-xs font-semibold text-[var(--primary)] flex-shrink-0 whitespace-nowrap hidden sm:inline">{selectedTaskIds.size} selected</span>
+                        <select
+                            value={bulkStatus}
+                            onChange={(e) => setBulkStatus(e.target.value)}
+                            className="h-[38px] rounded-[5px] border border-[var(--border-color)] px-2 text-xs font-medium text-[var(--text-main)] bg-white flex-shrink-0"
+                            title="Select status for bulk action"
+                        >
+                            {bulkSelectOptions.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={handleBulkMove}
+                            disabled={bulkApplying || selectedTaskIds.size === 0}
+                            className="px-2 py-1 rounded-[5px] border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--surface-dim)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 whitespace-nowrap h-[38px] flex items-center"
+                            title={bulkStatus === 'Overdue' ? 'Mark selected as overdue' : bulkStatus === 'Escalated' ? 'Mark selected as escalated' : 'Move selected tasks'}
+                        >
+                            <span className="hidden sm:inline">
+                                {bulkStatus === 'Overdue'
+                                    ? 'Mark overdue'
+                                    : bulkStatus === 'Escalated'
+                                        ? 'Mark escalated'
+                                        : 'Move selected'}
+                            </span>
+                            <span className="inline sm:hidden">
+                                {bulkStatus === 'Overdue'
+                                    ? 'Overdue'
+                                    : bulkStatus === 'Escalated'
+                                        ? 'Escalate'
+                                        : 'Move'}
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleBulkDelete}
+                            disabled={selectedTaskIds.size === 0 || bulkApplying}
+                            className="px-2 py-1 rounded-[5px] border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 whitespace-nowrap h-[38px] flex items-center"
+                            title="Delete selected tasks"
+                        >
+                            <span className="hidden sm:inline">Delete selected</span>
+                            <span className="inline sm:hidden">Delete</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
-            {isAdmin && (
-                <div className="flex flex-wrap items-center gap-2 shrink-0 rounded-[var(--radius-md)] border border-border/60 bg-card px-3 py-2">
-                    <span className="text-xs font-semibold text-text-muted">Bulk actions</span>
-                    <button
-                        type="button"
-                        onClick={toggleSelectAllFiltered}
-                        className="px-2.5 py-1.5 rounded-lg border border-border/60 text-xs font-semibold text-text-main hover:bg-surface-dim"
-                    >
-                        {filteredTaskIds.length > 0 && filteredTaskIds.every(id => selectedTaskIds.has(id))
-                            ? 'Clear page'
-                            : 'Select page'}
-                    </button>
-                    <span className="text-xs font-semibold text-primary">{selectedTaskIds.size} selected</span>
-                    <select
-                        value={bulkStatus}
-                        onChange={(e) => setBulkStatus(e.target.value)}
-                        className="h-8 rounded-lg border border-border/60 px-2.5 text-xs font-medium text-text-main bg-white"
-                    >
-                        {bulkSelectOptions.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                        ))}
-                    </select>
-                    <button
-                        type="button"
-                        onClick={handleBulkMove}
-                        disabled={bulkApplying || selectedTaskIds.size === 0}
-                        className="px-3 py-1.5 rounded-lg border border-border/60 text-xs font-semibold text-text-main hover:bg-surface-dim disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {bulkStatus === 'Overdue'
-                            ? 'Mark overdue'
-                            : bulkStatus === 'Escalated'
-                                ? 'Mark escalated'
-                                : 'Move selected'}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleBulkDelete}
-                        disabled={selectedTaskIds.size === 0 || bulkApplying}
-                        className="px-3 py-1.5 rounded-lg border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Delete selected
-                    </button>
-                </div>
-            )}
-
-            <div className="flex-1 min-h-0 relative overflow-auto">
+            <div className="flex-1 min-h-0 relative overflow-auto flex flex-col">
                 {loading ? (
                     <TaskBoardSkeleton />
                 ) : viewMode === 'list' ? (
@@ -1178,7 +1214,7 @@ export default function TasksPage() {
                         collisionDetection={collisionDetection}
                         onDragEnd={handleDragEnd}
                     >
-                        <CrmKanbanBoard className="!overflow-x-hidden gap-3 pr-1">
+                        <CrmKanbanBoard className="flex-1 min-h-0 overflow-x-auto overflow-y-auto gap-3 pr-1 pb-4 custom-scrollbar">
                             {TASK_COLUMNS.map((column) => (
                                 <BoardColumn
                                     key={column.name}
@@ -1221,51 +1257,51 @@ export default function TasksPage() {
             </div>
 
             {isCreating && (
-            <CrmJiraPortal>
-                <CrmSlidePanelShell
-                    isOpen={isCreating}
-                    onClose={() => setIsCreating(false)}
-                    title="New task"
-                    subtitle="Create a new task and assign it to the board."
-                >
-                    <div className="mt-2 space-y-4">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="block text-xs font-semibold text-[var(--text-muted)]">
-                                Related lead (optional)
-                                <input
-                                    value={relatedLeadId}
-                                    onChange={(e) => setRelatedLeadId(e.target.value)}
-                                    placeholder="Lead ObjectId"
-                                    className="mt-1 h-9 w-full rounded-md border border-[var(--border-color)] px-2 text-sm font-normal text-[var(--text-main)]"
-                                />
-                            </label>
-                            <label className="block text-xs font-semibold text-[var(--text-muted)]">
-                                Related PM property (optional)
-                                <select
-                                    value={relatedListingId}
-                                    onChange={(e) => setRelatedListingId(e.target.value)}
-                                    className="mt-1 h-9 w-full rounded-md border border-[var(--border-color)] px-2 text-sm font-normal text-[var(--text-main)]"
-                                >
-                                    <option value="">None</option>
-                                    {pmListings.map((p) => (
-                                        <option key={p._id} value={p._id}>{p.title || p._id}</option>
-                                    ))}
-                                </select>
-                            </label>
+                <CrmJiraPortal>
+                    <CrmSlidePanelShell
+                        isOpen={isCreating}
+                        onClose={() => setIsCreating(false)}
+                        title="New task"
+                        subtitle="Create a new task and assign it to the board."
+                    >
+                        <div className="mt-2 space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="block text-xs font-semibold text-[var(--text-muted)]">
+                                    Related lead (optional)
+                                    <input
+                                        value={relatedLeadId}
+                                        onChange={(e) => setRelatedLeadId(e.target.value)}
+                                        placeholder="Lead ObjectId"
+                                        className="mt-1 h-9 w-full rounded-md border border-[var(--border-color)] px-2 text-sm font-normal text-[var(--text-main)]"
+                                    />
+                                </label>
+                                <label className="block text-xs font-semibold text-[var(--text-muted)]">
+                                    Related PM property (optional)
+                                    <select
+                                        value={relatedListingId}
+                                        onChange={(e) => setRelatedListingId(e.target.value)}
+                                        className="mt-1 h-9 w-full rounded-md border border-[var(--border-color)] px-2 text-sm font-normal text-[var(--text-main)]"
+                                    >
+                                        <option value="">None</option>
+                                        {pmListings.map((p) => (
+                                            <option key={p._id} value={p._id}>{p.title || p._id}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                            </div>
+                            <ActivityLogger
+                                onSave={handleSaveActivity}
+                                fixedType="Task"
+                                statuses={statusOptions}
+                                initialData={{ status: defaultColumnForNew }}
+                                submitLabel="Create task"
+                                crmUsers={crmUsers}
+                                defaultReporterId={defaultReporterId || undefined}
+                                variant="hubspot"
+                            />
                         </div>
-                        <ActivityLogger
-                            onSave={handleSaveActivity}
-                            fixedType="Task"
-                            statuses={statusOptions}
-                            initialData={{ status: defaultColumnForNew }}
-                            submitLabel="Create task"
-                            crmUsers={crmUsers}
-                            defaultReporterId={defaultReporterId || undefined}
-                            variant="hubspot"
-                        />
-                    </div>
-                </CrmSlidePanelShell>
-            </CrmJiraPortal>
+                    </CrmSlidePanelShell>
+                </CrmJiraPortal>
             )}
 
             {editingTask && (

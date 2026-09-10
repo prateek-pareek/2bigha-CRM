@@ -2973,6 +2973,12 @@ export class CRMService {
     if (!resolvedId) return null;
     id = resolvedId;
 
+    if (dto.stage !== undefined && dto.converted === undefined) {
+      dto.converted = dto.stage === 'Converted';
+    } else if (dto.status !== undefined && dto.status === 'Converted' && dto.converted === undefined) {
+      dto.converted = true;
+    }
+
     // Final sanitization for ObjectId fields
     if (dto.pipeline !== undefined)
       dto.pipeline = this.toObjectIdSafe(dto.pipeline);
@@ -4984,8 +4990,11 @@ export class CRMService {
       const allIds = selfId ? [selfId, ...ids] : ids;
       if (allIds.length) filter.assignee = { $in: allIds };
     } else {
-      const selfId = this.userObjectId(extras?.user);
-      if (selfId) filter.assignee = selfId;
+      const fullAccess = hasCrmFullDataAccess(extras?.user);
+      if (!fullAccess) {
+        const selfId = this.userObjectId(extras?.user);
+        if (selfId) filter.assignee = selfId;
+      }
     }
     try {
       const activities = await this.activityModel
@@ -5402,6 +5411,9 @@ export class CRMService {
     }
 
     if (!result) throw new Error('Invalid convert type');
+    
+    await this.bustCrmCache('leads', resolvedLeadId);
+    
     return result;
   }
 

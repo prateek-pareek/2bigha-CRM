@@ -155,19 +155,19 @@ export default function CRMDateRangePicker({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 z-[999] w-64 bg-card rounded-[24px] border border-border/50 shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[500px]">
-          <div className="p-4 border-b border-border/40 bg-surface-dim/30 shrink-0">
+        <div className="absolute top-full left-0 mt-2 z-[999] w-56 sm:w-64 bg-card rounded-[24px] border border-border/50 shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[350px]">
+          <div className="p-3 sm:p-4 border-b border-border/40 bg-surface-dim/30 shrink-0">
             <span className="text-xs font-black text-text-muted pl-1">Filter by Period</span>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-            <div className="py-2">
+            <div className="py-1 sm:py-2">
               {PREDEFINED_RANGES.map((range) => (
                 <button
                   key={range.label}
                   onClick={() => handleSelectRange(range)}
                   className={cn(
-                    "w-full px-5 py-3 text-left text-sm font-bold transition-all flex items-center justify-between group",
+                    "w-full px-3 sm:px-5 py-2 sm:py-3 text-left text-xs sm:text-sm font-bold transition-all flex items-center justify-between group",
                     selectedLabel === range.label ? "bg-primary/5 text-primary" : "text-text-main hover:bg-surface-dim"
                   )}
                 >
@@ -177,12 +177,12 @@ export default function CRMDateRangePicker({
               ))}
             </div>
 
-            <div className="p-4 border-t border-border/40 bg-surface-dim/30 space-y-3">
+            <div className="p-3 sm:p-4 border-t border-border/40 bg-surface-dim/30 space-y-2 sm:space-y-3">
               <div className="flex items-center gap-2 mb-1">
                 <Clock size={12} className="text-text-muted" />
                 <span className="text-xs font-black text-text-muted">Custom Range</span>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-2 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
                 <div className="space-y-1">
                   <span className="text-[9px] font-bold text-text-muted uppercase pl-1">From</span>
                   <DatePickerField
@@ -190,7 +190,7 @@ export default function CRMDateRangePicker({
                     onChange={setCustomFrom}
                     placeholder="Start"
                     disableFuture
-                    buttonClassName="h-9 w-full justify-start rounded-[3px] border-border/60 bg-white dark:bg-[var(--card-bg)] dark:text-[var(--text-main)] px-2 text-xs font-bold"
+                    buttonClassName="h-8 sm:h-9 w-full justify-start rounded-[3px] border-border/60 bg-white dark:bg-[var(--card-bg)] dark:text-[var(--text-main)] px-2 text-xs font-bold"
                   />
                 </div>
                 <div className="space-y-1">
@@ -200,15 +200,15 @@ export default function CRMDateRangePicker({
                     onChange={setCustomTo}
                     placeholder="End"
                     disableFuture
-                    buttonClassName="h-9 w-full justify-start rounded-[3px] border-border/60 bg-white dark:bg-[var(--card-bg)] dark:text-[var(--text-main)] px-2 text-xs font-bold"
+                    buttonClassName="h-8 sm:h-9 w-full justify-start rounded-[3px] border-border/60 bg-white dark:bg-[var(--card-bg)] dark:text-[var(--text-main)] px-2 text-xs font-bold"
                   />
                 </div>
               </div>
-              <button 
+              <button
                 type="button"
                 onClick={handleApplyCustom}
                 disabled={!customFrom || !customTo}
-                className="w-full py-2.5 bg-[var(--hs-link)] text-white text-xs font-semibold rounded-[3px] mt-1 disabled:opacity-50 hover:bg-[var(--hs-link-hover)] transition-all shadow-sm"
+                className="w-full py-2 sm:py-2.5 bg-[var(--hs-link)] text-white text-xs font-semibold rounded-[3px] mt-1 sm:mt-2 disabled:opacity-50 hover:bg-[var(--hs-link-hover)] transition-all shadow-sm"
               >
                 Apply Filter
               </button>

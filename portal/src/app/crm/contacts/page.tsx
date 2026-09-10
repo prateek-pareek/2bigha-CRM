@@ -611,8 +611,9 @@ export default function ContactsPage() {
           { label: 'Contacts' },
         ]}
         actions={
-          <CrmHeaderTools
-            leading={
+          <div className="flex items-center gap-2">
+            <CrmHeaderTools
+              leading={
               <>
                 {selectedIds.size > 0 && isAdmin && (
                   <CrmButton variant="danger" onClick={() => setShowConfirmDelete(true)} leftIcon={<CrmIcon.Trash size={14} />}>
@@ -663,6 +664,16 @@ export default function ContactsPage() {
               ) : null
             }
           />
+          {hasAccess('contacts:write') && (
+            <CrmButton
+              variant="primary"
+              onClick={() => setIsModalOpen(true)}
+              leftIcon={<CrmIcon.AddFilled size={16} />}
+            >
+              Add Contact
+            </CrmButton>
+          )}
+          </div>
         }
       />
 
@@ -720,15 +731,6 @@ export default function ContactsPage() {
               onChange={(mode) => changeViewMode(mode === 'calendar' ? 'calendar' : mode === 'grid' ? 'grid' : 'list')}
               modes={['list', 'grid', 'calendar']}
             />
-            {hasAccess('contacts:write') && (
-              <CrmButton
-                variant="primary"
-                onClick={() => setIsModalOpen(true)}
-                leftIcon={<CrmIcon.AddFilled size={16} />}
-              >
-                Add Contact
-              </CrmButton>
-            )}
           </>
         }
       />

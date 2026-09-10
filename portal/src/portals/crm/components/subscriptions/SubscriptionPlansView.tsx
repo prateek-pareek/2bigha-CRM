@@ -11,7 +11,7 @@ import { CrmButton } from "../ui/CrmButton";
 export default function SubscriptionPlansView() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "YEARLY">("MONTHLY");
+  const [billingCycle, setBillingCycle] = useState<string>("1M");
 
   useEffect(() => {
     async function loadPlans() {
@@ -43,8 +43,22 @@ export default function SubscriptionPlansView() {
     );
   }
 
-  // Find if yearly is available across any plan
-  const hasYearly = plans.some((p) => p.pricing.some((pr) => pr.billingCycle === "YEARLY"));
+  // Dynamically find available billing cycles across all plans
+  const availableCycles = Array.from(
+    new Set(plans.flatMap((p) => p.pricing.map((pr) => pr.billingCycle)))
+  ).sort((a, b) => {
+    const monthsA = parseInt(a.replace('M', ''), 10) || 0;
+    const monthsB = parseInt(b.replace('M', ''), 10) || 0;
+    return monthsA - monthsB;
+  });
+
+  const getCycleLabel = (cycle: string) => {
+    if (cycle === '1M') return 'Monthly';
+    if (cycle === '3M') return 'Quarterly';
+    if (cycle === '6M') return 'Half-Yearly';
+    if (cycle === '12M') return 'Yearly';
+    return cycle;
+  };
 
   return (
     <div className="space-y-6 pb-12">
@@ -55,25 +69,25 @@ export default function SubscriptionPlansView() {
         </p>
       </div>
 
-      {hasYearly && (
+      {availableCycles.length > 1 && (
         <div className="flex justify-center mt-4">
           <div className="flex items-center space-x-1 rounded-full border border-[var(--border-color)] bg-[var(--surface-dim)] p-1 shadow-sm">
-            <button
-              onClick={() => setBillingCycle("MONTHLY")}
-              className={`rounded-full px-5 py-1.5 text-xs font-semibold transition-colors ${
-                billingCycle === "MONTHLY" ? "bg-[var(--card-bg)] text-[var(--text-main)] shadow-sm border border-[var(--border-color)]" : "text-[var(--text-muted)] hover:text-[var(--text-main)]"
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setBillingCycle("YEARLY")}
-              className={`flex items-center rounded-full px-5 py-1.5 text-xs font-semibold transition-colors ${
-                billingCycle === "YEARLY" ? "bg-[var(--card-bg)] text-[var(--text-main)] shadow-sm border border-[var(--border-color)]" : "text-[var(--text-muted)] hover:text-[var(--text-main)]"
-              }`}
-            >
-              Yearly <span className="ml-1.5 text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Save 20%</span>
-            </button>
+            {availableCycles.map((cycle) => (
+              <button
+                key={cycle}
+                onClick={() => setBillingCycle(cycle)}
+                className={`flex items-center rounded-full px-5 py-1.5 text-xs font-semibold transition-colors ${
+                  billingCycle === cycle
+                    ? "bg-[var(--card-bg)] text-[var(--text-main)] shadow-sm border border-[var(--border-color)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-main)]"
+                }`}
+              >
+                {getCycleLabel(cycle)}
+                {cycle === '12M' && (
+                  <span className="ml-1.5 text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Save 20%</span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -125,7 +139,7 @@ export default function SubscriptionPlansView() {
               <div className="mb-1 flex items-baseline text-[var(--text-main)]">
                 <span className="text-3xl font-extrabold tracking-tight">₹{pricingOption.basePrice}</span>
                 <span className="ml-1 text-sm font-semibold text-[var(--text-muted)]">
-                  /{pricingOption.billingCycle === "YEARLY" ? "yr" : "mo"}
+                  /{pricingOption.billingCycle === "12M" ? "yr" : pricingOption.billingCycle === "3M" ? "qtr" : "mo"}
                 </span>
               </div>
               

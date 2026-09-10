@@ -11,6 +11,7 @@ export interface LeaderboardEntry {
   properties: number;
   taskCompletion: number;
   score: number;
+  team?: string;
 }
 
 interface LeaderboardTableProps {
@@ -46,11 +47,12 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ title, data,
             <tr>
               <th className="px-4 py-3 text-center w-12">Rank</th>
               <th className="px-4 py-3">Agent</th>
-              <th className="px-4 py-3 text-right">Score</th>
+              <th className="px-4 py-3">Team</th>
               <th className="px-4 py-3 text-right">Leads</th>
               <th className="px-4 py-3 text-right">Calls (Conn)</th>
               <th className="px-4 py-3 text-right">Properties</th>
               <th className="px-4 py-3 text-right">Tasks %</th>
+              <th className="px-4 py-3 text-right">Score</th>
             </tr>
           </thead>
           <tbody>
@@ -81,8 +83,8 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ title, data,
                     </div>
                     {entry.name}
                   </td>
-                  <td className="px-4 py-3 text-right font-bold text-blue-600 dark:text-blue-400">
-                    {entry.score}
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                    {entry.team || '—'}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
                     {entry.leads}
@@ -100,6 +102,9 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ title, data,
                       }`}>
                       {entry.taskCompletion}%
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-green-600 dark:text-green-400">
+                    {entry.score}
                   </td>
                 </tr>
               ))

@@ -51,7 +51,7 @@ export function CrmListToolbar({
     search ??
     (searchProps ? (
       <CrmSearchInput
-        wrapperClassName="relative w-[220px] max-w-full shrink-0"
+        wrapperClassName="relative w-full max-w-[220px]"
         placeholder={searchProps.placeholder ?? "Search"}
         {...searchProps}
       />
@@ -61,8 +61,10 @@ export function CrmListToolbar({
     <div className={cn("mb-2 shrink-0 space-y-2", className)}>
       <div className={cn(CRM_TOOLBAR, "justify-between gap-3")}>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
-          {filterControl ? <div className="shrink-0">{filterControl}</div> : null}
-          {searchControl ? <div className="shrink-0">{searchControl}</div> : null}
+          <div className={cn("flex shrink items-center gap-2.5 flex-nowrap", searchControl ? "flex-1 min-w-[150px]" : "min-w-0")}>
+            {filterControl ? <div className="shrink-0">{filterControl}</div> : null}
+            {searchControl ? <div className="flex-1 min-w-[100px]">{searchControl}</div> : null}
+          </div>
           {leftExtra}
         </div>
         {right ? (

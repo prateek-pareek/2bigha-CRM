@@ -51,28 +51,28 @@ function SimpleSelect({ value, onChange, options }: {
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className={`flex h-9 w-full items-center justify-between gap-2 rounded-md border px-3 text-sm transition-all ${
+        className={`flex h-[38px] w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 text-sm transition-all shadow-[var(--crm-shadow-input)] ${
           open
-            ? "border-[var(--hs-link)] bg-[#fff8f6] ring-1 ring-[var(--hs-link)]/20"
-            : "border-[var(--border-color)] bg-white text-[var(--text-main)] hover:border-[var(--hs-link)]/60 hover:bg-[#fff8f6]"
+            ? "border-[var(--primary)] bg-[var(--surface-dim)] ring-1 ring-[var(--primary)]/25"
+            : "border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-main)] hover:border-[var(--primary)]/60 hover:bg-[var(--surface-dim)]"
         }`}
       >
         <span className="text-[var(--text-main)]">{selected?.label}</span>
-        <ChevronDown size={13} className={`shrink-0 text-[var(--primary-muted)] transition-transform ${open ? "rotate-180 text-[var(--hs-link)]" : ""}`} />
+        <ChevronDown size={13} className={`shrink-0 text-[var(--text-muted)] transition-transform ${open ? "rotate-180 text-[var(--primary)]" : ""}`} />
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-[var(--border-color)] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.10)] overflow-hidden">
+        <div className="absolute z-[100] mt-1 w-full rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] shadow-[0_4px_16px_rgba(0,0,0,0.15)] overflow-hidden">
           {options.map((o) => (
             <button
               key={o.value}
               type="button"
               onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`flex w-full items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-[#fff3ef] hover:text-[#b94b36] ${
-                o.value === value ? "bg-[#fff3ef] text-[#b94b36] font-medium" : "text-[var(--text-main)]"
+              className={`flex w-full items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-dim)] hover:text-[var(--text-main)] ${
+                o.value === value ? "bg-[var(--surface-dim)] text-[var(--primary)] font-medium" : "text-[var(--text-main)]"
               }`}
             >
               {o.label}
-              {o.value === value && <Check size={12} className="text-[var(--hs-link)]" />}
+              {o.value === value && <Check size={12} className="text-[var(--primary)]" />}
             </button>
           ))}
         </div>
@@ -81,9 +81,9 @@ function SimpleSelect({ value, onChange, options }: {
   );
 }
 
-const LBL = "block text-xs font-semibold text-[var(--text-muted)] mb-1";
+const LBL = "mb-1.5 block text-[13px] font-medium text-[var(--text-main)]";
 const INP =
-  "w-full h-9 bg-white border border-[var(--border-color)] rounded-md px-3 text-sm text-[var(--text-main)] outline-none placeholder:text-[var(--primary-muted)] focus:border-[var(--hs-link)] focus:ring-1 focus:ring-[var(--hs-link)]/30 transition-all";
+  "w-full h-[38px] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)] shadow-[var(--crm-shadow-input)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/25 transition-all";
 import {
   formatCategorySummary,
   type CategoryAudience,
@@ -437,14 +437,14 @@ export default function CrmSnippetsSettingsPage() {
                 type="button"
                 onClick={() => copySnippetPlain(formData.body, formData.name)}
                 disabled={!formData.body.trim()}
-                className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-color)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--background)] transition-colors disabled:opacity-40"
+                className="inline-flex h-[38px] items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3.5 text-sm font-medium text-[var(--text-main)] shadow-[var(--crm-shadow-input)] hover:bg-[var(--background)] transition-colors disabled:opacity-40"
               >
                 <Copy size={14} /> Copy plain
               </button>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-md border border-[var(--border-color)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
+                className="inline-flex h-[38px] items-center justify-center rounded-[var(--radius-md)] border-0 bg-[var(--surface-dim)] px-3.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--background)] transition-colors"
               >
                 Cancel
               </button>
@@ -452,7 +452,7 @@ export default function CrmSnippetsSettingsPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !formData.name.trim() || !formData.body.trim()}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-[var(--hs-link)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--hs-link-hover)] transition-colors shadow-sm disabled:opacity-50"
+                className="flex-1 inline-flex h-[38px] items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--primary)] px-3.5 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--primary-dark)] transition-colors shadow-sm disabled:opacity-50"
               >
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                 {saving ? "Saving…" : editing ? "Save changes" : "Save snippet"}
@@ -463,7 +463,7 @@ export default function CrmSnippetsSettingsPage() {
           <div className="space-y-5">
             {/* Name */}
             <div>
-              <label className={LBL}>Name <span className="text-[#f2545b]">*</span></label>
+              <label className={LBL}>Name <span className="text-[var(--primary)]">*</span></label>
               <input
                 className={INP}
                 placeholder="e.g. Standard intro"
@@ -523,7 +523,7 @@ export default function CrmSnippetsSettingsPage() {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 relative z-50">
               <div>
                 <label className={LBL}>Audience</label>
                 <SimpleSelect
@@ -553,8 +553,8 @@ export default function CrmSnippetsSettingsPage() {
 
             {/* Content */}
             <div>
-              <label className={LBL}>Content <span className="text-[#f2545b]">*</span></label>
-              <div className="rounded-md border border-[var(--border-color)] overflow-hidden focus-within:border-[var(--hs-link)] focus-within:ring-1 focus-within:ring-[var(--hs-link)]/30 transition-all">
+              <label className={LBL}>Content <span className="text-[var(--primary)]">*</span></label>
+              <div className="rounded-[var(--radius-md)] border border-[var(--border-color)] overflow-hidden focus-within:border-[var(--primary)] focus-within:ring-1 focus-within:ring-[var(--primary)]/25 transition-all shadow-[var(--crm-shadow-input)]">
                 <RichTextEditor
                   key={editing?._id ?? "new"}
                   content={formData.body}

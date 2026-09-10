@@ -3767,17 +3767,28 @@ export class ReportingService {
   /**
    * Team & Organization Reports - Team-level aggregations
    */
-  async getTeamPerformanceMetrics(window: string) {
+  async getTeamPerformanceMetrics(window: string, teamLeadId?: string) {
     const range = this.resolveWorkspaceWindow(window);
     const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
 
+    let userFilter: any = {};
+    if (teamLeadId && teamLeadId !== 'all') {
+      userFilter.reportsTo = new Types.ObjectId(teamLeadId);
+    }
+
     // Get all agents grouped by team (using reportsTo for team hierarchy)
-    const [agents, callRows, leadRows, convertedRows, activityRows, users] = await Promise.all([
-      this.hrmsUserModel.find().select('_id firstName lastName email reportsTo').limit(2000).exec(),
+    const [agents, callRows, connectedCallRows, leadRows, convertedRows, activityRows, users] = await Promise.all([
+      this.hrmsUserModel.find(userFilter).select('_id firstName lastName email reportsTo').limit(2000).exec(),
       this.callLogModel
         .aggregate([
           { $match: { ...dateMatch, initiatedByUserId: { $exists: true, $ne: null } } },
           { $group: { _id: '$initiatedByUserId', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.callLogModel
+        .aggregate([
+          { $match: { ...dateMatch, callStatus: 'answered', agentId: { $exists: true, $ne: null } } },
+          { $group: { _id: '$agentId', count: { $sum: 1 } } },
         ])
         .exec(),
       this.leadModel
@@ -3795,7 +3806,7 @@ export class ReportingService {
       this.activityModel
         .aggregate([
           { $match: { ...dateMatch, type: { $nin: ['System'] }, author: { $exists: true, $ne: null } } },
-          { $group: { _id: '$author', count: { $sum: 1 } } },
+          { $group: { _id: { author: '$author', type: '$type', status: '$status' }, count: { $sum: 1 } } },
         ])
         .exec(),
       this.hrmsUserModel.find().select('_id firstName lastName email reportsTo').limit(2000).exec(),
@@ -3806,9 +3817,16 @@ export class ReportingService {
       new Map(rows.map((r) => [String(r._id), r.count]));
 
     const calls = countMapFn(callRows);
+    const connectedCalls = countMapFn(connectedCallRows);
     const leadsCreated = countMapFn(leadRows);
     const leadsConverted = countMapFn(convertedRows);
-    const activities = countMapFn(activityRows);
+    
+    const activityMap = new Map<string, any[]>();
+    for (const a of activityRows) {
+      const authorId = String(a._id.author);
+      if (!activityMap.has(authorId)) activityMap.set(authorId, []);
+      activityMap.get(authorId)!.push(a);
+    }
 
     // Group agents by team (manager/team lead from reportsTo)
     const teamMap = new Map<string, any[]>();
@@ -3831,18 +3849,43 @@ export class ReportingService {
     // Calculate team metrics
     const teamMetrics = Array.from(teamMap.entries()).map(([teamId, teamAgents]) => {
       const totalCalls = teamAgents.reduce((sum, a) => sum + (calls.get(String(a._id)) || 0), 0);
+      const totalConnected = teamAgents.reduce((sum, a) => sum + (connectedCalls.get(String(a._id)) || 0), 0);
       const totalLeads = teamAgents.reduce((sum, a) => sum + (leadsCreated.get(String(a._id)) || 0), 0);
       const totalConverted = teamAgents.reduce((sum, a) => sum + (leadsConverted.get(String(a._id)) || 0), 0);
-      const totalActivities = teamAgents.reduce((sum, a) => sum + (activities.get(String(a._id)) || 0), 0);
+      
+      let totalTasks = 0;
+      let completedTasks = 0;
+      let totalProperties = 0;
+
+      for (const agent of teamAgents) {
+        const agentActivities = activityMap.get(String(agent._id)) || [];
+        for (const a of agentActivities) {
+          if (a._id.type === 'Task') {
+            totalTasks += a.count;
+            if (a._id.status === 'Completed' || a._id.status === 'Done') completedTasks += a.count;
+          }
+          if (a._id.type === 'Property Share' || a._id.type === 'Site Visit') {
+            totalProperties += a.count;
+          }
+        }
+      }
+
+      const connectedRate = totalCalls > 0 ? Math.round((totalConnected / totalCalls) * 100) : 0;
+      const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+      const score = (totalLeads * 10) + (totalProperties * 20) + (totalConnected * 5) + (taskCompletionRate * 2);
 
       return {
         teamName: teamLeadNames.get(teamId) || (teamId === 'Unassigned' ? 'Unassigned' : teamId),
         teamId,
+        teamLead: teamLeadNames.get(teamId) || 'Unassigned',
         teamSize: teamAgents.length,
         totalCalls,
         totalLeads,
         leadsConverted: totalConverted,
-        totalActivities,
+        connectedRate,
+        totalProperties,
+        taskCompletionRate,
+        score
       };
     });
 
@@ -7477,17 +7520,33 @@ export class ReportingService {
     // Get all users (agents)
     let userFilter: any = { is_archived: { $ne: true } };
     if (teamId && teamId !== 'all') {
-      userFilter.team = new Types.ObjectId(teamId);
+      userFilter.reportsTo = new Types.ObjectId(teamId);
     }
-    const agents = await this.hrmsUserModel.find(userFilter).select('_id firstName lastName').lean();
+    const agents = await this.hrmsUserModel.find(userFilter).select('_id firstName lastName reportsTo').lean();
+    
+    // Resolve team names from reportsTo
+    const managerIds = [...new Set(agents.map(a => a.reportsTo?.toString()).filter(Boolean))] as string[];
+    let managerMap = new Map<string, string>();
+    if (managerIds.length > 0) {
+      const managers = await this.hrmsUserModel.find({ _id: { $in: managerIds } }).select('_id firstName lastName email').lean();
+      managerMap = new Map(managers.map((m: any) => [
+        String(m._id), 
+        `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email || 'Unknown'
+      ]));
+    }
 
     const leaderboards = await Promise.all(agents.map(async (agent) => {
       const authorMatch = this.authorIdQueryValue([agent._id as Types.ObjectId]);
       const agentIdStr = agent._id.toString();
 
       // 1. Leads
-      const leads = await this.leadModel.countDocuments({
+      const assigned = await this.leadModel.countDocuments({
         leadOwner: agentIdStr,
+        createdAt: { $gte: currentStart, $lt: currentEnd }
+      });
+
+      const leads = await this.leadModel.countDocuments({
+        $or: [{ leadOwner: agentIdStr }, { createdBy: agentIdStr }],
         createdAt: { $gte: currentStart, $lt: currentEnd }
       });
 
@@ -7520,18 +7579,51 @@ export class ReportingService {
         callStatus: 'answered',
         createdAt: { $gte: currentStart, $lt: currentEnd }
       });
+      const connectedRate = calls > 0 ? Math.round((connected / calls) * 100) : 0;
+
+      // 4. Task Status
+      const agentTasks = await this.activityModel.find({
+        author: authorMatch,
+        type: 'Task',
+        createdAt: { $gte: currentStart, $lt: currentEnd }
+      }).select('status dueDate').lean();
+
+      let openTasks = 0;
+      let overdueTasks = 0;
+      const now = new Date();
+
+      agentTasks.forEach((t: any) => {
+        if (t.status !== 'Completed' && t.status !== 'Done') {
+          openTasks++;
+          if (t.dueDate && new Date(t.dueDate) < now) {
+            overdueTasks++;
+          }
+        }
+      });
+
+      let taskStatus = openTasks > 0 ? `${openTasks} open` : 'All done';
+      if (overdueTasks > 0) {
+        taskStatus = `${overdueTasks} overdue`;
+      }
 
       // 5. Score (Formula: Leads*10 + Properties*20 + Connected*5 + TaskCompletion*2)
       const score = (leads * 10) + (properties * 20) + (connected * 5) + (taskCompletion * 2);
+      
+      const reportsToStr = agent.reportsTo ? String(agent.reportsTo) : 'Unassigned';
+      const teamName = managerMap.get(reportsToStr) || (reportsToStr === 'Unassigned' ? 'Unassigned' : reportsToStr);
 
       return {
         id: agent._id,
         name: `${agent.firstName || ''} ${agent.lastName || ''}`.trim(),
+        team: teamName,
         leads,
+        assigned,
         calls,
         connected,
+        connectedRate,
         properties,
         taskCompletion,
+        taskStatus,
         score
       };
     }));

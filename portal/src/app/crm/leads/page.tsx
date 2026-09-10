@@ -2017,19 +2017,22 @@ export default function LeadsPage() {
 
             right={undefined}
             secondary={
-              <div className="flex items-center gap-2 w-full justify-between flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <CrmScopeToggle
-                    allLabel="All Leads"
-                    mineLabel="My Leads"
-                    showMineOnly={showMyLeadsOnly}
-                    onShowAll={() => { setShowMyLeadsOnly(false); setPage(1); }}
-                    onShowMine={() => { setShowMyLeadsOnly(true); setPage(1); }}
-                    onClearAll={() => { setSearch(''); setFilters([]); setDateRange(null); }}
-                  />
-                  <CRMDateRangePicker onChange={setDateRange} compact />
+              <div className="flex items-center gap-2 w-full justify-between overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 sm:gap-3 md:gap-4">
+                <div className="flex items-center gap-2 flex-nowrap sm:flex-wrap sm:gap-3 order-1 flex-shrink-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap flex-shrink-0">
+                    <CrmScopeToggle
+                      allLabel="All Leads"
+                      mineLabel="My Leads"
+                      showMineOnly={showMyLeadsOnly}
+                      onShowAll={() => { setShowMyLeadsOnly(false); setPage(1); }}
+                      onShowMine={() => { setShowMyLeadsOnly(true); setPage(1); }}
+                      onClearAll={() => { setSearch(''); setFilters([]); setDateRange(null); }}
+                      className="flex-shrink-0"
+                    />
+                    <CRMDateRangePicker onChange={setDateRange} compact className="flex-shrink-0" />
+                  </div>
                   {!(user as any)?.assignedLeadsPipeline ? (
-                    <div className="relative">
+                    <div className="relative flex-shrink-0">
                       <CrmIcon.GitBranch
                         size={14}
                         className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
@@ -2043,7 +2046,7 @@ export default function LeadsPage() {
                           void fetchLeadsList(v || null);
                         }}
                         aria-label="Pipeline"
-                        className={cn(CRM_TOOLBAR_SELECT, 'min-w-[140px] max-w-[170px] pl-8 pr-7 text-xs')}
+                        className={cn(CRM_TOOLBAR_SELECT, 'h-[38px] w-auto sm:min-w-[140px] sm:max-w-[170px] pl-8 pr-7 text-xs')}
                       >
                         {pipelinesForActiveVertical.map((p) => (
                           <option key={p._id} value={p._id}>
@@ -2058,7 +2061,7 @@ export default function LeadsPage() {
                     </div>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 order-2 sm:order-2 flex-shrink-0">
                   <CrmViewToggle
                     value={viewMode}
                     onChange={(mode) => {
@@ -2071,11 +2074,22 @@ export default function LeadsPage() {
                     <button
                       type="button"
                       onClick={() => setIsColumnsOpen(true)}
-                      className={CRM_BTN_MANAGE_COLUMNS}
+                      className={cn(CRM_BTN_MANAGE_COLUMNS, "whitespace-nowrap hidden sm:inline-flex")}
                       title="Manage columns visibility and order"
                     >
                       <CrmIcon.Columns size={16} aria-hidden />
                       Manage Columns
+                    </button>
+                  ) : null}
+                  {viewMode === 'list' && hasAccess('leads:write') ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsColumnsOpen(true)}
+                      className="inline-flex sm:hidden h-[38px] items-center justify-center rounded-[5px] border border-[var(--border-color)] bg-white px-2 text-xs font-medium text-[var(--text-main)] shadow-xs hover:bg-[var(--surface-dim)] transition-colors dark:bg-black dark:hover:bg-[var(--surface-hover)]"
+                      title="Manage columns visibility and order"
+                      aria-label="Manage columns"
+                    >
+                      <CrmIcon.Columns size={14} aria-hidden />
                     </button>
                   ) : null}
                 </div>

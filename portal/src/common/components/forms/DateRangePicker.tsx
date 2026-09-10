@@ -151,7 +151,7 @@ export default function DateRangePicker({
       </Button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 z-[999] w-64 bg-card rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] shadow-[var(--crm-shadow-raised)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[500px]">
+        <div className="absolute top-full left-0 mt-2 z-[999] w-64 bg-card rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] shadow-[var(--crm-shadow-raised)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[350px]">
           <div className="p-3 border-b border-[var(--border-color)] bg-[var(--background)] shrink-0">
             <span className="text-xs font-semibold text-text-muted pl-1">Filter by period</span>
           </div>

@@ -5,7 +5,7 @@ import { getCrmAuthToken } from "@/lib/crm/api";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { DashboardShell, DateRangeFilter } from "@/components/crm/dashboards/DashboardShell";
 import { ChartCard, CustomChartTooltip } from "@/components/crm/dashboards/ChartCard";
-import { LeaderboardTable } from "@/components/crm/dashboards/LeaderboardTable";
+import { MemberPerformanceTable } from "@/components/crm/dashboards/MemberPerformanceTable";
 import { Dropdown } from "@/app/crm/workspace/_components/workspace-ui";
 import {
   ResponsiveContainer,
@@ -265,10 +265,9 @@ export default function TeamDashboardPage() {
         </ChartCard>
       </div>
 
-      {/* Leaderboard */}
       <div className="grid grid-cols-1 gap-6 mt-6">
-        <LeaderboardTable
-          title="Team Members Leaderboard"
+        <MemberPerformanceTable
+          title="Team — Member Performance"
           data={leaderboardData}
           loading={loading}
         />

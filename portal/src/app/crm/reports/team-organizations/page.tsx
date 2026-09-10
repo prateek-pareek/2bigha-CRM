@@ -14,7 +14,7 @@ import WhatsAppEngagementChart from "./WhatsAppEngagementChart";
 import IVRAnalyticsChart from "./IVRAnalyticsChart";
 import OrganizationTargetGauge from "./OrganizationTargetGauge";
 import TeamPerformanceTrendChart from "./TeamPerformanceTrendChart";
-import TeamActivityHeatmap from "./TeamActivityHeatmap";
+import TeamActivityAreaChart from "./TeamActivityAreaChart";
 import AdvancedTeamFilters, { AdvancedTeamFilter } from "./AdvancedTeamFilters";
 import TeamExportButtons from "./TeamExportButtons";
 import DetailedTeamView from "./DetailedTeamView";
@@ -265,7 +265,7 @@ export default function TeamOrganizationsReportsPage() {
       {/* Activity & Intent Analytics */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr]">
         <LeadIntentAnalytics intentData={intentData} loading={loading} />
-        <TeamActivityHeatmap trendData={trendData} loading={loading} />
+        <TeamActivityAreaChart trendData={trendData} loading={loading} />
       </div>
 
       {/* WhatsApp & IVR Analytics */}
