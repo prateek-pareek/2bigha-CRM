@@ -49,6 +49,7 @@ export const CrmIcon = {
   Settings: createCrmTiIcon("settings"),
   FilePdf: createCrmTiIcon("file-type-pdf"),
   FileXls: createCrmTiIcon("file-type-xls"),
+  FileText: createCrmTiIcon("file-text"),
   Trash: createCrmTiIcon("trash"),
   Columns: createCrmTiIcon("columns-3"),
   GitBranch: createCrmTiIcon("git-branch"),

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { crmStageAccent } from "@/lib/crm/stage-accent";
@@ -574,5 +575,189 @@ export function CrmHoverActionIcon({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+const ROW_ACTIONS_LINGER_MS = 8000;
+
+type CrmRowQuickActionsProps = {
+  /** Quick icons (Call / WhatsApp / Property / Farm). */
+  quick: ReactNode;
+  /** Trailing ⋮ menu — shown in the end Action column. */
+  menu: ReactNode;
+  /** How long the mid-scroll popup stays after mouse leaves (default 8s). */
+  lingerMs?: number;
+  className?: string;
+};
+
+/**
+ * Dual mode:
+ * - Scrolled to table end (Action cell in view): normal table Action column (icons + ⋮).
+ * - Mid-scroll / Action off-screen: hover popup with the 4 icons only (no mid-table Action rail).
+ */
+export function CrmRowQuickActions({
+  quick,
+  menu,
+  lingerMs = ROW_ACTIONS_LINGER_MS,
+  className,
+}: CrmRowQuickActionsProps) {
+  const [open, setOpen] = useState(false);
+  const [atEnd, setAtEnd] = useState(true);
+  const [popupStyle, setPopupStyle] = useState<CSSProperties | null>(null);
+  const hideTimerRef = useRef<number | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const clearHideTimer = useCallback(() => {
+    if (hideTimerRef.current != null) {
+      window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const show = useCallback(() => {
+    clearHideTimer();
+    setOpen(true);
+  }, [clearHideTimer]);
+
+  const scheduleHide = useCallback(() => {
+    clearHideTimer();
+    hideTimerRef.current = window.setTimeout(() => {
+      setOpen(false);
+      hideTimerRef.current = null;
+    }, lingerMs);
+  }, [clearHideTimer, lingerMs]);
+
+  useEffect(() => () => clearHideTimer(), [clearHideTimer]);
+
+  // Detect whether the Action cell is visible in the scroll viewport (table end).
+  useEffect(() => {
+    const root = rootRef.current;
+    const cell = root?.closest("td");
+    const scrollRoot = root?.closest(".crm-table-scroll") as HTMLElement | null;
+    if (!cell || !scrollRoot) return;
+
+    const update = (entry?: IntersectionObserverEntry) => {
+      if (entry) {
+        setAtEnd(entry.isIntersecting && entry.intersectionRatio >= 0.55);
+        return;
+      }
+      const cellRect = cell.getBoundingClientRect();
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const visible =
+        cellRect.left < rootRect.right - 8 &&
+        cellRect.right > rootRect.left + 8 &&
+        cellRect.width > 0;
+      const mostlyVisible = visible && cellRect.left >= rootRect.left - 4;
+      setAtEnd(mostlyVisible);
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => update(entry),
+      { root: scrollRoot, threshold: [0, 0.25, 0.5, 0.55, 0.75, 1] },
+    );
+    observer.observe(cell);
+    update();
+    return () => observer.disconnect();
+  }, []);
+
+  // Position fixed popup against the visible right edge of the scroll area.
+  const syncPopupPosition = useCallback(() => {
+    const root = rootRef.current;
+    const row = root?.closest("tr");
+    const scrollRoot = root?.closest(".crm-table-scroll") as HTMLElement | null;
+    if (!row || !scrollRoot) {
+      setPopupStyle(null);
+      return;
+    }
+    const rowRect = row.getBoundingClientRect();
+    const scrollRect = scrollRoot.getBoundingClientRect();
+    setPopupStyle({
+      position: "fixed",
+      top: rowRect.top + rowRect.height / 2,
+      right: Math.max(12, window.innerWidth - scrollRect.right + 12),
+      transform: "translateY(-50%)",
+      zIndex: 9999,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (atEnd || !open) {
+      setPopupStyle(null);
+      return;
+    }
+    syncPopupPosition();
+    const scrollRoot = rootRef.current?.closest(".crm-table-scroll");
+    const onMove = () => syncPopupPosition();
+    scrollRoot?.addEventListener("scroll", onMove, { passive: true });
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      scrollRoot?.removeEventListener("scroll", onMove);
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [atEnd, open, syncPopupPosition]);
+
+  useEffect(() => {
+    const cell = rootRef.current;
+    const row = cell?.closest("tr");
+    if (!row) return;
+
+    const onEnter = () => show();
+    const onLeave = (e: MouseEvent) => {
+      const next = e.relatedTarget as Node | null;
+      if (next && row.contains(next)) return;
+      // Keep open while moving onto the portaled popup
+      if (next && (next as Element).closest?.(".crm-row-actions__viewport-popup")) return;
+      scheduleHide();
+    };
+
+    row.addEventListener("mouseenter", onEnter);
+    row.addEventListener("mouseleave", onLeave);
+    return () => {
+      row.removeEventListener("mouseenter", onEnter);
+      row.removeEventListener("mouseleave", onLeave);
+    };
+  }, [show, scheduleHide]);
+
+  useEffect(() => {
+    const row = rootRef.current?.closest("tr");
+    if (!row) return;
+    row.classList.toggle("crm-row-actions-open", open && !atEnd);
+  }, [open, atEnd]);
+
+  return (
+    <div
+      ref={rootRef}
+      className={cn(
+        "crm-row-actions inline-flex items-center justify-end gap-1",
+        atEnd ? "crm-row-actions--end" : "crm-row-actions--hover",
+        className,
+      )}
+      onClick={(e) => e.stopPropagation()}
+      onMouseEnter={show}
+      onMouseLeave={scheduleHide}
+    >
+      {/* End-of-table: icons live in the Action column */}
+      {atEnd ? <div className="crm-row-actions__inline">{quick}</div> : null}
+
+      {/* Mid-scroll: icons only as a hover popup */}
+      {!atEnd && open && popupStyle && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="crm-row-actions__viewport-popup"
+              style={popupStyle}
+              onMouseEnter={show}
+              onMouseLeave={scheduleHide}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {quick}
+            </div>,
+            document.body,
+          )
+        : null}
+
+      <div className="crm-row-actions__menu shrink-0">{menu}</div>
+    </div>
   );
 }

@@ -2358,7 +2358,8 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   line-height: 1.5;
   letter-spacing: normal;
   color: #707070;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
   background: #ffffff;
 }
@@ -2566,27 +2567,151 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   padding-right: 8px !important;
 }
 
-.crm-table .crm-table-actions,
-[data-crm-theme="crms"] .crm-table .crm-table-actions {
-  position: sticky;
-  right: 0;
-  width: auto;
-  min-width: 17rem;
+/* Leave a little room for the fixed theme gear; Action paints into this gap */
+.crm-list-page .crm-table-scroll {
+  padding-right: 2.75rem;
+  scroll-padding-right: 2.75rem;
+}
+
+/*
+ * Action = normal LAST column only (never sticky horizontally).
+ * Visible as a full table Action column when scrolled to the right end.
+ * Mid-scroll uses a hover popup (see .crm-row-actions__viewport-popup).
+ */
+.crm-table tbody .crm-table-actions,
+[data-crm-theme="crms"] .crm-table tbody .crm-table-actions {
+  position: relative;
+  right: auto !important;
+  width: 11.5rem;
+  min-width: 11.5rem;
+  max-width: 11.5rem;
+  white-space: nowrap;
   text-align: right;
-  padding-left: 12px !important;
-  padding-right: 12px !important;
-  background-color: white;
-  z-index: 9;
+  vertical-align: middle;
+  padding-left: 8px !important;
+  padding-right: 10px !important;
+  background-color: #ffffff !important;
+  border-left: 1px solid #e8eaed;
+  border-bottom: 1px solid var(--border-color, #e2e8f0) !important;
+  box-shadow: none !important;
+  z-index: auto !important;
+  overflow: visible;
 }
 
-.crm-table thead .crm-table-actions {
-  z-index: 10;
-  background-color: white;
+/* Extend header/row color + bottom line into the right padding (to table end) */
+.crm-table thead .crm-table-actions::after,
+.crm-table tbody .crm-table-actions::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 2.75rem;
+  pointer-events: none;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
 }
 
-[data-theme="dark"] .crm-table .crm-table-actions,
-[data-theme="dark"][data-crm-theme="crms"] .crm-table .crm-table-actions {
+.crm-table thead .crm-table-actions::after {
+  background-color: #f7f8f9;
+}
+
+.crm-table tbody .crm-table-actions::after {
+  background-color: #ffffff;
+}
+
+.crm-table tbody tr.crm-table-row-selected .crm-table-actions,
+.crm-table tbody tr:hover .crm-table-actions {
+  background-color: #ffffff !important;
+}
+
+.crm-table tbody tr.crm-table-row-selected .crm-table-actions::after,
+.crm-table tbody tr:hover .crm-table-actions::after {
+  background-color: #ffffff;
+}
+
+.crm-table .crm-table-actions > div,
+.crm-table .crm-table-actions .crm-row-actions {
+  display: inline-flex !important;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0;
+}
+
+/* Same grey header treatment as every other column */
+.crm-table thead th.crm-table-actions,
+[data-crm-theme="crms"] .crm-table thead th.crm-table-actions,
+.crm-list-page .crm-table thead th.crm-table-actions {
+  position: sticky !important;
+  top: 0 !important;
+  right: auto !important;
+  z-index: 10 !important;
+  width: 11.5rem;
+  min-width: 11.5rem;
+  max-width: 11.5rem;
+  white-space: nowrap;
+  text-align: right;
+  vertical-align: middle;
+  padding-left: 8px !important;
+  padding-right: 10px !important;
+  border-left: 1px solid #e8eaed;
+  border-bottom: 1px solid var(--border-color, #e2e8f0) !important;
+  background: #f7f8f9 !important;
+  background-color: #f7f8f9 !important;
+  box-shadow: inset 0 -1px 0 var(--border-color, #e2e8f0);
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #1f2020 !important;
+  overflow: visible;
+}
+
+.crm-row-actions__inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.crm-row-actions__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Mid-scroll hover popup — floats on the visible right edge, not a table column */
+.crm-row-actions__viewport-popup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #e8eaed;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+  pointer-events: auto;
+}
+
+[data-theme="dark"] .crm-table tbody .crm-table-actions,
+[data-theme="dark"][data-crm-theme="crms"] .crm-table tbody .crm-table-actions {
+  background-color: var(--crm-dark-bg, #1a1a1a) !important;
+  border-left-color: var(--border-color, #404040);
+}
+
+[data-theme="dark"] .crm-table tbody .crm-table-actions::after {
   background-color: var(--crm-dark-bg, #1a1a1a);
+  border-bottom-color: var(--border-color, #404040);
+}
+
+[data-theme="dark"] .crm-table thead th.crm-table-actions {
+  background: var(--surface-dim, #252525) !important;
+  background-color: var(--surface-dim, #252525) !important;
+  box-shadow: inset 0 -1px 0 var(--border-color, #404040);
+}
+
+[data-theme="dark"] .crm-table thead th.crm-table-actions::after {
+  background-color: var(--surface-dim, #252525);
+  border-bottom-color: var(--border-color, #404040);
 }
 
 .crm-table-action-btn {

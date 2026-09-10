@@ -92,9 +92,11 @@ export class RoleDashboardService {
 
   /**
    * Which dashboard the caller lands on / may open. Permission keys drive it:
-   *   workspace-admin:read (or dashboard:read master / true admin) → admin
+   *   workspace-admin:read → admin
    *   workspace-team:read  → team
    *   workspace-agent:read → agent
+   *   dashboard:read master (no tier key) / true admin → admin
+   * Specific tier keys win over the master so Agents are not treated as Admin.
    * Fallback when no explicit key: team if the user has direct reports, else agent.
    */
   async resolveTier(
@@ -105,7 +107,7 @@ export class RoleDashboardService {
     const perms = this.mergePermissions(dbUser, jwtUser);
     const has = (k: string) => perms.includes(k);
 
-    if (isAdmin || has('workspace-admin:read') || has('dashboard:read')) {
+    if (isAdmin || has('workspace-admin:read')) {
       return { tier: 'admin', teamLeadId: null, canSeeAll: true };
     }
     if (has('workspace-team:read')) {
@@ -113,6 +115,9 @@ export class RoleDashboardService {
     }
     if (has('workspace-agent:read')) {
       return { tier: 'agent', teamLeadId: null, canSeeAll: false };
+    }
+    if (has('dashboard:read')) {
+      return { tier: 'admin', teamLeadId: null, canSeeAll: true };
     }
     // No explicit dashboard key — infer from hierarchy.
     const selfId = this.selfId(jwtUser, dbUser);

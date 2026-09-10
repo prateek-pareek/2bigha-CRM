@@ -67,9 +67,25 @@ export default function AdminDashboardPage() {
   return (
     <DashboardShell
       title="Admin Dashboard"
-      description="Organization-wide CRM metrics across all teams. Admin only."
+      description="Organization-wide CRM metrics. Open Team Lead or Agent dashboards to inspect any employee."
       dateRange={dateRange}
       setDateRange={setDateRange}
+      extraFilters={
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/crm/workspace/team"
+            className="inline-flex h-[38px] items-center rounded-[5px] border border-[var(--border-color)] bg-white px-3 text-xs font-semibold text-[var(--text-main)] shadow-[var(--crm-shadow-input)] hover:bg-[var(--surface-dim)] dark:bg-black dark:border-white/10"
+          >
+            Team dashboards
+          </Link>
+          <Link
+            href="/crm/workspace/agent"
+            className="inline-flex h-[38px] items-center rounded-[5px] border border-[var(--border-color)] bg-white px-3 text-xs font-semibold text-[var(--text-main)] shadow-[var(--crm-shadow-input)] hover:bg-[var(--surface-dim)] dark:bg-black dark:border-white/10"
+          >
+            Agent dashboards
+          </Link>
+        </div>
+      }
     >
       {error ? (
         <DashboardError message={error} onRetry={load} />
@@ -227,6 +243,7 @@ function TeamTable({ rows }: { rows: any[] }) {
             <th className="px-3 py-2 text-right">Props</th>
             <th className="px-3 py-2 text-right">Task %</th>
             <th className="px-3 py-2 text-right">Score</th>
+            <th className="px-3 py-2 text-right">View</th>
           </tr>
         </thead>
         <tbody>
@@ -241,6 +258,18 @@ function TeamTable({ rows }: { rows: any[] }) {
               <td className="px-3 py-2 text-right text-muted-foreground">{fmt(t.properties)}</td>
               <td className="px-3 py-2 text-right text-muted-foreground">{t.taskCompletion}%</td>
               <td className="px-3 py-2 text-right font-semibold text-emerald-600 dark:text-emerald-400">{t.score}%</td>
+              <td className="px-3 py-2 text-right">
+                {t.teamId ? (
+                  <Link
+                    href={`/crm/workspace/team?teamLead=${encodeURIComponent(String(t.teamId))}`}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    Open
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -263,6 +292,7 @@ function LeaderTable({ rows }: { rows: any[] }) {
             <th className="px-3 py-2 text-right">Calls</th>
             <th className="px-3 py-2 text-right">Properties</th>
             <th className="px-3 py-2 text-right">Score</th>
+            <th className="px-3 py-2 text-right">View</th>
           </tr>
         </thead>
         <tbody>
@@ -289,6 +319,18 @@ function LeaderTable({ rows }: { rows: any[] }) {
               <td className="px-3 py-2 text-right text-muted-foreground">{fmt(a.calls)}</td>
               <td className="px-3 py-2 text-right text-muted-foreground">{fmt(a.properties)}</td>
               <td className="px-3 py-2 text-right font-semibold text-emerald-600 dark:text-emerald-400">{a.score}</td>
+              <td className="px-3 py-2 text-right">
+                {a.id ? (
+                  <Link
+                    href={`/crm/workspace/agent?agent=${encodeURIComponent(String(a.id))}`}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    Open
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

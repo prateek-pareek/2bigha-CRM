@@ -15,6 +15,9 @@ const ACTIONS = ['read', 'write', 'edit', 'delete'] as const;
 const MODULES = [
   'dashboard',
   'workspace',
+  'workspace-admin',
+  'workspace-team',
+  'workspace-agent',
   'workspace-work',
   'workspace-summary',
   'workspace-prospecting',
@@ -69,6 +72,7 @@ type RoleSeed = {
   name: string;
   description: string;
   isSystem?: boolean;
+  workspaceModule?: '2Bigha' | 'PROPERTY_MGMT' | 'LEGAL' | 'ALL';
   permissions: string[];
 };
 
@@ -89,11 +93,15 @@ const SALES_CORE = [
   'proposals',
 ];
 
+/** Agent / Team Lead must NOT get `dashboard:read` — that key routes them to the Admin dashboard. */
+const SALES_CORE_NO_DASH = SALES_CORE.filter((m) => m !== 'dashboard');
+
 const COMPANY_ROLES: RoleSeed[] = [
   {
     name: 'Admin',
     description: 'Full CRM access — settings, users, all records',
     isSystem: true,
+    workspaceModule: 'ALL',
     permissions: [
       ...modulePerms([...MODULES]),
       ...EXTRA_PERMS.map((p) => p.name),
@@ -102,6 +110,7 @@ const COMPANY_ROLES: RoleSeed[] = [
   {
     name: 'Manager',
     description: 'Sales manager — all-team visibility, pipeline moves, no user admin',
+    workspaceModule: '2Bigha',
     permissions: [
       ...modulePerms(SALES_CORE),
       ...modulePerms(['reports', 'reports-overview', 'reports-leads', 'outreach', 'workflows'], [
@@ -119,8 +128,10 @@ const COMPANY_ROLES: RoleSeed[] = [
   {
     name: 'Team Lead',
     description: 'Team lead — own + direct reports scope',
+    workspaceModule: '2Bigha',
     permissions: [
-      ...modulePerms(SALES_CORE),
+      ...modulePerms(SALES_CORE_NO_DASH),
+      'workspace-team:read',
       ...modulePerms(['reports', 'reports-overview', 'reports-leads'], ['read']),
       'leads:read:team',
       'clients:read:team',
@@ -131,10 +142,10 @@ const COMPANY_ROLES: RoleSeed[] = [
   {
     name: 'Agent',
     description: 'Sales agent — own leads, tasks, calls, inbox',
+    workspaceModule: '2Bigha',
     permissions: [
       ...modulePerms(
         [
-          'dashboard',
           'workspace',
           'workspace-work',
           'workspace-prospecting',
@@ -149,12 +160,14 @@ const COMPANY_ROLES: RoleSeed[] = [
         ],
         ['read', 'write', 'edit'],
       ),
+      'workspace-agent:read',
       'organizations:read',
     ],
   },
   {
     name: 'BDM',
     description: 'Business Development Manager — broad sales + reports',
+    workspaceModule: '2Bigha',
     permissions: [
       ...modulePerms(SALES_CORE),
       ...modulePerms(['reports', 'reports-overview', 'reports-leads', 'outreach'], [
@@ -171,6 +184,7 @@ const COMPANY_ROLES: RoleSeed[] = [
   {
     name: 'BDE',
     description: 'Business Development Executive — field / acquisition focus',
+    workspaceModule: '2Bigha',
     permissions: [
       ...modulePerms(
         [
@@ -196,6 +210,7 @@ const COMPANY_ROLES: RoleSeed[] = [
   {
     name: 'Social Media',
     description: 'Social / outreach — campaigns, inbox, light lead access',
+    workspaceModule: '2Bigha',
     permissions: [
       ...modulePerms(
         ['dashboard', 'workspace', 'outreach', 'inbox', 'activities', 'contacts'],
@@ -211,6 +226,7 @@ const COMPANY_ROLES: RoleSeed[] = [
   {
     name: 'Legal',
     description: 'Legal workspace — cases and related records',
+    workspaceModule: 'LEGAL',
     permissions: [
       ...modulePerms(['dashboard', 'workspace', 'legal', 'activities', 'contacts'], [
         'read',
@@ -229,6 +245,7 @@ const COMPANY_ROLES: RoleSeed[] = [
   {
     name: 'Property Management',
     description: 'Property / PM-facing CRM access',
+    workspaceModule: 'PROPERTY_MGMT',
     permissions: [
       ...modulePerms(
         ['dashboard', 'workspace', 'clients', 'contacts', 'organizations', 'activities', 'inbox'],
@@ -262,6 +279,7 @@ async function seed() {
         description: String,
         permissions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Permission' }],
         isSystem: { type: Boolean, default: false },
+        workspaceModule: { type: String, default: 'ALL' },
       },
       { timestamps: true },
     );
@@ -315,6 +333,7 @@ async function seed() {
             description: role.description,
             permissions: ids,
             isSystem: !!role.isSystem,
+            workspaceModule: role.workspaceModule || 'ALL',
           },
         },
         { upsert: true, returnDocument: 'after' },
@@ -332,9 +351,16 @@ async function seed() {
   }
 }
 
-seed()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error('Role seed failed:', err);
-    process.exit(1);
-  });
+export async function seedCrmRoles(): Promise<void> {
+  await seed();
+}
+
+const invokedDirectly = /seed-crm-roles/.test(process.argv[1] || '');
+if (invokedDirectly) {
+  seed()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error('Role seed failed:', err);
+      process.exit(1);
+    });
+}

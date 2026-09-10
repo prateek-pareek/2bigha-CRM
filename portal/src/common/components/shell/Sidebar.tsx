@@ -24,6 +24,7 @@ import {
     canAccessAnyReport,
     canAccessAnyWorkspace,
     canAccessCrmDashboardPage,
+    canShowCrmDashboardNavItem,
 } from '@/lib/crm/shared/dashboard-access';
 import { CrmNavIcon } from '@/lib/crm/shared/icons';
 
@@ -884,6 +885,12 @@ export default function Sidebar({
                                 permission: string;
                                 children?: Array<{ permission: string }>;
                             }) => {
+                                if (item.name === 'Dashboard') {
+                                    return canShowCrmDashboardNavItem(
+                                        hasAccess,
+                                        child.permission,
+                                    );
+                                }
                                 const grand =
                                     'children' in child && Array.isArray(child.children)
                                         ? child.children
@@ -896,10 +903,17 @@ export default function Sidebar({
                                 }
                                 return suiteNavHasAccess(hasAccess, child.permission);
                             };
-                            if (childList.some(childVisible)) return true;
                             if (item.name === 'Dashboard') {
-                                return canAccessAnyWorkspace(hasAccess);
+                                return (
+                                    childList.some((child) =>
+                                        canShowCrmDashboardNavItem(
+                                            hasAccess,
+                                            child.permission,
+                                        ),
+                                    ) || canAccessAnyWorkspace(hasAccess)
+                                );
                             }
+                            if (childList.some(childVisible)) return true;
                             if (item.name === 'Reports') {
                                 return canAccessAnyReport(hasAccess);
                             }
@@ -921,6 +935,12 @@ export default function Sidebar({
                                     const children =
                                         'children' in item && Array.isArray(item.children)
                                             ? item.children.filter((child) => {
+                                                  if (item.name === 'Dashboard') {
+                                                      return canShowCrmDashboardNavItem(
+                                                          hasAccess,
+                                                          child.permission,
+                                                      );
+                                                  }
                                                   const grand =
                                                       'children' in child &&
                                                       Array.isArray(child.children)

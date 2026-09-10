@@ -410,6 +410,7 @@ export default function ContactsPage() {
     }
 
     const handleClickOutside = (e: MouseEvent) => {
+      if ((e.target as Element | null)?.closest?.('[data-crm-export-menu]')) return;
       if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
         setIsActionsOpen(false);
       }

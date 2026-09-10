@@ -20,6 +20,8 @@ type RoleDoc = {
   name: string;
   description?: string;
   isActive?: boolean;
+  /** Seeded hierarchy role (Admin, Manager, Team Lead, …) — cannot be renamed, re-scoped, or deleted. */
+  isSystem?: boolean;
   permissions: string[];
   crmPermissions: string[];
   pmPermissions: string[];
@@ -441,8 +443,13 @@ export function CrmRolesSettings() {
             </div>
           )}
 
-          <div className="flex gap-2 justify-end">
-            {selectedId && (
+          <div className="flex items-center gap-2 justify-end">
+            {selected?.isSystem && (
+              <span className="mr-auto text-xs text-text-muted">
+                System role — name &amp; permissions are locked.
+              </span>
+            )}
+            {selectedId && !selected?.isSystem && (
               <Button size="sm" variant="outline" onClick={deleteRole} disabled={saving} className="gap-1.5 text-red-600 border-red-200">
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
