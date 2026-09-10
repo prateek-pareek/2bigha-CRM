@@ -123,8 +123,118 @@ export const CRM_REPORT_ACCESS_ITEMS: CrmDashboardAccessItem[] = [
   },
 ];
 
-/** Master key OR specific module — same pattern as canAccessCrmSetting.
- *  Only applies the `dashboard:read` master key to workspace-* / reports-* pages.
+/** Role-tier dashboards shown under Work → Dashboard. Highest grant wins. */
+export const ROLE_DASHBOARD_PERMISSIONS = [
+  "workspace-admin:read",
+  "workspace-team:read",
+  "workspace-agent:read",
+] as const;
+
+export type RoleDashboardPermission =
+  (typeof ROLE_DASHBOARD_PERMISSIONS)[number];
+
+/**
+ * One landing dashboard per role: Admin > Team Lead > Agent.
+ * Specific tier keys win over the `dashboard:read` master so Agents who still
+ * carry the master key are not shown Admin / Team Lead dashboards.
+ */
+export function primaryRoleDashboardPermission(
+  hasAccess: (permission: string) => boolean,
+): RoleDashboardPermission | null {
+  if (hasAccess("workspace-admin:read")) {
+    return "workspace-admin:read";
+  }
+  if (hasAccess("workspace-team:read")) {
+    return "workspace-team:read";
+  }
+  if (hasAccess("workspace-agent:read")) {
+    return "workspace-agent:read";
+  }
+  // Master key alone (Managers / Admins without a tier key) → Admin dashboard.
+  if (hasAccess("dashboard:read")) {
+    return "workspace-admin:read";
+  }
+  return null;
+}
+
+function isRoleDashboardPermission(
+  permission: string,
+): permission is RoleDashboardPermission {
+  return (ROLE_DASHBOARD_PERMISSIONS as readonly string[]).includes(permission);
+}
+
+/**
+ * Which role dashboards a caller may open:
+ *   Admin  → Admin only
+ *   Team   → Team Lead + Agent (agent view filtered by team member name)
+ *   Agent  → Agent only
+ */
+export function canAccessRoleDashboard(
+  hasAccess: (permission: string) => boolean,
+  requiredPermission: string,
+): boolean {
+  if (!isRoleDashboardPermission(requiredPermission)) return false;
+  const primary = primaryRoleDashboardPermission(hasAccess);
+  if (!primary) return false;
+  if (primary === "workspace-admin:read") {
+    return requiredPermission === "workspace-admin:read";
+  }
+  if (primary === "workspace-team:read") {
+    return (
+      requiredPermission === "workspace-team:read" ||
+      requiredPermission === "workspace-agent:read"
+    );
+  }
+  return requiredPermission === "workspace-agent:read";
+}
+
+/** True when caller is Admin tier (org-wide pickers on Admin / Team pages). */
+export function canPickAnyDashboardEmployee(
+  hasAccess: (permission: string) => boolean,
+): boolean {
+  return primaryRoleDashboardPermission(hasAccess) === "workspace-admin:read";
+}
+
+/** Team Lead may open Agent Dashboard for a selected team member. */
+export function canPickAgentOnAgentDashboard(
+  hasAccess: (permission: string) => boolean,
+): boolean {
+  return primaryRoleDashboardPermission(hasAccess) === "workspace-team:read";
+}
+
+/** Sidebar visibility: page access AND role-dashboard rules above. */
+export function canShowCrmDashboardNavItem(
+  hasAccess: (permission: string) => boolean,
+  requiredPermission: string,
+): boolean {
+  if (!isRoleDashboardPermission(requiredPermission)) {
+    return (
+      canAccessCrmDashboardPage(hasAccess, requiredPermission) ||
+      hasAccess(requiredPermission)
+    );
+  }
+  return canAccessRoleDashboard(hasAccess, requiredPermission);
+}
+
+/** Redirect away from a role dashboard the caller cannot open. */
+export function roleDashboardRedirectHref(
+  hasAccess: (permission: string) => boolean,
+  requiredPermission: string,
+): string | null {
+  if (!isRoleDashboardPermission(requiredPermission)) return null;
+  if (canAccessRoleDashboard(hasAccess, requiredPermission)) return null;
+  const primary = primaryRoleDashboardPermission(hasAccess);
+  if (!primary) return null;
+  return (
+    CRM_WORKSPACE_ACCESS_ITEMS.find((i) => i.requiredPermission === primary)
+      ?.href ?? null
+  );
+}
+
+/**
+ * Master key OR specific module — same pattern as canAccessCrmSetting.
+ * Role-tier dashboards follow canAccessRoleDashboard (Admin / Team+Agent / Agent).
+ * Other workspace-* / reports-* still accept `dashboard:read` as a master unlock.
  */
 export function canAccessCrmDashboardPage(
   hasAccess: (permission: string) => boolean,
@@ -132,6 +242,9 @@ export function canAccessCrmDashboardPage(
   opts?: { canViewCrmRevenue?: boolean; revenueOnly?: boolean },
 ): boolean {
   if (opts?.revenueOnly && !opts.canViewCrmRevenue) return false;
+  if (isRoleDashboardPermission(requiredPermission)) {
+    return canAccessRoleDashboard(hasAccess, requiredPermission);
+  }
   const isScoped =
     requiredPermission.startsWith("workspace-") ||
     requiredPermission.startsWith("reports-");

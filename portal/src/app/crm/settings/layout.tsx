@@ -142,18 +142,27 @@ export default function CrmSettingsLayout({ children }: { children: React.ReactN
           <div
             className={cn(
               "flex items-center border-b border-[var(--border-color)]",
-              isCollapsed ? "justify-center px-2 py-3.5" : "gap-2.5 px-4 py-3.5",
+              isCollapsed ? "flex-col gap-2 px-2 py-3" : "gap-2 px-3 py-3",
             )}
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-[var(--primary-light)] text-[var(--primary)]">
               <SlidersHorizontal className="h-4 w-4" />
             </div>
             {!isCollapsed ? (
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h2 className="truncate text-sm font-bold text-[var(--text-main)]">Settings</h2>
                 <p className="truncate text-[11px] text-[var(--text-muted)]">CRM configuration</p>
               </div>
             ) : null}
+            <button
+              type="button"
+              onClick={handleToggleSidebar}
+              className={cn(CRM_BTN_ICON, "h-7 w-7 shrink-0")}
+              aria-label={isCollapsed ? "Expand settings sidebar" : "Collapse settings sidebar"}
+              title={isCollapsed ? "Expand" : "Collapse"}
+            >
+              {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+            </button>
           </div>
 
           <nav
@@ -192,19 +201,6 @@ export default function CrmSettingsLayout({ children }: { children: React.ReactN
               </div>
             ))}
           </nav>
-
-          <button
-            type="button"
-            onClick={handleToggleSidebar}
-            className={cn(
-              CRM_BTN_ICON,
-              "absolute -right-3 top-4 z-10 hidden h-7 w-7 shadow-[var(--crm-shadow-card)] lg:flex",
-            )}
-            aria-label={isCollapsed ? "Expand settings sidebar" : "Collapse settings sidebar"}
-            title={isCollapsed ? "Expand" : "Collapse"}
-          >
-            {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
         </aside>
 
         <main className="min-w-0">{children}</main>

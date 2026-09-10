@@ -466,12 +466,11 @@ export default function LegalCasesPage() {
             leftExtra={
               <>
                 <CRMDateRangePicker onChange={setDateRange} compact />
-                <div className="relative group">
-                  <CrmIcon.GitBranch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                <div className="relative group shrink-0">
                   <select
                     value={selectedPipelineId ? String(selectedPipelineId) : ''}
                     onChange={(e) => setSelectedPipelineId(e.target.value)}
-                    className={cn(CRM_TOOLBAR_SELECT, 'min-w-[160px] cursor-pointer pl-9 pr-8')}
+                    className={cn(CRM_TOOLBAR_SELECT, 'min-w-[160px] cursor-pointer px-3 pr-8')}
                   >
                     {pipelines.length === 0 ? (
                       <option value="">No pipelines</option>

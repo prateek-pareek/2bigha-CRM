@@ -7,6 +7,7 @@ import {
   canAccessCrmDashboardPage,
   CRM_WORKSPACE_ACCESS_ITEMS,
   firstAccessibleWorkspaceHref,
+  roleDashboardRedirectHref,
 } from "@/lib/crm/shared/dashboard-access";
 import { WORKSPACE_ROUTES } from "@/lib/crm/shared/dashboard-routes";
 
@@ -55,6 +56,11 @@ export default function CrmWorkspaceLayout({
     }
     const match = matchWorkspacePermission(pathname);
     if (!match) return;
+    const tierRedirect = roleDashboardRedirectHref(hasAccess, match.permission);
+    if (tierRedirect && tierRedirect !== pathname) {
+      router.replace(tierRedirect);
+      return;
+    }
     if (
       !canAccessCrmDashboardPage(hasAccess, match.permission, {
         ...opts,

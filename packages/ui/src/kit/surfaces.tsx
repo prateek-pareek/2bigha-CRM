@@ -85,7 +85,7 @@ export function KitTable({
   className?: string;
 }) {
   return (
-    <table className={cn("crm-table min-w-full border-collapse text-left text-sm", className)}>
+    <table className={cn("crm-table min-w-full border-separate border-spacing-0 text-left text-sm", className)}>
       {children}
     </table>
   );

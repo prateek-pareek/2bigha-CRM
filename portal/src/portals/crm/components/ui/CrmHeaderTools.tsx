@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { CrmButton } from "./CrmButton";
 import { CrmIcon } from "@/lib/crm/shared/icons";
@@ -27,8 +28,13 @@ type CrmHeaderToolsProps = {
   exportMenu?: ReactNode;
   exportMenuOpen?: boolean;
   onExportMenuToggle?: () => void;
-  exportMenuRef?: React.RefObject<HTMLDivElement | null>;
+  exportMenuRef?: RefObject<HTMLDivElement | null>;
 };
+
+function assignRef<T>(ref: RefObject<T | null> | undefined, value: T | null) {
+  if (!ref) return;
+  (ref as { current: T | null }).current = value;
+}
 
 /**
  * CRMS page-header tools: Export · Refresh · Collapse
@@ -54,11 +60,69 @@ export function CrmHeaderTools({
   onExportMenuToggle,
   exportMenuRef,
 }: CrmHeaderToolsProps) {
+  const triggerWrapRef = useRef<HTMLDivElement | null>(null);
+  const menuPortalRef = useRef<HTMLDivElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+
+  const setTriggerNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      triggerWrapRef.current = node;
+      assignRef(exportMenuRef, node);
+    },
+    [exportMenuRef],
+  );
+
+  const updateMenuPosition = useCallback(() => {
+    const el = triggerWrapRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setMenuPos({
+      top: rect.bottom + 8,
+      right: Math.max(8, window.innerWidth - rect.right),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!exportMenuOpen) {
+      setMenuPos(null);
+      return;
+    }
+    updateMenuPosition();
+    const onReposition = () => updateMenuPosition();
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [exportMenuOpen, updateMenuPosition]);
+
+  const portaledMenu =
+    exportMenu &&
+    exportMenuOpen &&
+    menuPos &&
+    typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={menuPortalRef}
+            data-crm-export-menu=""
+            className="fixed z-[9999]"
+            style={{ top: menuPos.top, right: menuPos.right }}
+          >
+            {/* Neutralize page-level absolute/mt classes so the menu hugs the button */}
+            <div className="[&>div]:!static [&>div]:!right-auto [&>div]:!mt-0 [&>div]:!top-auto">
+              {exportMenu}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
       {leading}
       {exportMenu ? (
-        <div className="relative z-30" ref={exportMenuRef}>
+        <div className="relative z-30" ref={setTriggerNode}>
           <CrmButton
             variant="secondary"
             onClick={onExportMenuToggle}
@@ -73,7 +137,7 @@ export function CrmHeaderTools({
           >
             {exportLabel}
           </CrmButton>
-          {exportMenuOpen ? exportMenu : null}
+          {portaledMenu}
         </div>
       ) : canExport && onExport ? (
         <CrmButton

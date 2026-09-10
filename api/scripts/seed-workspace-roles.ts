@@ -40,6 +40,8 @@ const PERMISSIONS: Array<{ name: string; description: string }> = [
   { name: 'legal:move_pipeline', description: 'Move legal cases between pipelines' },
   { name: 'property_listings:read', description: 'View property listings' },
   { name: 'property_listings:write', description: 'Create, edit, approve, or reject property listings' },
+  { name: 'forms:read', description: 'View lead-capture forms and their submissions' },
+  { name: 'forms:write', description: 'Create, edit, and publish lead-capture forms' },
 ];
 
 const ROLES: SeedRole[] = [
@@ -56,6 +58,7 @@ const ROLES: SeedRole[] = [
     permissionNames: [
       'leads:read', 'leads:read:team', 'leads:write', 'leads:delete', 'leads:move_pipeline',
       'contacts:read', 'contacts:read:team', 'contacts:write',
+      'forms:read', 'forms:write',
     ],
   },
   {
@@ -71,7 +74,7 @@ const ROLES: SeedRole[] = [
     name: 'Social Media Executive',
     description: '2Bigha workspace — uploads/assigns social-sourced leads to BDM/BDE.',
     workspaceModule: '2Bigha',
-    permissionNames: ['leads:read', 'leads:write'],
+    permissionNames: ['leads:read', 'leads:write', 'forms:read', 'forms:write'],
   },
   {
     name: 'Property Approval Team',

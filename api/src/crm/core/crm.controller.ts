@@ -632,18 +632,19 @@ export class CRMController {
 
   // Export/Import
   @Get('export/:type')
-  @Permissions('admin:manage')
+  @Permissions('admin:manage', 'leads:export')
   async exportData(
     @Param('type') type: string,
     @Query('ids') ids?: string,
     @Query('pipelineId') pipelineId?: string,
     @Request() req?: any,
+    @Res({ passthrough: true }) res?: Response,
   ) {
     const parsedIds = String(ids || '')
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean);
-    return this.crmService.exportToCsv(
+    const csv = await this.crmService.exportToCsv(
       type,
       {
         ids: parsedIds,
@@ -651,6 +652,12 @@ export class CRMController {
       },
       req?.user,
     );
+    res?.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res?.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${type}_export.csv"`,
+    );
+    return csv;
   }
 
   @Post('import/preview')

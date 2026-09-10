@@ -107,6 +107,7 @@ import { WhatsAppWebhookController } from './integrations/whatsapp-webhook.contr
 import { AiSensyWebhookController } from './integrations/aisensy-webhook.controller';
 import { MetaLeadAdsService } from './integrations/meta-lead-ads.service';
 import { MetaLeadAdsWebhookController } from './integrations/meta-lead-ads-webhook.controller';
+import { WebsiteLeadWebhookController } from './integrations/website-lead-webhook.controller';
 import { MetaLeadAdsPollingCronService } from './integrations/meta-lead-ads-polling-cron.service';
 import {
   HrmsIntegrationService,
@@ -428,6 +429,7 @@ import {
     WhatsAppWebhookController,
     AiSensyWebhookController,
     MetaLeadAdsWebhookController,
+    WebsiteLeadWebhookController,
     HrmsWebhookController,
     HrmsAdminController,
     WorkflowsController,

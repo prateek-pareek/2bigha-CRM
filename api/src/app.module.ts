@@ -25,6 +25,7 @@ import { PropertyListingsModule } from './crm/property-listings/property-listing
 import { LegalModule } from './crm/legal/legal.module';
 import { VisitsModule } from './crm/visits/visits.module';
 import { OwnershipTransferModule } from './crm/ownership-transfer/ownership-transfer.module';
+import { FormsModule } from './crm/forms/forms.module';
 import { mongoConnectionLabel } from './common/mongo-connection-label.util';
 import {
   LOCAL_MONGO_URI,
@@ -76,6 +77,7 @@ import {
     LegalModule,
     VisitsModule,
     OwnershipTransferModule,
+    FormsModule,
     RealtimeModule,
     MailModule,
     CRMUsersModule,

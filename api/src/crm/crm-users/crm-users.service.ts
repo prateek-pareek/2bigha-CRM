@@ -16,6 +16,7 @@ import { User, UserDocument } from '../../users/schemas/user.schema';
 import { isPlatformSuperAdminEmail } from '../../auth/platform-super-admin.util';
 import {
   collectRolePermissionNames,
+  crmPermissionNamesFromRole,
   serializeCrmRole,
 } from '../shared/crm-role-permissions.util';
 import { TwoBighaAgentService } from './twobigha-agent.service';
@@ -508,6 +509,38 @@ export class CRMUsersService implements OnModuleInit {
   }
 
   async updateRole(id: string, roleDto: any): Promise<any> {
+    const existing = await this.roleModel
+      .findById(id)
+      .populate('permissions')
+      .exec();
+    if (!existing) {
+      throw new BadRequestException('Role not found');
+    }
+    // System roles are protected: their permission set and name are part of the
+    // seeded hierarchy contract (see seed-crm-roles.ts). Reject rename/re-scope,
+    // but still allow editing the description (the UI re-submits the unchanged
+    // permission set on every save, so compare the actual sets rather than mere
+    // presence of a permissions array).
+    if (existing.isSystem) {
+      const renaming =
+        roleDto?.name !== undefined &&
+        String(roleDto.name).trim() !== existing.name;
+      const submittedPerms = collectRolePermissionNames(roleDto);
+      const submittedAny =
+        Array.isArray(roleDto?.crmPermissions) ||
+        Array.isArray(roleDto?.permissions);
+      const existingPerms = crmPermissionNamesFromRole(existing.toObject());
+      const repermissioning =
+        submittedAny &&
+        (submittedPerms.length !== existingPerms.length ||
+          submittedPerms.some((p) => !existingPerms.includes(p)));
+      if (renaming || repermissioning) {
+        throw new ForbiddenException(
+          'System roles cannot be renamed or have their permissions changed.',
+        );
+      }
+    }
+
     const names = collectRolePermissionNames(roleDto);
     const patch: Record<string, unknown> = {};
     if (roleDto?.name !== undefined) patch.name = String(roleDto.name).trim();
@@ -529,6 +562,15 @@ export class CRMUsersService implements OnModuleInit {
   }
 
   async deleteRole(id: string): Promise<any> {
+    const existing = await this.roleModel.findById(id).exec();
+    if (!existing) {
+      throw new BadRequestException('Role not found');
+    }
+    // System roles are part of the seeded hierarchy (Admin, Manager, Team Lead,
+    // Agent, …) and must not be deleted (see role.schema.ts isSystem contract).
+    if (existing.isSystem) {
+      throw new ForbiddenException('System roles cannot be deleted.');
+    }
     return this.roleModel.findByIdAndDelete(id).exec();
   }
 

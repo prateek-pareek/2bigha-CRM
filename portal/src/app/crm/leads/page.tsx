@@ -35,12 +35,10 @@ import {
   Tag,
   Eye,
   EyeOff,
-  Timer,
   MailOpen,
   Reply,
   MailX,
   FilterX,
-  Activity,
   MailPlus,
   MapPin,
   IndianRupee,
@@ -123,6 +121,7 @@ import {
   CrmTableCheck,
   CrmTableActionMenu,
   CrmHoverActionIcon,
+  CrmRowQuickActions,
   CrmKanbanBoard,
   CrmKanbanColumn,
   CrmKanbanCard,
@@ -198,6 +197,144 @@ const STORAGE_KEY = 'leads_columns_v2';
 /** Matches Mongo ObjectId hex strings; avoids sending bad `pipeline` query params. */
 function isMongoObjectIdString(value: string | null | undefined): boolean {
   return typeof value === 'string' && /^[a-fA-F0-9]{24}$/.test(value.trim());
+}
+
+function applyLeadMetricFilter(
+  leads: Lead[],
+  metric: 'all' | 'new' | 'pipeline' | 'qualified' | 'converted',
+): Lead[] {
+  if (metric === 'all') return leads;
+  if (metric === 'new') {
+    return leads.filter(
+      (l) =>
+        !l.callStatus ||
+        l.callStatus === 'Not Called' ||
+        /new|uncontacted/i.test(l.stage || l.status || ''),
+    );
+  }
+  if (metric === 'pipeline') {
+    return leads.filter(
+      (l) =>
+        /contact|in progress|visit|negotiat|follow/i.test(l.stage || l.status || '') ||
+        l.callStatus === 'Connected',
+    );
+  }
+  if (metric === 'qualified') {
+    return leads.filter(
+      (l) =>
+        /qualif|hot|proposal|decision/i.test(l.stage || l.status || '') ||
+        l.priority === 'High',
+    );
+  }
+  return leads.filter(
+    (l) =>
+      /won|convert|deal|close/i.test(l.stage || l.status || '') ||
+      (l as { converted?: boolean }).converted === true,
+  );
+}
+
+function formatLeadExportCell(
+  lead: Lead,
+  key: string,
+  ctx: {
+    pipelineNameById: Map<string, string>;
+    leadListingCounts: Record<string, { propertyCount?: number; farmCount?: number }>;
+    leadEmailStatsById: Record<string, CrmEmailEngagementStats>;
+    customFieldDefs: Array<{ key: string; type?: string }>;
+  },
+): string {
+  switch (key) {
+    case 'name':
+      return `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '—';
+    case 'email':
+      return lead.email || '—';
+    case 'phone':
+      return lead.mobileNo || lead.phone || '—';
+    case 'priority':
+      return lead.priority || '—';
+    case 'leadOwner':
+      return lead.leadOwner || '—';
+    case 'pipeline':
+      return (lead.pipeline && ctx.pipelineNameById.get(String(lead.pipeline))) || '—';
+    case 'status':
+      return lead.status || '—';
+    case 'stage':
+      return lead.stage || lead.status || '—';
+    case 'callStatus':
+      return lead.callStatus || 'Not Called';
+    case 'leadCategory':
+      return lead.leadCategory || '—';
+    case 'leadVertical':
+      return (lead as { leadVertical?: string }).leadVertical === 'property_management'
+        ? 'Property Management'
+        : 'Property Listing';
+    case 'group':
+      return lead.group || '—';
+    case 'createdByName':
+      return lead.createdByName || lead.leadOwner || '—';
+    case 'createdAt':
+      return lead.createdAt
+        ? new Date(lead.createdAt).toLocaleDateString(undefined, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })
+        : '—';
+    case 'lastEmailActivityAt': {
+      const iso = ctx.leadEmailStatsById[lead._id]?.latestActivityIso;
+      return iso ? new Date(iso).toLocaleString() : 'No activity';
+    }
+    case 'nextFollowUpAt':
+      return lead.nextFollowUpAt
+        ? new Date(lead.nextFollowUpAt).toLocaleDateString(undefined, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })
+        : '—';
+    case 'propertiesCount':
+      return String(ctx.leadListingCounts[lead._id]?.propertyCount ?? 0);
+    case 'farmsCount':
+      return String(ctx.leadListingCounts[lead._id]?.farmCount ?? 0);
+    default: {
+      if (key.startsWith('cf_')) {
+        const cfKey = key.replace('cf_', '');
+        const raw = lead.customFields?.[cfKey];
+        if (raw == null || raw === '') return '—';
+        if (typeof raw === 'object') return JSON.stringify(raw);
+        return String(raw);
+      }
+      return '—';
+    }
+  }
+}
+
+async function loadBrandLogoDataUrl(): Promise<string | null> {
+  try {
+    const res = await fetch('/brand/2bigha-logo.png', { cache: 'force-cache' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function downloadBlobFile(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = fileName;
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
 }
 
 function groupBadgeTone(group?: string): 'success' | 'info' | 'secondary' {
@@ -490,7 +627,9 @@ export default function LeadsPage() {
       if (typeof detail?.collapsed === 'boolean') setHeaderCollapsed(detail.collapsed);
     };
     const onClickOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node | null;
+      if ((e.target as Element | null)?.closest?.('[data-crm-export-menu]')) return;
+      if (exportMenuRef.current && target && !exportMenuRef.current.contains(target)) {
         setIsExportMenuOpen(false);
       }
     };
@@ -1256,37 +1395,209 @@ export default function LeadsPage() {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format: 'excel' | 'pdf' | 'docs') => {
     setExporting(true);
     const token = localStorage.getItem('token');
     try {
-      const params = new URLSearchParams();
+      const cellCtx = {
+        pipelineNameById,
+        leadListingCounts,
+        leadEmailStatsById,
+        customFieldDefs,
+      };
+
+      let exportLeads: Lead[] = [];
+
       if (selectedIds.size > 0) {
-        params.set('ids', Array.from(selectedIds).join(','));
-      } else if (isMongoObjectIdString(selectedPipelineId)) {
-        params.set('pipelineId', selectedPipelineId.trim());
+        const byId = new Map<string, Lead>();
+        for (const lead of [...leads, ...filteredLeads]) {
+          if (selectedIds.has(lead._id)) byId.set(lead._id, lead);
+        }
+        exportLeads = Array.from(selectedIds)
+          .map((id) => byId.get(id))
+          .filter((l): l is Lead => Boolean(l));
+      } else {
+        // Pull every page matching the current list filters (same as on-screen filters).
+        const collected: Lead[] = [];
+        let pageNum = 1;
+        let total = Number.POSITIVE_INFINITY;
+        while (collected.length < total && pageNum <= 40) {
+          const params = buildCrmListSearchParams({
+            page: pageNum,
+            pageSize: CRM_BOARD_PAGE_SIZE,
+            search: debouncedSearch,
+            filters: apiFilters,
+            emailEngagement,
+            extra: {
+              pipeline: isMongoObjectIdString(selectedPipelineId)
+                ? String(selectedPipelineId).trim()
+                : undefined,
+              mine: showMyLeadsOnly ? '1' : undefined,
+              followUp: followUpFilter !== 'all' ? followUpFilter : undefined,
+            },
+          });
+          const res = await fetch(`${CRM_API_URL}/crm/leads?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          });
+          if (!res.ok) {
+            toast.error('Failed to load leads for export');
+            return;
+          }
+          const payload = await res.json();
+          const unwrapped = unwrapCrmListPayload<Lead>(payload);
+          collected.push(...unwrapped.data);
+          total = unwrapped.total;
+          if (!unwrapped.data.length) break;
+          pageNum += 1;
+        }
+        exportLeads = applyLeadMetricFilter(collected, activeMetricFilter);
       }
-      const url = `${CRM_API_URL}/crm/export/leads${
-        params.toString() ? `?${params.toString()}` : ''
-      }`;
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const csvContent = await res.text();
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `leads_export_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+
+      if (!exportLeads.length) {
+        toast.error('No leads to export');
+        return;
       }
+
+      const cols =
+        visibleCols.length > 0
+          ? visibleCols
+          : BUILT_IN_COLUMNS.map((c) => ({ ...c, visible: true }));
+      const headers = cols.map((c) => c.label);
+      const body = exportLeads.map((lead) =>
+        cols.map((c) => formatLeadExportCell(lead, c.key, cellCtx)),
+      );
+
+      const stamp = new Date().toISOString().split('T')[0];
+      const generatedAt = new Date().toLocaleString();
+      const baseName = `leads_export_${stamp}`;
+      const title = '2Bigha CRM — Leads Export';
+      const subtitle = `Generated ${generatedAt} · ${exportLeads.length} lead${
+        exportLeads.length === 1 ? '' : 's'
+      }${selectedIds.size > 0 ? ' (selected)' : ' (filtered view)'}`;
+      const logoDataUrl = await loadBrandLogoDataUrl();
+
+      if (format === 'excel') {
+        const XLSX = await import('xlsx');
+        const sheet = XLSX.utils.aoa_to_sheet([
+          [title],
+          [subtitle],
+          [],
+          headers,
+          ...body,
+        ]);
+        sheet['!cols'] = headers.map((h) => ({
+          wch: Math.min(36, Math.max(12, String(h).length + 4)),
+        }));
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, sheet, 'Leads');
+        XLSX.writeFile(workbook, `${baseName}.xlsx`);
+        toast.success(`Exported ${exportLeads.length} leads as Excel`);
+        return;
+      }
+
+      if (format === 'pdf') {
+        const [{ default: jsPDF }, autoTableMod] = await Promise.all([
+          import('jspdf'),
+          import('jspdf-autotable'),
+        ]);
+        const autoTable = autoTableMod.default;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        let tableStartY = 56;
+
+        if (logoDataUrl) {
+          try {
+            doc.addImage(logoDataUrl, 'PNG', 28, 16, 92, 28);
+          } catch {
+            /* logo optional */
+          }
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(31, 32, 32);
+        doc.text(title, logoDataUrl ? 132 : 28, 30);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(112, 112, 112);
+        doc.text(subtitle, logoDataUrl ? 132 : 28, 44);
+        doc.setDrawColor(228, 31, 7);
+        doc.setLineWidth(1.5);
+        doc.line(28, 50, pageWidth - 28, 50);
+
+        autoTable(doc, {
+          head: [headers],
+          body,
+          startY: tableStartY,
+          styles: {
+            fontSize: 8,
+            cellPadding: 4,
+            textColor: [70, 70, 70],
+            lineColor: [226, 232, 240],
+            lineWidth: 0.4,
+            overflow: 'linebreak',
+            valign: 'middle',
+          },
+          headStyles: {
+            fillColor: [247, 248, 249],
+            textColor: [31, 32, 32],
+            fontStyle: 'bold',
+            lineColor: [226, 232, 240],
+          },
+          alternateRowStyles: { fillColor: [252, 252, 253] },
+          margin: { top: tableStartY, left: 28, right: 28, bottom: 36 },
+          didDrawPage: (data) => {
+            const pageCount = doc.getNumberOfPages();
+            doc.setFontSize(8);
+            doc.setTextColor(140, 140, 140);
+            doc.text(
+              `2Bigha CRM · Page ${data.pageNumber} of ${pageCount}`,
+              pageWidth / 2,
+              doc.internal.pageSize.getHeight() - 16,
+              { align: 'center' },
+            );
+          },
+        });
+        doc.save(`${baseName}.pdf`);
+        toast.success(`Exported ${exportLeads.length} leads as PDF`);
+        return;
+      }
+
+      // Docs — Word-compatible HTML (.doc)
+      const escapeHtml = (value: string) =>
+        String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      const logoHtml = logoDataUrl
+        ? `<img src="${logoDataUrl}" alt="2Bigha" width="120" height="36" style="display:block;margin-bottom:8px" />`
+        : '';
+      const tableHtml = [
+        '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">',
+        '<head><meta charset="utf-8"><title>2Bigha CRM — Leads Export</title>',
+        '<style>body{font-family:Arial,sans-serif;color:#1f2020}h1{font-size:18px;margin:0 0 4px}p{font-size:11px;color:#707070;margin:0 0 12px}table{border-collapse:collapse;width:100%;font-size:11px}th{background:#f7f8f9;border:1px solid #e2e8f0;padding:6px 8px;text-align:left}td{border:1px solid #e2e8f0;padding:6px 8px;color:#464646}.brand-bar{height:3px;background:#e41f07;margin:8px 0 16px;border:0}</style>',
+        '</head><body>',
+        logoHtml,
+        `<h1>${escapeHtml(title)}</h1>`,
+        `<p>${escapeHtml(subtitle)}</p>`,
+        '<hr class="brand-bar" />',
+        '<table>',
+        `<tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`,
+        ...body.map(
+          (row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`,
+        ),
+        '</table></body></html>',
+      ].join('');
+      downloadBlobFile(
+        new Blob(['\ufeff', tableHtml], { type: 'application/msword;charset=utf-8;' }),
+        `${baseName}.doc`,
+      );
+      toast.success(`Exported ${exportLeads.length} leads as Docs`);
     } catch (error) {
       console.error('Export error:', error);
+      toast.error('Export failed');
     } finally {
       setExporting(false);
     }
@@ -1890,21 +2201,7 @@ export default function LeadsPage() {
                 onExportMenuToggle={() => setIsExportMenuOpen((o) => !o)}
                 exportMenu={
                   hasAccess('leads:export') ? (
-                  <div className="absolute right-0 z-50 mt-2 w-56 animate-in slide-in-from-top-2 duration-200 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white p-2 shadow-[var(--crm-shadow-raised)]">
-                      <div className="flex items-center gap-2 px-2 py-1.5 mb-2">
-                        <Search size={14} className="text-[var(--text-muted)]" />
-                        <input
-                          type="text"
-                          placeholder="Search Keyword"
-                          value={search}
-                          onChange={(e) => {
-                            setSearch(e.target.value);
-                            setPage(1);
-                          }}
-                          className="flex-1 bg-transparent text-xs outline-none text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
-                        />
-                      </div>
-                      <div className="border-t border-[var(--border-color)]" />
+                  <div className="absolute right-0 z-50 mt-2 w-56 animate-in slide-in-from-top-2 duration-200 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white p-1.5 shadow-[var(--crm-shadow-raised)]">
                       <button
                         type="button"
                         disabled={exporting}
@@ -1912,12 +2209,40 @@ export default function LeadsPage() {
                           e.preventDefault();
                           e.stopPropagation();
                           setIsExportMenuOpen(false);
-                          void handleExport();
+                          void handleExport('excel');
                         }}
                         className={CRM_MENU_ITEM}
                       >
                         <CrmIcon.FileXls size={16} aria-hidden />
                         Export as Excel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={exporting}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsExportMenuOpen(false);
+                          void handleExport('pdf');
+                        }}
+                        className={CRM_MENU_ITEM}
+                      >
+                        <CrmIcon.FilePdf size={16} aria-hidden />
+                        Export as PDF
+                      </button>
+                      <button
+                        type="button"
+                        disabled={exporting}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsExportMenuOpen(false);
+                          void handleExport('docs');
+                        }}
+                        className={CRM_MENU_ITEM}
+                      >
+                        <CrmIcon.FileText size={16} aria-hidden />
+                        Export as Docs
                       </button>
                   </div>
                   ) : undefined
@@ -2027,11 +2352,6 @@ export default function LeadsPage() {
                   </div>
                 )}
                 <div className="relative h-8 shrink-0">
-                  <CrmIcon.Activity
-                    size={13}
-                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                    aria-hidden
-                  />
                   <select
                     value={lastActivityFilter}
                     onChange={(e) => {
@@ -2039,7 +2359,7 @@ export default function LeadsPage() {
                       setPage(1);
                     }}
                     aria-label="Filter leads by last tracked or CRM email activity"
-                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[118px] max-w-[150px] pl-8 pr-7 text-xs')}
+                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[118px] w-auto px-2.5 pr-7 text-xs')}
                     title="Last tracked or CRM email activity"
                   >
                     <option value="all">Activity: Any</option>
@@ -2055,11 +2375,6 @@ export default function LeadsPage() {
                   />
                 </div>
                 <div className="relative h-8 shrink-0">
-                  <Timer
-                    size={13}
-                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                    aria-hidden
-                  />
                   <select
                     value={followUpFilter}
                     onChange={(e) => {
@@ -2067,7 +2382,7 @@ export default function LeadsPage() {
                       setPage(1);
                     }}
                     aria-label="Filter leads by follow-up reminder date"
-                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[132px] max-w-[185px] pl-8 pr-7 text-xs font-medium')}
+                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[132px] w-auto px-2.5 pr-7 text-xs font-medium')}
                     title="Filter leads by follow-up reminder date"
                   >
                     <option value="all">Follow-up: All</option>
@@ -2088,16 +2403,12 @@ export default function LeadsPage() {
                   <div className="relative grid shrink-0">
                     <span
                       aria-hidden
-                      className="invisible col-start-1 row-start-1 h-8 whitespace-nowrap pl-7 pr-6 text-xs font-medium"
+                      className="invisible col-start-1 row-start-1 h-8 whitespace-nowrap px-2.5 pr-7 text-xs font-medium"
                     >
                       {pipelinesForActiveVertical.find((p) => String(p._id) === String(selectedPipelineId))?.name
                         || selectedPipeline?.name
                         || 'Pipeline'}
                     </span>
-                    <CrmIcon.GitBranch
-                      size={13}
-                      className="pointer-events-none absolute left-2 top-1/2 z-[1] -translate-y-1/2 text-[var(--text-muted)]"
-                    />
                     <select
                       value={selectedPipelineId}
                       onChange={(e) => {
@@ -2109,7 +2420,7 @@ export default function LeadsPage() {
                       aria-label="Pipeline"
                       className={cn(
                         CRM_TOOLBAR_SELECT,
-                        'col-start-1 row-start-1 h-8 w-full min-w-0 max-w-none whitespace-nowrap pl-7 pr-6 text-xs',
+                        'col-start-1 row-start-1 h-8 w-full min-w-0 max-w-none whitespace-nowrap px-2.5 pr-7 text-xs',
                       )}
                     >
                       {pipelinesForActiveVertical.map((p) => (
@@ -2120,7 +2431,7 @@ export default function LeadsPage() {
                     </select>
                     <CrmIcon.ChevronDown
                       size={12}
-                      className="pointer-events-none absolute right-1.5 top-1/2 z-[1] -translate-y-1/2 text-[var(--text-muted)]"
+                      className="pointer-events-none absolute right-2.5 top-1/2 z-[1] -translate-y-1/2 text-[var(--text-muted)]"
                     />
                   </div>
                 ) : null}
@@ -2550,7 +2861,7 @@ export default function LeadsPage() {
             ) : viewMode === 'list' ? (
               <div className="crm-view-panel min-h-0 flex flex-1 flex-col gap-0 overflow-hidden">
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <CrmTableShell scrollClassName="custom-scrollbar overflow-x-auto flex-1">
+              <CrmTableShell scrollClassName="crm-table-scroll custom-scrollbar overflow-x-auto flex-1">
                   <CrmTable>
                     <thead>
                       <tr>
@@ -2646,83 +2957,93 @@ export default function LeadsPage() {
                             </td>
                             {visibleCols.map(col => <td key={col.key}>{renderCell(lead, col.key)}</td>)}
                             <td className="crm-table-actions">
-                              <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                {(lead.mobileNo || lead.phone) ? (
-                                  <CrmHoverActionIcon
-                                    icon={<CrmIcon.PhoneCall size={14} />}
-                                    label="Call"
-                                    value={(lead.mobileNo || lead.phone)!}
-                                    tone="primary"
-                                    onClick={() => setCallLead(lead)}
-                                    className="h-7 w-7 border-transparent shadow-none hover:bg-emerald-50 hover:text-emerald-600 flex-shrink-0"
+                              <CrmRowQuickActions
+                                lingerMs={8000}
+                                quick={
+                                  <>
+                                    {(lead.mobileNo || lead.phone) ? (
+                                      <CrmHoverActionIcon
+                                        icon={<CrmIcon.PhoneCall size={14} />}
+                                        label="Call"
+                                        value={(lead.mobileNo || lead.phone)!}
+                                        tone="primary"
+                                        onClick={() => setCallLead(lead)}
+                                        className="h-7 w-7 shrink-0"
+                                      />
+                                    ) : null}
+                                    {contactWhatsappUrl(lead) ? (
+                                      <CrmHoverActionIcon
+                                        icon={<CrmNavIcon.WhatsApp size={14} />}
+                                        label="WhatsApp"
+                                        value={(lead.mobileNo || lead.phone)!}
+                                        tone="whatsapp"
+                                        onClick={() => openLeadWhatsApp(lead)}
+                                        className="h-7 w-7 shrink-0"
+                                      />
+                                    ) : null}
+                                    <CrmHoverActionIcon
+                                      icon={<Building2 size={12} />}
+                                      label="Add Property"
+                                      value={
+                                        leadListingCounts[lead._id]?.propertyCount
+                                          ? `${leadListingCounts[lead._id].propertyCount} listed`
+                                          : 'Add property'
+                                      }
+                                      tone="primary"
+                                      onClick={() => setPropertyLead(lead)}
+                                      className="h-7 w-7 shrink-0"
+                                    />
+                                    <CrmHoverActionIcon
+                                      icon={<MapPin size={12} />}
+                                      label="Add Farm"
+                                      value={
+                                        leadListingCounts[lead._id]?.farmCount
+                                          ? `${leadListingCounts[lead._id].farmCount} listed`
+                                          : 'Add farm'
+                                      }
+                                      tone="primary"
+                                      onClick={() => setFarmLead(lead)}
+                                      className="h-7 w-7 shrink-0"
+                                    />
+                                  </>
+                                }
+                                menu={
+                                  <CrmTableActionMenu
+                                    menuAlign="left"
+                                    className="shrink-0"
+                                    onView={() => router.push(`/crm/leads/${lead._id}?readonly=1`)}
+                                    onEdit={() => router.push(`/crm/leads/${lead._id}?edit=1`)}
+                                    onNotes={() => setActivityLead(lead)}
+                                    onSetActivity={() => setCallActivityLead(lead)}
+                                    onCallHistory={() => setCallHistoryLead(lead)}
+                                    onUpdateHistory={() => setUpdateHistoryLead(lead)}
+                                    onAddProperty={() => setPropertyLead(lead)}
+                                    onAddFarm={() => setFarmLead(lead)}
+                                    onReassign={
+                                      hasAccess('leads:write')
+                                        ? () => {
+                                            setSelectedIds(new Set([lead._id]));
+                                            setAssignOwner('');
+                                            setAssignOpen(true);
+                                          }
+                                        : undefined
+                                    }
+                                    onTransfer={
+                                      hasAccess('leads:write')
+                                        ? () => {
+                                            setTransferOwnerName('');
+                                            setTransferLeadTarget(lead);
+                                          }
+                                        : undefined
+                                    }
+                                    onDelete={
+                                      hasAccess('leads:delete')
+                                        ? () => handleDelete(lead._id)
+                                        : undefined
+                                    }
                                   />
-                                ) : null}
-                                {contactWhatsappUrl(lead) ? (
-                                  <CrmHoverActionIcon
-                                    icon={<CrmNavIcon.WhatsApp size={14} />}
-                                    label="WhatsApp"
-                                    value={(lead.mobileNo || lead.phone)!}
-                                    tone="whatsapp"
-                                    onClick={() => openLeadWhatsApp(lead)}
-                                    className="h-7 w-7 border-transparent shadow-none hover:bg-green-50 hover:text-green-600 flex-shrink-0"
-                                  />
-                                ) : null}
-                                <CrmHoverActionIcon
-                                  icon={<Building2 size={12} />}
-                                  label="Add Property"
-                                  value={
-                                    leadListingCounts[lead._id]?.propertyCount
-                                      ? `${leadListingCounts[lead._id].propertyCount} listed`
-                                      : 'Add property'
-                                  }
-                                  tone="primary"
-                                  onClick={() => setPropertyLead(lead)}
-                                />
-                                <CrmHoverActionIcon
-                                  icon={<MapPin size={12} />}
-                                  label="Add Farm"
-                                  value={
-                                    leadListingCounts[lead._id]?.farmCount
-                                      ? `${leadListingCounts[lead._id].farmCount} listed`
-                                      : 'Add farm'
-                                  }
-                                  tone="primary"
-                                  onClick={() => setFarmLead(lead)}
-                                />
-                                <CrmTableActionMenu
-                                  menuAlign="left"
-                                  onView={() => router.push(`/crm/leads/${lead._id}?readonly=1`)}
-                                  onEdit={() => router.push(`/crm/leads/${lead._id}?edit=1`)}
-                                  onNotes={() => setActivityLead(lead)}
-                                  onSetActivity={() => setCallActivityLead(lead)}
-                                  onCallHistory={() => setCallHistoryLead(lead)}
-                                  onUpdateHistory={() => setUpdateHistoryLead(lead)}
-                                  onAddProperty={() => setPropertyLead(lead)}
-                                  onAddFarm={() => setFarmLead(lead)}
-                                  onReassign={
-                                    hasAccess('leads:write')
-                                      ? () => {
-                                          setSelectedIds(new Set([lead._id]));
-                                          setAssignOwner('');
-                                          setAssignOpen(true);
-                                        }
-                                      : undefined
-                                  }
-                                  onTransfer={
-                                    hasAccess('leads:write')
-                                      ? () => {
-                                          setTransferOwnerName('');
-                                          setTransferLeadTarget(lead);
-                                        }
-                                      : undefined
-                                  }
-                                  onDelete={
-                                    hasAccess('leads:delete')
-                                      ? () => handleDelete(lead._id)
-                                      : undefined
-                                  }
-                                />
-                              </div>
+                                }
+                              />
                             </td>
                           </tr>
                         ))

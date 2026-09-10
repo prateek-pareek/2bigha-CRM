@@ -73,15 +73,19 @@ export function CrmListToolbar({
       <div className={cn(CRM_TOOLBAR, compact ? "justify-between gap-1.5 overflow-visible px-2 py-1" : "justify-between gap-3")}>
         <div
           className={cn(
-            "flex min-w-0 flex-1 items-center overflow-visible",
-            compact ? "flex-nowrap gap-1.5" : "flex-wrap gap-2.5",
+            "flex min-w-0 flex-1 items-center",
+            compact ? "flex-wrap gap-1.5 overflow-visible" : "flex-wrap gap-2.5",
           )}
         >
-          <div className={cn("flex shrink items-center flex-nowrap", compact ? "gap-1.5" : "gap-2.5", searchControl ? "flex-1 min-w-[150px]" : "min-w-0")}>
+          <div className={cn("flex shrink-0 items-center flex-nowrap", compact ? "gap-1.5" : "gap-2.5", searchControl ? "min-w-[150px]" : "min-w-0")}>
             {filterControl ? <div className="shrink-0">{filterControl}</div> : null}
-            {searchControl ? <div className="flex-1 min-w-[100px]">{searchControl}</div> : null}
+            {searchControl ? <div className="min-w-[100px] flex-1">{searchControl}</div> : null}
           </div>
-          {leftExtra}
+          {leftExtra ? (
+            <div className={cn("flex min-w-0 flex-wrap items-center", compact ? "gap-1.5" : "gap-2.5")}>
+              {leftExtra}
+            </div>
+          ) : null}
         </div>
         {right ? (
           <div className={cn("flex shrink-0 flex-wrap items-center", compact ? "gap-1.5" : "gap-2.5")}>{right}</div>
