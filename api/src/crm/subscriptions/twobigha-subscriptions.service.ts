@@ -190,6 +190,21 @@ export interface PmPaymentVerifyResult {
   paymentId?: number;
 }
 
+export interface ProrationPreviewResult {
+  userPropertyId: string;
+  currentPlanName?: string;
+  newPlanName?: string;
+  upgradeCost: number;
+  creditRemaining: number;
+  netAmountDue: number;
+  currency: string;
+}
+
+export interface CancelPmPlanResult {
+  success: boolean;
+  message?: string;
+}
+
 export interface LeadPmPropertyOverview {
   id: string;
   title?: string;
@@ -841,6 +856,118 @@ export class TwoBighaSubscriptionsService {
     const res = data?.pmAdminVerifyPlanOrder;
     if (!res) throw new Error('pmAdminVerifyPlanOrder returned empty');
     return res;
+  }
+
+  async cancelPmPlan(userPropertyId: string, reason?: string): Promise<CancelPmPlanResult> {
+    const config = getTwoBighaConfig();
+    if (!config) {
+      this.logger.log(`Mock cancelling PM plan for userPropertyId: ${userPropertyId}`);
+      return { success: true, message: 'Mock PM plan cancelled successfully' };
+    }
+    const mutation = `
+      mutation CancelPMPlan($userPropertyId: String!, $reason: String) {
+        cancelPMPlan(userPropertyId: $userPropertyId, reason: $reason) {
+          success
+          message
+        }
+      }
+    `;
+    try {
+      const data = await twoBighaGraphqlRequest<{
+        cancelPMPlan?: { success: boolean; message?: string };
+      }>(config, mutation, { userPropertyId, reason });
+      return data?.cancelPMPlan || { success: true, message: 'PM plan cancelled' };
+    } catch (error) {
+      this.logger.error(`Failed to cancel PM plan: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
+  async getProrationPreview(userPropertyId: string, newVariantId: number): Promise<ProrationPreviewResult> {
+    const config = getTwoBighaConfig();
+    if (!config) {
+      return {
+        userPropertyId,
+        currentPlanName: 'Standard PM',
+        newPlanName: 'Premium PM',
+        upgradeCost: 15000,
+        creditRemaining: 5000,
+        netAmountDue: 10000,
+        currency: 'INR',
+      };
+    }
+    const query = `
+      query GetProrationPreview($userPropertyId: String!, $newVariantId: Int!) {
+        getProrationPreview(userPropertyId: $userPropertyId, newVariantId: $newVariantId) {
+          userPropertyId
+          currentPlanName
+          newPlanName
+          upgradeCost
+          creditRemaining
+          netAmountDue
+          currency
+        }
+      }
+    `;
+    try {
+      const data = await twoBighaGraphqlRequest<{
+        getProrationPreview?: ProrationPreviewResult;
+      }>(config, query, { userPropertyId, newVariantId });
+      if (!data?.getProrationPreview) {
+        return {
+          userPropertyId,
+          upgradeCost: 0,
+          creditRemaining: 0,
+          netAmountDue: 0,
+          currency: 'INR',
+        };
+      }
+      return data.getProrationPreview;
+    } catch (error) {
+      this.logger.error(`Failed to fetch proration preview: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
+  async createPmUpgradeOrder(
+    userPropertyId: string,
+    targetVariantId: number,
+  ): Promise<RazorpayOrderPayload & { razorpayOrderId?: string }> {
+    const config = getTwoBighaConfig();
+    if (!config) {
+      return {
+        orderId: 'mock-upgrade-order-1',
+        razorpayOrderId: 'order_mock_upgrade_razorpay',
+        amount: 1000000,
+        currency: 'INR',
+        keyId: 'mock_key',
+      };
+    }
+    const mutation = `
+      mutation CreatePMUpgradeOrder($userPropertyId: String!, $targetVariantId: Int!) {
+        createPMUpgradeOrder(userPropertyId: $userPropertyId, targetVariantId: $targetVariantId) {
+          orderId
+          razorpayOrderId
+          amount
+          currency
+          keyId
+        }
+      }
+    `;
+    try {
+      const data = await twoBighaGraphqlRequest<{
+        createPMUpgradeOrder?: RazorpayOrderPayload & { razorpayOrderId?: string };
+      }>(config, mutation, { userPropertyId, targetVariantId });
+      const order = data?.createPMUpgradeOrder;
+      if (!order) throw new Error('createPMUpgradeOrder returned empty');
+      return {
+        ...order,
+        razorpayOrderId: order.razorpayOrderId || order.orderId,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create PM upgrade order: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 
   async getPmPaymentHistory(

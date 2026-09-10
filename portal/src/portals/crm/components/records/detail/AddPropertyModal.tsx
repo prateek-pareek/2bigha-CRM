@@ -74,9 +74,10 @@ export default function AddPropertyModal({
     if (!open) return;
     const params = new URLSearchParams();
     if (leadId) params.set("leadId", leadId);
+    if (isFarm) params.set("bucket", "farm");
     router.push(`/crm/property-listings/new?${params.toString()}`);
     onClose();
-  }, [open, leadId, router, onClose]);
+  }, [open, leadId, isFarm, router, onClose]);
 
   if (!open) return null;
 

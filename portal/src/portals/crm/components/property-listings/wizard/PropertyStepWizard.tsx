@@ -319,6 +319,7 @@ export function PropertyStepWizard({
       const mapLandTypeToPropertyType = (
         type?: string
       ): "Apartment" | "Villa" | "Independent House" | "Plot" | "Commercial" | "Office" | "Warehouse" | "Farm" | "Other" => {
+        if (bucket === "farm") return "Farm";
         if (!type) return "Plot";
         const allowed = [
           "Apartment",
@@ -334,15 +335,16 @@ export function PropertyStepWizard({
         if (allowed.includes(type)) return type as any;
         switch (type.toLowerCase()) {
           case "agricultural":
-            return "Plot";
+          case "farmland":
+          case "farmhouse":
+          case "farm":
+            return "Farm";
           case "residential":
             return "Independent House";
           case "commercial":
             return "Commercial";
           case "industrial":
             return "Warehouse";
-          case "farmhouse":
-            return "Farm";
           default:
             return "Plot";
         }
@@ -388,6 +390,9 @@ export function PropertyStepWizard({
         mapCoordinates: draft.mapCoordinates || undefined,
         mapLocation: draft.mapLocation || undefined,
         leadId: leadId || undefined,
+        listingBucket: bucket || "properties",
+        pmStage: bucket === "pm" ? "Property Submitted" : undefined,
+        pmPlan: bucket === "pm" ? "Standard" : undefined,
       };
 
       let resultId = editId;

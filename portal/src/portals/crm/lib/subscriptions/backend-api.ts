@@ -12,6 +12,8 @@ import type {
   LeadPmOverview,
   PmPaymentRecord,
   PmActivityEntry,
+  ProrationPreviewResult,
+  CancelPmPlanResult,
 } from "./types";
 
 export async function fetchSubscriptionPlans(): Promise<SubscriptionPlan[]> {
@@ -140,6 +142,16 @@ export async function fetchPmPayments(leadId: string): Promise<PmPaymentRecord[]
   }
 }
 
+function normalizeBillingCycle(cycle?: string): string {
+  if (!cycle) return "MONTHLY";
+  const c = cycle.trim().toUpperCase();
+  if (c === "1M" || c === "MONTHLY") return "MONTHLY";
+  if (c === "3M" || c === "QUARTERLY") return "QUARTERLY";
+  if (c === "6M" || c === "HALF_YEARLY") return "HALF_YEARLY";
+  if (c === "12M" || c === "YEARLY") return "YEARLY";
+  return "MONTHLY";
+}
+
 export async function createPmOrder(input: {
   leadId: string;
   planId: number;
@@ -147,7 +159,11 @@ export async function createPmOrder(input: {
   billingCycle?: string;
 }): Promise<RazorpayOrderPayload | null> {
   try {
-    const { data } = await api.post<RazorpayOrderPayload>("/crm/subscriptions/pm-order", input);
+    const payload = {
+      ...input,
+      billingCycle: normalizeBillingCycle(input.billingCycle),
+    };
+    const { data } = await api.post<RazorpayOrderPayload>("/crm/subscriptions/pm-order", payload);
     return data;
   } catch (error) {
     console.error("Failed to create PM order:", error);
@@ -164,10 +180,57 @@ export async function verifyPmPayment(input: {
   razorpaySignature: string;
 }): Promise<PmPaymentVerifyResult | null> {
   try {
-    const { data } = await api.post<PmPaymentVerifyResult>("/crm/subscriptions/pm-order/verify", input);
+    const payload = {
+      ...input,
+      billingCycle: normalizeBillingCycle(input.billingCycle),
+    };
+    const { data } = await api.post<PmPaymentVerifyResult>("/crm/subscriptions/pm-order/verify", payload);
     return data;
   } catch (error) {
     console.error("Failed to verify PM payment:", error);
+    throw error;
+  }
+}
+
+export async function cancelPmPlan(input: {
+  leadId: string;
+  userPropertyId: string;
+  reason?: string;
+}): Promise<CancelPmPlanResult | null> {
+  try {
+    const { data } = await api.post<CancelPmPlanResult>("/crm/subscriptions/cancel", input);
+    return data;
+  } catch (error) {
+    console.error("Failed to cancel PM plan:", error);
+    throw error;
+  }
+}
+
+export async function fetchProrationPreview(
+  userPropertyId: string,
+  variantId: number,
+): Promise<ProrationPreviewResult | null> {
+  try {
+    const { data } = await api.get<ProrationPreviewResult>(
+      `/crm/subscriptions/proration-preview/${userPropertyId}/${variantId}`,
+    );
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch proration preview for ${userPropertyId}:`, error);
+    return null;
+  }
+}
+
+export async function createPmUpgradeOrder(input: {
+  leadId: string;
+  userPropertyId: string;
+  targetVariantId: number;
+}): Promise<RazorpayOrderPayload | null> {
+  try {
+    const { data } = await api.post<RazorpayOrderPayload>("/crm/subscriptions/pm-upgrade-order", input);
+    return data;
+  } catch (error) {
+    console.error("Failed to create PM upgrade order:", error);
     throw error;
   }
 }
