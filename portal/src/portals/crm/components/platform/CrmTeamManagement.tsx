@@ -76,7 +76,11 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
 
     const [crmPortalUsers, setCrmPortalUsers] = useState<any[]>([]);
     const [loadingCrmPortalUsers, setLoadingCrmPortalUsers] = useState(false);
-    const [customRoles, setCustomRoles] = useState<Array<{ _id: string; name: string }>>([]);
+    const [customRoles, setCustomRoles] = useState<
+        Array<{ _id: string; name: string; description?: string; crmPermissions?: string[]; permissions?: string[] }>
+    >([]);
+    /** Fallback when no CRM roles are seeded yet, so the picker is never empty. */
+    const FALLBACK_SYSTEM_ROLES = ['Admin', 'Manager', 'Executive', 'Sales Rep', 'Viewer'];
     const [showAddMember, setShowAddMember] = useState(false);
     const [creating, setCreating] = useState(false);
     const [twobighaSyncingId, setTwobighaSyncingId] = useState<string | null>(null);
@@ -85,7 +89,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
         lastName: "",
         email: "",
         password: "",
-        role: "Sales Rep",
+        role: "Agent",
     });
 
     const crmModules = CRM_PERMISSION_MODULES.map((m) => ({
@@ -139,9 +143,15 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
 
     const openAccessEditor = async (u: StaffUser) => {
         setActivePermissionTab("role");
+        // If the user has no direct overrides, seed the editor with the permissions
+        // inherited from their assigned role template, so the CRM Permissions tab
+        // reflects what's actually granted instead of appearing empty.
+        const { perms: effectivePerms } = effectiveCrmPermissions(u);
         setEditingUser({
             ...u,
-            crmPermissions: migrateLegacyCrmPermissionKeys(u.crmPermissions || []),
+            crmPermissions: migrateLegacyCrmPermissionKeys(
+                u.crmPermissions?.length ? u.crmPermissions : effectivePerms,
+            ),
         });
         // `reportsTo` lives on the HRMS User record, not the CRMUser record this page
         // otherwise edits — CRMUser and User share the same _id, so this is a safe lookup.
@@ -300,11 +310,22 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
     const handleCreateMember = async () => {
         setCreating(true);
         try {
+            // Assign the seeded role template (roleId + its permissions) when the
+            // chosen role matches one, so a new user gets the correct scope tier
+            // immediately instead of a bare read-only default.
+            const matchedRole = customRoles.find((r) => r.name === newMember.role);
+            const seededPerms =
+                (matchedRole?.crmPermissions && matchedRole.crmPermissions.length
+                    ? matchedRole.crmPermissions
+                    : matchedRole?.permissions) || [];
             const { data } = await api.post("/crm-users", {
                 ...newMember,
+                roleId: matchedRole?._id,
                 permittedTools: ["CRM"],
                 permissions: [],
-                crmPermissions: ["dashboard:read", "leads:read", "contacts:read"],
+                crmPermissions: seededPerms.length
+                    ? seededPerms
+                    : ["dashboard:read", "leads:read", "contacts:read"],
             });
             const syncStatus = data?.twobighaSyncStatus;
             if (syncStatus === "synced" || syncStatus === "mock") {
@@ -327,7 +348,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                 lastName: "",
                 email: "",
                 password: "",
-                role: "Sales Rep",
+                role: "Agent",
             });
             fetchUsers();
         } catch (err) {
@@ -381,6 +402,62 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
         if (roleLower === 'executive') return applyPreset('executive');
         if (roleLower === 'viewer') return applyPreset('viewer');
         setEditingUser({ ...editingUser, role, permittedTools: ['CRM'] });
+    };
+
+    /**
+     * Assign a seeded CRM role (Team Lead, Agent, BDM, …) directly from the System
+     * Role picker: sets both the role string (drives management bypass / scope tier)
+     * and roleId (grants the role template's permissions), and prefills the CRM
+     * permissions from the template so the CRM Permissions tab reflects them.
+     */
+    const applyRoleTemplate = (r: {
+        _id: string;
+        name: string;
+        crmPermissions?: string[];
+        permissions?: string[];
+    }) => {
+        if (!editingUser) return;
+        const perms =
+            (r.crmPermissions && r.crmPermissions.length
+                ? r.crmPermissions
+                : r.permissions) || [];
+        setEditingUser({
+            ...editingUser,
+            role: r.name,
+            roleId: r._id,
+            crmPermissions: perms,
+            permissions: [],
+            permittedTools: ['CRM'],
+        });
+    };
+
+    /** The seeded role template assigned to a user (matched by roleId). */
+    const roleTemplateForUser = (user: StaffUser) => {
+        const rid =
+            typeof user.roleId === "object" ? user.roleId?._id : user.roleId;
+        if (!rid) return undefined;
+        return customRoles.find((r) => r._id === rid);
+    };
+
+    /**
+     * Effective CRM permissions shown for a user = their own direct overrides if
+     * any, otherwise the permissions inherited from their assigned role template.
+     * Keeps the list/editor display in sync with what RbacGuard actually enforces
+     * (it merges roleId permissions + direct permissions).
+     */
+    const effectiveCrmPermissions = (
+        user: StaffUser,
+    ): { perms: string[]; source: "direct" | "role" | "none" } => {
+        if (user.crmPermissions?.length) {
+            return { perms: user.crmPermissions, source: "direct" };
+        }
+        const tmpl = roleTemplateForUser(user);
+        const rolePerms =
+            (tmpl?.crmPermissions && tmpl.crmPermissions.length
+                ? tmpl.crmPermissions
+                : tmpl?.permissions) || [];
+        if (rolePerms.length) return { perms: rolePerms, source: "role" };
+        return { perms: [], source: "none" };
     };
 
     if (loading) return (
@@ -443,7 +520,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                         <input className="h-9 rounded-md border border-border px-3 text-sm md:col-span-2" placeholder="Email (@mathionix.com)" value={newMember.email} onChange={(e) => setNewMember((m) => ({ ...m, email: e.target.value }))} />
                         <input type="password" className="h-9 rounded-md border border-border px-3 text-sm md:col-span-2" placeholder="Temporary password (min 6 chars)" value={newMember.password} onChange={(e) => setNewMember((m) => ({ ...m, password: e.target.value }))} />
                         <select className="h-9 rounded-md border border-border px-3 text-sm md:col-span-2" value={newMember.role} onChange={(e) => setNewMember((m) => ({ ...m, role: e.target.value }))}>
-                            {['Admin', 'Manager', 'Executive', 'Sales Rep', 'Viewer'].map((r) => (
+                            {(customRoles.length ? customRoles.map((r) => r.name) : FALLBACK_SYSTEM_ROLES).map((r) => (
                                 <option key={r} value={r}>{r}</option>
                             ))}
                         </select>
@@ -544,13 +621,22 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                                 <span className="inline-flex items-center gap-1 text-xs text-primary font-semibold">
                                                     <Shield className="h-3 w-3" /> Full access
                                                 </span>
-                                            ) : (user.crmPermissions?.length ?? 0) > 0 ? (
-                                                <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-lg border border-indigo-100 font-semibold">
-                                                    {user.crmPermissions!.length} permission{user.crmPermissions!.length === 1 ? "" : "s"}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs text-text-muted italic">No permissions set</span>
-                                            )}
+                                            ) : (() => {
+                                                const { perms, source } = effectiveCrmPermissions(user);
+                                                if (!perms.length) {
+                                                    return <span className="text-xs text-text-muted italic">No permissions set</span>;
+                                                }
+                                                return (
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-lg border border-indigo-100 font-semibold">
+                                                            {perms.length} permission{perms.length === 1 ? "" : "s"}
+                                                        </span>
+                                                        {source === "role" && (
+                                                            <span className="text-[11px] text-text-muted">via role</span>
+                                                        )}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center gap-2">
@@ -669,17 +755,20 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                     <div className="space-y-2">
                                         <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-[0.15em]">System Role</label>
                                         <div className="grid grid-cols-2 gap-1.5">
-                                            {['Admin', 'Manager', 'Executive', 'Sales Rep', 'Viewer'].map((role) => (
+                                            {(customRoles.length
+                                                ? customRoles.map((r) => ({ name: r.name, doc: r }))
+                                                : FALLBACK_SYSTEM_ROLES.map((n) => ({ name: n, doc: null as null | (typeof customRoles)[number] }))
+                                            ).map(({ name, doc }) => (
                                                 <button
-                                                    key={role}
-                                                    onClick={() => handleSystemRoleChange(role)}
-                                                    className={`px-2.5 py-2 rounded-md border transition-all text-xs text-left font-medium flex items-center justify-between gap-1 ${editingUser.role === role
+                                                    key={name}
+                                                    onClick={() => (doc ? applyRoleTemplate(doc) : handleSystemRoleChange(name))}
+                                                    className={`px-2.5 py-2 rounded-md border transition-all text-xs text-left font-medium flex items-center justify-between gap-1 ${editingUser.role === name
                                                         ? "bg-[var(--text-main)] border-[var(--text-main)] text-white"
                                                         : "bg-white border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--text-main)]/50 hover:text-[var(--text-main)]"
                                                         }`}
                                                 >
-                                                    <span className="truncate">{role}</span>
-                                                    {editingUser.role === role && <Check className="h-3 w-3 shrink-0" />}
+                                                    <span className="truncate">{name}</span>
+                                                    {editingUser.role === name && <Check className="h-3 w-3 shrink-0" />}
                                                 </button>
                                             ))}
                                         </div>
@@ -1191,8 +1280,25 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
             <ConfirmDialog
                 open={!!userToDelete}
                 onOpenChange={(open) => !open && setUserToDelete(null)}
-                title="Delete Staff Member"
-                description="Are you sure you want to delete this staff member? This action cannot be undone."
+                title="Remove team member?"
+                confirmText="Remove member"
+                description={(() => {
+                    const u = users.find((x) => x._id === userToDelete);
+                    const name = u
+                        ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email
+                        : "this member";
+                    return (
+                        <>
+                            This revokes{" "}
+                            <span className="font-semibold text-foreground">{name}</span>
+                            &apos;s CRM access and removes them from the team.
+                            Their leads, contacts and activity history stay in the CRM.
+                            <span className="mt-2 block text-xs text-destructive">
+                                This action can&apos;t be undone.
+                            </span>
+                        </>
+                    );
+                })()}
                 onConfirm={() => {
                     if (userToDelete) {
                         handleDeleteUser(userToDelete);

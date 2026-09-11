@@ -12,6 +12,7 @@ import {
   hrmsPermissionListHasOverviewModuleAccess,
 } from '@/lib/suite/auth';
 
+// Keep in sync with api/src/crm/crm-users/permission-actions.util.ts
 const WRITE_IMPLIES_ACTIONS = new Set([
   'read',
   'create',
@@ -22,8 +23,10 @@ const WRITE_IMPLIES_ACTIONS = new Set([
 /**
  * Sensitive CRM/HRMS actions that require an explicit grant.
  * `module:write` alone must NOT unlock these (admin bypasses via isAdmin).
+ * `assign` (reassign / transfer ownership) is a distinct §13.2 action — a plain
+ * writer must not be able to reassign records.
  */
-const WRITE_DOES_NOT_IMPLY = new Set(['delete', 'export', 'import']);
+const WRITE_DOES_NOT_IMPLY = new Set(['delete', 'export', 'import', 'assign']);
 
 /** Whether a permission list grants a module:action (or bare module id). */
 export function userPermissionsInclude(

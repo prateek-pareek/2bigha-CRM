@@ -163,13 +163,13 @@ export class CRMController {
   }
 
   @Put('leads/:id')
-  @Permissions('leads:write', 'leads:move_pipeline')
+  @Permissions('leads:edit', 'leads:move_pipeline')
   async updateLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateLead(id, dto, req.user);
   }
 
   @Patch('leads/:id')
-  @Permissions('leads:write', 'leads:move_pipeline')
+  @Permissions('leads:edit', 'leads:move_pipeline')
   async patchLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateLead(id, dto, req.user);
   }
@@ -227,7 +227,7 @@ export class CRMController {
   }
 
   @Put('organizations/:id')
-  @Permissions('organizations:write')
+  @Permissions('organizations:edit')
   async updateOrganization(
     @Param('id') id: string,
     @Body() dto: any,
@@ -237,7 +237,7 @@ export class CRMController {
   }
 
   @Patch('organizations/:id')
-  @Permissions('organizations:write')
+  @Permissions('organizations:edit')
   async patchOrganization(
     @Param('id') id: string,
     @Body() dto: any,
@@ -321,7 +321,7 @@ export class CRMController {
   }
 
   @Put('contacts/:id')
-  @Permissions('contacts:write')
+  @Permissions('contacts:edit')
   async updateContact(
     @Param('id') id: string,
     @Body() dto: any,
@@ -331,7 +331,7 @@ export class CRMController {
   }
 
   @Patch('contacts/:id')
-  @Permissions('contacts:write')
+  @Permissions('contacts:edit')
   async patchContact(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateContact(id, dto, req.user);
   }
@@ -631,8 +631,16 @@ export class CRMController {
   }
 
   // Export/Import
+  // Coarse gate: any export grant passes here; exportToCsv enforces the exact
+  // `${type}:export` per record type (§13.2 per-module export).
   @Get('export/:type')
-  @Permissions('admin:manage', 'leads:export')
+  @Permissions(
+    'admin:manage',
+    'leads:export',
+    'contacts:export',
+    'clients:export',
+    'organizations:export',
+  )
   async exportData(
     @Param('type') type: string,
     @Query('ids') ids?: string,

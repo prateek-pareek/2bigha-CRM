@@ -55,6 +55,14 @@ const EXTRA_PERMS: Array<{ name: string; module: string; description: string }> 
   { name: 'legal:read', module: 'crm', description: 'View legal cases' },
   { name: 'legal:write', module: 'crm', description: 'Create/update legal cases' },
   { name: 'legal:delete', module: 'crm', description: 'Delete legal cases' },
+  // §13.2 per-module export (explicit grant — never implied by write).
+  { name: 'leads:export', module: 'leads', description: 'Export / download leads CSV' },
+  { name: 'contacts:export', module: 'contacts', description: 'Export / download contacts CSV' },
+  { name: 'clients:export', module: 'clients', description: 'Export / download clients CSV' },
+  { name: 'organizations:export', module: 'organizations', description: 'Export / download organizations CSV' },
+  // §13.2 assign action — reassign / transfer record ownership.
+  { name: 'leads:assign', module: 'leads', description: 'Assign / transfer lead ownership' },
+  { name: 'legal:assign', module: 'legal', description: 'Assign / transfer legal case ownership' },
 ];
 
 function modulePerms(
@@ -122,6 +130,12 @@ const COMPANY_ROLES: RoleSeed[] = [
       'clients:read:all',
       'contacts:read:all',
       'leads:move_pipeline',
+      'leads:assign',
+      'legal:assign',
+      'leads:export',
+      'contacts:export',
+      'clients:export',
+      'organizations:export',
       'settings:read',
     ],
   },
@@ -137,6 +151,8 @@ const COMPANY_ROLES: RoleSeed[] = [
       'clients:read:team',
       'contacts:read:team',
       'leads:move_pipeline',
+      'leads:assign',
+      'leads:export',
     ],
   },
   {

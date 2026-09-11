@@ -89,13 +89,13 @@ export class ClientsController {
   }
 
   @Put('clients/:id')
-  @Permissions('clients:write')
+  @Permissions('clients:edit')
   async update(@Param('id') id: string, @Body() data: any, @Request() req: any) {
     return this.clientsService.update(id, data, req.user);
   }
 
   @Patch('clients/:id')
-  @Permissions('clients:write')
+  @Permissions('clients:edit')
   async patchClient(@Param('id') id: string, @Body() data: any, @Request() req: any) {
     return this.clientsService.update(id, data, req.user);
   }

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from './permissions.decorator';
+import { permissionsSatisfyAny } from './permission-actions.util';
 import { CRMUsersService } from './crm-users.service';
 import {
   hasCrmAdminFromDbUser,
@@ -135,14 +136,12 @@ export class RbacGuard implements CanActivate {
       ]),
     );
 
-    const hasPermission = requiredPermissions.some((permission) => {
-      if (userPermissions.includes(permission)) return true;
-      const [prefix, action] = permission.split(':');
-      if (!action) return false;
-      // Legacy: bare module token (e.g. "leads") only grants read, never write/delete
-      if (action === 'read' && userPermissions.includes(prefix)) return true;
-      return false;
-    });
+    // Action-implication model (see permission-actions.util.ts): `write` implies
+    // create/edit/approve/assign; delete/export/import require an explicit grant.
+    const hasPermission = permissionsSatisfyAny(
+      userPermissions,
+      requiredPermissions,
+    );
 
     if (!hasPermission) {
       console.log('RbacGuard: Insufficient permissions');

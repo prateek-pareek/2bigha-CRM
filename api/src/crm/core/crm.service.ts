@@ -4994,19 +4994,36 @@ export class CRMService {
       }
       filter.$and = [...(filter.$and || []), { $or: listingOr }];
     }
+    const activitiesFullAccess = hasCrmFullDataAccess(extras?.user);
+    const activitiesSelfId = this.userObjectId(extras?.user);
     if (extras?.assignee && Types.ObjectId.isValid(extras.assignee)) {
-      filter.assignee = new Types.ObjectId(extras.assignee);
-    } else if (extras?.teamScope === '1' || extras?.teamScope === 'true') {
-      const selfId = this.userObjectId(extras?.user);
-      const { ids } = await this.teamMemberIdsAndNames(extras?.user);
-      const allIds = selfId ? [selfId, ...ids] : ids;
-      if (allIds.length) filter.assignee = { $in: allIds };
-    } else {
-      const fullAccess = hasCrmFullDataAccess(extras?.user);
-      if (!fullAccess) {
-        const selfId = this.userObjectId(extras?.user);
-        if (selfId) filter.assignee = selfId;
+      // §13.3 — a caller may only inspect a specific assignee's tasks/calls when
+      // they have full access, it is themselves, or it is a direct report.
+      // Without this, any agent could read another user's activities via
+      // `?assignee=<id>`, bypassing own-only scope.
+      const requested = new Types.ObjectId(extras.assignee);
+      if (activitiesFullAccess) {
+        filter.assignee = requested;
+      } else {
+        const { ids } = await this.teamMemberIdsAndNames(extras?.user);
+        const allowed = new Set(
+          [activitiesSelfId?.toString(), ...ids.map((id) => String(id))].filter(
+            Boolean,
+          ) as string[],
+        );
+        if (!allowed.has(requested.toString())) {
+          throw new ForbiddenException(
+            "You can only view your own or your team members' activities.",
+          );
+        }
+        filter.assignee = requested;
       }
+    } else if (extras?.teamScope === '1' || extras?.teamScope === 'true') {
+      const { ids } = await this.teamMemberIdsAndNames(extras?.user);
+      const allIds = activitiesSelfId ? [activitiesSelfId, ...ids] : ids;
+      if (allIds.length) filter.assignee = { $in: allIds };
+    } else if (!activitiesFullAccess && activitiesSelfId) {
+      filter.assignee = activitiesSelfId;
     }
     try {
       const activities = await this.activityModel
@@ -5653,6 +5670,22 @@ export class CRMService {
     },
     user?: any,
   ): Promise<string> {
+    // §13.2 — export is a per-module action that requires an explicit grant
+    // (never implied by write). The single export endpoint serves every record
+    // type, so enforce `${type}:export` here where the type is known. Admins /
+    // full-data-access roles bypass.
+    const exportModuleKey = String(type || '').trim();
+    if (exportModuleKey && !hasCrmFullDataAccess(user)) {
+      const perms = this.crmPermissionSet(user);
+      if (
+        !perms.has(`${exportModuleKey}:export`) &&
+        !perms.has('admin:manage')
+      ) {
+        throw new ForbiddenException(
+          `You do not have permission to export ${exportModuleKey}.`,
+        );
+      }
+    }
     await this.exportQuotaService.checkQuota(user?.userId);
     let data: any[] = [];
     let headers: string[] = [];
