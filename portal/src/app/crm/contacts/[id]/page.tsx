@@ -292,6 +292,7 @@ export default function ContactDetailPage() {
       title: hasEmail ? 'Send email' : 'Add an email to send from CRM',
       onClick: () => setIsSendEmailModalOpen(true),
     },
+    /* Hidden per request: Open tracking & Follow-ups buttons
     {
       id: 'open-tracking',
       label: 'Open tracking',
@@ -311,6 +312,17 @@ export default function ContactDetailPage() {
       title: 'Schedule follow-up cadence',
       onClick: () => {
         setFollowUpSeqInitialTab('follow-ups');
+        setIsFollowUpSeqOpen(true);
+      },
+    },
+    */
+    {
+      id: 'reminder',
+      label: 'Reminder',
+      icon: <CalendarClock size={14} />,
+      title: 'Set a personal Email or WhatsApp reminder',
+      onClick: () => {
+        setFollowUpSeqInitialTab('reminder');
         setIsFollowUpSeqOpen(true);
       },
     },

@@ -2351,29 +2351,7 @@ export default function LeadsPage() {
                     />
                   </div>
                 )}
-                <div className="relative h-8 shrink-0">
-                  <select
-                    value={lastActivityFilter}
-                    onChange={(e) => {
-                      setLastActivityFilter(e.target.value as any);
-                      setPage(1);
-                    }}
-                    aria-label="Filter leads by last tracked or CRM email activity"
-                    className={cn(CRM_TOOLBAR_SELECT, 'h-full min-w-[118px] w-auto px-2.5 pr-7 text-xs')}
-                    title="Last tracked or CRM email activity"
-                  >
-                    <option value="all">Activity: Any</option>
-                    <option value="today">Today</option>
-                    <option value="last7">Last 7 days</option>
-                    <option value="last30">Last 30 days</option>
-                    <option value="last90">Last 90 days</option>
-                    <option value="no-activity">No activity</option>
-                  </select>
-                  <CrmIcon.ChevronDown
-                    size={12}
-                    className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                  />
-                </div>
+
                 <div className="relative h-8 shrink-0">
                   <select
                     value={followUpFilter}
@@ -2958,7 +2936,7 @@ export default function LeadsPage() {
                             {visibleCols.map(col => <td key={col.key}>{renderCell(lead, col.key)}</td>)}
                             <td className="crm-table-actions">
                               <CrmRowQuickActions
-                                lingerMs={8000}
+                                lingerMs={300}
                                 quick={
                                   <>
                                     {(lead.mobileNo || lead.phone) ? (

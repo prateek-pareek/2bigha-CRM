@@ -426,6 +426,7 @@ export default function LeadDetailPage() {
   }
 
   quickActions.push(
+    /* Hidden per request: Open tracking & Follow-ups buttons
     {
       id: 'open-tracking',
       label: 'Open tracking',
@@ -444,6 +445,17 @@ export default function LeadDetailPage() {
       title: 'Auto emails or personal Email / WhatsApp reminder',
       onClick: () => {
         setFollowUpSeqInitialTab(hasEmail ? 'follow-ups' : 'first-outreach');
+        setIsFollowUpSeqOpen(true);
+      },
+    },
+    */
+    {
+      id: 'reminder',
+      label: 'Reminder',
+      icon: <CalendarClock size={14} />,
+      title: 'Set a personal Email or WhatsApp reminder',
+      onClick: () => {
+        setFollowUpSeqInitialTab('reminder');
         setIsFollowUpSeqOpen(true);
       },
     },

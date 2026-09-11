@@ -118,7 +118,7 @@ export default function FollowUpSequenceModal({
   entityType,
   entityId,
   entityLabel,
-  initialTab = "first-outreach",
+  initialTab = "reminder",
   onStarted,
   onScheduleChanged,
 }: Props) {

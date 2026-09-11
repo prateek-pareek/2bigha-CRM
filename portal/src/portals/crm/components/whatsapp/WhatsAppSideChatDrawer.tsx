@@ -327,7 +327,7 @@ export default function WhatsAppSideChatDrawer() {
     return (
       <div
         onClick={toggleMinimize}
-        className="fixed bottom-0 right-6 z-[95] flex h-12 w-80 cursor-pointer items-center justify-between rounded-t-xl bg-[#008069] px-4 text-white shadow-2xl transition-all hover:bg-[#00705c]"
+        className="fixed bottom-0 right-6 z-[500] flex h-12 w-80 cursor-pointer items-center justify-between rounded-t-xl bg-[#008069] px-4 text-white shadow-2xl transition-all hover:bg-[#00705c]"
       >
         <div className="flex items-center gap-2.5 truncate">
           <MessageCircle size={18} className="shrink-0 text-emerald-200" />
@@ -363,7 +363,7 @@ export default function WhatsAppSideChatDrawer() {
 
   return (
     <>
-      <div className="fixed bottom-4 right-6 z-[95] flex h-[620px] max-h-[90vh] w-[520px] sm:w-[540px] max-w-[96vw] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all">
+      <div className="fixed bottom-4 right-6 z-[500] flex h-[620px] max-h-[90vh] w-[520px] sm:w-[540px] max-w-[96vw] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all">
         {/* Main Header Bar */}
         <div
           className="flex items-center justify-between px-4 py-3 text-white"

@@ -128,7 +128,7 @@ export default function FollowUpSequenceModal({
   entityType,
   entityId,
   entityLabel,
-  initialTab = "first-outreach",
+  initialTab = "reminder",
   onStarted,
   onScheduleChanged,
 }: Props) {
@@ -737,6 +737,7 @@ export default function FollowUpSequenceModal({
           role="tablist"
           aria-label="Schedule sections"
         >
+          {/* Hidden per request: Open tracking & Auto emails tabs
           <button
             type="button"
             role="tab"
@@ -763,6 +764,7 @@ export default function FollowUpSequenceModal({
           >
             Auto emails ({enabledCount})
           </button>
+          */}
           <button
             type="button"
             role="tab"
