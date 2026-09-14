@@ -631,16 +631,33 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           onChange={(e: any) => setSelectedStage(e.target.value)}
                         />
                       )}
-                      {sl('leadCategory') && (
-                        <FormItem
-                          label="Lead Type"
-                          name="leadCategory"
-                          type="select"
-                          options={['', ...leadCategories.map((c) => c.label)]}
-                          defaultValue={initialData.leadCategory}
-                          error={errors.leadCategory}
-                        />
-                      )}
+                      {sl('leadCategory') && (() => {
+                        const rawCats = leadCategories.length > 0
+                          ? leadCategories.map((c) => c.label.toLowerCase() === 'buyer lead' ? 'Buyer' : c.label)
+                          : ['Lead', 'Buyer', 'Seller', 'Reference', 'Investor'];
+                        const optsSet = new Set(rawCats.map((c) => c.toLowerCase()));
+                        const finalCats = [...rawCats];
+                        if (!optsSet.has('lead')) finalCats.unshift('Lead');
+                        if (!optsSet.has('buyer')) finalCats.push('Buyer');
+                        if (!optsSet.has('seller')) finalCats.push('Seller');
+
+                        const initialVal = initialData.leadCategory
+                          ? initialData.leadCategory.toLowerCase() === 'buyer lead'
+                            ? 'Buyer'
+                            : initialData.leadCategory
+                          : 'Lead';
+
+                        return (
+                          <FormItem
+                            label="Lead Type"
+                            name="leadCategory"
+                            type="select"
+                            options={['', ...Array.from(new Set(finalCats))]}
+                            defaultValue={initialVal}
+                            error={errors.leadCategory}
+                          />
+                        );
+                      })()}
                       {sl('source') && (
                         <FormItem
                           label="Lead Source"

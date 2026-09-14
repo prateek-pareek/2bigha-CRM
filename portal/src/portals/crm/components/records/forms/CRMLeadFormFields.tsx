@@ -88,9 +88,9 @@ const SECTION_ICON: Record<string, any> = {
 
 function sectionForKey(key: string): string {
   if (key.startsWith('cf:')) return 'custom';
-  if (['salutation', 'firstName', 'lastName', 'email', 'additionalEmails', 'gender', 'mobileNo', 'phone', 'whatsappNumber', 'address', 'state', 'role', 'twitterHandle'].includes(key)) return 'contact';
+  if (['salutation', 'firstName', 'lastName', 'role', 'leadCategory', 'email', 'additionalEmails', 'gender', 'mobileNo', 'phone', 'whatsappNumber', 'address', 'state', 'pincode', 'twitterHandle'].includes(key)) return 'contact';
   if (['relatedService'].includes(key)) return 'company';
-  if (['leadVertical', 'pipeline', 'stage', 'status', 'callStatus', 'leadOwner', 'leadCategory', 'source', 'planningToBuyLand', 'group', 'notes'].includes(key)) return 'lead';
+  if (['leadVertical', 'pipeline', 'stage', 'status', 'callStatus', 'leadOwner', 'source', 'planningToBuyLand', 'group', 'notes'].includes(key)) return 'lead';
   return 'other';
 }
 
@@ -572,7 +572,27 @@ export default function CRMLeadFormFields({
             </div>
           </div>
         );
-      case 'leadCategory':
+      case 'leadCategory': {
+        const rawOptions = leadCategories.length > 0
+          ? leadCategories.map((o) => ({
+              _id: o._id,
+              label: o.label.toLowerCase() === 'buyer lead' ? 'Buyer' : o.label,
+            }))
+          : [
+              { _id: 'lead', label: 'Lead' },
+              { _id: 'buyer', label: 'Buyer' },
+              { _id: 'seller', label: 'Seller' },
+              { _id: 'reference', label: 'Reference' },
+              { _id: 'investor', label: 'Investor' },
+            ];
+
+        // Ensure Lead, Buyer, Seller are present
+        const labelsSet = new Set(rawOptions.map((o) => o.label.toLowerCase()));
+        const categoryOptions = [...rawOptions];
+        if (!labelsSet.has('lead')) categoryOptions.unshift({ _id: 'lead-opt', label: 'Lead' });
+        if (!labelsSet.has('buyer')) categoryOptions.push({ _id: 'buyer-opt', label: 'Buyer' });
+        if (!labelsSet.has('seller')) categoryOptions.push({ _id: 'seller-opt', label: 'Seller' });
+
         return (
           <div key={key} className="space-y-1">
             <label className={LBL}>
@@ -581,12 +601,12 @@ export default function CRMLeadFormFields({
             <div className="relative">
               <select
                 name="leadCategory"
-                defaultValue=""
+                defaultValue="Lead"
                 onChange={() => onClearError?.('leadCategory')}
                 className={fieldError ? SEL_ERR : SEL}
               >
                 <option value="">Select Type</option>
-                {leadCategories.map((o) => (
+                {categoryOptions.map((o) => (
                   <option key={o._id} value={o.label}>
                     {o.label}
                   </option>
@@ -601,6 +621,7 @@ export default function CRMLeadFormFields({
             )}
           </div>
         );
+      }
       case 'group':
         return (
           <div key={key} className="space-y-1">
@@ -717,15 +738,18 @@ export default function CRMLeadFormFields({
   const li = visibleKeys.indexOf('lastName');
   const namePair = fi >= 0 && li >= 0;
   const nameLeader = namePair ? (fi < li ? 'firstName' : 'lastName') : null;
-
-  const groups: { section: string; keys: string[] }[] = [];
+  const SECTION_ORDER = ['contact', 'lead', 'company', 'custom', 'other'];
+  const groupedKeys: Record<string, string[]> = {};
   for (const key of keys) {
     if (namePair && (key === 'firstName' || key === 'lastName') && key !== nameLeader) continue;
     const sec = sectionForKey(key === nameLeader ? 'firstName' : key);
-    const last = groups[groups.length - 1];
-    if (last && last.section === sec) last.keys.push(key);
-    else groups.push({ section: sec, keys: [key] });
+    if (!groupedKeys[sec]) groupedKeys[sec] = [];
+    groupedKeys[sec].push(key);
   }
+
+  const groups = SECTION_ORDER
+    .filter((sec) => groupedKeys[sec]?.length)
+    .map((sec) => ({ section: sec, keys: groupedKeys[sec] }));
 
   const wrapField = (key: string, node: ReactNode) => {
     if (!node) return null;

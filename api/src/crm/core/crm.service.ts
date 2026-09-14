@@ -380,6 +380,8 @@ export class CRMService {
       /** Rows whose Role column wasn't OWNER/AGENT/USER — defaulted to USER. */
       invalidRoleCount: number;
       duplicateStrategy: ImportDuplicateStrategy;
+      failedRows: { rowNumber: number; rowData?: any; reason: string }[];
+      skippedRows: { rowNumber: number; rowData?: any; reason: string }[];
       error?: string;
       createdAt: number;
     }
@@ -5866,6 +5868,23 @@ export class CRMService {
     mappedData: Record<string, unknown>,
     customFields: Record<string, string>,
   ): Promise<LeadDocument | null> {
+    // 1. Phone number (highest priority for 2 Bigha)
+    for (const field of ['mobileNo', 'phone', 'whatsappNumber'] as const) {
+      const digits = normalizePhoneDigits(String(mappedData[field] || ''));
+      if (digits.length < 7) continue;
+      const re = new RegExp(digits.split('').join('\\D*') + '$');
+      const byPhone = await this.leadModel
+        .findOne({
+          $or: [
+            { mobileNo: re },
+            { phone: re },
+          ],
+        })
+        .exec();
+      if (byPhone) return byPhone;
+    }
+
+    // 2. Email fallback
     const email = normalizeEmail(String(mappedData.email || ''));
     if (email) {
       const byEmail = await this.leadModel
@@ -5878,6 +5897,8 @@ export class CRMService {
         .exec();
       if (byEmail) return byEmail;
     }
+
+    // 3. HubSpot ID
     const hs =
       customFields.hubspot_contact_id ||
       mappedData.hubspotContactId ||
@@ -5890,6 +5911,8 @@ export class CRMService {
         .exec();
       if (byHs) return byHs;
     }
+
+    // 4. LinkedIn
     const li = linkedInProfileKey(String(mappedData.linkedinUrl || ''));
     if (li) {
       const byLi = await this.leadModel
@@ -5904,17 +5927,7 @@ export class CRMService {
         .exec();
       if (byLi) return byLi;
     }
-    for (const field of ['mobileNo', 'phone'] as const) {
-      const digits = normalizePhoneDigits(String(mappedData[field] || ''));
-      if (digits.length < 7) continue;
-      const re = new RegExp(digits.split('').join('\\D*'));
-      const byPhone = await this.leadModel
-        .findOne({
-          $or: [{ mobileNo: { $regex: re } }, { phone: { $regex: re } }],
-        })
-        .exec();
-      if (byPhone) return byPhone;
-    }
+
     return null;
   }
 
@@ -5990,6 +6003,8 @@ export class CRMService {
       existingClientCount: 0,
       invalidRoleCount: 0,
       duplicateStrategy: strategy,
+      failedRows: [],
+      skippedRows: [],
       createdAt: Date.now(),
     });
     void this.importFromExcel(
@@ -6033,6 +6048,8 @@ export class CRMService {
       existingClientCount: job.existingClientCount,
       invalidRoleCount: job.invalidRoleCount,
       duplicateStrategy: job.duplicateStrategy,
+      failedRows: job.failedRows || [],
+      skippedRows: job.skippedRows || [],
       error: job.error,
       progress:
         job.total > 0 ? Math.round((job.processed / job.total) * 100) : 100,
@@ -6161,8 +6178,27 @@ export class CRMService {
               if (leadClient.invalidRole) job.invalidRoleCount++;
             }
           }
-          this.stripImportRoutingFields(mappedData);
-          this.stripLeadImportClientRoutingFields(mappedData);
+          if (mappedData.role) {
+            const r = String(mappedData.role).trim().toUpperCase();
+            if (['USER', 'AGENT', 'OWNER', 'BUILDER', 'BUYER', 'TENANT', 'SELLER', '2 BIGHA USER', 'REAL ESTATE AGENT', 'PROPERTY OWNER'].includes(r)) {
+              if (r === '2 BIGHA USER') mappedData.role = 'USER';
+              else if (r === 'REAL ESTATE AGENT') mappedData.role = 'AGENT';
+              else if (r === 'PROPERTY OWNER') mappedData.role = 'OWNER';
+              else mappedData.role = r;
+            }
+          }
+          if (mappedData.planningToBuyLand) {
+            const p = String(mappedData.planningToBuyLand).trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (p.includes('exploring')) mappedData.planningToBuyLand = 'just_exploring';
+            else if (p.includes('within_1') || p.includes('1_month')) mappedData.planningToBuyLand = 'within_1_month';
+            else if (p.includes('1') && p.includes('3')) mappedData.planningToBuyLand = '1–3_months';
+            else if (p.includes('3') && p.includes('6')) mappedData.planningToBuyLand = '3–6_months';
+          }
+          if (mappedData.leadVertical) {
+            const v = String(mappedData.leadVertical).trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (v.includes('listing')) mappedData.leadVertical = 'property_listing';
+            else if (v.includes('management')) mappedData.leadVertical = 'property_management';
+          }
           const leadRequestedRid =
             mappedData.recordId != null &&
               String(mappedData.recordId).trim() !== ''
@@ -6618,15 +6654,47 @@ export class CRMService {
 
         if (rowOutcome !== 'failed') {
           if (rowOutcome === 'skipped') {
-            if (job) this.bumpImportJobOutcome(job, 'skipped');
+            if (job) {
+              this.bumpImportJobOutcome(job, 'skipped');
+              job.skippedRows.push({
+                rowNumber: rowIndex,
+                rowData: row,
+                reason: `Duplicate record skipped (existing lead with matching phone or email)`,
+              });
+            }
           } else {
             count++;
             if (job) this.bumpImportJobOutcome(job, rowOutcome);
           }
         }
       } catch (err) {
-        console.error(`Failed to import row:`, (err as Error).message);
-        rowOutcome = 'failed';
+        const errMsg = (err as Error).message || 'Failed to import row';
+        console.error(`Failed to import row:`, errMsg);
+        const isDuplicateConflict =
+          errMsg.toLowerCase().includes('already used by') ||
+          errMsg.toLowerCase().includes('duplicate') ||
+          errMsg.includes('E11000');
+
+        if (isDuplicateConflict) {
+          rowOutcome = 'skipped';
+          if (job) {
+            this.bumpImportJobOutcome(job, 'skipped');
+            job.skippedRows.push({
+              rowNumber: rowIndex,
+              rowData: row,
+              reason: errMsg,
+            });
+          }
+        } else {
+          rowOutcome = 'failed';
+          if (job) {
+            job.failedRows.push({
+              rowNumber: rowIndex,
+              rowData: row,
+              reason: errMsg,
+            });
+          }
+        }
       }
       if (job) {
         job.processed = rowIndex;

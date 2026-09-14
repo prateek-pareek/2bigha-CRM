@@ -15,6 +15,16 @@ export interface TrackedCrmImport {
   processed: number;
   successCount: number;
   failedCount: number;
+  createdCount?: number;
+  mergedCount?: number;
+  replacedCount?: number;
+  skippedCount?: number;
+  invalidCount?: number;
+  existingClientCount?: number;
+  invalidRoleCount?: number;
+  failedRows?: { rowNumber: number; rowData?: any; reason: string }[];
+  skippedRows?: { rowNumber: number; rowData?: any; reason: string }[];
+  invalidRows?: { rowNumber: number; rowData?: any; errors: string[] }[];
   status: CrmImportJobStatus;
   error?: string;
   onSuccess?: () => void;
