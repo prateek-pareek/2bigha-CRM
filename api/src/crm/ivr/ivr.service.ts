@@ -82,6 +82,8 @@ export interface LogCallActivityDto {
   status: string;
   notes?: string;
   followUpAt?: string;
+  callbackScheduledAt?: string;
+  firstCallResponse?: string;
   intents?: string[];
 }
 
@@ -205,6 +207,15 @@ export class IvrService {
 
     if (dto.relatedTo && Types.ObjectId.isValid(dto.relatedTo)) {
       const leadOid = new Types.ObjectId(dto.relatedTo);
+      if (dto.relatedType === 'Lead' || !dto.relatedType) {
+        await this.leadModel.findByIdAndUpdate(leadOid, {
+          $set: {
+            lastCallAt: new Date(),
+            callStatus: 'Initiated',
+          },
+        }).exec();
+      }
+
       await this.activityModel.create({
         type: 'Call',
         title: 'Outgoing Call',
@@ -222,6 +233,24 @@ export class IvrService {
           customerNumber,
         },
       });
+    } else if (customerNumber) {
+      const digits = customerNumber.replace(/\D/g, '').slice(-10);
+      if (digits.length === 10) {
+        await this.leadModel.updateMany(
+          {
+            $or: [
+              { mobileNo: new RegExp(digits + '$') },
+              { phone: new RegExp(digits + '$') },
+            ],
+          },
+          {
+            $set: {
+              lastCallAt: new Date(),
+              callStatus: 'Initiated',
+            },
+          },
+        ).exec();
+      }
     }
 
     return { sessionId, message: data?.message || 'Call initiated', raw: data };
@@ -294,18 +323,37 @@ export class IvrService {
 
       if (!leadId && update.customerNumber) {
         const normalizedCustomer = normalizeE164(update.customerNumber);
+        const digits = update.customerNumber.replace(/\D/g, '').slice(-10);
+        const matchConditions: any[] = [
+          { mobileNo: normalizedCustomer },
+          { mobileNo: normalizedCustomer.replace(/^\+91/, '') },
+          { mobileNo: `+91${normalizedCustomer.replace(/^\+91/, '')}` },
+        ];
+        if (digits.length === 10) {
+          matchConditions.push({ mobileNo: new RegExp(digits + '$') });
+          matchConditions.push({ phone: new RegExp(digits + '$') });
+        }
         const matchedLead = await this.leadModel.findOne({
-          $or: [
-            { mobileNo: normalizedCustomer },
-            { mobileNo: normalizedCustomer.replace(/^\+91/, '') },
-            { mobileNo: `+91${normalizedCustomer.replace(/^\+91/, '')}` }
-          ]
+          $or: matchConditions,
         }).exec();
         if (matchedLead) {
           leadId = matchedLead._id;
           leadType = 'Lead';
           await this.callLogModel.findByIdAndUpdate(callLogRecord._id, { $set: { relatedTo: leadId, relatedType: leadType } }).exec();
+          await this.leadModel.findByIdAndUpdate(leadId, {
+            $set: {
+              callStatus: status,
+              lastCallAt: update.callDate || new Date(),
+            },
+          }).exec();
         }
+      } else if (leadId && leadType === 'Lead') {
+        await this.leadModel.findByIdAndUpdate(leadId, {
+          $set: {
+            callStatus: status,
+            lastCallAt: update.callDate || new Date(),
+          },
+        }).exec();
       }
 
       if (leadId) {
@@ -453,12 +501,32 @@ export class IvrService {
       },
     });
 
+    const lead = await this.leadModel.findById(leadOid).lean().exec();
+    const updateFields: Record<string, any> = {
+      callStatus: status,
+      lastCallAt: new Date(),
+    };
+    if (followUpDate) {
+      updateFields.nextFollowUpAt = followUpDate;
+      updateFields.followUpReminderSentAt = null;
+      updateFields.followUpUpcomingReminderSentAt = null;
+      updateFields.followUpOverdueReminderSentAt = null;
+    }
+    if (dto.callbackScheduledAt) {
+      const cb = new Date(dto.callbackScheduledAt);
+      if (!Number.isNaN(cb.getTime())) {
+        updateFields.callbackScheduledAt = cb;
+      }
+    }
+    if (dto.firstCallResponse) {
+      updateFields.firstCallResponse = dto.firstCallResponse;
+    } else if (!lead?.firstCallResponse && (dto.notes || status)) {
+      updateFields.firstCallResponse = dto.notes?.trim() || status;
+    }
+
     await this.leadModel
       .findByIdAndUpdate(leadOid, {
-        $set: {
-          callStatus: status,
-          ...(followUpDate ? { nextFollowUpAt: followUpDate, followUpReminderSentAt: null, followUpUpcomingReminderSentAt: null, followUpOverdueReminderSentAt: null } : {}),
-        },
+        $set: updateFields,
       })
       .exec();
 

@@ -43,7 +43,7 @@ export function CrmFormSection({
   defaultOpen = true,
   collapsible = true,
 }: {
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   className?: string;
   description?: string;
@@ -114,7 +114,7 @@ export function CrmFormSection({
       <div
         id={panelId}
         role="region"
-        aria-label={title}
+        aria-label={typeof title === 'string' ? title : undefined}
         className={cn(
           'grid transition-[grid-template-rows] duration-200 ease-out',
           open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',

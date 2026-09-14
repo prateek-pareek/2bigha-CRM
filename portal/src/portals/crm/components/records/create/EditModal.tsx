@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { X, Save, Trash2, Settings2, ChevronDown } from 'lucide-react';
+import { X, Save, Trash2, Settings2, ChevronDown, AlertCircle } from 'lucide-react';
 import { CRM_API_URL } from '@/lib/crm/config';
 import { getCrmAuthToken } from '@/lib/crm/api';
 import { hasPersonContactMethod, hasPersonContactMethodOrPortalListing } from '@/lib/crm/crm-contact-method';
@@ -10,6 +10,7 @@ import { invalidateCrmForEntityType } from '@/lib/crm/shared/invalidate-on-mutat
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
 import CRMFieldLayoutCustomizer from '@/components/crm/records/forms/CRMFieldLayoutCustomizer';
+import { INDIAN_STATES } from '@/components/crm/records/forms/CRMLeadFormFields';
 import {
   CRM_PHONE_COUNTRY_OPTIONS,
   getDefaultCountryCodeFromPhone,
@@ -32,6 +33,34 @@ import { CRM_BTN_PRIMARY, CRM_BTN_SECONDARY, CRM_BTN_GHOST } from '@/lib/crm/ui'
 function pipelineIdEq(a: unknown, b: unknown): boolean {
   return String(a ?? '') === String(b ?? '');
 }
+
+const BUY_LAND_OPTIONS = [
+  { value: 'just_exploring', label: 'Just Exploring' },
+  { value: 'within_1_month', label: 'Within 1 Month' },
+  { value: '1–3_months', label: '1–3 Months' },
+  { value: '3–6_months', label: '3–6 Months' },
+];
+
+const ROLE_OPTIONS = [
+  { value: 'USER', label: '2 Bigha User' },
+  { value: 'AGENT', label: 'Real Estate Agent' },
+  { value: 'OWNER', label: 'Property Owner' },
+];
+
+const LEAD_SOURCE_OPTIONS = [
+  'Website',
+  'Google Lead',
+  'Meta Ads',
+  'Referral',
+  'Walk In',
+  'Direct Call',
+  'Other',
+];
+
+const LEAD_VERTICAL_OPTIONS = [
+  { value: 'property_listing', label: 'Property Listing' },
+  { value: 'property_management', label: 'Property Management' },
+];
 
 /** Ensures edit forms can show a selected value before org/contact lists finish loading or for legacy rows. */
 function crmSelectOptionsWithLegacyValue(
@@ -58,6 +87,9 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState<string>('');
   const [selectedStage, setSelectedStage] = useState<string>('');
+  const [leadVertical, setLeadVertical] = useState<'property_listing' | 'property_management'>(
+    initialData?.leadVertical || 'property_listing'
+  );
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [layoutTickContact, setLayoutTickContact] = useState(0);
   const [layoutTickOrg, setLayoutTickOrg] = useState(0);
@@ -67,6 +99,9 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   const [showCustomizeLead, setShowCustomizeLead] = useState(false);
   const [crmPortalUsers, setCrmPortalUsers] = useState<Array<{ _id: string; firstName: string; lastName: string }>>([]);
   const [leadServiceOfferings, setLeadServiceOfferings] = useState<Array<{ _id: string; name: string }>>([]);
+  const [leadCategories, setLeadCategories] = useState<Array<{ _id: string; label: string }>>([]);
+  const [leadGroups, setLeadGroups] = useState<Array<{ _id: string; label: string }>>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen && type) {
@@ -100,13 +135,25 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
     if (!token) return;
     void (async () => {
       try {
-        const res = await fetch(`${CRM_API_URL}/crm/service-offerings`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = res.ok ? await res.json() : [];
-        setLeadServiceOfferings(Array.isArray(data) ? data : []);
+        const [svcsRes, catRes, groupRes] = await Promise.all([
+          fetch(`${CRM_API_URL}/crm/service-offerings`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${CRM_API_URL}/crm/lead-picklist-options?listKey=leadCategory`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${CRM_API_URL}/crm/lead-picklist-options?listKey=group`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        if (svcsRes.ok) {
+          const data = await svcsRes.json();
+          setLeadServiceOfferings(Array.isArray(data) ? data : []);
+        }
+        if (catRes.ok) {
+          const data = await catRes.json();
+          setLeadCategories(Array.isArray(data) ? data : []);
+        }
+        if (groupRes.ok) {
+          const data = await groupRes.json();
+          setLeadGroups(Array.isArray(data) ? data : []);
+        }
       } catch {
-        setLeadServiceOfferings([]);
+        /* ignore */
       }
     })();
   }, [isOpen, type]);
@@ -122,11 +169,12 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       const defaultP = pipelines.find((p: any) => p.isDefault) || pipelines[0];
       if (defaultP) setSelectedPipeline(String(defaultP._id));
     }
-  }, [initialData, pipelines, type]);
+  }, [initialData, pipelines, type, selectedPipeline]);
 
   useEffect(() => {
     if (isOpen && initialData && (type === 'Lead' || type === 'Contact')) {
       setSelectedStage(initialData.stage || initialData.status || '');
+      if (initialData.leadVertical) setLeadVertical(initialData.leadVertical);
     }
   }, [isOpen, initialData, type]);
 
@@ -232,9 +280,56 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     const formData = new FormData(e.target as HTMLFormElement);
     const data = Object.fromEntries(formData.entries()) as Record<string, any>;
+
+    if (type === 'Lead') {
+      const validationErrors: Record<string, string> = {};
+
+      const firstName = String(data.firstName || '').trim();
+      if (!firstName) {
+        validationErrors.firstName = 'First name is required';
+      } else if (firstName.length < 2) {
+        validationErrors.firstName = 'First name must be at least 2 characters';
+      }
+
+      const rawMobile = String(data.mobileNo || '').replace(/\D/g, '');
+      if (!rawMobile) {
+        validationErrors.mobileNo = 'Phone number is required';
+      } else if (rawMobile.length !== 10) {
+        validationErrors.mobileNo = 'Phone number must be exactly 10 digits';
+      } else if (!/^[6-9]\d{9}$/.test(rawMobile)) {
+        validationErrors.mobileNo = 'Indian phone numbers must start with 6, 7, 8, or 9';
+      }
+
+      if (data.role && !['USER', 'AGENT', 'OWNER'].includes(data.role)) {
+        validationErrors.role = 'Please select a valid role';
+      }
+
+      const rawWhatsapp = String(data.whatsappNumber || '').replace(/\D/g, '');
+      if (rawWhatsapp) {
+        if (rawWhatsapp.length !== 10) {
+          validationErrors.whatsappNumber = 'WhatsApp number must be exactly 10 digits';
+        } else if (!/^[6-9]\d{9}$/.test(rawWhatsapp)) {
+          validationErrors.whatsappNumber = 'WhatsApp number must start with 6, 7, 8, or 9';
+        }
+      }
+
+      const email = String(data.email || '').trim();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        validationErrors.email = 'Please enter a valid email address';
+      }
+
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        const firstKey = Object.keys(validationErrors)[0];
+        toast.error(validationErrors[firstKey]);
+        return;
+      }
+    }
+
+    setErrors({});
+    setLoading(true);
 
     if (type === 'Lead' && leadFormKeys.has('additionalEmails')) {
       data.additionalEmails = parseAdditionalEmailsFromForm(formData, data.email);
@@ -246,6 +341,10 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
     if (data.mobileNo_countryCode && data.mobileNo) {
       data.mobileNo = `${data.mobileNo_countryCode} ${data.mobileNo}`.trim();
       delete data.mobileNo_countryCode;
+    }
+    if (data.whatsappNumber_countryCode && data.whatsappNumber) {
+      data.whatsappNumber = `${data.whatsappNumber_countryCode} ${data.whatsappNumber}`.trim();
+      delete data.whatsappNumber_countryCode;
     }
     if (data.phone_countryCode && data.phone) {
       data.phone = `${data.phone_countryCode} ${data.phone}`.trim();
@@ -280,7 +379,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
 
     const endpoint = type === 'Lead' ? 'leads' :
       type === 'Org' ? 'organizations' :
-        type === 'Contact' ? 'contacts' : 'activities'; // Basic mapping
+        type === 'Contact' ? 'contacts' : 'activities';
 
     const prevCf =
       initialData.customFields && typeof initialData.customFields.get === 'function'
@@ -309,7 +408,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       payload.customFields = customFieldsData;
     }
 
-
     if (type === 'Lead') {
       if (!payload.stage && (initialData.stage || initialData.status)) {
         payload.stage = initialData.stage || initialData.status;
@@ -322,6 +420,8 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
         payload.pipeline = typeof p === 'object' && p && '_id' in p ? (p as any)._id : p;
       }
       if (payload.relatedService === '') payload.relatedService = null;
+      if (payload.planningToBuyLand === '') payload.planningToBuyLand = undefined;
+      if (payload.state === '') payload.state = undefined;
     }
 
     if (type === 'Contact') {
@@ -356,6 +456,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
 
       if (res.ok) {
         invalidateCrmForEntityType(type);
+        toast.success(`${type} updated successfully`);
         if (onSuccess) onSuccess();
         onClose();
       } else {
@@ -375,7 +476,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       }
     } catch (err) {
       console.error('Update failed', err);
-      alert('Update failed');
+      toast.error('Update failed');
     } finally {
       setLoading(false);
     }
@@ -423,21 +524,32 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
         </div>
 
         <div className={`${crmModalChrome.centerBody} custom-scrollbar`}>
-          <form key={initialData?._id} id="edit-form" onSubmit={handleSubmit} className="space-y-3">
+          <form key={initialData?._id} id="edit-form" onSubmit={handleSubmit} className="space-y-4">
             {type === 'Lead' && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex justify-end">
                   <button type="button" onClick={() => setShowCustomizeLead(true)} className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--background)] transition-colors">
                     <Settings2 size={13} className="text-[var(--text-muted)]" /> Fields
                   </button>
                 </div>
-                {(sl('salutation') || sl('firstName') || sl('lastName') || sl('email') || sl('additionalEmails') || sl('mobileNo') || sl('phone') || sl('gender') || sl('twitterHandle')) && (
-                  <CrmFormSection title="Contact Information" defaultOpen>
+                {(sl('salutation') || sl('firstName') || sl('lastName') || sl('role') || sl('email') || sl('additionalEmails') || sl('mobileNo') || sl('whatsappNumber') || sl('phone') || sl('gender') || sl('address') || sl('state') || sl('twitterHandle')) && (
+                  <CrmFormSection title="Client Information" defaultOpen>
                     <CrmFormGrid>
-                      {sl('salutation') && <FormItem label="Salutation" name="salutation" type="select" options={['Mr', 'Ms', 'Mrs', 'Dr']} defaultValue={initialData.salutation} />}
-                      {sl('firstName') && <FormItem label="First Name" name="firstName" defaultValue={initialData.firstName} />}
+                      {sl('salutation') && <FormItem label="Salutation" name="salutation" type="select" options={['', 'Mr', 'Ms', 'Mrs', 'Dr']} defaultValue={initialData.salutation} />}
+                      {sl('firstName') && <FormItem label="First Name" name="firstName" required defaultValue={initialData.firstName} error={errors.firstName} />}
                       {sl('lastName') && <FormItem label="Last Name" name="lastName" defaultValue={initialData.lastName} />}
-                      {sl('email') && <FormItem label="Email" name="email" type="email" defaultValue={initialData.email} />}
+                      {sl('role') && (
+                        <FormItem
+                          label="Role"
+                          name="role"
+                          type="select"
+                          required
+                          options={ROLE_OPTIONS}
+                          defaultValue={initialData.role || 'USER'}
+                          error={errors.role}
+                        />
+                      )}
+                      {sl('email') && <FormItem label="Email" name="email" type="email" defaultValue={initialData.email} error={errors.email} />}
                       {sl('additionalEmails') && (
                         <div className="col-span-2">
                           <CrmMultiEmailListField
@@ -446,9 +558,20 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           />
                         </div>
                       )}
-                      {sl('mobileNo') && <FormItem label="Mobile No" name="mobileNo" type="phone" defaultValue={initialData.mobileNo} />}
-                      {sl('phone') && <FormItem label="Phone (alternate)" name="phone" defaultValue={initialData.phone} />}
-                      {sl('gender') && <FormItem label="Gender" name="gender" type="select" options={['Male', 'Female', 'Other']} defaultValue={initialData.gender} />}
+                      {sl('mobileNo') && <FormItem label="Phone" name="mobileNo" type="phone" required defaultValue={initialData.mobileNo} error={errors.mobileNo} />}
+                      {sl('whatsappNumber') && <FormItem label="WhatsApp" name="whatsappNumber" type="phone" defaultValue={initialData.whatsappNumber} error={errors.whatsappNumber} />}
+                      {sl('phone') && <FormItem label="Phone (Alternate)" name="phone" type="phone" defaultValue={initialData.phone} />}
+                      {sl('gender') && <FormItem label="Gender" name="gender" type="select" options={['', 'Male', 'Female', 'Other']} defaultValue={initialData.gender} />}
+                      {sl('address') && <FormItem label="Address" name="address" className="sm:col-span-2" defaultValue={initialData.address} placeholder="Plot / Street / Area / City" />}
+                      {sl('state') && (
+                        <FormItem
+                          label="State"
+                          name="state"
+                          type="select"
+                          options={['', ...INDIAN_STATES]}
+                          defaultValue={initialData.state}
+                        />
+                      )}
                       {sl('twitterHandle') && (
                         <FormItem
                           label="X (Twitter) handle"
@@ -460,16 +583,18 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                     </CrmFormGrid>
                   </CrmFormSection>
                 )}
-                {(sl('pipeline') || sl('stage') || sl('status') || sl('callStatus') || sl('leadOwner') || sl('relatedService')) && (
+                {(sl('leadVertical') || sl('pipeline') || sl('stage') || sl('status') || sl('callStatus') || sl('leadCategory') || sl('source') || sl('group') || sl('planningToBuyLand') || sl('leadOwner') || sl('relatedService') || sl('notes')) && (
                   <CrmFormSection title="Lead Information" defaultOpen={false}>
                     <CrmFormGrid>
-                      {sl('relatedService') && (
+                      {sl('leadVertical') && (
                         <FormItem
-                          label="Related service"
-                          name="relatedService"
+                          label="Lead Vertical"
+                          name="leadVertical"
                           type="select"
-                          options={leadServiceSelectOptions}
-                          defaultValue={leadRelatedSvcId}
+                          required
+                          options={LEAD_VERTICAL_OPTIONS}
+                          value={leadVertical}
+                          onChange={(e: any) => setLeadVertical(e.target.value)}
                         />
                       )}
                       {sl('pipeline') && (
@@ -482,9 +607,15 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                               onChange={(e) => setSelectedPipeline(e.target.value)}
                               className={`${CRM_HS_SELECT_CLASS} pr-10`}
                             >
-                              {pipelines.map((p: any) => (
-                                <option key={String(p._id)} value={String(p._id)}>{p.name}</option>
-                              ))}
+                              {pipelines
+                                .filter((p) =>
+                                  leadVertical === 'property_management'
+                                    ? p.leadVertical === 'property_management'
+                                    : p.leadVertical === 'property_listing' || !p.leadVertical
+                                )
+                                .map((p: any) => (
+                                  <option key={String(p._id)} value={String(p._id)}>{p.name}</option>
+                                ))}
                             </select>
                             <ChevronDown className="absolute right-3 h-4 w-4 text-[var(--text-muted)] pointer-events-none" />
                           </div>
@@ -498,6 +629,44 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           options={(pipelines.find((p: any) => pipelineIdEq(p._id, selectedPipeline))?.stages || []).sort((a: any, b: any) => a.order - b.order).map((s: any) => s.name) || ['New']}
                           value={selectedStage}
                           onChange={(e: any) => setSelectedStage(e.target.value)}
+                        />
+                      )}
+                      {sl('leadCategory') && (
+                        <FormItem
+                          label="Lead Type"
+                          name="leadCategory"
+                          type="select"
+                          options={['', ...leadCategories.map((c) => c.label)]}
+                          defaultValue={initialData.leadCategory}
+                          error={errors.leadCategory}
+                        />
+                      )}
+                      {sl('source') && (
+                        <FormItem
+                          label="Lead Source"
+                          name="source"
+                          type="select"
+                          options={['', ...LEAD_SOURCE_OPTIONS]}
+                          defaultValue={initialData.source}
+                          error={errors.source}
+                        />
+                      )}
+                      {sl('group') && (
+                        <FormItem
+                          label="Group"
+                          name="group"
+                          type="select"
+                          options={['', ...leadGroups.map((g) => g.label)]}
+                          defaultValue={initialData.group}
+                        />
+                      )}
+                      {sl('planningToBuyLand') && (
+                        <FormItem
+                          label="Planning To Buy Land"
+                          name="planningToBuyLand"
+                          type="select"
+                          options={[{ label: 'Select Timeframe', value: '' }, ...BUY_LAND_OPTIONS]}
+                          defaultValue={initialData.planningToBuyLand}
                         />
                       )}
                       {sl('status') && (
@@ -519,6 +688,15 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           defaultValue={initialData.callStatus || 'Not Called'}
                         />
                       )}
+                      {sl('relatedService') && (
+                        <FormItem
+                          label="Related service"
+                          name="relatedService"
+                          type="select"
+                          options={leadServiceSelectOptions}
+                          defaultValue={leadRelatedSvcId}
+                        />
+                      )}
                       {sl('leadOwner') &&
                         (leadOwnerSelectOptions.length > 0 ? (
                           <FormItem
@@ -531,6 +709,16 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                         ) : (
                           <FormItem label="Lead Owner" name="leadOwner" defaultValue={initialData.leadOwner} placeholder="First Last" />
                         ))}
+                      {sl('notes') && (
+                        <FormItem
+                          label="Notes"
+                          name="notes"
+                          type="textarea"
+                          className="sm:col-span-2"
+                          defaultValue={initialData.notes}
+                          placeholder="Add details, buyer requirements, budget notes..."
+                        />
+                      )}
                     </CrmFormGrid>
                   </CrmFormSection>
                 )}
@@ -655,19 +843,11 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           onChange={(e: any) => setSelectedStage(e.target.value)}
                         />
                       )}
-                      {sc('leadOwner') && <FormItem label="Owner" name="leadOwner" defaultValue={initialData.leadOwner} />}
+                      {sc('leadOwner') && <FormItem label="Contact Owner" name="leadOwner" defaultValue={initialData.leadOwner} />}
                     </CrmFormGrid>
                   </CrmFormSection>
                 )}
-                {(sc('telegram') || sc('address')) && (
-                  <CrmFormSection title="Other" defaultOpen={false}>
-                    <CrmFormGrid>
-                      {sc('telegram') && <FormItem label="Telegram" name="telegram" defaultValue={initialData.telegram} placeholder="@username or +1…" />}
-                      {sc('address') && <FormItem label="Address" name="address" className="col-span-2" defaultValue={initialData.address} />}
-                    </CrmFormGrid>
-                  </CrmFormSection>
-                )}
-                {customFields.some((f) => sc(`cf:${f.key}`)) && (
+                {customFields.filter((field) => sc(`cf:${field.key}`)).length > 0 && (
                   <CrmFormSection title="Custom Properties" defaultOpen={false}>
                     <CrmFormGrid>
                       {customFields.filter((field) => sc(`cf:${field.key}`)).map((field) => (
@@ -679,7 +859,6 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           options={field.options}
                           required={field.required}
                           defaultValue={initialData.customFields?.[field.key]}
-                          className={field.type === 'textarea' ? 'col-span-2' : ''}
                         />
                       ))}
                     </CrmFormGrid>
@@ -687,25 +866,30 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                 )}
               </div>
             )}
+
+            {/* General fallback fields for Notes, Tasks, Calls */}
+            {['Note', 'Task', 'Call'].includes(type) && (
+              <div className="space-y-4">
+                <FormItem label="Title / Subject" name="title" defaultValue={initialData.title} required />
+                <FormItem label="Description" name="description" type="textarea" defaultValue={initialData.description} />
+              </div>
+            )}
           </form>
         </div>
 
-        <div className={`${crmModalChrome.centerFooter} justify-between`}>
+        <div className={`${crmModalChrome.centerFooter} flex justify-between`}>
           <button
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
-            disabled={loading}
-            className="inline-flex h-8 items-center gap-2 rounded-[var(--radius-md)] px-3 text-sm font-medium text-[var(--error)] hover:bg-[var(--error-light)] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors"
           >
-            <Trash2 size={16} strokeWidth={1.75} />
-            Delete
+            <Trash2 size={14} /> Delete
           </button>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={onClose}
-              disabled={loading}
-              className={`${CRM_BTN_SECONDARY} disabled:opacity-50`}
+              className={CRM_BTN_SECONDARY}
             >
               Cancel
             </button>
@@ -713,14 +897,9 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
               type="submit"
               form="edit-form"
               disabled={loading}
-              className={`${CRM_BTN_PRIMARY} disabled:opacity-50`}
+              className={`${CRM_BTN_PRIMARY} flex items-center gap-1.5`}
             >
-              {loading ? 'Saving...' : (
-                <>
-                  <Save size={16} strokeWidth={1.75} />
-                  Save changes
-                </>
-              )}
+              <Save size={14} /> {loading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </div>
@@ -729,9 +908,11 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
       <ConfirmDialog
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
-        title="Delete Record"
-        description="Move this record to Trash? Only a CRM admin can restore or permanently delete it."
         onConfirm={handleDelete}
+        title={`Delete ${type}`}
+        description={`Are you sure you want to delete this ${type.toLowerCase()}? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="destructive"
       />
 
       <CRMFieldLayoutCustomizer
@@ -762,7 +943,20 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
   );
 }
 
-function FormItem({ label, name, type = 'text', options = [], placeholder = '', required = false, className = '', defaultValue = '', value, onChange, onBlurField }: any) {
+function FormItem({
+  label,
+  name,
+  type = 'text',
+  options = [],
+  placeholder = '',
+  required = false,
+  className = '',
+  defaultValue = '',
+  value,
+  onChange,
+  onBlurField,
+  error = '',
+}: any) {
   const strOpts = options.map((o: any) => (typeof o === 'object' ? String(o.value) : String(o)));
   let selectList = options;
   const dvOrVal = String(value !== undefined ? value : (defaultValue || ''));
@@ -770,11 +964,16 @@ function FormItem({ label, name, type = 'text', options = [], placeholder = '', 
     selectList = [dvOrVal, ...options];
   }
 
+  const handlePhoneInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    target.value = target.value.replace(/\D/g, '').slice(0, 10);
+  };
+
   return (
-    <div className={`space-y-0 ${className}`}>
+    <div className={`space-y-1 ${className}`}>
       <label className={CRM_HS_LABEL_CLASS}>
-        {label}
-        {required ? <span className="text-[var(--primary)] ml-0.5">*</span> : null}
+        <span>{label}</span>
+        {required ? <span className="text-rose-500 font-bold ml-1">*</span> : null}
       </label>
       {type === 'multiselect' ? (
         <div className="rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] p-3 space-y-2 max-h-[200px] overflow-y-auto shadow-[var(--crm-shadow-input)]">
@@ -799,7 +998,7 @@ function FormItem({ label, name, type = 'text', options = [], placeholder = '', 
             value={value !== undefined ? value : undefined}
             defaultValue={value === undefined ? defaultValue : undefined}
             onChange={onChange}
-            className={`${CRM_HS_SELECT_CLASS} pr-10`}
+            className={`${CRM_HS_SELECT_CLASS} pr-10 ${error ? 'border-rose-500 bg-rose-50/10 focus:border-rose-500' : ''}`}
           >
             {selectList.map((opt: any) => {
               const label = typeof opt === 'object' ? opt.label : opt;
@@ -820,7 +1019,7 @@ function FormItem({ label, name, type = 'text', options = [], placeholder = '', 
           value={value !== undefined ? value : undefined}
           defaultValue={value === undefined ? defaultValue : undefined}
           onChange={onChange}
-          className={`${CRM_HS_CONTROL_CLASS} min-h-[100px] h-auto py-2.5 resize-y`}
+          className={`${CRM_HS_CONTROL_CLASS} min-h-[90px] h-auto py-2.5 resize-y ${error ? 'border-rose-500 bg-rose-50/10 focus:border-rose-500' : ''}`}
           placeholder={placeholder}
         />
       ) : type === 'phone' ? (
@@ -828,17 +1027,24 @@ function FormItem({ label, name, type = 'text', options = [], placeholder = '', 
           <select
             name={`${name}_countryCode`}
             defaultValue={getDefaultCountryCodeFromPhone(defaultValue ? String(defaultValue) : undefined)}
-            className="absolute left-0 z-10 w-[7rem] sm:w-[7.5rem] h-[38px] bg-[var(--card-bg)] text-sm text-[var(--text-main)] outline-none cursor-pointer border-r border-[var(--border-color)] pl-2 pr-1 appearance-none rounded-l-[var(--radius-md)]"
+            className="absolute left-0 z-10 w-[5rem] h-[38px] bg-[var(--surface-dim)] text-xs font-medium text-[var(--text-main)] outline-none cursor-pointer border-r border-[var(--border-color)] pl-2 pr-1 appearance-none rounded-l-[var(--radius-md)]"
           >
             {CRM_PHONE_COUNTRY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label.split(' ')[0]} {o.value}
+              </option>
             ))}
           </select>
           <input
             name={name}
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={10}
+            onInput={handlePhoneInput}
             required={required}
             defaultValue={getNationalDigitsFromPhone(defaultValue ? String(defaultValue) : undefined)}
-            className={`${CRM_HS_CONTROL_CLASS} pl-[7.25rem] sm:pl-[7.75rem]`}
+            className={`${CRM_HS_CONTROL_CLASS} pl-[5.5rem] font-mono text-[13px] tracking-wide ${error ? 'border-rose-500 bg-rose-50/10 focus:border-rose-500' : ''}`}
             placeholder={placeholder || "9876543210"}
           />
         </div>
@@ -852,10 +1058,15 @@ function FormItem({ label, name, type = 'text', options = [], placeholder = '', 
           value={value !== undefined ? value : undefined}
           defaultValue={value === undefined ? (defaultValue as string | number) : undefined}
           onChange={onChange}
-          className={CRM_HS_CONTROL_CLASS}
+          className={`${CRM_HS_CONTROL_CLASS} ${error ? 'border-rose-500 bg-rose-50/10 focus:border-rose-500' : ''}`}
           placeholder={type === 'url' ? 'https://…' : placeholder}
           onBlur={onBlurField}
         />
+      )}
+      {error && (
+        <p className="flex items-center gap-1 text-xs text-rose-500 mt-1 font-medium animate-fadeIn">
+          <AlertCircle size={12} /> {error}
+        </p>
       )}
     </div>
   );

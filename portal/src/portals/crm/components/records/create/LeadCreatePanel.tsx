@@ -80,6 +80,24 @@ export default function LeadCreatePanel({
   const [leadGroups, setLeadGroups] = useState<Array<{ _id: string; label: string }>>([]);
   const [selectedIntents, setSelectedIntents] = useState<string[]>([]);
   const [intentFollowUpAt, setIntentFollowUpAt] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Profile photo must be under 5MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setProfilePhoto(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // --- Add Lead: optional inline "existing contact" search that auto-fills the form below ---
   type ClientLite = {
@@ -312,6 +330,17 @@ export default function LeadCreatePanel({
     return keys.filter((k) => k !== "leadOwner");
   }, [customFields, layoutTick, layoutModule]);
 
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (field: string) => {
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const copy = { ...prev };
+      delete copy[field];
+      return copy;
+    });
+  };
+
   const handleAddNewField = async () => {
     if (!newFieldName.trim()) {
       toast.error("Enter a property name");
@@ -368,9 +397,75 @@ export default function LeadCreatePanel({
     const data = Object.fromEntries(formData.entries()) as Record<string, string>;
     const additionalEmails = parseAdditionalEmailsFromForm(formData, data.email);
 
+    const errors: Record<string, string> = {};
+
+    // 1. First Name validation
+    const firstName = (data.firstName || "").trim();
+    if (!firstName) {
+      errors.firstName = "First name is required";
+    } else if (firstName.length < 2) {
+      errors.firstName = "First name must be at least 2 characters";
+    }
+
+    // 2. Mobile Phone validation
+    const rawMobile = (data.mobileNo || "").replace(/\D/g, "");
+    if (entity === "lead") {
+      if (!rawMobile) {
+        errors.mobileNo = "Phone number is required";
+      } else if (rawMobile.length !== 10) {
+        errors.mobileNo = "Phone number must be exactly 10 digits";
+      } else if (!/^[6-9]\d{9}$/.test(rawMobile)) {
+        errors.mobileNo = "Indian phone numbers must start with 6, 7, 8, or 9";
+      }
+    }
+
+    // 3. Lead specific mandatory fields
+    if (entity === "lead") {
+      if (!data.role) {
+        errors.role = "Role is required";
+      }
+      if (!data.leadCategory) {
+        errors.leadCategory = "Lead Type is required";
+      }
+      if (!data.source) {
+        errors.source = "Lead Source is required";
+      }
+    }
+
+    // 4. WhatsApp Number validation (if provided)
+    const rawWhatsapp = (data.whatsappNumber || "").replace(/\D/g, "");
+    if (rawWhatsapp) {
+      if (rawWhatsapp.length !== 10) {
+        errors.whatsappNumber = "WhatsApp number must be exactly 10 digits";
+      } else if (!/^[6-9]\d{9}$/.test(rawWhatsapp)) {
+        errors.whatsappNumber = "WhatsApp number must start with 6, 7, 8, or 9";
+      }
+    }
+
+    // 5. Email validation (if provided)
+    const email = (data.email || "").trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = "Please enter a valid email address";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      const firstErrorKey = Object.keys(errors)[0];
+      toast.error(errors[firstErrorKey]);
+      const el = formRef.current?.querySelector<HTMLElement>(`[name="${firstErrorKey}"]`);
+      el?.focus();
+      return;
+    }
+
+    setFormErrors({});
+
     if (data.mobileNo_countryCode && data.mobileNo) {
       data.mobileNo = `${data.mobileNo_countryCode} ${data.mobileNo}`.trim();
       delete data.mobileNo_countryCode;
+    }
+    if (data.whatsappNumber_countryCode && data.whatsappNumber) {
+      data.whatsappNumber = `${data.whatsappNumber_countryCode} ${data.whatsappNumber}`.trim();
+      delete data.whatsappNumber_countryCode;
     }
 
     if (
@@ -432,7 +527,13 @@ export default function LeadCreatePanel({
       email: data.email,
       additionalEmails: additionalEmails.length ? additionalEmails : undefined,
       mobileNo: data.mobileNo,
+      whatsappNumber: data.whatsappNumber || undefined,
       phone: data.phone,
+      address: data.address || undefined,
+      state: data.state || undefined,
+      role: entity === "lead" ? data.role || "USER" : undefined,
+      planningToBuyLand: entity === "lead" ? data.planningToBuyLand || undefined : undefined,
+      image: profilePhoto || undefined,
       organization:
         entity === "contact" &&
         (orgVal === "" || orgVal === "Select organization..." || orgVal === "Select Organization...")
@@ -485,6 +586,8 @@ export default function LeadCreatePanel({
           localStorage.setItem("crm_active_pipeline_leads", String(payload.pipeline));
         if (saveAndAddAnother) {
           formRef.current?.reset();
+          setProfilePhoto(null);
+          setFormErrors({});
           if (entity === "lead") {
             setSelectedClient(null);
             setClientQuery("");
@@ -571,7 +674,51 @@ export default function LeadCreatePanel({
         }
         footer={detailsFooter}
       >
-        <form id={formId} ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+        <form id={formId} ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+          {entity === "lead" && (
+            <div className="flex items-center gap-4 p-3.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] shadow-[var(--crm-shadow-input)]">
+              <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--primary)]/40 bg-[var(--surface-dim)] overflow-hidden shadow-inner">
+                {profilePhoto ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profilePhoto} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-[11px] font-bold text-[var(--primary)] uppercase tracking-wide">
+                    Photo
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-[var(--text-main)]">Profile Photo</p>
+                <p className="text-[11px] text-[var(--text-muted)]">JPEG, PNG, GIF, or WebP (Max 5MB)</p>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="inline-flex h-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--background)] px-3 text-xs font-medium text-[var(--text-main)] hover:bg-[var(--surface-dim)] transition-colors shadow-xs"
+                >
+                  {profilePhoto ? "Change" : "Upload"}
+                </button>
+                {profilePhoto && (
+                  <button
+                    type="button"
+                    onClick={() => setProfilePhoto(null)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-50/50 transition-colors"
+                    title="Remove photo"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           {selectedClient && (
             <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--background)] px-3.5 py-2.5">
               <div className="min-w-0">
@@ -693,6 +840,8 @@ export default function LeadCreatePanel({
               leadCategories={leadCategories}
               leadGroups={leadGroups}
               visualVariant="hubspot"
+              errors={formErrors}
+              onClearError={clearFieldError}
             />
           )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, Phone, ExternalLink } from 'lucide-react';
+import { Mail, Phone, ExternalLink, MessageCircle, MapPin, Shield, Tag, Compass, Calendar, Layers } from 'lucide-react';
 import { fieldLabel } from '@/lib/crm/crm-field-layout';
 import { contactXProfileUrl } from '@/lib/crm/crm-x-messaging';
 import { CrmCustomFieldValue, type CrmCustomFieldDefLite } from '@/components/crm/records/forms/CrmCustomFieldValue';
@@ -21,14 +21,23 @@ const SIDEBAR_SKIP = new Set([
 /** Preferred order for sidebar summary (CRMS Lead Information style) */
 const SIDEBAR_ORDER = [
   'createdAt',
+  'role',
   'email',
   'additionalEmails',
   'mobileNo',
+  'whatsappNumber',
   'phone',
+  'leadVertical',
+  'pipeline',
   'stage',
   'status',
   'callStatus',
-  'pipeline',
+  'leadCategory',
+  'source',
+  'group',
+  'planningToBuyLand',
+  'state',
+  'address',
   'twitterHandle',
   'relatedService',
 ];
@@ -51,6 +60,19 @@ function cfGet(lead: Record<string, any>, k: string): unknown {
   if (typeof cf.get === 'function') return cf.get(k);
   return cf[k];
 }
+
+const BUY_LAND_MAP: Record<string, string> = {
+  just_exploring: 'Just Exploring',
+  within_1_month: 'Within 1 Month',
+  '1–3_months': '1–3 Months',
+  '3–6_months': '3–6 Months',
+};
+
+const ROLE_MAP: Record<string, string> = {
+  USER: '2 Bigha User',
+  AGENT: 'Real Estate Agent',
+  OWNER: 'Property Owner',
+};
 
 export default function CRMLeadRecordFields({
   lead,
@@ -90,6 +112,8 @@ export default function CRMLeadRecordFields({
         return Array.isArray(lead.additionalEmails) && lead.additionalEmails.length > 0;
       case 'mobileNo':
         return Boolean(String(lead.mobileNo || '').trim());
+      case 'whatsappNumber':
+        return Boolean(String(lead.whatsappNumber || '').trim());
       case 'phone':
         return Boolean(String(lead.phone || '').trim());
       case 'twitterHandle':
@@ -128,6 +152,12 @@ export default function CRMLeadRecordFields({
         return lead.firstName || '—';
       case 'lastName':
         return lead.lastName || '—';
+      case 'role':
+        return lead.role ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+            <Shield size={11} /> {ROLE_MAP[lead.role] || lead.role}
+          </span>
+        ) : '—';
       case 'email':
         if (!lead.email) return '—';
         if (compact) {
@@ -164,9 +194,23 @@ export default function CRMLeadRecordFields({
         );
       case 'mobileNo':
         return lead.mobileNo ? (
-          <a href={`tel:${lead.mobileNo}`} className={compact ? 'hover:underline' : 'flex items-center gap-2'}>
+          <a href={`tel:${lead.mobileNo}`} className={compact ? 'hover:underline text-[var(--primary)] font-medium' : 'flex items-center gap-2 text-[var(--primary)] font-medium'}>
             {!compact ? <Phone size={16} className="text-text-muted shrink-0" /> : null}
             {lead.mobileNo}
+          </a>
+        ) : (
+          '—'
+        );
+      case 'whatsappNumber':
+        return lead.whatsappNumber ? (
+          <a
+            href={`https://wa.me/${String(lead.whatsappNumber).replace(/\D/g, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={compact ? 'inline-flex items-center gap-1 text-emerald-600 font-medium hover:underline' : 'flex items-center gap-2 text-emerald-600 font-medium hover:underline'}
+          >
+            <MessageCircle size={15} className="shrink-0" />
+            {lead.whatsappNumber}
           </a>
         ) : (
           '—'
@@ -180,6 +224,60 @@ export default function CRMLeadRecordFields({
         ) : (
           '—'
         );
+      case 'address':
+        return lead.address || '—';
+      case 'state':
+        return lead.state || '—';
+      case 'leadVertical':
+        return lead.leadVertical === 'property_management' ? 'Property Management' : 'Property Listing';
+      case 'leadCategory':
+        return lead.leadCategory ? (
+          <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">
+            <Tag size={11} /> {lead.leadCategory}
+          </span>
+        ) : '—';
+      case 'source':
+        return lead.source ? (
+          <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 border border-indigo-200">
+            {lead.source}
+          </span>
+        ) : '—';
+      case 'group':
+        return lead.group ? (
+          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+            {lead.group}
+          </span>
+        ) : '—';
+      case 'planningToBuyLand':
+        return lead.planningToBuyLand ? (
+          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+            <Compass size={11} /> {BUY_LAND_MAP[lead.planningToBuyLand] || lead.planningToBuyLand}
+          </span>
+        ) : '—';
+      case 'firstCallResponse':
+        return lead.firstCallResponse || '—';
+      case 'currentSubscriptionPlan':
+        return lead.currentSubscriptionPlan || '—';
+      case 'lastCallAt':
+        return lead.lastCallAt
+          ? new Date(lead.lastCallAt).toLocaleString(undefined, {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '—';
+      case 'callbackScheduledAt':
+        return lead.callbackScheduledAt
+          ? new Date(lead.callbackScheduledAt).toLocaleString(undefined, {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '—';
       case 'twitterHandle': {
         const x = contactXProfileUrl(lead);
         return x ? (
@@ -206,6 +304,8 @@ export default function CRMLeadRecordFields({
         return lead.status || '—';
       case 'callStatus':
         return lead.callStatus || '—';
+      case 'notes':
+        return lead.notes || '—';
       case 'createdAt':
         return lead.createdAt
           ? new Date(lead.createdAt).toLocaleString(undefined, {
@@ -231,16 +331,31 @@ export default function CRMLeadRecordFields({
       gender: 'Gender',
       firstName: 'First Name',
       lastName: 'Last Name',
+      role: 'Role',
       email: 'Email',
       additionalEmails: 'Additional emails',
-      mobileNo: 'Mobile',
+      mobileNo: 'Phone',
+      whatsappNumber: 'WhatsApp',
       phone: 'Phone (alternate)',
+      address: 'Address',
+      state: 'State',
+      leadVertical: 'Lead Vertical',
+      leadCategory: 'Lead Type',
+      source: 'Lead Source',
+      group: 'Group',
+      planningToBuyLand: 'Planning To Buy Land',
+      firstCallResponse: 'First Call Response',
+      lastCallAt: 'Last Call Date',
+      callbackScheduledAt: 'Callback Schedule Date',
+      currentSubscriptionPlan: 'Subscription Plan',
       twitterHandle: 'X (Twitter)',
       relatedService: 'Related service',
       leadOwner: 'Lead Owner',
       pipeline: 'Pipeline',
       stage: 'Stage',
       status: 'Status',
+      callStatus: 'Call Status',
+      notes: 'Notes',
       createdAt: 'Created',
     };
     return map[key] || key;
@@ -270,7 +385,7 @@ export default function CRMLeadRecordFields({
         </div>
       );
     }
-    const span2 = key === 'twitterHandle' && lead.twitterHandle;
+    const span2 = ['twitterHandle', 'address', 'notes'].includes(key) && lead[key];
     if (layout === 'sidebar') {
       return (
         <div key={key} className={crmRecordChrome.infoRow}>

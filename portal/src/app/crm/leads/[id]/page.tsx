@@ -78,7 +78,7 @@ export default function LeadDetailPage() {
   const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
   const [isFollowUpSeqOpen, setIsFollowUpSeqOpen] = useState(false);
   const [followUpSeqInitialTab, setFollowUpSeqInitialTab] = useState<
-    'first-outreach' | 'follow-ups'
+    'first-outreach' | 'follow-ups' | 'reminder'
   >('first-outreach');
   const [followUpRefreshKey, setFollowUpRefreshKey] = useState(0);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);

@@ -2437,6 +2437,28 @@ export class CRMService {
           ? dto.leadVertical
           : undefined;
     }
+    if (typeof dto.role === 'string') {
+      const r = dto.role.trim().toUpperCase();
+      dto.role = ['USER', 'AGENT', 'OWNER'].includes(r) ? r : 'USER';
+    }
+    if (typeof dto.source === 'string') {
+      dto.source = dto.source.trim() || undefined;
+    }
+    if (typeof dto.address === 'string') {
+      dto.address = dto.address.trim() || undefined;
+    }
+    if (typeof dto.state === 'string') {
+      dto.state = dto.state.trim() || undefined;
+    }
+    if (typeof dto.pincode === 'string') {
+      dto.pincode = dto.pincode.trim() || undefined;
+    }
+    if (typeof dto.whatsappNumber === 'string') {
+      dto.whatsappNumber = this.sanitizePhone(dto.whatsappNumber);
+    }
+    if (typeof dto.planningToBuyLand === 'string') {
+      dto.planningToBuyLand = dto.planningToBuyLand.trim() || undefined;
+    }
     if (typeof dto.notes === 'string') {
       dto.notes = dto.notes.trim() || undefined;
     }
@@ -2883,7 +2905,7 @@ export class CRMService {
     );
     const skip = (page - 1) * pageSize;
     const outreachSelect =
-      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType leadVertical opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt';
+      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType leadVertical opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt role whatsappNumber address state pincode planningToBuyLand firstCallResponse lastCallAt callbackScheduledAt currentSubscriptionPlan image';
     const [data, count] = await Promise.all([
       this.leadModel
         .find(filter)
@@ -4667,6 +4689,27 @@ export class CRMService {
       else delete dto.assignee;
     }
     const activity = await new this.activityModel(dto).save();
+
+    if (dto.type === 'Call') {
+      const callLeadIds = uniqueInvolved.filter((i) => i.type === 'Lead').map((i) => i.id);
+      if (dto.relatedTo && (dto.relatedType === 'Lead' || !dto.relatedType)) {
+        try {
+          callLeadIds.push(new Types.ObjectId(String(dto.relatedTo)));
+        } catch {
+          /* ignore */
+        }
+      }
+      if (callLeadIds.length > 0) {
+        const updateCallFields: Record<string, any> = {
+          lastCallAt: new Date(),
+        };
+        const st = dto.metadata?.status || dto.status;
+        if (st && st !== 'Initiated') updateCallFields.callStatus = st;
+        await this.leadModel
+          .updateMany({ _id: { $in: callLeadIds } }, { $set: updateCallFields })
+          .exec();
+      }
+    }
 
     if (dto.type === 'Task') {
       void (async () => {

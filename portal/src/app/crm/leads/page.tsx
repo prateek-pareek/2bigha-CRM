@@ -147,6 +147,17 @@ interface Lead {
   email: string;
   phone?: string;
   mobileNo?: string;
+  whatsappNumber?: string;
+  address?: string;
+  state?: string;
+  pincode?: string;
+  role?: string;
+  source?: string;
+  planningToBuyLand?: string;
+  firstCallResponse?: string;
+  lastCallAt?: string | null;
+  callbackScheduledAt?: string | null;
+  currentSubscriptionPlan?: string;
   status: string; // This is the stage name
   stage?: string;
   callStatus?: string;
@@ -173,26 +184,31 @@ interface Column {
 
 const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'name', label: 'Name' },
+  { key: 'planningToBuyLand', label: 'Planning To Buy Land' },
+  { key: 'firstCallResponse', label: 'First Call Response' },
+  { key: 'propertiesCount', label: 'Property Count' },
+  { key: 'farmsCount', label: 'Farm Count' },
+  { key: 'subscriptionPlan', label: 'Subscription (current plan)' },
+  { key: 'callStatus', label: 'Last Call Status' },
+  { key: 'lastCallAt', label: 'Last Call Date' },
+  { key: 'nextFollowUpAt', label: 'Follow Up Date' },
+  { key: 'callbackScheduledAt', label: 'Callback Schedule Date' },
+  { key: 'leadCategory', label: 'Lead Type' },
+  { key: 'source', label: 'Lead Source' },
+  { key: 'group', label: 'Group' },
+  { key: 'createdByName', label: 'Created By' },
+  { key: 'leadOwner', label: 'Assigned To' },
+  { key: 'createdAt', label: 'Created Date' },
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
   { key: 'status', label: 'Status' },
   { key: 'stage', label: 'Stage' },
-  { key: 'callStatus', label: 'Call Status' },
-  { key: 'leadCategory', label: 'Lead Type' },
   { key: 'leadVertical', label: 'Lead Vertical' },
-  { key: 'group', label: 'Group' },
-  { key: 'priority', label: 'Priority' },
-  { key: 'leadOwner', label: 'Lead Owner' },
-  { key: 'createdByName', label: 'Created By' },
   { key: 'pipeline', label: 'Pipeline' },
-  { key: 'createdAt', label: 'Created Date' },
   { key: 'lastEmailActivityAt', label: 'Last Email Activity' },
-  { key: 'nextFollowUpAt', label: 'Next Follow-up' },
-  { key: 'propertiesCount', label: 'Properties' },
-  { key: 'farmsCount', label: 'Farms' },
 ];
 
-const STORAGE_KEY = 'leads_columns_v2';
+const STORAGE_KEY = 'leads_columns_v3';
 
 /** Matches Mongo ObjectId hex strings; avoids sending bad `pipeline` query params. */
 function isMongoObjectIdString(value: string | null | undefined): boolean {
@@ -268,6 +284,32 @@ function formatLeadExportCell(
       return (lead as { leadVertical?: string }).leadVertical === 'property_management'
         ? 'Property Management'
         : 'Property Listing';
+    case 'planningToBuyLand':
+      return lead.planningToBuyLand || '—';
+    case 'firstCallResponse':
+      return lead.firstCallResponse || '—';
+    case 'subscriptionPlan':
+      return lead.currentSubscriptionPlan || '—';
+    case 'lastCallAt':
+      return lead.lastCallAt
+        ? new Date(lead.lastCallAt).toLocaleDateString(undefined, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })
+        : '—';
+    case 'callbackScheduledAt':
+      return lead.callbackScheduledAt
+        ? new Date(lead.callbackScheduledAt).toLocaleString(undefined, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '—';
+    case 'source':
+      return lead.source || '—';
     case 'group':
       return lead.group || '—';
     case 'createdByName':
@@ -2049,6 +2091,44 @@ export default function LeadsPage() {
       case 'status': return <CrmListStatusBadge label={lead.status || '—'} />;
       case 'stage': return <CrmListStatusBadge label={lead.stage || lead.status || '—'} />;
       case 'callStatus': return <CrmListStatusBadge label={lead.callStatus || 'Not Called'} />;
+      case 'planningToBuyLand': {
+        const val = lead.planningToBuyLand;
+        if (!val) return <span className="text-sm text-[#707070]">—</span>;
+        const labelMap: Record<string, string> = {
+          just_exploring: 'Just Exploring',
+          within_1_month: 'Within 1 Month',
+          '1–3_months': '1–3 Months',
+          '1-3_months': '1–3 Months',
+          '3–6_months': '3–6 Months',
+          '3-6_months': '3–6 Months',
+        };
+        return <span className="text-sm font-medium text-[var(--text-main)]">{labelMap[val] || val}</span>;
+      }
+      case 'firstCallResponse':
+        return (
+          <CrmListMutedText className="block max-w-[200px] truncate" title={lead.firstCallResponse || undefined}>
+            {lead.firstCallResponse || '—'}
+          </CrmListMutedText>
+        );
+      case 'subscriptionPlan': {
+        const plan = lead.currentSubscriptionPlan;
+        return plan ? (
+          <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200/80">
+            {plan}
+          </span>
+        ) : (
+          <span className="text-sm text-[#707070]">—</span>
+        );
+      }
+      case 'lastCallAt': {
+        const d = lead.lastCallAt ? new Date(lead.lastCallAt) : null;
+        return <span className="text-sm text-[#707070]">{d ? d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>;
+      }
+      case 'callbackScheduledAt': {
+        const d = lead.callbackScheduledAt ? new Date(lead.callbackScheduledAt) : null;
+        return <span className="text-sm font-medium text-[var(--text-main)]">{d ? d.toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span>;
+      }
+      case 'source': return <span className="text-sm text-[#707070]">{lead.source || '—'}</span>;
       case 'leadCategory': return <span className="text-sm text-[#707070]">{lead.leadCategory || '—'}</span>;
       case 'leadVertical': return (
         <span className="text-sm text-[#707070]">
