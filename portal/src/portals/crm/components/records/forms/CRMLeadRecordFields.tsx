@@ -69,7 +69,7 @@ const BUY_LAND_MAP: Record<string, string> = {
 };
 
 const ROLE_MAP: Record<string, string> = {
-  USER: '2 Bigha User',
+  USER: 'User',
   AGENT: 'Real Estate Agent',
   OWNER: 'Property Owner',
 };

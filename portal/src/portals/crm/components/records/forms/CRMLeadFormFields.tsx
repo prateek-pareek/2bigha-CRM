@@ -383,7 +383,7 @@ export default function CRMLeadFormFields({
                 onChange={() => onClearError?.('role')}
                 className={fieldError ? SEL_ERR : SEL}
               >
-                <option value="USER">2 Bigha User</option>
+                <option value="USER">User</option>
                 <option value="AGENT">Real Estate Agent</option>
                 <option value="OWNER">Property Owner</option>
               </select>

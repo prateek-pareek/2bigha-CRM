@@ -170,7 +170,7 @@ export class Lead {
   @Prop({ trim: true, index: true })
   group?: string;
 
-  /** Role option: 2 Bigha User (USER), Real Estate Agent (AGENT), Property Owner (OWNER) */
+  /** Role option: User (USER), Real Estate Agent (AGENT), Property Owner (OWNER) */
   @Prop({ enum: ['USER', 'AGENT', 'OWNER'], default: 'USER', index: true })
   role?: 'USER' | 'AGENT' | 'OWNER';
 

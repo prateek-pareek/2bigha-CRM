@@ -42,7 +42,7 @@ const BUY_LAND_OPTIONS = [
 ];
 
 const ROLE_OPTIONS = [
-  { value: 'USER', label: '2 Bigha User' },
+  { value: 'USER', label: 'User' },
   { value: 'AGENT', label: 'Real Estate Agent' },
   { value: 'OWNER', label: 'Property Owner' },
 ];
