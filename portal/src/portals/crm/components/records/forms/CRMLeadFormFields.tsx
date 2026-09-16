@@ -370,6 +370,19 @@ export default function CRMLeadFormFields({
             </div>
           </div>
         );
+      case 'pincode':
+        return (
+          <div key={key} className="space-y-1">
+            <label className={LBL}>PinCode</label>
+            <input
+              name="pincode"
+              type="text"
+              placeholder="e.g. 110001"
+              maxLength={6}
+              className={INP}
+            />
+          </div>
+        );
       case 'role':
         return (
           <div key={key} className="space-y-1">
@@ -405,11 +418,10 @@ export default function CRMLeadFormFields({
             <div className="relative">
               <select
                 name="source"
-                defaultValue=""
+                defaultValue="Website"
                 onChange={() => onClearError?.('source')}
                 className={fieldError ? SEL_ERR : SEL}
               >
-                <option value="">Select Source</option>
                 <option value="Website">Website</option>
                 <option value="Google Lead">Google Lead</option>
                 <option value="Meta Ads">Meta Ads</option>
@@ -605,7 +617,6 @@ export default function CRMLeadFormFields({
                 onChange={() => onClearError?.('leadCategory')}
                 className={fieldError ? SEL_ERR : SEL}
               >
-                <option value="">Select Type</option>
                 {categoryOptions.map((o) => (
                   <option key={o._id} value={o.label}>
                     {o.label}

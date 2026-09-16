@@ -228,6 +228,8 @@ export default function CRMLeadRecordFields({
         return lead.address || '—';
       case 'state':
         return lead.state || '—';
+      case 'pincode':
+        return lead.pincode || '—';
       case 'leadVertical':
         return lead.leadVertical === 'property_management' ? 'Property Management' : 'Property Listing';
       case 'leadCategory':

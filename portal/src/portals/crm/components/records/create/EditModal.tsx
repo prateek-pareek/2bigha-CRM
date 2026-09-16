@@ -572,6 +572,14 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           defaultValue={initialData.state}
                         />
                       )}
+                      {sl('pincode') && (
+                        <FormItem
+                          label="PinCode"
+                          name="pincode"
+                          defaultValue={initialData.pincode}
+                          placeholder="e.g. 110001"
+                        />
+                      )}
                       {sl('twitterHandle') && (
                         <FormItem
                           label="X (Twitter) handle"
@@ -652,7 +660,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                             label="Lead Type"
                             name="leadCategory"
                             type="select"
-                            options={['', ...Array.from(new Set(finalCats))]}
+                            options={Array.from(new Set(finalCats))}
                             defaultValue={initialVal}
                             error={errors.leadCategory}
                           />
@@ -663,8 +671,8 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           label="Lead Source"
                           name="source"
                           type="select"
-                          options={['', ...LEAD_SOURCE_OPTIONS]}
-                          defaultValue={initialData.source}
+                          options={LEAD_SOURCE_OPTIONS}
+                          defaultValue={initialData.source || 'Website'}
                           error={errors.source}
                         />
                       )}

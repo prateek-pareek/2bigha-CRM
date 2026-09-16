@@ -26,13 +26,16 @@ interface ImportModalProps {
 /** Extra mapping rows for HubSpot-style exports (companies ↔ contacts). */
 const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
   leads: [
+    { label: 'Salutation', key: 'salutation' },
     { label: 'First Name', key: 'firstName' },
     { label: 'Last Name', key: 'lastName' },
     { label: 'Role', key: 'role' },
     { label: 'Email', key: 'email' },
     { label: 'Additional Emails', key: 'additionalEmails' },
+    { label: 'Gender', key: 'gender' },
     { label: 'Contact Number', key: 'mobileNo' },
     { label: 'WhatsApp Number', key: 'whatsappNumber' },
+    { label: 'Phone (Alternate)', key: 'phone' },
     { label: 'Lead Vertical', key: 'leadVertical' },
     { label: 'Lead Type', key: 'leadCategory' },
     { label: 'Lead Source', key: 'source' },
@@ -41,7 +44,11 @@ const CRM_FIELDS_MAP: Record<string, { label: string; key: string }[]> = {
     { label: 'City / Address', key: 'address' },
     { label: 'State', key: 'state' },
     { label: 'PinCode', key: 'pincode' },
+    { label: 'X (Twitter) handle', key: 'twitterHandle' },
+    { label: 'Lead Owner', key: 'leadOwner' },
+    { label: 'Stage', key: 'stage' },
     { label: 'Status', key: 'status' },
+    { label: 'Call Status', key: 'callStatus' },
     { label: 'Notes', key: 'notes' },
   ],
  contacts: [
@@ -190,14 +197,21 @@ function applyHubSpotHints(
   if (!out.hubspotContactId && (type === 'contacts' || type === 'leads'))
     out.hubspotContactId = pick('Record ID', 'Contact ID', 'Contact record ID');
   if (type === 'leads') {
+    if (!out.salutation) out.salutation = pick('Salutation', 'Title');
     if (!out.role) out.role = pick('Role', 'User Type');
+    if (!out.gender) out.gender = pick('Gender', 'Sex');
     if (!out.whatsappNumber) out.whatsappNumber = pick('WhatsApp Number', 'WhatsApp', 'Whatsapp Number');
+    if (!out.phone) out.phone = pick('Phone (Alternate)', 'Alternate Phone', 'Alternate Mobile', 'Work phone');
     if (!out.address) out.address = pick('Address', 'City, State', 'City / Address', 'Street Address');
     if (!out.group) out.group = pick('Group', 'Group Name');
     if (!out.leadCategory) out.leadCategory = pick('Lead Type', 'Lead Category', 'Category');
     if (!out.leadVertical) out.leadVertical = pick('Lead Vertical', 'Vertical');
     if (!out.planningToBuyLand) out.planningToBuyLand = pick('Planning To Buy Land', 'Planning to Buy Land', 'Buy Land', 'Buying Timeline');
+    if (!out.twitterHandle) out.twitterHandle = pick('X (Twitter) handle', 'Twitter Handle', 'Twitter', 'X Handle');
+    if (!out.leadOwner) out.leadOwner = pick('Lead Owner', 'Owner', 'Assigned To');
+    if (!out.stage) out.stage = pick('Stage', 'Lead Stage');
     if (!out.status) out.status = pick('Status', 'Lead Status');
+    if (!out.callStatus) out.callStatus = pick('Call Status', 'Call status');
     if (!out.notes) out.notes = pick('Notes', 'Description', 'Remark', 'Remarks');
     if (!out.additionalEmails) out.additionalEmails = pick('Additional Emails', 'Alternate Email', 'Other Email');
   }
@@ -211,13 +225,16 @@ function applyHubSpotHints(
  */
 const LEADS_TEMPLATE_HEADERS = CRM_FIELDS_MAP.leads.map((f) => f.label);
 const LEADS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
+  salutation: 'Mr',
   firstName: 'Shagun',
   lastName: 'Mishra',
   role: 'OWNER',
   email: 'sapnashagun@example.com',
   additionalEmails: 'shagun.alt@example.com',
+  gender: 'Female',
   mobileNo: '+919876543210',
   whatsappNumber: '+919876543210',
+  phone: '+919876543211',
   leadVertical: 'Property Listing',
   leadCategory: 'Lead',
   source: 'Google Lead',
@@ -226,7 +243,11 @@ const LEADS_TEMPLATE_EXAMPLE_BY_KEY: Record<string, string> = {
   address: 'Gurugram',
   state: 'Haryana',
   pincode: '122016',
+  twitterHandle: '@shagun_m',
+  leadOwner: 'Aarav Sharma',
+  stage: 'New',
   status: 'New',
+  callStatus: 'Not Called',
   notes: 'Interested in agricultural plots.',
 };
 const LEADS_TEMPLATE_EXAMPLE = CRM_FIELDS_MAP.leads.map(
@@ -1793,6 +1814,20 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                           {type === 'leads' ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Salutation</label>
+                                <select
+                                  value={currentMapped.salutation || ''}
+                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'salutation', e.target.value)}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
+                                >
+                                  <option value="">— Select Salutation —</option>
+                                  {['Mr', 'Ms', 'Mrs', 'Dr'].map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
                                   First Name <span className="text-rose-500">*</span>
                                 </label>
@@ -1821,14 +1856,13 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                   Role <span className="text-rose-500">*</span>
                                 </label>
                                 <select
-                                  value={currentMapped.role || ''}
+                                  value={currentMapped.role ? (currentMapped.role.toUpperCase() === '2 BIGHA USER' ? 'USER' : currentMapped.role.toUpperCase()) : 'USER'}
                                   onChange={(e) => handleUpdateRowField(editingRowIndex, 'role', e.target.value)}
                                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
                                 >
-                                  <option value="">— Select Valid Role —</option>
-                                  {['OWNER', 'AGENT', 'USER', 'BUILDER', 'BUYER', 'TENANT', 'SELLER'].map((r) => (
-                                    <option key={r} value={r}>{r}</option>
-                                  ))}
+                                  <option value="USER">User</option>
+                                  <option value="AGENT">Real Estate Agent</option>
+                                  <option value="OWNER">Property Owner</option>
                                 </select>
                               </div>
 
@@ -1843,6 +1877,20 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                 >
                                   {Array.from(new Set(['Lead', 'Buyer', 'Seller', 'Reference', 'Investor', ...picklistLeadCategories.map(c => c.toLowerCase() === 'buyer lead' ? 'Buyer' : c)])).map((c) => (
                                     <option key={c} value={c}>{c}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Gender</label>
+                                <select
+                                  value={currentMapped.gender || ''}
+                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'gender', e.target.value)}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
+                                >
+                                  <option value="">— Select Gender —</option>
+                                  {['Male', 'Female', 'Other'].map((g) => (
+                                    <option key={g} value={g}>{g}</option>
                                   ))}
                                 </select>
                               </div>
@@ -1874,6 +1922,19 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                               </div>
 
                               <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Phone (Alternate)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={currentMapped.phone || ''}
+                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'phone', e.target.value)}
+                                  placeholder="e.g. 9876543211"
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-primary font-mono"
+                                />
+                              </div>
+
+                              <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
                                 <input
                                   type="email"
@@ -1884,15 +1945,25 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                 />
                               </div>
 
+                              <div className="sm:col-span-2">
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Additional Emails</label>
+                                <input
+                                  type="text"
+                                  value={Array.isArray(currentMapped.additionalEmails) ? currentMapped.additionalEmails.join(', ') : (currentMapped.additionalEmails || '')}
+                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'additionalEmails', e.target.value)}
+                                  placeholder="e.g. user.work@example.com, user.alt@example.com"
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">Lead Source</label>
                                 <select
-                                  value={currentMapped.source || ''}
+                                  value={currentMapped.source || 'Website'}
                                   onChange={(e) => handleUpdateRowField(editingRowIndex, 'source', e.target.value)}
                                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
                                 >
-                                  <option value="">— Select Valid Source —</option>
-                                  {['Google Lead', 'Website', 'Meta Ads', 'Referral', 'Walk In', 'Direct Call', 'Other', 'Organic Search', 'Social Media', 'Paid Ads', 'Email Campaign', 'Offline'].map((s) => (
+                                  {['Website', 'Google Lead', 'Meta Ads', 'Referral', 'Walk In', 'Direct Call', 'Other', 'Organic Search', 'Social Media', 'Paid Ads', 'Email Campaign', 'Offline'].map((s) => (
                                     <option key={s} value={s}>{s}</option>
                                   ))}
                                 </select>
@@ -1900,17 +1971,25 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
 
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">Group</label>
-                                <input
-                                  type="text"
+                                <select
                                   value={currentMapped.group || ''}
                                   onChange={(e) => handleUpdateRowField(editingRowIndex, 'group', e.target.value)}
-                                  placeholder="e.g. Group-New-01"
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-primary"
-                                />
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
+                                >
+                                  <option value="">— Select Group —</option>
+                                  {Array.from(new Set([
+                                    'Seller',
+                                    'Buyer',
+                                    ...picklistLeadGroups,
+                                    ...(currentMapped.group ? [currentMapped.group] : [])
+                                  ])).map((g) => (
+                                    <option key={g} value={g}>{g}</option>
+                                  ))}
+                                </select>
                               </div>
 
                               <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">City</label>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">City / Address</label>
                                 <input
                                   type="text"
                                   value={currentMapped.address || ''}
@@ -1949,6 +2028,17 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                               </div>
 
                               <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">X (Twitter) handle</label>
+                                <input
+                                  type="text"
+                                  value={currentMapped.twitterHandle || ''}
+                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'twitterHandle', e.target.value)}
+                                  placeholder="@username"
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+
+                              <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">Planning To Buy Land</label>
                                 <select
                                   value={currentMapped.planningToBuyLand || ''}
@@ -1976,14 +2066,51 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                 </select>
                               </div>
 
-                              <div className="sm:col-span-2">
-                                <label className="block text-xs font-bold text-slate-700 mb-1">Notes / Description</label>
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Lead Owner</label>
                                 <input
                                   type="text"
+                                  value={currentMapped.leadOwner || ''}
+                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'leadOwner', e.target.value)}
+                                  placeholder="e.g. Aarav Sharma"
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Status (legacy)</label>
+                                <select
+                                  value={currentMapped.status || 'New'}
+                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'status', e.target.value)}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
+                                >
+                                  {['New', 'Qualified', 'Replied', 'Opportunity'].map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Call Status</label>
+                                <select
+                                  value={currentMapped.callStatus || 'Not Called'}
+                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'callStatus', e.target.value)}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
+                                >
+                                  {['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'].map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="sm:col-span-2">
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Notes / Description</label>
+                                <textarea
                                   value={currentMapped.notes || ''}
                                   onChange={(e) => handleUpdateRowField(editingRowIndex, 'notes', e.target.value)}
-                                  placeholder="e.g. Additional remarks or notes..."
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-primary"
+                                  placeholder="e.g. Additional remarks, requirements, or notes..."
+                                  rows={3}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-primary resize-none"
                                 />
                               </div>
                             </div>
