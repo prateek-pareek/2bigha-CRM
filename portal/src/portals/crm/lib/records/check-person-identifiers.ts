@@ -4,6 +4,7 @@ export type PersonIdentifierContext = {
   entityType: 'lead' | 'contact';
   excludeLeadId?: string;
   excludeContactId?: string;
+  leadVertical?: 'property_listing' | 'property_management';
 };
 
 export type PersonIdentifierConflicts = Record<
@@ -32,6 +33,7 @@ export async function fetchPersonIdentifierConflicts(
 ): Promise<PersonIdentifierConflicts> {
   const sp = new URLSearchParams();
   sp.set('entityType', params.entityType);
+  if (params.leadVertical) sp.set('leadVertical', params.leadVertical);
   if (params.excludeLeadId) sp.set('excludeLeadId', params.excludeLeadId);
   if (params.excludeContactId) sp.set('excludeContactId', params.excludeContactId);
   if (params.email != null && String(params.email).trim()) sp.set('email', String(params.email).trim());

@@ -64,7 +64,7 @@ export class CRMController {
 
   /** Duplicate check for email / phone / LinkedIn (leads + contacts). */
   @Get('person-identifiers/check')
-  @Permissions('leads:read', 'contacts:read')
+  @Permissions('leads:read', 'contacts:read', 'pm-leads:read')
   checkPersonIdentifiers(
     @Query('email') email?: string,
     @Query('mobileNo') mobileNo?: string,
@@ -73,6 +73,7 @@ export class CRMController {
     @Query('entityType') entityType: 'lead' | 'contact' = 'lead',
     @Query('excludeLeadId') excludeLeadId?: string,
     @Query('excludeContactId') excludeContactId?: string,
+    @Query('leadVertical') leadVertical?: 'property_listing' | 'property_management',
   ) {
     return this.crmService.checkPersonIdentifiers({
       email,
@@ -82,18 +83,19 @@ export class CRMController {
       entityType: entityType === 'contact' ? 'contact' : 'lead',
       excludeLeadId,
       excludeContactId,
+      leadVertical,
     });
   }
 
   // Leads
   @Post('leads')
-  @Permissions('leads:write')
+  @Permissions('leads:write', 'pm-leads:write')
   async createLead(@Body() dto: any, @Request() req: any) {
     return this.crmService.createLead(dto, req.user);
   }
 
   @Get('leads')
-  @Permissions('leads:read')
+  @Permissions('leads:read', 'pm-leads:read')
   findAllLeads(
     @Request() req: any,
     @Query('pipeline') pipeline?: string,
@@ -151,25 +153,25 @@ export class CRMController {
 
   /** Batched email open / reply signals for leads board & list (replaces N×3 per-lead HTTP calls). */
   @Post('leads/email-engagement-batch')
-  @Permissions('leads:read')
+  @Permissions('leads:read', 'pm-leads:read')
   batchLeadEmailEngagement(@Body() body: { ids?: unknown }) {
     return this.crmEmailEngagementBatchService.getBatchForModule(body?.ids, 'leads');
   }
 
   @Get('leads/:id')
-  @Permissions('leads:read')
+  @Permissions('leads:read', 'pm-leads:read')
   findOneLead(@Param('id') id: string, @Request() req: any) {
     return this.crmService.findOneLead(id, req.user);
   }
 
   @Put('leads/:id')
-  @Permissions('leads:write', 'leads:move_pipeline')
+  @Permissions('leads:write', 'leads:move_pipeline', 'pm-leads:write', 'pm-leads:move_pipeline')
   async updateLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateLead(id, dto, req.user);
   }
 
   @Patch('leads/:id')
-  @Permissions('leads:write', 'leads:move_pipeline')
+  @Permissions('leads:write', 'leads:move_pipeline', 'pm-leads:write', 'pm-leads:move_pipeline')
   async patchLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateLead(id, dto, req.user);
   }
@@ -695,19 +697,19 @@ export class CRMController {
 
   // --- Deletion ---
   @Delete('leads/:id')
-  @Permissions('leads:delete')
+  @Permissions('leads:delete', 'pm-leads:delete')
   removeLead(@Param('id') id: string, @Request() req: any) {
     return this.crmService.removeLead(id, req.user?.userId);
   }
 
   @Post('leads/bulk-delete')
-  @Permissions('leads:delete')
+  @Permissions('leads:delete', 'pm-leads:delete')
   bulkRemoveLeads(@Body('ids') ids: string[], @Request() req: any) {
     return this.crmService.bulkRemoveLeads(ids, req.user?.userId);
   }
 
   @Post('leads/bulk-assign')
-  @Permissions('leads:write')
+  @Permissions('leads:write', 'pm-leads:write')
   bulkAssignLeads(
     @Body()
     body: {
@@ -726,7 +728,7 @@ export class CRMController {
   }
 
   @Post('leads/:id/convert')
-  @Permissions('leads:write')
+  @Permissions('leads:write', 'pm-leads:write')
   convertLead(
     @Param('id') id: string,
     @Body()

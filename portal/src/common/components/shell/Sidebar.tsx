@@ -371,6 +371,7 @@ const crmGroups = [
                     { name: 'Property Management', href: '/crm/property-listings?bucket=pm', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
                 ],
             },
+            { name: 'PM Leads', href: '/crm/pm/leads', icon: CrmNavIcon.Leads, permission: 'pm-leads:read' },
             { name: 'Approval Queue', href: '/crm/property-approval', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
             { name: 'Visit tracking', href: '/crm/visits', icon: CrmNavIcon.MapPin, permission: 'leads:read' },
         ],

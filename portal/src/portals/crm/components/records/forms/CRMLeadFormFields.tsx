@@ -121,6 +121,7 @@ export interface CRMLeadFormFieldsProps {
   /** Which vertical (Property Listing vs Property Management) this lead belongs to — scopes the Pipeline dropdown. */
   leadVertical?: 'property_listing' | 'property_management';
   setLeadVertical?: (v: 'property_listing' | 'property_management') => void;
+  lockVertical?: boolean;
   variant: 'stack' | 'grid';
   isAdmin?: boolean;
   onDeleteCustom?: (id: string, name: string) => void;
@@ -145,6 +146,7 @@ export default function CRMLeadFormFields({
   setSelectedStage,
   leadVertical = 'property_listing',
   setLeadVertical,
+  lockVertical = false,
   variant,
   isAdmin,
   onDeleteCustom,
@@ -169,6 +171,7 @@ export default function CRMLeadFormFields({
     const fd = new FormData(form);
     const conflicts = await fetchPersonIdentifierConflicts(token, {
       ...identifierContext,
+      leadVertical: leadVertical || identifierContext.leadVertical,
       email: String(fd.get('email') ?? '').trim() || undefined,
       mobileNo: combinePhoneFromForm(fd, 'mobileNo') || undefined,
       phone: combinePhoneFromForm(fd, 'phone') || undefined,
@@ -178,7 +181,7 @@ export default function CRMLeadFormFields({
       mobileNo: conflicts.mobileNo?.message || '',
       phone: conflicts.phone?.message || '',
     });
-  }, [identifierContext]);
+  }, [identifierContext, leadVertical]);
 
   const onBlurId = useCallback((e: FocusEvent<HTMLElement>) => {
     void runIdentifierCheck(e.target.closest('form') as HTMLFormElement);
@@ -201,6 +204,7 @@ export default function CRMLeadFormFields({
     target.value = digitsOnly;
     setPhoneLengths((prev) => ({ ...prev, [fieldName]: digitsOnly.length }));
     if (onClearError) onClearError(fieldName);
+    setIdWarnings((prev) => (prev[fieldName] ? { ...prev, [fieldName]: '' } : prev));
   };
 
   const phoneField = (name: string, label: string, required: boolean, warn: string) => {
@@ -307,7 +311,10 @@ export default function CRMLeadFormFields({
               name="email"
               type="email"
               placeholder="name@example.com"
-              onChange={() => onClearError?.('email')}
+              onChange={() => {
+                onClearError?.('email');
+                setIdWarnings((prev) => (prev.email ? { ...prev, email: '' } : prev));
+              }}
               onBlur={identifierContext ? onBlurId : undefined}
               className={fieldError || idWarnings.email ? INP_ERR : INP}
             />
@@ -488,6 +495,20 @@ export default function CRMLeadFormFields({
           </div>
         );
       case 'leadVertical':
+        if (lockVertical) {
+          return (
+            <div key={key} className="space-y-1">
+              <label className={LBL}>
+                <span>Lead Vertical</span>
+              </label>
+              <input type="hidden" name="leadVertical" value={leadVertical} />
+              <div className="flex items-center gap-2 h-[38px] px-3 bg-[var(--surface-subtle)] border border-[var(--border-color)] rounded-[var(--radius-md)] text-xs font-medium text-[var(--text-main)]">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                {leadVertical === 'property_management' ? 'Property Management' : 'Property Listing'}
+              </div>
+            </div>
+          );
+        }
         return (
           <div key={key} className="space-y-1">
             <label className={LBL}>

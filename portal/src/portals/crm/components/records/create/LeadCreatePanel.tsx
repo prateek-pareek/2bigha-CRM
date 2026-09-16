@@ -27,6 +27,7 @@ export interface LeadCreatePanelProps {
   initialPipelineId?: string;
   /** Property Listing vs Property Management — scopes which pipelines are offered below. */
   initialLeadVertical?: "property_listing" | "property_management";
+  lockVertical?: boolean;
   onSuccess?: () => void;
   /** Use `contact` for the same slide-panel UX on the Contacts page */
   entity?: CrmPersonEntity;
@@ -50,6 +51,7 @@ export default function LeadCreatePanel({
   onClose,
   initialPipelineId = "",
   initialLeadVertical = "property_listing",
+  lockVertical = false,
   onSuccess,
   entity = "lead",
 }: LeadCreatePanelProps) {
@@ -832,10 +834,11 @@ export default function LeadCreatePanel({
               setSelectedStage={setSelectedStage}
               leadVertical={leadVertical}
               setLeadVertical={setLeadVertical}
+              lockVertical={lockVertical}
               variant="stack"
               isAdmin={isAdmin}
               onDeleteCustom={(fieldId) => handleDeleteField(fieldId)}
-              identifierContext={{ entityType: "lead" }}
+              identifierContext={{ entityType: "lead", leadVertical }}
               services={serviceOfferings}
               leadCategories={leadCategories}
               leadGroups={leadGroups}

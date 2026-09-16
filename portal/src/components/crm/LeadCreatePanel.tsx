@@ -435,7 +435,7 @@ export default function LeadCreatePanel({
               variant="stack"
               isAdmin={isAdmin}
               onDeleteCustom={(fieldId) => handleDeleteField(fieldId)}
-              identifierContext={{ entityType: "lead" }}
+              identifierContext={{ entityType: "lead", leadVertical }}
               services={serviceOfferings}
               visualVariant="hubspot"
             />

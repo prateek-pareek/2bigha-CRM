@@ -1386,16 +1386,39 @@ export class CRMService {
     email: string,
     excludeLeadIds: Set<string>,
     excludeContactIds: Set<string>,
+    leadVertical?: 'property_listing' | 'property_management',
+    entityType: 'lead' | 'contact' = 'lead',
   ): Promise<{ kind: 'Lead' | 'Contact'; doc: any } | null> {
     const re = this.emailRegexForMatch(email);
+    const leadFilter: Record<string, any> = {
+      _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
+      $or: [{ email: { $regex: re } }, { additionalEmails: re }],
+    };
+    if (leadVertical === 'property_management') {
+      leadFilter.leadVertical = 'property_management';
+    } else if (leadVertical === 'property_listing') {
+      leadFilter.$and = [
+        {
+          $or: [
+            { leadVertical: 'property_listing' },
+            { leadVertical: { $exists: false } },
+            { leadVertical: null },
+            { leadVertical: '' },
+          ],
+        },
+      ];
+    }
     const lead = await this.leadModel
-      .findOne({
-        _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
-        $or: [{ email: { $regex: re } }, { additionalEmails: re }],
-      })
+      .findOne(leadFilter)
       .lean()
       .exec();
     if (lead) return { kind: 'Lead', doc: lead };
+
+    // Contacts synced from 2bigha property listings should not conflict with PM leads
+    if (entityType === 'lead' && leadVertical === 'property_management') {
+      return null;
+    }
+
     const contact = await this.contactModel
       .findOne({
         _id: { $nin: this.toObjectIdSet(excludeContactIds) },
@@ -1411,7 +1434,12 @@ export class CRMService {
     linkedinUrl: string,
     excludeLeadIds: Set<string>,
     excludeContactIds: Set<string>,
+    leadVertical?: 'property_listing' | 'property_management',
+    entityType: 'lead' | 'contact' = 'lead',
   ): Promise<{ kind: 'Lead' | 'Contact'; doc: any } | null> {
+    if (entityType === 'lead' && leadVertical === 'property_management') {
+      return null;
+    }
     const key = linkedInProfileKey(linkedinUrl);
     if (!key) return null;
     const safe = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1446,17 +1474,35 @@ export class CRMService {
     norm: string,
     excludeLeadIds: Set<string>,
     excludeContactIds: Set<string>,
+    leadVertical?: 'property_listing' | 'property_management',
+    entityType: 'lead' | 'contact' = 'lead',
   ): Promise<{ kind: 'Lead' | 'Contact'; doc: any } | null> {
     if (norm.length < 7) return null;
     const tail = norm.slice(-Math.min(15, norm.length));
     const safeTail = tail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(safeTail);
 
+    const leadFilter: Record<string, any> = {
+      _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
+      $or: [{ mobileNo: { $regex: re } }, { phone: { $regex: re } }],
+    };
+    if (leadVertical === 'property_management') {
+      leadFilter.leadVertical = 'property_management';
+    } else if (leadVertical === 'property_listing') {
+      leadFilter.$and = [
+        {
+          $or: [
+            { leadVertical: 'property_listing' },
+            { leadVertical: { $exists: false } },
+            { leadVertical: null },
+            { leadVertical: '' },
+          ],
+        },
+      ];
+    }
+
     const leads = await this.leadModel
-      .find({
-        _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
-        $or: [{ mobileNo: { $regex: re } }, { phone: { $regex: re } }],
-      })
+      .find(leadFilter)
       .limit(80)
       .lean()
       .exec();
@@ -1467,6 +1513,11 @@ export class CRMService {
       ) {
         return { kind: 'Lead', doc: L };
       }
+    }
+
+    // Contacts synced from 2bigha property listings should not conflict with PM leads
+    if (entityType === 'lead' && leadVertical === 'property_management') {
+      return null;
     }
 
     const contacts = await this.contactModel
@@ -1537,12 +1588,16 @@ export class CRMService {
       existingContact: opts.existingContact,
     });
 
+    const leadVertical = merged.leadVertical || (opts.existingLead as any)?.leadVertical;
+
     const em = normalizeEmail(merged.email);
     if (em) {
       const hit = await this.findEmailConflict(
         merged.email,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        opts.entity,
       );
       if (hit)
         throw new BadRequestException(
@@ -1556,6 +1611,8 @@ export class CRMService {
         String(liRaw),
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        opts.entity,
       );
       if (hit)
         throw new BadRequestException(
@@ -1572,6 +1629,8 @@ export class CRMService {
         norm,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        opts.entity,
       );
       if (hit) {
         const label = field === 'mobileNo' ? 'mobile number' : 'phone number';
@@ -1591,6 +1650,7 @@ export class CRMService {
     entityType: 'lead' | 'contact';
     excludeLeadId?: string;
     excludeContactId?: string;
+    leadVertical?: 'property_listing' | 'property_management';
   }): Promise<{
     conflicts: Record<
       string,
@@ -1624,6 +1684,7 @@ export class CRMService {
       mobileNo: q.mobileNo,
       phone: q.phone,
       linkedinUrl: q.linkedinUrl,
+      leadVertical: q.leadVertical,
     };
 
     const excludeLeadIds = new Set<string>();
@@ -1640,11 +1701,15 @@ export class CRMService {
       existingContact: existingContact || undefined,
     });
 
+    const leadVertical = q.leadVertical || (existingLead as any)?.leadVertical;
+
     if (q.email != null && String(q.email).trim()) {
       const hit = await this.findEmailConflict(
         q.email,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        q.entityType,
       );
       if (hit) {
         const d = hit.doc;
@@ -1666,6 +1731,8 @@ export class CRMService {
         q.linkedinUrl,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        q.entityType,
       );
       if (hit) {
         const d = hit.doc;
@@ -1687,6 +1754,8 @@ export class CRMService {
         norm,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        q.entityType,
       );
       if (hit) {
         const d = hit.doc;
