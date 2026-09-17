@@ -109,6 +109,32 @@ export class Integration {
   lastPolledAt?: Date;
 
   /**
+   * Meta Pixel ID for Conversions API (CAPI) events — the server-to-server
+   * counterpart of the browser pixel. `type: 'meta-leadgen'` only.
+   */
+  @Prop()
+  pixelId?: string;
+
+  /**
+   * Event Data Set ID for CAPI — alternative to Pixel ID when using server
+   * events. `type: 'meta-leadgen'` only.
+   */
+  @Prop()
+  eventDataSetId?: string;
+
+  /**
+   * Separate access token for CAPI (System User token with ads_management
+   * permission). Falls back to `pageAccessToken` when unset.
+   * `type: 'meta-leadgen'` only.
+   */
+  @Prop()
+  capiAccessToken?: string;
+
+  /** Whether to send Conversions API events on Meta lead creation. */
+  @Prop({ default: false })
+  capiEnabled?: boolean;
+
+  /**
    * AiSensy "Project API" credentials — a separate surface from the
    * Campaign API (`apiKey` above): it's the only confirmed way to send a
    * free-text/session WhatsApp message via AiSensy. Both optional; without

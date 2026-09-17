@@ -334,6 +334,10 @@ export class Lead {
   @Prop({ trim: true, index: true })
   twobighaLeadId?: string;
 
+  /** Meta Leadgen ID — unique identifier from Meta Lead Ads, used for dedup and CAPI attribution. */
+  @Prop({ trim: true, sparse: true, unique: true, index: true })
+  metaLeadId?: string;
+
   /** 'skipped' = no `clientId` linked yet, or the linked Client hasn't synced to 2bigha itself — createLead needs a 2bigha platform-user id. */
   @Prop({
     enum: ['not_synced', 'synced', 'mock', 'failed', 'skipped'],

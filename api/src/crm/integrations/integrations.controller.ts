@@ -10,6 +10,7 @@ import {
 import { TeamsIntegrationService } from './teams-integration.service';
 import { WhatsAppService } from './whatsapp.service';
 import { MetaLeadAdsService } from './meta-lead-ads.service';
+import { MetaConversionsApiService } from './meta-conversions-api.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RbacGuard } from '../crm-users/rbac.guard';
 import { Permissions } from '../crm-users/permissions.decorator';
@@ -26,6 +27,7 @@ export class IntegrationsController {
     private readonly teamsService: TeamsIntegrationService,
     private readonly whatsappService: WhatsAppService,
     private readonly metaLeadAdsService: MetaLeadAdsService,
+    private readonly metaConversionsApiService: MetaConversionsApiService,
     private readonly teamsBotService: TeamsBotService,
     private readonly catalogService: IntegrationCatalogService,
     private readonly slackService: SlackIntegrationService,
@@ -119,6 +121,10 @@ export class IntegrationsController {
     'appSecret',
     'sourceLabel',
     'isActive',
+    'pixelId',
+    'eventDataSetId',
+    'capiAccessToken',
+    'capiEnabled',
   ] as const;
 
   @Post('meta-leadgen')
@@ -143,6 +149,12 @@ export class IntegrationsController {
   @Permissions('settings:write')
   async listMetaLeadAdsForms() {
     return this.metaLeadAdsService.listForms();
+  }
+
+  @Post('meta-leadgen/test-capi')
+  @Permissions('settings:write')
+  async testMetaCapiConnection() {
+    return this.metaConversionsApiService.testConnection();
   }
 
   @Get('teams')

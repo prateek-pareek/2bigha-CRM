@@ -4,8 +4,9 @@ import { Model } from 'mongoose';
 import { Integration } from './schemas/integration.schema';
 import { Lead, LeadDocument } from '../records/schemas/lead.schema';
 import { CRMService } from '../core/crm.service';
+import { MetaConversionsApiService } from './meta-conversions-api.service';
 
-const META_API = 'https://graph.facebook.com/v18.0';
+const META_API = 'https://graph.facebook.com/v26.0';
 
 /** Fields fetched for a single lead — shared by the webhook path (one lead
  * at a time, via `/{leadgen_id}`) and the polling fallback (many leads at
@@ -42,6 +43,7 @@ type MetaLeadAdsConfig = {
   formIds: string[];
   forms?: Array<{ id: string; name: string; status?: string }>;
   lastPolledAt?: Date;
+  capiEnabled?: boolean;
 };
 
 @Injectable()
@@ -55,6 +57,7 @@ export class MetaLeadAdsService {
     private readonly leadModel: Model<LeadDocument>,
     @Inject(forwardRef(() => CRMService))
     private readonly crmService: CRMService,
+    private readonly metaConversionsApiService: MetaConversionsApiService,
   ) {}
 
   private async getConfig(): Promise<MetaLeadAdsConfig | null> {
@@ -71,6 +74,7 @@ export class MetaLeadAdsService {
       formIds: Array.isArray(config.formIds) ? config.formIds.map(String) : [],
       forms: Array.isArray(config.forms) ? config.forms : undefined,
       lastPolledAt: config.lastPolledAt ? new Date(config.lastPolledAt) : undefined,
+      capiEnabled: !!config.capiEnabled,
     };
   }
 
@@ -184,7 +188,7 @@ export class MetaLeadAdsService {
     if (!leadgenId) return false;
 
     const existing = await this.leadModel
-      .findOne({ 'customFields.metaLeadgenId': leadgenId })
+      .findOne({ $or: [{ metaLeadId: leadgenId }, { 'customFields.metaLeadgenId': leadgenId }] })
       .select('_id')
       .lean()
       .exec();
@@ -217,6 +221,7 @@ export class MetaLeadAdsService {
       source: `Meta Lead Ads — ${formName}`,
       status: 'New',
       stage: 'New',
+      metaLeadId: leadgenId,
       sourceMetadata: {
         type: platform === 'ig' ? 'instagram' : 'facebook',
         url: `https://www.facebook.com/${pageId}`,
@@ -224,7 +229,7 @@ export class MetaLeadAdsService {
       },
       customFields: {
         ...customFields,
-        metaLeadgenId: leadgenId,
+        metaLeadgenId: leadgenId, // backward compat
         metaFormId: formId || undefined,
         metaPageId: pageId,
         metaAdId: detail.ad_id || undefined,
@@ -238,6 +243,20 @@ export class MetaLeadAdsService {
     try {
       await this.crmService.createLead(dto);
       this.logger.log(`Created CRM lead from Meta leadgen ${leadgenId} (form: ${formName})`);
+
+      // Fire-and-forget CAPI event — don't block lead creation on CAPI failure
+      if (config.capiEnabled) {
+        this.metaConversionsApiService
+          .sendLeadEvent({
+            metaLeadId: leadgenId,
+            email: known.email,
+            phone: known.phone,
+          })
+          .catch((err) =>
+            this.logger.warn(`CAPI event fire-and-forget error for ${leadgenId}: ${err?.message}`),
+          );
+      }
+
       return true;
     } catch (e: any) {
       this.logger.error(`Failed to create CRM lead from Meta leadgen ${leadgenId}: ${e?.message}`);
