@@ -1851,35 +1851,75 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                 />
                               </div>
 
-                              <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Role <span className="text-rose-500">*</span>
-                                </label>
-                                <select
-                                  value={currentMapped.role ? (currentMapped.role.toUpperCase() === '2 BIGHA USER' ? 'USER' : currentMapped.role.toUpperCase()) : 'USER'}
-                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'role', e.target.value)}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
-                                >
-                                  <option value="USER">User</option>
-                                  <option value="AGENT">Real Estate Agent</option>
-                                  <option value="OWNER">Property Owner</option>
-                                </select>
-                              </div>
+                              {(() => {
+                                const norm = currentMapped.role ? currentMapped.role.toUpperCase().replace(/[\s_-]+/g, ' ').trim() : '';
+                                const isAllowed = ['USER', 'AGENT', 'OWNER'].includes(norm) || norm === '2 BIGHA USER';
+                                const roleVal = isAllowed ? (norm === '2 BIGHA USER' ? 'USER' : norm) : (currentMapped.role || '');
+                                const hasRoleError = currentRow.errors.some((err) => err.toLowerCase().includes('role'));
 
-                              <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Lead Type / Category <span className="text-slate-400 font-normal">(Default: Lead)</span>
-                                </label>
-                                <select
-                                  value={currentMapped.leadCategory ? (currentMapped.leadCategory.toLowerCase() === 'buyer lead' ? 'Buyer' : currentMapped.leadCategory) : 'Lead'}
-                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'leadCategory', e.target.value)}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
-                                >
-                                  {Array.from(new Set(['Lead', 'Buyer', 'Seller', 'Reference', 'Investor', ...picklistLeadCategories.map(c => c.toLowerCase() === 'buyer lead' ? 'Buyer' : c)])).map((c) => (
-                                    <option key={c} value={c}>{c}</option>
-                                  ))}
-                                </select>
-                              </div>
+                                return (
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                      <span>Role <span className="text-rose-500">*</span></span>
+                                      {hasRoleError && <span className="text-[10px] font-bold text-rose-600">Invalid Role</span>}
+                                    </label>
+                                    <select
+                                      value={roleVal}
+                                      onChange={(e) => handleUpdateRowField(editingRowIndex, 'role', e.target.value)}
+                                      className={cn(
+                                        "w-full border rounded-lg px-3 py-2 text-xs font-bold focus:outline-none bg-white cursor-pointer transition-colors",
+                                        hasRoleError
+                                          ? "border-rose-300 bg-rose-50/30 text-rose-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                                          : "border-slate-200 text-slate-800 focus:border-primary"
+                                      )}
+                                    >
+                                      {!isAllowed && (
+                                        <option value={currentMapped.role || ''} disabled className="text-rose-600 font-bold bg-rose-50">
+                                          {currentMapped.role ? `⚠️ Invalid: "${currentMapped.role}" (Select valid role)` : '— Select Role —'}
+                                        </option>
+                                      )}
+                                      <option value="USER">User</option>
+                                      <option value="AGENT">Real Estate Agent</option>
+                                      <option value="OWNER">Property Owner</option>
+                                    </select>
+                                  </div>
+                                );
+                              })()}
+
+                              {(() => {
+                                const allowedCategories = Array.from(new Set(['Lead', 'Buyer', 'Seller', 'Reference', 'Investor', ...picklistLeadCategories.map(c => c.toLowerCase() === 'buyer lead' ? 'Buyer' : c)]));
+                                const normCat = currentMapped.leadCategory ? (currentMapped.leadCategory.toLowerCase() === 'buyer lead' ? 'Buyer' : currentMapped.leadCategory) : 'Lead';
+                                const isAllowed = allowedCategories.some(c => c.toLowerCase() === (currentMapped.leadCategory || '').toLowerCase()) || !currentMapped.leadCategory;
+                                const hasCatError = currentRow.errors.some((err) => err.toLowerCase().includes('lead type') || err.toLowerCase().includes('category'));
+
+                                return (
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                      <span>Lead Type / Category <span className="text-slate-400 font-normal">(Default: Lead)</span></span>
+                                      {hasCatError && <span className="text-[10px] font-bold text-rose-600">Invalid Type</span>}
+                                    </label>
+                                    <select
+                                      value={isAllowed ? normCat : (currentMapped.leadCategory || '')}
+                                      onChange={(e) => handleUpdateRowField(editingRowIndex, 'leadCategory', e.target.value)}
+                                      className={cn(
+                                        "w-full border rounded-lg px-3 py-2 text-xs font-bold focus:outline-none bg-white cursor-pointer transition-colors",
+                                        hasCatError
+                                          ? "border-rose-300 bg-rose-50/30 text-rose-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                                          : "border-slate-200 text-slate-800 focus:border-primary"
+                                      )}
+                                    >
+                                      {!isAllowed && currentMapped.leadCategory && (
+                                        <option value={currentMapped.leadCategory} disabled className="text-rose-600 font-bold bg-rose-50">
+                                          ⚠️ Invalid: "{currentMapped.leadCategory}" (Select valid type)
+                                        </option>
+                                      )}
+                                      {allowedCategories.map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })()}
 
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">Gender</label>
@@ -1956,18 +1996,40 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                 />
                               </div>
 
-                              <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">Lead Source</label>
-                                <select
-                                  value={currentMapped.source || 'Website'}
-                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'source', e.target.value)}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
-                                >
-                                  {['Website', 'Google Lead', 'Meta Ads', 'Referral', 'Walk In', 'Direct Call', 'Other', 'Organic Search', 'Social Media', 'Paid Ads', 'Email Campaign', 'Offline'].map((s) => (
-                                    <option key={s} value={s}>{s}</option>
-                                  ))}
-                                </select>
-                              </div>
+                              {(() => {
+                                const allowedSources = ['Website', 'Google Lead', 'Meta Ads', 'Referral', 'Walk In', 'Direct Call', 'Other', 'Organic Search', 'Social Media', 'Paid Ads', 'Email Campaign', 'Offline'];
+                                const matchSource = allowedSources.find(s => s.toLowerCase() === (currentMapped.source || '').toLowerCase());
+                                const isAllowed = !currentMapped.source || !!matchSource;
+                                const hasSourceError = currentRow.errors.some((err) => err.toLowerCase().includes('lead source') || err.toLowerCase().includes('source'));
+
+                                return (
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                      <span>Lead Source</span>
+                                      {hasSourceError && <span className="text-[10px] font-bold text-rose-600">Invalid Source</span>}
+                                    </label>
+                                    <select
+                                      value={isAllowed ? (matchSource || 'Website') : (currentMapped.source || '')}
+                                      onChange={(e) => handleUpdateRowField(editingRowIndex, 'source', e.target.value)}
+                                      className={cn(
+                                        "w-full border rounded-lg px-3 py-2 text-xs font-bold focus:outline-none bg-white cursor-pointer transition-colors",
+                                        hasSourceError
+                                          ? "border-rose-300 bg-rose-50/30 text-rose-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                                          : "border-slate-200 text-slate-800 focus:border-primary"
+                                      )}
+                                    >
+                                      {!isAllowed && currentMapped.source && (
+                                        <option value={currentMapped.source} disabled className="text-rose-600 font-bold bg-rose-50">
+                                          ⚠️ Invalid: "{currentMapped.source}" (Select valid source)
+                                        </option>
+                                      )}
+                                      {allowedSources.map((s) => (
+                                        <option key={s} value={s}>{s}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })()}
 
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">Group</label>
@@ -1999,19 +2061,40 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                 />
                               </div>
 
-                              <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">State</label>
-                                <select
-                                  value={currentMapped.state || ''}
-                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'state', e.target.value)}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
-                                >
-                                  <option value="">— Select Valid State —</option>
-                                  {INDIAN_STATES.map((s) => (
-                                    <option key={s} value={s}>{s}</option>
-                                  ))}
-                                </select>
-                              </div>
+                              {(() => {
+                                const matchState = INDIAN_STATES.find(s => s.toUpperCase() === (currentMapped.state || '').toUpperCase());
+                                const isAllowed = !currentMapped.state || !!matchState;
+                                const hasStateError = currentRow.errors.some((err) => err.toLowerCase().includes('state'));
+
+                                return (
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                      <span>State</span>
+                                      {hasStateError && <span className="text-[10px] font-bold text-rose-600">Invalid State</span>}
+                                    </label>
+                                    <select
+                                      value={isAllowed ? (matchState || '') : (currentMapped.state || '')}
+                                      onChange={(e) => handleUpdateRowField(editingRowIndex, 'state', e.target.value)}
+                                      className={cn(
+                                        "w-full border rounded-lg px-3 py-2 text-xs font-bold focus:outline-none bg-white cursor-pointer transition-colors",
+                                        hasStateError
+                                          ? "border-rose-300 bg-rose-50/30 text-rose-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                                          : "border-slate-200 text-slate-800 focus:border-primary"
+                                      )}
+                                    >
+                                      {!isAllowed && currentMapped.state && (
+                                        <option value={currentMapped.state} disabled className="text-rose-600 font-bold bg-rose-50">
+                                          ⚠️ Invalid: "{currentMapped.state}" (Select valid state)
+                                        </option>
+                                      )}
+                                      <option value="">— Select Valid State —</option>
+                                      {INDIAN_STATES.map((s) => (
+                                        <option key={s} value={s}>{s}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })()}
 
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -2038,33 +2121,79 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                 />
                               </div>
 
-                              <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">Planning To Buy Land</label>
-                                <select
-                                  value={currentMapped.planningToBuyLand || ''}
-                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'planningToBuyLand', e.target.value)}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
-                                >
-                                  <option value="">— Select Timeline —</option>
-                                  <option value="Just Exploring">Just Exploring</option>
-                                  <option value="Within 1 Month">Within 1 Month</option>
-                                  <option value="1–3 Months">1–3 Months</option>
-                                  <option value="3–6 Months">3–6 Months</option>
-                                </select>
-                              </div>
+                              {(() => {
+                                const allowedPlans = ['Just Exploring', 'Within 1 Month', '1–3 Months', '3–6 Months'];
+                                const normPlan = currentMapped.planningToBuyLand ? currentMapped.planningToBuyLand.toUpperCase().replace(/[\s_-]+/g, ' ').trim() : '';
+                                const matchPlan = allowedPlans.find(p => p.toUpperCase().replace(/[\s_-]+/g, ' ').trim() === normPlan);
+                                const isAllowed = !currentMapped.planningToBuyLand || !!matchPlan;
+                                const hasPlanError = currentRow.errors.some((err) => err.toLowerCase().includes('planning to buy land'));
 
-                              <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">Lead Vertical</label>
-                                <select
-                                  value={currentMapped.leadVertical || ''}
-                                  onChange={(e) => handleUpdateRowField(editingRowIndex, 'leadVertical', e.target.value)}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
-                                >
-                                  <option value="">— Select Vertical —</option>
-                                  <option value="Property Listing">Property Listing</option>
-                                  <option value="Property Management">Property Management</option>
-                                </select>
-                              </div>
+                                return (
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                      <span>Planning To Buy Land</span>
+                                      {hasPlanError && <span className="text-[10px] font-bold text-rose-600">Invalid Timeline</span>}
+                                    </label>
+                                    <select
+                                      value={isAllowed ? (matchPlan || '') : (currentMapped.planningToBuyLand || '')}
+                                      onChange={(e) => handleUpdateRowField(editingRowIndex, 'planningToBuyLand', e.target.value)}
+                                      className={cn(
+                                        "w-full border rounded-lg px-3 py-2 text-xs font-bold focus:outline-none bg-white cursor-pointer transition-colors",
+                                        hasPlanError
+                                          ? "border-rose-300 bg-rose-50/30 text-rose-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                                          : "border-slate-200 text-slate-800 focus:border-primary"
+                                      )}
+                                    >
+                                      {!isAllowed && currentMapped.planningToBuyLand && (
+                                        <option value={currentMapped.planningToBuyLand} disabled className="text-rose-600 font-bold bg-rose-50">
+                                          ⚠️ Invalid: "{currentMapped.planningToBuyLand}" (Select valid timeline)
+                                        </option>
+                                      )}
+                                      <option value="">— Select Timeline —</option>
+                                      {allowedPlans.map((p) => (
+                                        <option key={p} value={p}>{p}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })()}
+
+                              {(() => {
+                                const allowedVerticals = ['Property Listing', 'Property Management'];
+                                const normVert = currentMapped.leadVertical ? currentMapped.leadVertical.toUpperCase().replace(/[\s_-]+/g, ' ').trim() : '';
+                                const matchVert = allowedVerticals.find(v => v.toUpperCase().replace(/[\s_-]+/g, ' ').trim() === normVert);
+                                const isAllowed = !currentMapped.leadVertical || !!matchVert;
+                                const hasVertError = currentRow.errors.some((err) => err.toLowerCase().includes('lead vertical'));
+
+                                return (
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                      <span>Lead Vertical</span>
+                                      {hasVertError && <span className="text-[10px] font-bold text-rose-600">Invalid Vertical</span>}
+                                    </label>
+                                    <select
+                                      value={isAllowed ? (matchVert || '') : (currentMapped.leadVertical || '')}
+                                      onChange={(e) => handleUpdateRowField(editingRowIndex, 'leadVertical', e.target.value)}
+                                      className={cn(
+                                        "w-full border rounded-lg px-3 py-2 text-xs font-bold focus:outline-none bg-white cursor-pointer transition-colors",
+                                        hasVertError
+                                          ? "border-rose-300 bg-rose-50/30 text-rose-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                                          : "border-slate-200 text-slate-800 focus:border-primary"
+                                      )}
+                                    >
+                                      {!isAllowed && currentMapped.leadVertical && (
+                                        <option value={currentMapped.leadVertical} disabled className="text-rose-600 font-bold bg-rose-50">
+                                          ⚠️ Invalid: "{currentMapped.leadVertical}" (Select valid vertical)
+                                        </option>
+                                      )}
+                                      <option value="">— Select Vertical —</option>
+                                      {allowedVerticals.map((v) => (
+                                        <option key={v} value={v}>{v}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })()}
 
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">Lead Owner</label>
