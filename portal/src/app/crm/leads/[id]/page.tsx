@@ -68,7 +68,13 @@ export default function LeadDetailPage() {
   /** "View" quick action (Lead Action Menu) — same detail page, edit entry points hidden. */
   const isReadOnlyView = searchParams.get('readonly') === '1';
   const { hasAccess } = usePermissions();
+  const fromParam = searchParams.get('from');
   const [lead, setLead] = useState<any>(null);
+  const isPm = lead?.leadVertical === 'property_management' || fromParam === '/crm/pm/leads';
+  const leadsListHref = isPm ? '/crm/pm/leads' : '/crm/leads';
+  const leadsListLabel = isPm ? 'PM Leads' : 'Leads';
+  const canWrite = hasAccess('leads:write') || (isPm && hasAccess('pm-leads:write' as any));
+  const canDelete = hasAccess('leads:delete') || (isPm && hasAccess('pm-leads:delete' as any));
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -367,7 +373,7 @@ export default function LeadDetailPage() {
     .filter(Boolean);
 
   const updateLeadStage = async (newStage: string) => {
-    if (!newStage || newStage === stage || !hasAccess('leads:write')) return;
+    if (!newStage || newStage === stage || !canWrite) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${CRM_API_URL}/crm/leads/${recordId}`, {
@@ -548,11 +554,11 @@ export default function LeadDetailPage() {
   return (
     <div className={cn(crmRecordChrome.page, 'animate-in fade-in duration-300')}>
       <CrmPageHeader
-        title="Leads"
+        title={leadsListLabel}
         bordered={false}
         breadcrumbs={[
           { label: 'Home', href: '/crm' },
-          { label: 'Leads', href: '/crm/leads' },
+          { label: leadsListLabel, href: leadsListHref },
           { label: displayName },
         ]}
         actions={
@@ -570,7 +576,7 @@ export default function LeadDetailPage() {
             >
               Refresh
             </CrmButton>
-            {hasAccess('leads:write') ? (
+            {canWrite ? (
               <CrmButton
                 type="button"
                 onClick={() => setIsConvertModalOpen(true)}
@@ -580,7 +586,7 @@ export default function LeadDetailPage() {
                 Convert
               </CrmButton>
             ) : null}
-            {hasAccess('leads:delete') ? (
+            {canDelete ? (
               <CrmButton
                 type="button"
                 variant="secondary"
@@ -593,7 +599,7 @@ export default function LeadDetailPage() {
                       method: 'DELETE',
                       headers: { Authorization: `Bearer ${token}` },
                     });
-                    if (res.ok) router.push('/crm/leads');
+                    if (res.ok) router.push(leadsListHref);
                   }
                 }}
               >
@@ -604,9 +610,9 @@ export default function LeadDetailPage() {
         }
       />
 
-      <button type="button" onClick={() => router.push('/crm/leads')} className={crmRecordChrome.backLink}>
+      <button type="button" onClick={() => router.push(leadsListHref)} className={crmRecordChrome.backLink}>
         <ChevronLeft size={14} />
-        Back to Leads
+        Back to {leadsListLabel}
       </button>
 
       {/* Profile hero — CRMS contact-head */}
@@ -647,7 +653,7 @@ export default function LeadDetailPage() {
               <Lock size={12} />
               Lead
             </span>
-            {pipelineStages.length > 0 && hasAccess('leads:write') ? (
+            {pipelineStages.length > 0 && canWrite ? (
               <div className="relative inline-flex" ref={stageMenuRef}>
                 <button
                   type="button"
@@ -719,7 +725,7 @@ export default function LeadDetailPage() {
             secondaryActions={secondaryActions}
             className="!mt-0 !border-0 !pt-3"
           >
-            {hasAccess('leads:write') && (
+            {canWrite && (
               <div className="relative inline-flex items-center">
                 <select
                   value={lead.pipeline?._id || lead.pipeline || ''}
@@ -779,7 +785,7 @@ export default function LeadDetailPage() {
         <CrmRecordPipelineStatus
           stages={pipelineStages}
           currentStage={stage}
-          onSelect={hasAccess('leads:write') ? updateLeadStage : undefined}
+          onSelect={canWrite ? updateLeadStage : undefined}
         />
       ) : null}
 
@@ -916,7 +922,7 @@ export default function LeadDetailPage() {
             <CrmRecordOwnerCard
               ownerLabel={lead.leadOwner}
               leadId={entityId}
-              canReassign={hasAccess('leads:write')}
+              canReassign={canWrite}
               onReassigned={() => void fetchLead()}
             />
             <CrmRecordRemindersPanel

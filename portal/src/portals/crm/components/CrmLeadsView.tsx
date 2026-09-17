@@ -446,6 +446,15 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
   const router = useRouter();
   const isPm = fixedVertical === 'property_management';
   const effectiveViewModeKey = isPm ? 'crm_pm_leads_view_mode_v1' : VIEW_MODE_KEY;
+
+  const getLeadUrl = (leadId: string, options?: { readonly?: boolean; edit?: boolean }) => {
+    const query = new URLSearchParams();
+    if (isPm) query.set('from', '/crm/pm/leads');
+    if (options?.readonly) query.set('readonly', '1');
+    if (options?.edit) query.set('edit', '1');
+    const qs = query.toString();
+    return `/crm/leads/${leadId}${qs ? `?${qs}` : ''}`;
+  };
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'grid' | 'calendar'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(effectiveViewModeKey);
@@ -2713,7 +2722,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                               selectedIds.has(lead._id) ? 'ring-2 ring-[var(--primary)]/25' : '',
                               exitingLeadIds.has(lead._id) && 'pointer-events-none translate-x-8 -rotate-2 scale-95 opacity-0',
                             )}
-                            onClick={() => !exitingLeadIds.has(lead._id) && router.push(`/crm/leads/${lead._id}`)}
+                            onClick={() => !exitingLeadIds.has(lead._id) && router.push(getLeadUrl(lead._id))}
                           >
                             <CrmKanbanCardHead
                               tone={crmKanbanAvatarTone(`${lead.firstName}${lead.lastName}${lead._id}`)}
@@ -2756,7 +2765,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                                   ) : null}
                                   <CrmTableActionMenu
                                     menuAlign="right"
-                                    onView={() => router.push(`/crm/leads/${lead._id}?readonly=1`)}
+                                    onView={() => router.push(getLeadUrl(lead._id, { readonly: true }))}
                                     onNotes={() => setActivityLead(lead)}
                                     onSetActivity={() => setCallActivityLead(lead)}
                                     onCallHistory={() => setCallHistoryLead(lead)}
@@ -2874,10 +2883,10 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                               return next;
                             });
                           }}
-                          onClick={() => router.push(`/crm/leads/${lead._id}`)}
+                          onClick={() => router.push(getLeadUrl(lead._id))}
                           actions={
                             <CrmTableActionMenu
-                              onEdit={() => router.push(`/crm/leads/${lead._id}?edit=1`)}
+                              onEdit={() => router.push(getLeadUrl(lead._id, { edit: true }))}
                               onEmail={lead.email ? () => setEmailLead(lead) : undefined}
                               onCall={
                                 (lead.mobileNo || lead.phone)
@@ -3021,7 +3030,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                               'group cursor-pointer transition-colors',
                               selectedIds.has(lead._id) && 'crm-table-row-selected',
                             )}
-                            onClick={() => router.push(`/crm/leads/${lead._id}`)}
+                            onClick={() => router.push(getLeadUrl(lead._id))}
                           >
                             <td className="crm-table-check">
                               <CrmTableCheck
@@ -3086,8 +3095,8 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                                   <CrmTableActionMenu
                                     menuAlign="left"
                                     className="shrink-0"
-                                    onView={() => router.push(`/crm/leads/${lead._id}?readonly=1`)}
-                                    onEdit={() => router.push(`/crm/leads/${lead._id}?edit=1`)}
+                                    onView={() => router.push(getLeadUrl(lead._id, { readonly: true }))}
+                                    onEdit={() => router.push(getLeadUrl(lead._id, { edit: true }))}
                                     onNotes={() => setActivityLead(lead)}
                                     onSetActivity={() => setCallActivityLead(lead)}
                                     onCallHistory={() => setCallHistoryLead(lead)}
@@ -3133,7 +3142,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
               </div>
             ) : (
               <div className="crm-view-panel min-h-0 flex-1 overflow-auto custom-scrollbar">
-                <CRMCalendarView items={filteredLeads} onItemClick={(item) => router.push(`/crm/leads/${item._id}`)} />
+                <CRMCalendarView items={filteredLeads} onItemClick={(item) => router.push(getLeadUrl(item._id))} />
               </div>
             )}
           </div>
