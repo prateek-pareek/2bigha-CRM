@@ -198,6 +198,7 @@ const crmGroups = [
         name: 'Inbound',
         items: [
             { name: 'Leads', href: '/crm/leads', icon: Users, permission: 'leads:read' },
+            { name: 'PM Leads', href: '/crm/pm/leads', icon: Users, permission: 'pm-leads:read' },
             { name: 'Clients', href: '/crm/clients', icon: UserCheck, permission: 'clients:read', adminOnly: true },
             { name: 'Deals', href: '/crm/deals', icon: Handshake, permission: 'deals:read' },
         ],

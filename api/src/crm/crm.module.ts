@@ -109,6 +109,7 @@ import { MetaLeadAdsService } from './integrations/meta-lead-ads.service';
 import { MetaLeadAdsWebhookController } from './integrations/meta-lead-ads-webhook.controller';
 import { WebsiteLeadWebhookController } from './integrations/website-lead-webhook.controller';
 import { MetaLeadAdsPollingCronService } from './integrations/meta-lead-ads-polling-cron.service';
+import { MetaConversionsApiService } from './integrations/meta-conversions-api.service';
 import {
   HrmsIntegrationService,
   HrmsWebhookController,
@@ -516,6 +517,7 @@ import {
     EmailTrackingService,
     WhatsAppService,
     MetaLeadAdsService,
+    MetaConversionsApiService,
     MetaLeadAdsPollingCronService,
     HrmsIntegrationService,
     HrmsAvailabilityCronService,

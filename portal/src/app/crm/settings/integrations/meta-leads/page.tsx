@@ -15,12 +15,18 @@ export default function MetaLeadAdsIntegrationPage() {
     formIds: [] as string[],
     sourceLabel: '2Bigha CRM',
     isActive: false,
+    pixelId: '',
+    eventDataSetId: '',
+    capiAccessToken: '',
+    capiEnabled: false,
   });
   const [forms, setForms] = useState<LeadForm[]>([]);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [syncingForms, setSyncingForms] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testingCapi, setTestingCapi] = useState(false);
+  const [capiTestResult, setCapiTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const webhookUrl = `${CRM_API_URL}/webhooks/meta-leadgen`;
@@ -122,6 +128,28 @@ export default function MetaLeadAdsIntegrationPage() {
     navigator.clipboard.writeText(webhookUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleTestCapi = async () => {
+    setTestingCapi(true);
+    setCapiTestResult(null);
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/integrations/meta-leadgen/test-capi`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setCapiTestResult({ success: true, message: data.message || 'CAPI test event sent successfully' });
+      } else {
+        setCapiTestResult({ success: false, message: data.error || 'CAPI connection test failed' });
+      }
+    } catch (err) {
+      setCapiTestResult({ success: false, message: 'CAPI connection test failed' });
+    } finally {
+      setTestingCapi(false);
+    }
   };
 
   return (
@@ -301,6 +329,72 @@ export default function MetaLeadAdsIntegrationPage() {
                 {testResult.message}
               </p>
             )}
+          </div>
+
+          <div className="bg-indigo-50 border border-indigo-100 rounded-[var(--crm-radius-ui)] p-8">
+            <h3 className="text-lg font-black text-indigo-900 mb-2 uppercase tracking-tight">Conversions API (CAPI)</h3>
+            <p className="text-indigo-700 text-sm font-medium mb-6">Send lead events back to Meta for ad optimization &amp; attribution tracking.</p>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-indigo-800 px-1">Pixel ID</label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 bg-white border border-indigo-200 rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-indigo-500/15 outline-none transition-all"
+                    placeholder="1006574812313887"
+                    value={config.pixelId}
+                    onChange={(e) => setConfig({ ...config, pixelId: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-indigo-800 px-1">Event Data Set ID</label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 bg-white border border-indigo-200 rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-indigo-500/15 outline-none transition-all"
+                    placeholder="1054825264020188"
+                    value={config.eventDataSetId}
+                    onChange={(e) => setConfig({ ...config, eventDataSetId: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-indigo-800 px-1">CAPI Access Token <span className="font-medium text-indigo-500">(optional — falls back to Page Access Token)</span></label>
+                <div className="relative">
+                  <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-400" size={18} />
+                  <input
+                    type="password"
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-indigo-200 rounded-[var(--radius-md)] text-sm font-bold text-text-main focus:ring-4 focus:ring-indigo-500/15 outline-none transition-all"
+                    placeholder="System User token with ads_management permission"
+                    value={config.capiAccessToken}
+                    onChange={(e) => setConfig({ ...config, capiAccessToken: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-4 pt-2">
+                <label className="flex items-center gap-3 px-4 py-3 bg-white rounded-[var(--radius-md)] cursor-pointer border border-indigo-200">
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 rounded-lg border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={config.capiEnabled}
+                    onChange={(e) => setConfig({ ...config, capiEnabled: e.target.checked })}
+                  />
+                  <span className="text-xs font-black text-indigo-900 leading-none">Enable CAPI Events</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleTestCapi}
+                  disabled={testingCapi || !config.pixelId}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-[var(--radius-md)] text-xs font-semibold transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {testingCapi ? 'Testing...' : <><Send size={14} /> Test CAPI</>}
+                </button>
+              </div>
+              {capiTestResult && (
+                <p className={`text-sm font-semibold ${capiTestResult.success ? 'text-indigo-700' : 'text-rose-600'}`}>
+                  {capiTestResult.message}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

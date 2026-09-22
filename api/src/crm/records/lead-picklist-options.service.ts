@@ -16,7 +16,7 @@ export type LeadPicklistKey =
 
 /** Seeded once on first boot so the tab bar / dropdowns / checklist aren't empty on day one. */
 const DEFAULT_OPTIONS: Record<LeadPicklistKey, string[]> = {
-  leadCategory: ['Reference', 'Investor', 'Lead', 'Buyer lead'],
+  leadCategory: ['Lead', 'Buyer', 'Seller', 'Reference', 'Investor'],
   group: ['Seller', 'Buyer'],
   checklistItem: [
     'Initial Contact Made',
@@ -58,13 +58,34 @@ export class LeadPicklistOptionsService implements OnModuleInit {
   }
 
   async seedDefaults() {
+    // 1. Rename any existing 'Buyer lead' option to 'Buyer'
+    await this.model.updateMany(
+      { listKey: 'leadCategory', label: { $regex: /^buyer lead$/i } },
+      { $set: { label: 'Buyer' } },
+    );
+    await this.leadModel.updateMany(
+      { leadCategory: { $regex: /^buyer lead$/i } },
+      { $set: { leadCategory: 'Buyer' } },
+    );
+
+    // 2. Ensure each listKey has default values
     for (const listKey of Object.keys(DEFAULT_OPTIONS) as LeadPicklistKey[]) {
-      const count = await this.model.countDocuments({ listKey });
-      if (count > 0) continue;
       const labels = DEFAULT_OPTIONS[listKey];
-      await this.model.insertMany(
-        labels.map((label, i) => ({ listKey, label, sortOrder: i, isActive: true })),
-      );
+      for (let i = 0; i < labels.length; i++) {
+        const label = labels[i];
+        const existing = await this.model.findOne({
+          listKey,
+          label: { $regex: new RegExp(`^${label}$`, 'i') },
+        });
+        if (!existing) {
+          await this.model.create({
+            listKey,
+            label,
+            sortOrder: i,
+            isActive: true,
+          });
+        }
+      }
     }
   }
 

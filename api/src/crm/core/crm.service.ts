@@ -380,6 +380,8 @@ export class CRMService {
       /** Rows whose Role column wasn't OWNER/AGENT/USER — defaulted to USER. */
       invalidRoleCount: number;
       duplicateStrategy: ImportDuplicateStrategy;
+      failedRows: { rowNumber: number; rowData?: any; reason: string }[];
+      skippedRows: { rowNumber: number; rowData?: any; reason: string }[];
       error?: string;
       createdAt: number;
     }
@@ -1384,16 +1386,39 @@ export class CRMService {
     email: string,
     excludeLeadIds: Set<string>,
     excludeContactIds: Set<string>,
+    leadVertical?: 'property_listing' | 'property_management',
+    entityType: 'lead' | 'contact' = 'lead',
   ): Promise<{ kind: 'Lead' | 'Contact'; doc: any } | null> {
     const re = this.emailRegexForMatch(email);
+    const leadFilter: Record<string, any> = {
+      _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
+      $or: [{ email: { $regex: re } }, { additionalEmails: re }],
+    };
+    if (leadVertical === 'property_management') {
+      leadFilter.leadVertical = 'property_management';
+    } else if (leadVertical === 'property_listing') {
+      leadFilter.$and = [
+        {
+          $or: [
+            { leadVertical: 'property_listing' },
+            { leadVertical: { $exists: false } },
+            { leadVertical: null },
+            { leadVertical: '' },
+          ],
+        },
+      ];
+    }
     const lead = await this.leadModel
-      .findOne({
-        _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
-        $or: [{ email: { $regex: re } }, { additionalEmails: re }],
-      })
+      .findOne(leadFilter)
       .lean()
       .exec();
     if (lead) return { kind: 'Lead', doc: lead };
+
+    // Contacts synced from 2bigha property listings should not conflict with PM leads
+    if (entityType === 'lead' && leadVertical === 'property_management') {
+      return null;
+    }
+
     const contact = await this.contactModel
       .findOne({
         _id: { $nin: this.toObjectIdSet(excludeContactIds) },
@@ -1409,7 +1434,12 @@ export class CRMService {
     linkedinUrl: string,
     excludeLeadIds: Set<string>,
     excludeContactIds: Set<string>,
+    leadVertical?: 'property_listing' | 'property_management',
+    entityType: 'lead' | 'contact' = 'lead',
   ): Promise<{ kind: 'Lead' | 'Contact'; doc: any } | null> {
+    if (entityType === 'lead' && leadVertical === 'property_management') {
+      return null;
+    }
     const key = linkedInProfileKey(linkedinUrl);
     if (!key) return null;
     const safe = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1444,17 +1474,35 @@ export class CRMService {
     norm: string,
     excludeLeadIds: Set<string>,
     excludeContactIds: Set<string>,
+    leadVertical?: 'property_listing' | 'property_management',
+    entityType: 'lead' | 'contact' = 'lead',
   ): Promise<{ kind: 'Lead' | 'Contact'; doc: any } | null> {
     if (norm.length < 7) return null;
     const tail = norm.slice(-Math.min(15, norm.length));
     const safeTail = tail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(safeTail);
 
+    const leadFilter: Record<string, any> = {
+      _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
+      $or: [{ mobileNo: { $regex: re } }, { phone: { $regex: re } }],
+    };
+    if (leadVertical === 'property_management') {
+      leadFilter.leadVertical = 'property_management';
+    } else if (leadVertical === 'property_listing') {
+      leadFilter.$and = [
+        {
+          $or: [
+            { leadVertical: 'property_listing' },
+            { leadVertical: { $exists: false } },
+            { leadVertical: null },
+            { leadVertical: '' },
+          ],
+        },
+      ];
+    }
+
     const leads = await this.leadModel
-      .find({
-        _id: { $nin: this.toObjectIdSet(excludeLeadIds) },
-        $or: [{ mobileNo: { $regex: re } }, { phone: { $regex: re } }],
-      })
+      .find(leadFilter)
       .limit(80)
       .lean()
       .exec();
@@ -1465,6 +1513,11 @@ export class CRMService {
       ) {
         return { kind: 'Lead', doc: L };
       }
+    }
+
+    // Contacts synced from 2bigha property listings should not conflict with PM leads
+    if (entityType === 'lead' && leadVertical === 'property_management') {
+      return null;
     }
 
     const contacts = await this.contactModel
@@ -1535,12 +1588,16 @@ export class CRMService {
       existingContact: opts.existingContact,
     });
 
+    const leadVertical = merged.leadVertical || (opts.existingLead as any)?.leadVertical;
+
     const em = normalizeEmail(merged.email);
     if (em) {
       const hit = await this.findEmailConflict(
         merged.email,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        opts.entity,
       );
       if (hit)
         throw new BadRequestException(
@@ -1554,6 +1611,8 @@ export class CRMService {
         String(liRaw),
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        opts.entity,
       );
       if (hit)
         throw new BadRequestException(
@@ -1570,6 +1629,8 @@ export class CRMService {
         norm,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        opts.entity,
       );
       if (hit) {
         const label = field === 'mobileNo' ? 'mobile number' : 'phone number';
@@ -1589,6 +1650,7 @@ export class CRMService {
     entityType: 'lead' | 'contact';
     excludeLeadId?: string;
     excludeContactId?: string;
+    leadVertical?: 'property_listing' | 'property_management';
   }): Promise<{
     conflicts: Record<
       string,
@@ -1622,6 +1684,7 @@ export class CRMService {
       mobileNo: q.mobileNo,
       phone: q.phone,
       linkedinUrl: q.linkedinUrl,
+      leadVertical: q.leadVertical,
     };
 
     const excludeLeadIds = new Set<string>();
@@ -1638,11 +1701,15 @@ export class CRMService {
       existingContact: existingContact || undefined,
     });
 
+    const leadVertical = q.leadVertical || (existingLead as any)?.leadVertical;
+
     if (q.email != null && String(q.email).trim()) {
       const hit = await this.findEmailConflict(
         q.email,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        q.entityType,
       );
       if (hit) {
         const d = hit.doc;
@@ -1664,6 +1731,8 @@ export class CRMService {
         q.linkedinUrl,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        q.entityType,
       );
       if (hit) {
         const d = hit.doc;
@@ -1685,6 +1754,8 @@ export class CRMService {
         norm,
         excludeLeadIds,
         excludeContactIds,
+        leadVertical,
+        q.entityType,
       );
       if (hit) {
         const d = hit.doc;
@@ -2437,6 +2508,28 @@ export class CRMService {
           ? dto.leadVertical
           : undefined;
     }
+    if (typeof dto.role === 'string') {
+      const r = dto.role.trim().toUpperCase();
+      dto.role = ['USER', 'AGENT', 'OWNER'].includes(r) ? r : 'USER';
+    }
+    if (typeof dto.source === 'string') {
+      dto.source = dto.source.trim() || undefined;
+    }
+    if (typeof dto.address === 'string') {
+      dto.address = dto.address.trim() || undefined;
+    }
+    if (typeof dto.state === 'string') {
+      dto.state = dto.state.trim() || undefined;
+    }
+    if (typeof dto.pincode === 'string') {
+      dto.pincode = dto.pincode.trim() || undefined;
+    }
+    if (typeof dto.whatsappNumber === 'string') {
+      dto.whatsappNumber = this.sanitizePhone(dto.whatsappNumber);
+    }
+    if (typeof dto.planningToBuyLand === 'string') {
+      dto.planningToBuyLand = dto.planningToBuyLand.trim() || undefined;
+    }
     if (typeof dto.notes === 'string') {
       dto.notes = dto.notes.trim() || undefined;
     }
@@ -2883,7 +2976,7 @@ export class CRMService {
     );
     const skip = (page - 1) * pageSize;
     const outreachSelect =
-      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType leadVertical opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt';
+      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType leadVertical opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt role whatsappNumber address state pincode planningToBuyLand firstCallResponse lastCallAt callbackScheduledAt currentSubscriptionPlan image';
     const [data, count] = await Promise.all([
       this.leadModel
         .find(filter)
@@ -4668,6 +4761,27 @@ export class CRMService {
     }
     const activity = await new this.activityModel(dto).save();
 
+    if (dto.type === 'Call') {
+      const callLeadIds = uniqueInvolved.filter((i) => i.type === 'Lead').map((i) => i.id);
+      if (dto.relatedTo && (dto.relatedType === 'Lead' || !dto.relatedType)) {
+        try {
+          callLeadIds.push(new Types.ObjectId(String(dto.relatedTo)));
+        } catch {
+          /* ignore */
+        }
+      }
+      if (callLeadIds.length > 0) {
+        const updateCallFields: Record<string, any> = {
+          lastCallAt: new Date(),
+        };
+        const st = dto.metadata?.status || dto.status;
+        if (st && st !== 'Initiated') updateCallFields.callStatus = st;
+        await this.leadModel
+          .updateMany({ _id: { $in: callLeadIds } }, { $set: updateCallFields })
+          .exec();
+      }
+    }
+
     if (dto.type === 'Task') {
       void (async () => {
         try {
@@ -5856,6 +5970,23 @@ export class CRMService {
     mappedData: Record<string, unknown>,
     customFields: Record<string, string>,
   ): Promise<LeadDocument | null> {
+    // 1. Phone number (highest priority for 2 Bigha)
+    for (const field of ['mobileNo', 'phone', 'whatsappNumber'] as const) {
+      const digits = normalizePhoneDigits(String(mappedData[field] || ''));
+      if (digits.length < 7) continue;
+      const re = new RegExp(digits.split('').join('\\D*') + '$');
+      const byPhone = await this.leadModel
+        .findOne({
+          $or: [
+            { mobileNo: re },
+            { phone: re },
+          ],
+        })
+        .exec();
+      if (byPhone) return byPhone;
+    }
+
+    // 2. Email fallback
     const email = normalizeEmail(String(mappedData.email || ''));
     if (email) {
       const byEmail = await this.leadModel
@@ -5868,6 +5999,8 @@ export class CRMService {
         .exec();
       if (byEmail) return byEmail;
     }
+
+    // 3. HubSpot ID
     const hs =
       customFields.hubspot_contact_id ||
       mappedData.hubspotContactId ||
@@ -5880,6 +6013,8 @@ export class CRMService {
         .exec();
       if (byHs) return byHs;
     }
+
+    // 4. LinkedIn
     const li = linkedInProfileKey(String(mappedData.linkedinUrl || ''));
     if (li) {
       const byLi = await this.leadModel
@@ -5894,17 +6029,7 @@ export class CRMService {
         .exec();
       if (byLi) return byLi;
     }
-    for (const field of ['mobileNo', 'phone'] as const) {
-      const digits = normalizePhoneDigits(String(mappedData[field] || ''));
-      if (digits.length < 7) continue;
-      const re = new RegExp(digits.split('').join('\\D*'));
-      const byPhone = await this.leadModel
-        .findOne({
-          $or: [{ mobileNo: { $regex: re } }, { phone: { $regex: re } }],
-        })
-        .exec();
-      if (byPhone) return byPhone;
-    }
+
     return null;
   }
 
@@ -5980,6 +6105,8 @@ export class CRMService {
       existingClientCount: 0,
       invalidRoleCount: 0,
       duplicateStrategy: strategy,
+      failedRows: [],
+      skippedRows: [],
       createdAt: Date.now(),
     });
     void this.importFromExcel(
@@ -6023,6 +6150,8 @@ export class CRMService {
       existingClientCount: job.existingClientCount,
       invalidRoleCount: job.invalidRoleCount,
       duplicateStrategy: job.duplicateStrategy,
+      failedRows: job.failedRows || [],
+      skippedRows: job.skippedRows || [],
       error: job.error,
       progress:
         job.total > 0 ? Math.round((job.processed / job.total) * 100) : 100,
@@ -6151,8 +6280,27 @@ export class CRMService {
               if (leadClient.invalidRole) job.invalidRoleCount++;
             }
           }
-          this.stripImportRoutingFields(mappedData);
-          this.stripLeadImportClientRoutingFields(mappedData);
+          if (mappedData.role) {
+            const r = String(mappedData.role).trim().toUpperCase();
+            if (['USER', 'AGENT', 'OWNER', 'BUILDER', 'BUYER', 'TENANT', 'SELLER', '2 BIGHA USER', 'REAL ESTATE AGENT', 'PROPERTY OWNER'].includes(r)) {
+              if (r === '2 BIGHA USER') mappedData.role = 'USER';
+              else if (r === 'REAL ESTATE AGENT') mappedData.role = 'AGENT';
+              else if (r === 'PROPERTY OWNER') mappedData.role = 'OWNER';
+              else mappedData.role = r;
+            }
+          }
+          if (mappedData.planningToBuyLand) {
+            const p = String(mappedData.planningToBuyLand).trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (p.includes('exploring')) mappedData.planningToBuyLand = 'just_exploring';
+            else if (p.includes('within_1') || p.includes('1_month')) mappedData.planningToBuyLand = 'within_1_month';
+            else if (p.includes('1') && p.includes('3')) mappedData.planningToBuyLand = '1–3_months';
+            else if (p.includes('3') && p.includes('6')) mappedData.planningToBuyLand = '3–6_months';
+          }
+          if (mappedData.leadVertical) {
+            const v = String(mappedData.leadVertical).trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (v.includes('listing')) mappedData.leadVertical = 'property_listing';
+            else if (v.includes('management')) mappedData.leadVertical = 'property_management';
+          }
           const leadRequestedRid =
             mappedData.recordId != null &&
               String(mappedData.recordId).trim() !== ''
@@ -6608,15 +6756,47 @@ export class CRMService {
 
         if (rowOutcome !== 'failed') {
           if (rowOutcome === 'skipped') {
-            if (job) this.bumpImportJobOutcome(job, 'skipped');
+            if (job) {
+              this.bumpImportJobOutcome(job, 'skipped');
+              job.skippedRows.push({
+                rowNumber: rowIndex,
+                rowData: row,
+                reason: `Duplicate record skipped (existing lead with matching phone or email)`,
+              });
+            }
           } else {
             count++;
             if (job) this.bumpImportJobOutcome(job, rowOutcome);
           }
         }
       } catch (err) {
-        console.error(`Failed to import row:`, (err as Error).message);
-        rowOutcome = 'failed';
+        const errMsg = (err as Error).message || 'Failed to import row';
+        console.error(`Failed to import row:`, errMsg);
+        const isDuplicateConflict =
+          errMsg.toLowerCase().includes('already used by') ||
+          errMsg.toLowerCase().includes('duplicate') ||
+          errMsg.includes('E11000');
+
+        if (isDuplicateConflict) {
+          rowOutcome = 'skipped';
+          if (job) {
+            this.bumpImportJobOutcome(job, 'skipped');
+            job.skippedRows.push({
+              rowNumber: rowIndex,
+              rowData: row,
+              reason: errMsg,
+            });
+          }
+        } else {
+          rowOutcome = 'failed';
+          if (job) {
+            job.failedRows.push({
+              rowNumber: rowIndex,
+              rowData: row,
+              reason: errMsg,
+            });
+          }
+        }
       }
       if (job) {
         job.processed = rowIndex;

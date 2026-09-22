@@ -170,6 +170,53 @@ export class Lead {
   @Prop({ trim: true, index: true })
   group?: string;
 
+  /** Role option: User (USER), Real Estate Agent (AGENT), Property Owner (OWNER) */
+  @Prop({ enum: ['USER', 'AGENT', 'OWNER'], default: 'USER', index: true })
+  role?: 'USER' | 'AGENT' | 'OWNER';
+
+  /** WhatsApp phone number */
+  @Prop({ trim: true, index: true })
+  whatsappNumber?: string;
+
+  /** Free-text mailing address */
+  @Prop({ trim: true })
+  address?: string;
+
+  /** State name */
+  @Prop({ trim: true, index: true })
+  state?: string;
+
+  /** Indian pincode */
+  @Prop({ trim: true })
+  pincode?: string;
+
+  /** Lead source (e.g. Website, Referral, Google Lead, Meta Ads) */
+  @Prop({ trim: true, index: true })
+  source?: string;
+
+  /** Planning to buy land timeframe */
+  @Prop({
+    enum: ['just_exploring', 'within_1_month', '1–3_months', '3–6_months', '1-3_months', '3-6_months'],
+    index: true,
+  })
+  planningToBuyLand?: string;
+
+  /** First call outcome / notes */
+  @Prop({ trim: true })
+  firstCallResponse?: string;
+
+  /** Timestamp of the most recent outbound/inbound call */
+  @Prop({ index: true })
+  lastCallAt?: Date;
+
+  /** Scheduled callback date and time */
+  @Prop({ index: true })
+  callbackScheduledAt?: Date;
+
+  /** Active subscription plan label */
+  @Prop({ trim: true })
+  currentSubscriptionPlan?: string;
+
   /** Free-text note captured on the Add Lead / Edit Lead form. */
   @Prop()
   notes?: string;
@@ -286,6 +333,10 @@ export class Lead {
   /** 2bigha-side lead id once synced (see TwoBighaLeadService, createLead). Unset until a sync attempt succeeds. */
   @Prop({ trim: true, index: true })
   twobighaLeadId?: string;
+
+  /** Meta Leadgen ID — unique identifier from Meta Lead Ads, used for dedup and CAPI attribution. */
+  @Prop({ trim: true, sparse: true, unique: true, index: true })
+  metaLeadId?: string;
 
   /** 'skipped' = no `clientId` linked yet, or the linked Client hasn't synced to 2bigha itself — createLead needs a 2bigha platform-user id. */
   @Prop({

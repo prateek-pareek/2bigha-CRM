@@ -22,10 +22,14 @@ export interface TrackedCrmImport {
   mergedCount?: number;
   replacedCount?: number;
   skippedCount?: number;
+  invalidCount?: number;
   /** Leads-only: rows whose Role/WhatsApp/Address matched an existing Client. */
   existingClientCount?: number;
   /** Leads-only: rows whose Role column wasn't OWNER/AGENT/USER (defaulted to USER). */
   invalidRoleCount?: number;
+  failedRows?: { rowNumber: number; rowData?: any; reason: string }[];
+  skippedRows?: { rowNumber: number; rowData?: any; reason: string }[];
+  invalidRows?: { rowNumber: number; rowData?: any; errors: string[] }[];
 }
 
 interface CrmImportStore {

@@ -21,10 +21,19 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'salutation', label: 'Salutation' },
   { key: 'firstName', label: 'First Name', pinned: true },
   { key: 'lastName', label: 'Last Name' },
-  { key: 'email', label: 'Email', pinned: true },
+  { key: 'mobileNo', label: 'Phone', pinned: true },
+  { key: 'whatsappNumber', label: 'WhatsApp' },
+  { key: 'email', label: 'Email' },
   { key: 'additionalEmails', label: 'Additional emails' },
+  { key: 'address', label: 'Address' },
+  { key: 'state', label: 'State' },
+  { key: 'role', label: 'Role', pinned: true },
+  { key: 'leadCategory', label: 'Lead Type' },
+  { key: 'source', label: 'Lead Source' },
+  { key: 'group', label: 'Group' },
+  { key: 'planningToBuyLand', label: 'Planning To Buy Land' },
+  { key: 'notes', label: 'Note' },
   { key: 'gender', label: 'Gender' },
-  { key: 'mobileNo', label: 'Mobile' },
   { key: 'phone', label: 'Phone (alternate)' },
   { key: 'relatedService', label: 'Related service', recordOnly: true },
   /** Shown when editing a lead (create panel omits this field; API sets owner on create). */
@@ -33,11 +42,6 @@ export const LEAD_FIELD_DEFS: CrmFieldDef[] = [
   { key: 'stage', label: 'Stage' },
   { key: 'status', label: 'Status (legacy)' },
   { key: 'callStatus', label: 'Call Status' },
-  /** Add Lead "Lead Type" (Reference/Investor/Lead/Buyer lead) — options managed in Settings. */
-  { key: 'leadCategory', label: 'Lead Type' },
-  /** Add Lead "Group" (Seller/Buyer) — options managed in Settings. */
-  { key: 'group', label: 'Group' },
-  { key: 'notes', label: 'Notes' },
   { key: 'createdAt', label: 'Created', recordOnly: true },
 ];
 

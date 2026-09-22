@@ -371,6 +371,7 @@ const crmGroups = [
                     { name: 'Property Management', href: '/crm/property-listings?bucket=pm', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
                 ],
             },
+            { name: 'PM Leads', href: '/crm/pm/leads', icon: CrmNavIcon.Leads, permission: 'pm-leads:read' },
             { name: 'Approval Queue', href: '/crm/property-approval', icon: CrmNavIcon.Home, permission: 'property_listings:read' },
             { name: 'Visit tracking', href: '/crm/visits', icon: CrmNavIcon.MapPin, permission: 'leads:read' },
         ],
@@ -490,7 +491,7 @@ const crmGroups = [
             { name: 'Settings', href: '/crm/settings', icon: CrmNavIcon.Settings, permission: 'settings:read' },
             { name: 'Users & access', href: '/crm/settings/users', icon: CrmNavIcon.Users, permission: 'settings:admin' },
             { name: 'Roles', href: '/crm/settings/roles', icon: CrmNavIcon.UsersGroup, permission: 'settings:admin' },
-            { name: 'Subscriptions', href: '/crm/subscriptions', icon: CreditCard, permission: 'settings:admin' },
+            // { name: 'Subscriptions', href: '/crm/subscriptions', icon: CreditCard, permission: 'settings:admin' },
         ],
     },
 ];

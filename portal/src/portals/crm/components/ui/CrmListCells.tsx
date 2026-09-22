@@ -578,14 +578,14 @@ export function CrmHoverActionIcon({
   );
 }
 
-const ROW_ACTIONS_LINGER_MS = 8000;
+const ROW_ACTIONS_LINGER_MS = 250;
 
 type CrmRowQuickActionsProps = {
   /** Quick icons (Call / WhatsApp / Property / Farm). */
   quick: ReactNode;
   /** Trailing ⋮ menu — shown in the end Action column. */
   menu: ReactNode;
-  /** How long the mid-scroll popup stays after mouse leaves (default 8s). */
+  /** How long the mid-scroll popup stays after mouse leaves (default 250ms). */
   lingerMs?: number;
   className?: string;
 };
@@ -676,7 +676,7 @@ export function CrmRowQuickActions({
       top: rowRect.top + rowRect.height / 2,
       right: Math.max(12, window.innerWidth - scrollRect.right + 12),
       transform: "translateY(-50%)",
-      zIndex: 9999,
+      zIndex: 40,
     });
   }, []);
 

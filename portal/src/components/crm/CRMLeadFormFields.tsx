@@ -104,6 +104,7 @@ export default function CRMLeadFormFields({
     const fd = new FormData(form);
     const conflicts = await fetchPersonIdentifierConflicts(token, {
       ...identifierContext,
+      leadVertical: (identifierContext as any)?.leadVertical,
       email: String(fd.get('email') ?? '').trim() || undefined,
       mobileNo: combinePhoneFromForm(fd, 'mobileNo') || undefined,
       phone: combinePhoneFromForm(fd, 'phone') || undefined,

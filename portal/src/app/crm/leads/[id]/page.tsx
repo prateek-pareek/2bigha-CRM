@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Building2, Phone, EyeOff, ChevronDown, MapPin, Lock, ThumbsUp, CheckCircle2, History, ClipboardList } from 'lucide-react';
+import { Mail, Calendar, CalendarClock, Edit2, ChevronLeft, Trash2, Share2, RefreshCw, User, Settings2, MessageSquare, Info, Building2, Phone, EyeOff, ChevronDown, MapPin, Lock, ThumbsUp, CheckCircle2, History, ClipboardList, CreditCard } from 'lucide-react';
 import FollowUpSequenceModal from '@/components/crm/automation/playbooks/FollowUpSequenceModal';
 import FollowUpSequenceCard from '@/components/crm/automation/playbooks/FollowUpSequenceCard';
 import Timeline from '@/components/crm/inbox/Timeline';
@@ -39,6 +39,7 @@ import CrmRecordOwnerCard from '@/components/crm/records/detail/CrmRecordOwnerCa
 import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
 import LeadOnboardingChecklistCard from '@/components/crm/records/detail/LeadOnboardingChecklistCard';
 import LeadUpdateHistoryPanel from '@/components/crm/records/detail/LeadUpdateHistoryPanel';
+import LeadSubscriptionDetailsTab from '@/components/crm/records/detail/LeadSubscriptionDetailsTab';
 import CrmRecordPipelineStatus from '@/components/crm/records/detail/CrmRecordPipelineStatus';
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
 import CrmRecordSidebarGroup from '@/components/crm/records/detail/CrmRecordSidebarGroup';
@@ -67,7 +68,13 @@ export default function LeadDetailPage() {
   /** "View" quick action (Lead Action Menu) — same detail page, edit entry points hidden. */
   const isReadOnlyView = searchParams.get('readonly') === '1';
   const { hasAccess } = usePermissions();
+  const fromParam = searchParams.get('from');
   const [lead, setLead] = useState<any>(null);
+  const isPm = lead?.leadVertical === 'property_management' || fromParam === '/crm/pm/leads';
+  const leadsListHref = isPm ? '/crm/pm/leads' : '/crm/leads';
+  const leadsListLabel = isPm ? 'PM Leads' : 'Leads';
+  const canWrite = hasAccess('leads:write') || (isPm && hasAccess('pm-leads:write' as any));
+  const canDelete = hasAccess('leads:delete') || (isPm && hasAccess('pm-leads:delete' as any));
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -77,7 +84,7 @@ export default function LeadDetailPage() {
   const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
   const [isFollowUpSeqOpen, setIsFollowUpSeqOpen] = useState(false);
   const [followUpSeqInitialTab, setFollowUpSeqInitialTab] = useState<
-    'first-outreach' | 'follow-ups'
+    'first-outreach' | 'follow-ups' | 'reminder'
   >('first-outreach');
   const [followUpRefreshKey, setFollowUpRefreshKey] = useState(0);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
@@ -97,7 +104,7 @@ export default function LeadDetailPage() {
   const [layoutTickRecord, setLayoutTickRecord] = useState(0);
   const [isSharing, setIsSharing] = useState(false);
   const [emailTracking, setEmailTracking] = useState<CrmEmailTrackingRow[]>([]);
-  const [activeTab, setActiveTab] = useState<'Activity' | 'Details' | 'History'>('Activity');
+  const [activeTab, setActiveTab] = useState<'Activity' | 'Details' | 'Subscription' | 'History'>('Activity');
   const [recordMetaLoaded, setRecordMetaLoaded] = useState(false);
   const entityId = useMemo(
     () => String((lead?._id ?? recordId) || ''),
@@ -366,7 +373,7 @@ export default function LeadDetailPage() {
     .filter(Boolean);
 
   const updateLeadStage = async (newStage: string) => {
-    if (!newStage || newStage === stage || !hasAccess('leads:write')) return;
+    if (!newStage || newStage === stage || !canWrite) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${CRM_API_URL}/crm/leads/${recordId}`, {
@@ -425,6 +432,7 @@ export default function LeadDetailPage() {
   }
 
   quickActions.push(
+    /* Hidden per request: Open tracking & Follow-ups buttons
     {
       id: 'open-tracking',
       label: 'Open tracking',
@@ -443,6 +451,17 @@ export default function LeadDetailPage() {
       title: 'Auto emails or personal Email / WhatsApp reminder',
       onClick: () => {
         setFollowUpSeqInitialTab(hasEmail ? 'follow-ups' : 'first-outreach');
+        setIsFollowUpSeqOpen(true);
+      },
+    },
+    */
+    {
+      id: 'reminder',
+      label: 'Reminder',
+      icon: <CalendarClock size={14} />,
+      title: 'Set a personal Email or WhatsApp reminder',
+      onClick: () => {
+        setFollowUpSeqInitialTab('reminder');
         setIsFollowUpSeqOpen(true);
       },
     },
@@ -528,17 +547,18 @@ export default function LeadDetailPage() {
   const recordTabs = [
     { id: 'Activity' as const, label: 'Activity', icon: MessageSquare },
     { id: 'Details' as const, label: 'Details', icon: Info },
+    { id: 'Subscription' as const, label: 'Subscription Details', icon: CreditCard },
     { id: 'History' as const, label: 'History', icon: History },
   ];
 
   return (
     <div className={cn(crmRecordChrome.page, 'animate-in fade-in duration-300')}>
       <CrmPageHeader
-        title="Leads"
+        title={leadsListLabel}
         bordered={false}
         breadcrumbs={[
           { label: 'Home', href: '/crm' },
-          { label: 'Leads', href: '/crm/leads' },
+          { label: leadsListLabel, href: leadsListHref },
           { label: displayName },
         ]}
         actions={
@@ -556,7 +576,7 @@ export default function LeadDetailPage() {
             >
               Refresh
             </CrmButton>
-            {hasAccess('leads:write') ? (
+            {canWrite ? (
               <CrmButton
                 type="button"
                 onClick={() => setIsConvertModalOpen(true)}
@@ -566,7 +586,7 @@ export default function LeadDetailPage() {
                 Convert
               </CrmButton>
             ) : null}
-            {hasAccess('leads:delete') ? (
+            {canDelete ? (
               <CrmButton
                 type="button"
                 variant="secondary"
@@ -579,7 +599,7 @@ export default function LeadDetailPage() {
                       method: 'DELETE',
                       headers: { Authorization: `Bearer ${token}` },
                     });
-                    if (res.ok) router.push('/crm/leads');
+                    if (res.ok) router.push(leadsListHref);
                   }
                 }}
               >
@@ -590,9 +610,9 @@ export default function LeadDetailPage() {
         }
       />
 
-      <button type="button" onClick={() => router.push('/crm/leads')} className={crmRecordChrome.backLink}>
+      <button type="button" onClick={() => router.push(leadsListHref)} className={crmRecordChrome.backLink}>
         <ChevronLeft size={14} />
-        Back to Leads
+        Back to {leadsListLabel}
       </button>
 
       {/* Profile hero — CRMS contact-head */}
@@ -633,7 +653,7 @@ export default function LeadDetailPage() {
               <Lock size={12} />
               Lead
             </span>
-            {pipelineStages.length > 0 && hasAccess('leads:write') ? (
+            {pipelineStages.length > 0 && canWrite ? (
               <div className="relative inline-flex" ref={stageMenuRef}>
                 <button
                   type="button"
@@ -705,7 +725,7 @@ export default function LeadDetailPage() {
             secondaryActions={secondaryActions}
             className="!mt-0 !border-0 !pt-3"
           >
-            {hasAccess('leads:write') && (
+            {canWrite && (
               <div className="relative inline-flex items-center">
                 <select
                   value={lead.pipeline?._id || lead.pipeline || ''}
@@ -765,7 +785,7 @@ export default function LeadDetailPage() {
         <CrmRecordPipelineStatus
           stages={pipelineStages}
           currentStage={stage}
-          onSelect={hasAccess('leads:write') ? updateLeadStage : undefined}
+          onSelect={canWrite ? updateLeadStage : undefined}
         />
       ) : null}
 
@@ -855,6 +875,16 @@ export default function LeadDetailPage() {
                 </div>
               )}
 
+              {activeTab === 'Subscription' && (
+                <div className="animate-in fade-in duration-300">
+                  <LeadSubscriptionDetailsTab
+                    leadId={entityId}
+                    refreshKey={propertiesRefreshKey}
+                    onRefresh={() => setPropertiesRefreshKey((n) => n + 1)}
+                  />
+                </div>
+              )}
+
               {activeTab === 'History' && (
                 <div className="animate-in fade-in duration-300">
                   <LeadUpdateHistoryPanel entityId={entityId} bare emptyLabel="No updates have been recorded for this lead yet." />
@@ -892,7 +922,7 @@ export default function LeadDetailPage() {
             <CrmRecordOwnerCard
               ownerLabel={lead.leadOwner}
               leadId={entityId}
-              canReassign={hasAccess('leads:write')}
+              canReassign={canWrite}
               onReassigned={() => void fetchLead()}
             />
             <CrmRecordRemindersPanel
