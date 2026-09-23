@@ -16,6 +16,11 @@ import {
   Phone,
   Lock,
   RefreshCw,
+  Building2,
+  Receipt,
+  Gauge,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Timeline from '@/components/crm/inbox/Timeline';
@@ -30,7 +35,12 @@ import { getVisibleFieldKeysOrdered } from '@/lib/crm/crm-field-layout';
 import { contactWhatsappWaId } from '@/lib/crm/crm-messaging-links';
 import EmailEngagementPanel from '@/components/crm/email/engagement/EmailEngagementPanel';
 import ClientAssociationsPanel from '@/components/crm/records/associations/ClientAssociationsPanel';
-import TwoBighaClientPlatformPanel from '@/components/crm/platform/TwoBighaClientPlatformPanel';
+import TwoBighaClientPlatformPanel from '@/portals/crm/components/platform/TwoBighaClientPlatformPanel';
+import Client2BighaPropertiesTab from '@/portals/crm/components/clients/Client2BighaPropertiesTab';
+import Client2BighaInvoicesTab from '@/portals/crm/components/clients/Client2BighaInvoicesTab';
+import Client2BighaUsageTab from '@/portals/crm/components/clients/Client2BighaUsageTab';
+import Client2BighaRequestsTab from '@/portals/crm/components/clients/Client2BighaRequestsTab';
+import Client2BighaManagedTab from '@/portals/crm/components/clients/Client2BighaManagedTab';
 import TwoBighaVisitTrackingPanel from '@/components/crm/visits/TwoBighaVisitTrackingPanel';
 import CrmRecordQuickActions, { type CrmRecordQuickAction } from '@/components/crm/records/detail/CrmRecordQuickActions';
 import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetailTabs';
@@ -72,7 +82,9 @@ export default function ClientDetailPage() {
   const [layoutTickRecord, setLayoutTickRecord] = useState(0);
   const [isSharing, setIsSharing] = useState(false);
   const [emailTracking, setEmailTracking] = useState<CrmEmailTrackingRow[]>([]);
-  const [activeTab, setActiveTab] = useState<'Activity' | 'Details'>('Activity');
+  const [activeTab, setActiveTab] = useState<
+    'Activity' | 'Details' | 'Properties' | 'Invoices' | 'Usage' | 'Requests' | 'Managed'
+  >('Activity');
   const [recordMetaLoaded, setRecordMetaLoaded] = useState(false);
 
   const emailLookups = useMemo(() => buildEmailTrackingLookup(emailTracking), [emailTracking]);
@@ -272,6 +284,11 @@ export default function ClientDetailPage() {
   const recordTabs = [
     { id: 'Activity' as const, label: 'Activity', icon: MessageSquare },
     { id: 'Details' as const, label: 'Details', icon: Info },
+    { id: 'Properties' as const, label: 'Properties', icon: Building2 },
+    { id: 'Invoices' as const, label: 'Invoices', icon: Receipt },
+    { id: 'Usage' as const, label: 'Plan & Quotas', icon: Gauge },
+    { id: 'Requests' as const, label: 'Requests', icon: Clock },
+    { id: 'Managed' as const, label: 'Managed PM', icon: ShieldCheck },
   ];
 
   return (
@@ -456,6 +473,36 @@ export default function ClientDetailPage() {
                     Client properties
                   </h3>
                   <CRMClientRecordFields client={client} visibleKeys={visibleRecordKeys} customFieldDefs={customFieldDefs} />
+                </div>
+              )}
+
+              {activeTab === 'Properties' && (
+                <div className="animate-in fade-in duration-300">
+                  <Client2BighaPropertiesTab clientId={client?.twobighaUserId || recordId} />
+                </div>
+              )}
+
+              {activeTab === 'Invoices' && (
+                <div className="animate-in fade-in duration-300">
+                  <Client2BighaInvoicesTab clientId={client?.twobighaUserId || recordId} />
+                </div>
+              )}
+
+              {activeTab === 'Usage' && (
+                <div className="animate-in fade-in duration-300">
+                  <Client2BighaUsageTab clientId={client?.twobighaUserId || recordId} />
+                </div>
+              )}
+
+              {activeTab === 'Requests' && (
+                <div className="animate-in fade-in duration-300">
+                  <Client2BighaRequestsTab clientId={client?.twobighaUserId || recordId} />
+                </div>
+              )}
+
+              {activeTab === 'Managed' && (
+                <div className="animate-in fade-in duration-300">
+                  <Client2BighaManagedTab clientId={client?.twobighaUserId || recordId} />
                 </div>
               )}
             </div>
