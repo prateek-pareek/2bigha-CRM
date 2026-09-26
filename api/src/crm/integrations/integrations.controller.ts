@@ -157,6 +157,12 @@ export class IntegrationsController {
     return this.metaConversionsApiService.testConnection();
   }
 
+  @Post('meta-leadgen/sync')
+  @Permissions('settings:write')
+  async syncMetaLeadsNow() {
+    return this.metaLeadAdsService.pollForNewLeads();
+  }
+
   @Get('teams')
   @Permissions('settings:write')
   findAllTeams() {

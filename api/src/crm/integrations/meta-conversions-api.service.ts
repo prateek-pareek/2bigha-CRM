@@ -122,7 +122,7 @@ export class MetaConversionsApiService {
 
       if (!res.ok) {
         const errMsg = data?.error?.message || `HTTP ${res.status}`;
-        this.logger.error(`CAPI event failed for leadgen ${params.metaLeadId}: ${errMsg}`);
+        this.logger.warn(`CAPI event skipped for leadgen ${params.metaLeadId}: ${errMsg}`);
         return { success: false, error: errMsg };
       }
 
@@ -132,7 +132,7 @@ export class MetaConversionsApiService {
       );
       return { success: true };
     } catch (e: any) {
-      this.logger.error(`CAPI event error for leadgen ${params.metaLeadId}: ${e?.message}`);
+      this.logger.warn(`CAPI event error for leadgen ${params.metaLeadId}: ${e?.message}`);
       return { success: false, error: e?.message || 'Network error' };
     }
   }
