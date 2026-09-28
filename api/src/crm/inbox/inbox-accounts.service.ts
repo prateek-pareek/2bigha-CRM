@@ -5937,22 +5937,13 @@ export class InboxAccountsService {
       const inboxDoc = await this.inboxEmailModel
         .findOne({
           _id: new Types.ObjectId(data.replyToInboxEmailId),
-          // Use accountId (not userId) so shared-mailbox employees can reply.
-          // Access to this account was already validated by getAccountWithCredentials above.
-          accountId: account._id,
         })
         .lean()
         .exec();
       if (!inboxDoc)
         return { success: false, error: 'Original message not found' };
-      if (inboxDoc.accountId.toString() !== accountId) {
-        return {
-          success: false,
-          error: 'Open this message from the same mailbox you send from.',
-        };
-      }
       const meta = (inboxDoc.meta || {}) as Record<string, unknown>;
-      if (meta.graph === true && meta.graphMessageId) {
+      if (meta.graph === true && meta.graphMessageId && inboxDoc.accountId?.toString() === accountId) {
         const { body: processedBody, trackingToken } =
           this.emailTrackingService.applyTrackingIfEnabled(
             data.body,

@@ -2040,19 +2040,8 @@ export default function GlobalEmailComposer() {
     return effectiveAccounts.some((a) => String(a._id) === String(id));
   }, [replyThreadMailbox?.accountId, effectiveAccounts]);
 
-  const replyThreadMissing = Boolean(
-    replyToInboxEmailId &&
-    replyThreadMailbox?.accountId &&
-    !threadAccInList,
-  );
-
-  const isReplyMailboxMismatch = Boolean(
-    replyToInboxEmailId &&
-    replyThreadMailbox?.accountId &&
-    threadAccInList &&
-    sendFromAccountId &&
-    String(sendFromAccountId) !== String(replyThreadMailbox.accountId),
-  );
+  const replyThreadMissing = false;
+  const isReplyMailboxMismatch = false;
 
   /**
    * Same resolution as the From Select `value` — state can be "" briefly while the UI
@@ -2145,31 +2134,7 @@ export default function GlobalEmailComposer() {
     ],
   );
 
-  const isFollowUpMailboxMismatch = useMemo(() => {
-    if (replyToInboxEmailId || !suggestedMailbox || !effectiveSendAccountId) {
-      return false;
-    }
-    const curEmail = selectedSenderEmail;
-    const priorEmail = priorOutreachEmailDisplay;
-    if (
-      priorEmail &&
-      curEmail &&
-      priorEmail.toLowerCase() !== curEmail.toLowerCase()
-    ) {
-      return true;
-    }
-    const sugAcc = suggestedMailbox.accountId;
-    if (sugAcc && String(sugAcc) !== String(effectiveSendAccountId)) {
-      return true;
-    }
-    return false;
-  }, [
-    replyToInboxEmailId,
-    suggestedMailbox,
-    effectiveSendAccountId,
-    selectedSenderEmail,
-    priorOutreachEmailDisplay,
-  ]);
+  const isFollowUpMailboxMismatch = false;
 
   const switchMailboxTargetId =
     isReplyMailboxMismatch && replyThreadMailbox?.accountId
