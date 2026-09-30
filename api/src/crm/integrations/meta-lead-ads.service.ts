@@ -44,6 +44,20 @@ const KNOWN_FIELD_KEYS: Record<string, string> = {
   planning_to_buy_land: 'planningToBuyLand',
 };
 
+function normalizePlanningToBuyLand(val?: string): string | undefined {
+  if (!val) return undefined;
+  const raw = String(val).trim();
+  if (!raw) return undefined;
+  const s = raw.toLowerCase().replace(/[\s-]+/g, '_');
+  if (s.includes('explor') || s.includes('dummy') || s.includes('test')) return 'just_exploring';
+  if (s.includes('within_1') || s.includes('1_month') || s.includes('immediate') || s.includes('1month')) return 'within_1_month';
+  if (s.includes('1_3') || s.includes('1–3') || s.includes('1-3') || (s.includes('1') && s.includes('3'))) return '1–3_months';
+  if (s.includes('3_6') || s.includes('3–6') || s.includes('3-6') || (s.includes('3') && s.includes('6'))) return '3–6_months';
+  const valid = ['just_exploring', 'within_1_month', '1–3_months', '3–6_months', '1-3_months', '3-6_months'];
+  if (valid.includes(raw)) return raw;
+  return 'just_exploring';
+}
+
 type MetaLeadAdsConfig = {
   pageId: string;
   pageAccessToken: string;
@@ -251,7 +265,7 @@ export class MetaLeadAdsService {
       state: known.state || customFields.state || customFields.State || undefined,
       pincode: known.zip || customFields.pincode || customFields.zip || undefined,
       address: [known.tehsil, known.district, known.city].filter(Boolean).join(', ') || customFields.address || undefined,
-      planningToBuyLand: known.planningToBuyLand || undefined,
+      planningToBuyLand: normalizePlanningToBuyLand(known.planningToBuyLand),
       source: `Meta Lead Ads — ${formName}`,
       status: 'New',
       stage: 'New',

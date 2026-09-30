@@ -2528,7 +2528,19 @@ export class CRMService {
       dto.whatsappNumber = this.sanitizePhone(dto.whatsappNumber);
     }
     if (typeof dto.planningToBuyLand === 'string') {
-      dto.planningToBuyLand = dto.planningToBuyLand.trim() || undefined;
+      const p = dto.planningToBuyLand.trim();
+      const s = p.toLowerCase().replace(/[\s-]+/g, '_');
+      if (s.includes('explor') || s.includes('dummy') || s.includes('test')) {
+        dto.planningToBuyLand = 'just_exploring';
+      } else if (s.includes('within_1') || s.includes('1_month') || s.includes('immediate') || s.includes('1month')) {
+        dto.planningToBuyLand = 'within_1_month';
+      } else if (s.includes('1_3') || s.includes('1–3') || s.includes('1-3') || (s.includes('1') && s.includes('3'))) {
+        dto.planningToBuyLand = '1–3_months';
+      } else if (s.includes('3_6') || s.includes('3–6') || s.includes('3-6') || (s.includes('3') && s.includes('6'))) {
+        dto.planningToBuyLand = '3–6_months';
+      } else {
+        dto.planningToBuyLand = p || undefined;
+      }
     }
     if (typeof dto.notes === 'string') {
       dto.notes = dto.notes.trim() || undefined;

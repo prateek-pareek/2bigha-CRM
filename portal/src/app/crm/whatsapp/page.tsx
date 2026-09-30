@@ -156,8 +156,9 @@ export default function WhatsAppChatsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [filterAssigneeId, setFilterAssigneeId] = useState("");
   const [filterUsers, setFilterUsers] = useState<any[]>([]);
-  const [grantAccessModalOpen, setGrantAccessModalOpen] = useState(false);
   const [linkLeadModalOpen, setLinkLeadModalOpen] = useState(false);
+  const [leadModalMode, setLeadModalMode] = useState<"create" | "link">("create");
+  const [grantAccessModalOpen, setGrantAccessModalOpen] = useState(false);
   const [callModalOpen, setCallModalOpen] = useState(false);
   const [addPropertyModalOpen, setAddPropertyModalOpen] = useState(false);
   const [sharePropertyModalOpen, setSharePropertyModalOpen] = useState(false);
@@ -760,13 +761,28 @@ export default function WhatsAppChatsPage() {
                     ) : (
                       <>
                         <p className="text-sm font-semibold">{formatPhone(selectedWaId)}</p>
-                        <button
-                          type="button"
-                          onClick={() => setLinkLeadModalOpen(true)}
-                          className="flex items-center gap-1 text-[11px] text-white/70 hover:text-white hover:underline"
-                        >
-                          <Link2 size={10} /> Link to lead
-                        </button>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLeadModalMode("create");
+                              setLinkLeadModalOpen(true);
+                            }}
+                            className="flex items-center gap-1 text-[11px] text-emerald-950 font-bold bg-emerald-300 hover:bg-white px-2 py-0.5 rounded-full transition shadow-xs"
+                          >
+                            <UserPlus size={11} /> + Create Lead
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLeadModalMode("link");
+                              setLinkLeadModalOpen(true);
+                            }}
+                            className="flex items-center gap-1 text-[11px] text-white/75 hover:text-white hover:underline"
+                          >
+                            <Link2 size={10} /> Link existing
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>
@@ -1091,6 +1107,7 @@ export default function WhatsAppChatsPage() {
           open={linkLeadModalOpen}
           onClose={() => setLinkLeadModalOpen(false)}
           waId={selectedWaId}
+          initialMode={leadModalMode}
           onSuccess={(lead) => setLinkedLead(lead)}
         />
       )}
