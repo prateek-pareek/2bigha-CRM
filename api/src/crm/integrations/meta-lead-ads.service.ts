@@ -31,10 +31,17 @@ const KNOWN_FIELD_KEYS: Record<string, string> = {
   company_name: 'organization',
   job_title: 'jobTitle',
   city: 'city',
+  district: 'district',
+  tehsil: 'tehsil',
+  taluka: 'tehsil',
   state: 'state',
   country: 'country',
   zip_code: 'zip',
   post_code: 'zip',
+  pincode: 'zip',
+  pin_code: 'zip',
+  'how_soon_are_you_planning_to_buy_land?': 'planningToBuyLand',
+  planning_to_buy_land: 'planningToBuyLand',
 };
 
 type MetaLeadAdsConfig = {
@@ -238,8 +245,13 @@ export class MetaLeadAdsService {
       email,
       phone: known.phone || undefined,
       mobileNo: known.phone || undefined,
+      whatsappNumber: known.phone || undefined,
       organization: known.organization || undefined,
       jobTitle: known.jobTitle || undefined,
+      state: known.state || customFields.state || customFields.State || undefined,
+      pincode: known.zip || customFields.pincode || customFields.zip || undefined,
+      address: [known.tehsil, known.district, known.city].filter(Boolean).join(', ') || customFields.address || undefined,
+      planningToBuyLand: known.planningToBuyLand || undefined,
       source: `Meta Lead Ads — ${formName}`,
       status: 'New',
       stage: 'New',
@@ -251,6 +263,10 @@ export class MetaLeadAdsService {
       },
       customFields: {
         ...customFields,
+        ...(known.city ? { city: known.city } : {}),
+        ...(known.district ? { district: known.district } : {}),
+        ...(known.tehsil ? { tehsil: known.tehsil } : {}),
+        ...(known.state ? { state: known.state } : {}),
         metaLeadgenId: leadgenId, // backward compat
         metaFormId: formId || undefined,
         metaPageId: pageId,
