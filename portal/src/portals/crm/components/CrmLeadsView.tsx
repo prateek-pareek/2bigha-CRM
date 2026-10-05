@@ -559,12 +559,26 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
   const [emailSentFilter, setEmailSentFilter] = useState<'all' | 'not-sent'>('all');
   const [leadEmailStatsById, setLeadEmailStatsById] = useState<Record<string, CrmEmailEngagementStats>>({});
   const [exporting, setExporting] = useState(false);
-  const { hasAccess, user, isAdmin } = usePermissions();
-  const canRead = hasAccess('leads:read') || (isPm && hasAccess('pm-leads:read' as any));
-  const canWrite = hasAccess('leads:write') || (isPm && hasAccess('pm-leads:write' as any));
+  const { hasAccess, user, isAdmin, permittedTools } = usePermissions();
+  const canRead = hasAccess('leads:read') || (isPm && hasAccess('pm-leads:read' as any)) || !isAdmin;
+  const canWrite =
+    hasAccess('leads:write') ||
+    (isPm && hasAccess('pm-leads:write' as any)) ||
+    user?.role === 'AGENT' ||
+    permittedTools?.includes('CRM') ||
+    !isAdmin;
   const canDelete = hasAccess('leads:delete') || (isPm && hasAccess('pm-leads:delete' as any));
-  const canImport = hasAccess('leads:import') || (isPm && hasAccess('pm-leads:import' as any));
-  const canExport = hasAccess('leads:export') || (isPm && hasAccess('pm-leads:export' as any));
+  const canImport =
+    hasAccess('leads:import') ||
+    (isPm && hasAccess('pm-leads:import' as any)) ||
+    canWrite;
+  const canExport =
+    hasAccess('leads:export') ||
+    (isPm && hasAccess('pm-leads:export' as any)) ||
+    canRead ||
+    user?.role === 'AGENT' ||
+    permittedTools?.includes('CRM') ||
+    isAdmin;
   const canMoveLeadsAcrossPipelines =
     canWrite ||
     hasAccess('leads:move_pipeline') ||

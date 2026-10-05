@@ -55,6 +55,7 @@ import {
   normalizeEmail,
   normalizeLinkedInUrl,
   normalizePhoneDigits,
+  formatIndianPhoneWithCountryCode,
 } from '../shared/crm-person-identifiers.util';
 import {
   extractEmailDomain,
@@ -2458,10 +2459,13 @@ export class CRMService {
       dto.pipeline = user.assignedLeadsPipeline;
     }
 
-    // Lead owner is always the user who creates the record (ignore client payload).
-    // Same label as sales workspace / getSalesAttention owner filter.
+    // Lead owner is auto-assigned to creator. If admin specified another owner, allow it;
+    // otherwise (and for all non-admins/agents), strictly auto-assign to themselves.
     if (user) {
-      dto.leadOwner = this.repOwnerLabelFromUser(user);
+      const isFullAdmin = this.isCrmWorkspaceAdmin(user);
+      if (!isFullAdmin || !dto.leadOwner) {
+        dto.leadOwner = this.repOwnerLabelFromUser(user);
+      }
       const rawId = user.userId ?? user._id;
       if (rawId && Types.ObjectId.isValid(String(rawId))) {
         dto.createdBy = new Types.ObjectId(String(rawId));
@@ -2469,6 +2473,8 @@ export class CRMService {
       // Denormalized so "search by Created By / agent name" doesn't need a $lookup.
       if (user.firstName || user.lastName) {
         dto.createdByName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      } else if (user.name) {
+        dto.createdByName = String(user.name).trim();
       }
     }
 
@@ -3964,6 +3970,22 @@ export class CRMService {
 
     const requestedContactRecordId = dto.recordId;
     delete dto.recordId;
+
+    if (user) {
+      const isFullAdmin = this.isCrmWorkspaceAdmin(user);
+      if (!isFullAdmin || !dto.leadOwner) {
+        dto.leadOwner = this.repOwnerLabelFromUser(user);
+      }
+      const rawId = user.userId ?? user._id;
+      if (rawId && Types.ObjectId.isValid(String(rawId))) {
+        dto.createdBy = new Types.ObjectId(String(rawId));
+      }
+      if (user.firstName || user.lastName) {
+        dto.createdByName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      } else if (user.name) {
+        dto.createdByName = String(user.name).trim();
+      }
+    }
 
     // Final sanitization for ObjectId fields
     dto.pipeline = this.toObjectIdSafe(dto.pipeline);
@@ -6196,6 +6218,16 @@ export class CRMService {
           mappedData.additionalEmails = parsed;
         }
 
+        if (mappedData.mobileNo !== undefined && mappedData.mobileNo !== null && String(mappedData.mobileNo).trim() !== '') {
+          mappedData.mobileNo = this.sanitizePhone(mappedData.mobileNo);
+        }
+        if (mappedData.phone !== undefined && mappedData.phone !== null && String(mappedData.phone).trim() !== '') {
+          mappedData.phone = this.sanitizePhone(mappedData.phone);
+        }
+        if (mappedData.whatsappNumber !== undefined && mappedData.whatsappNumber !== null && String(mappedData.whatsappNumber).trim() !== '') {
+          mappedData.whatsappNumber = this.sanitizePhone(mappedData.whatsappNumber);
+        }
+
         if (type === 'leads') {
           if (!mapping) {
             const fullName = String(
@@ -6345,9 +6377,18 @@ export class CRMService {
               entity: 'lead',
               merged: { ...mappedData },
             });
+            const isFullAdmin = this.isCrmWorkspaceAdmin(user);
+            const importedLeadOwner = (!isFullAdmin || !mappedData.leadOwner) && user
+              ? this.repOwnerLabelFromUser(user)
+              : mappedData.leadOwner;
             const importedLead = await this.leadModel.create({
               ...mappedData,
               customFields,
+              leadOwner: importedLeadOwner,
+              createdBy: user ? new Types.ObjectId(String(user.userId ?? user._id)) : undefined,
+              createdByName: user && (user.firstName || user.lastName)
+                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                : user?.name,
               ...(leadOrgId ? { associatedOrganizations: [leadOrgId] } : {}),
               recordId: await this.nextRecordId(
                 this.leadModel,
@@ -6486,9 +6527,18 @@ export class CRMService {
               entity: 'contact',
               merged: { ...mappedData },
             });
+            const isFullAdmin = this.isCrmWorkspaceAdmin(user);
+            const importedContactOwner = (!isFullAdmin || !mappedData.leadOwner) && user
+              ? this.repOwnerLabelFromUser(user)
+              : mappedData.leadOwner;
             const createdContact = await this.contactModel.create({
               ...mappedData,
               customFields,
+              leadOwner: importedContactOwner,
+              createdBy: user ? new Types.ObjectId(String(user.userId ?? user._id)) : undefined,
+              createdByName: user && (user.firstName || user.lastName)
+                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                : user?.name,
               ...(contactOrgId
                 ? { associatedOrganizations: [contactOrgId] }
                 : {}),
@@ -6881,10 +6931,10 @@ export class CRMService {
   }
 
   private sanitizePhone(val: any): string | undefined {
-    if (!val || typeof val !== 'string') return undefined;
-    // Keep only numbers and '+' (for international format)
-    const sanitized = val.replace(/[^0-9+]/g, '');
-    return sanitized || undefined;
+    if (val === undefined || val === null) return undefined;
+    const str = String(val).trim();
+    if (!str) return undefined;
+    return formatIndianPhoneWithCountryCode(str) || undefined;
   }
 
   /**

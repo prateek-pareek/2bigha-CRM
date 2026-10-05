@@ -526,6 +526,7 @@ export class PropertyListingsService {
     page?: number;
     limit?: number;
     searchTerm?: string;
+    approvalStatus?: string;
   }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
     return this.twoBighaService.listFarms(params);
   }
@@ -693,6 +694,32 @@ export class PropertyListingsService {
         totalValue: 0,
         availableValue: 0,
       };
+    }
+
+    if (listingBucket === 'properties') {
+      const live = await this.twoBighaService.getPropertiesStats();
+      if (live) {
+        return {
+          total: live.total,
+          byStatus: live.byStatus,
+          byType: { property: live.total, farm: 0 },
+          totalValue: 0,
+          availableValue: 0,
+        };
+      }
+    }
+
+    if (listingBucket === 'farm') {
+      const live = await this.twoBighaService.getFarmsStats();
+      if (live) {
+        return {
+          total: live.total,
+          byStatus: live.byStatus,
+          byType: { property: 0, farm: live.total },
+          totalValue: 0,
+          availableValue: 0,
+        };
+      }
     }
 
     // `applyCrmSoftDeletePlugin` only hooks find/findOne/countDocuments —

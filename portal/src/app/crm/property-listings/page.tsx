@@ -164,6 +164,8 @@ function PropertyListingsPageContent() {
   const [callProperty, setCallProperty] = useState<PropertyListingRecord | null>(null);
   const [notesProperty, setNotesProperty] = useState<PropertyListingRecord | null>(null);
 
+  const [overallTotal, setOverallTotal] = useState<number>(0);
+
   useEffect(() => {
     const fromUrl = searchParams.get("bucket");
     if (fromUrl) {
@@ -191,6 +193,7 @@ function PropertyListingsPageContent() {
       setListings([]);
       setStats(null);
       setTotal(0);
+      setOverallTotal(0);
       setLoading(true);
       setPage(1);
       setPmStageFilter("all");
@@ -233,9 +236,13 @@ function PropertyListingsPageContent() {
           page,
           limit: safePageSize,
           searchTerm: search.trim() || undefined,
+          approvalStatus: approvalFilter !== "all" ? approvalFilter : undefined,
         });
         setListings(data.map(mapTwoBighaFarmToRecord));
         setTotal(farmTotal);
+        if (!search.trim() && approvalFilter === "all") {
+          setOverallTotal(farmTotal);
+        }
         return;
       }
       if (bucket === "properties") {
@@ -244,9 +251,16 @@ function PropertyListingsPageContent() {
           page,
           limit: safePageSize,
           searchTerm: search.trim() || undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+          approvalStatus: approvalFilter !== "all" ? approvalFilter : undefined,
+          priceOrder: sortBy === "price_asc" ? "ASC" : sortBy === "price_desc" ? "DESC" : undefined,
+          newlyCreated: sortBy === "newest" ? true : undefined,
         });
         setListings(data.map((raw) => mapTwoBighaPropertyToRecord(raw)));
         setTotal(propTotal);
+        if (statusFilter === "all" && !search.trim() && approvalFilter === "all") {
+          setOverallTotal(propTotal);
+        }
         return;
       }
       // PM bucket — same page/pageSize in list and kanban so the board never dumps the full set.
@@ -270,6 +284,8 @@ function PropertyListingsPageContent() {
     pageSize,
     search,
     statusFilter,
+    approvalFilter,
+    sortBy,
     pmStageFilter,
     pmPlanFilter,
     bucket,
@@ -278,28 +294,14 @@ function PropertyListingsPageContent() {
 
   const loadStats = useCallback(async () => {
     try {
-      if (bucket === "farm" || bucket === "properties") {
-        // 2bigha's API has no aggregate-stats query — compute from loaded page
-        const availableCount = listings.filter((l) => l.status === "Available").length;
-        setStats({
-          total,
-          byStatus: {
-            Available: listings.filter((l) => l.status === "Available").length,
-            "Under Offer": listings.filter((l) => l.status === "Under Offer").length,
-            Sold: listings.filter((l) => l.status === "Sold").length,
-          },
-          totalValue: listings.reduce((sum, l) => sum + (l.price || 0), 0),
-          availableValue: listings
-            .filter((l) => l.status === "Available")
-            .reduce((sum, l) => sum + (l.price || 0), 0),
-        });
-        return;
+      const live = await fetchThirdPartyPropertyStats(bucket);
+      if (live) {
+        setStats(live);
       }
-      setStats(await fetchThirdPartyPropertyStats(bucket));
     } catch {
       /* silent */
     }
-  }, [bucket, listings, total]);
+  }, [bucket]);
 
   useEffect(() => {
     void load();
@@ -316,15 +318,20 @@ function PropertyListingsPageContent() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, pmStageFilter, pmPlanFilter, bucket]);
+  }, [search, statusFilter, approvalFilter, typeFilter, sortBy, pmStageFilter, pmPlanFilter, legalStatusFilter, bucket]);
 
-  const availableCount = stats?.byStatus?.["Available"] ?? 0;
-  const underOfferCount = stats?.byStatus?.["Under Offer"] ?? 0;
-  const soldCount = stats?.byStatus?.["Sold"] ?? 0;
+  const availableCount = stats?.byStatus?.["Available"] ?? (marketplace && statusFilter === "Available" ? total : 0);
+  const underOfferCount = stats?.byStatus?.["Under Offer"] ?? (marketplace && statusFilter === "Under Offer" ? total : 0);
+  const soldCount = stats?.byStatus?.["Sold"] ?? (marketplace && statusFilter === "Sold" ? total : 0);
   const statusOptions = useMemo(() => ["all", ...PROPERTY_STATUSES], []);
   const filtersActive = marketplace
     ? statusFilter !== "all" || approvalFilter !== "all" || typeFilter !== "all" || Boolean(search)
     : pmStageFilter !== "all" || pmPlanFilter !== "all" || legalStatusFilter !== "all" || Boolean(search);
+
+  const pageTotalValue = useMemo(
+    () => listings.reduce((sum, l) => sum + (l.price || 0), 0),
+    [listings],
+  );
 
   const listingPills = marketplace
     ? [
@@ -496,96 +503,6 @@ function PropertyListingsPageContent() {
         }
         className="mb-3"
       />
-
-      {/* KPI Stats Header Banner (Interactive Filter Cards with Skeleton Loading) */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <button
-          type="button"
-          onClick={() => setStatusFilter("all")}
-          className={cn(
-            "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
-            statusFilter === "all"
-              ? "border-emerald-500 bg-white ring-2 ring-emerald-500/20 dark:bg-slate-900"
-              : "border-slate-200/80 bg-gradient-to-br from-white to-slate-50/50 hover:border-slate-300 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50",
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Inventory</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
-              <Landmark size={15} />
-            </div>
-          </div>
-          {loading ? (
-            <div className="mt-2 h-6 w-16 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700" />
-          ) : (
-            <p className="mt-1.5 text-xl font-extrabold text-slate-900 dark:text-white">{stats?.total || total}</p>
-          )}
-          <p className="text-[11px] text-slate-400">Total listed properties</p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setStatusFilter("Available")}
-          className={cn(
-            "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
-            statusFilter === "Available"
-              ? "border-emerald-500 bg-emerald-50/40 ring-2 ring-emerald-500/30 dark:bg-emerald-950/40"
-              : "border-slate-200/80 bg-gradient-to-br from-white to-emerald-50/20 hover:border-slate-300 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50",
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Available</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-              <TrendingUp size={15} />
-            </div>
-          </div>
-          {loading ? (
-            <div className="mt-2 h-6 w-12 animate-pulse rounded-lg bg-emerald-200/60 dark:bg-emerald-950/60" />
-          ) : (
-            <p className="mt-1.5 text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{availableCount}</p>
-          )}
-          <p className="text-[11px] text-slate-400">Active marketplace listings</p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setStatusFilter("Under Offer")}
-          className={cn(
-            "text-left transition-all duration-200 rounded-2xl border p-3.5 shadow-sm hover:shadow-md cursor-pointer",
-            statusFilter === "Under Offer"
-              ? "border-amber-500 bg-amber-50/40 ring-2 ring-amber-500/30 dark:bg-amber-950/40"
-              : "border-slate-200/80 bg-gradient-to-br from-white to-amber-50/20 hover:border-slate-300 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50",
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Under Offer</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
-              <Home size={15} />
-            </div>
-          </div>
-          {loading ? (
-            <div className="mt-2 h-6 w-12 animate-pulse rounded-lg bg-amber-200/60 dark:bg-amber-950/60" />
-          ) : (
-            <p className="mt-1.5 text-xl font-extrabold text-amber-600 dark:text-amber-400">{underOfferCount}</p>
-          )}
-          <p className="text-[11px] text-slate-400">Deal in negotiation</p>
-        </button>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-blue-50/20 p-3.5 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Portfolio Value</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-              <IndianRupee size={15} />
-            </div>
-          </div>
-          {loading ? (
-            <div className="mt-2 h-6 w-24 animate-pulse rounded-lg bg-blue-200/60 dark:bg-blue-950/60" />
-          ) : (
-            <p className="mt-1.5 text-xl font-extrabold text-blue-600 dark:text-blue-400">{formatRupeesInWords(stats?.totalValue)}</p>
-          )}
-          <p className="text-[11px] text-slate-400">Estimated value</p>
-        </div>
-      </div>
 
       <CrmListToolbar
         searchProps={{

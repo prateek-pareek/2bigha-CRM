@@ -425,6 +425,58 @@ const GET_APPROVED_PROPERTIES_QUERY = `
   }
 `;
 
+const GET_PENDING_PROPERTIES_QUERY = `
+  query GetPendingProperties($input: GetPropertiesInput!) {
+    getPendingApprovalProperties(input: $input) {
+      data {
+        property {
+          ${PROPERTY_LIST_FIELDS}
+        }
+        seo {
+          slug
+        }
+        images {
+          variants {
+            thumbnail
+          }
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
+const GET_REJECTED_PROPERTIES_QUERY = `
+  query GetRejectedProperties($input: GetPropertiesInput!) {
+    getRejectedProperties(input: $input) {
+      data {
+        property {
+          ${PROPERTY_LIST_FIELDS}
+        }
+        seo {
+          slug
+        }
+        images {
+          variants {
+            thumbnail
+          }
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
 const GET_PROPERTIES_QUERY = `
   query GetProperties($input: GetPropertiesInput!) {
     properties(input: $input) {
@@ -599,6 +651,114 @@ const GET_FARMS_QUERY = `
   }
 `;
 
+const GET_PENDING_APPROVAL_FARMS_QUERY = `
+  query GetPendingFarms($input: GetFarmsInput!) {
+    getPendingApprovalFarms(input: $input) {
+      data {
+        property {
+          ${FARM_DETAIL_FIELDS}
+        }
+        seo {
+          slug
+          seoTitle
+        }
+        verification {
+          isVerified
+          verificationMessage
+        }
+        ${FARM_ENVELOPE_IMAGE_FIELDS}
+        user {
+          id
+          firstName
+          lastName
+          email
+          role
+          phone
+          whatsappNumber
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
+const GET_APPROVED_FARMS_QUERY = `
+  query GetApprovedFarms($input: GetFarmsInput!) {
+    getApprovedFarms(input: $input) {
+      data {
+        property {
+          ${FARM_DETAIL_FIELDS}
+        }
+        seo {
+          slug
+          seoTitle
+        }
+        verification {
+          isVerified
+          verificationMessage
+        }
+        ${FARM_ENVELOPE_IMAGE_FIELDS}
+        user {
+          id
+          firstName
+          lastName
+          email
+          role
+          phone
+          whatsappNumber
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
+const GET_REJECTED_FARMS_QUERY = `
+  query GetRejectedFarms($input: GetFarmsInput!) {
+    getRejectedFarms(input: $input) {
+      data {
+        property {
+          ${FARM_DETAIL_FIELDS}
+        }
+        seo {
+          slug
+          seoTitle
+        }
+        verification {
+          isVerified
+          verificationMessage
+        }
+        ${FARM_ENVELOPE_IMAGE_FIELDS}
+        user {
+          id
+          firstName
+          lastName
+          email
+          role
+          phone
+          whatsappNumber
+        }
+      }
+      meta {
+        page
+        limit
+        total
+        totalPages
+      }
+    }
+  }
+`;
+
 /**
  * `getFarmBySlug` — the farm-detail display operation. The handbook flags
  * that the outer `input` argument is NOT marked non-null in 2bigha's SDL and
@@ -691,7 +851,7 @@ const GET_PENDING_APPROVAL_PROPERTIES_QUERY = `
 `;
 
 
-const GET_REJECTED_PROPERTIES_QUERY = `
+const GET_REJECTED_APPROVAL_PROPERTIES_QUERY = `
   query GetRejectedProperties($input: GetPropertiesInput!) {
     getRejectedProperties(input: $input) {
       data {
@@ -717,7 +877,7 @@ export type ApprovalQueueBucket = 'pending' | 'approved' | 'rejected';
 const APPROVAL_QUEUE_QUERIES: Record<ApprovalQueueBucket, { query: string; field: string }> = {
   pending: { query: GET_PENDING_APPROVAL_PROPERTIES_QUERY, field: 'getPendingApprovalProperties' },
   approved: { query: GET_APPROVED_PROPERTIES_QUERY, field: 'getApprovedProperties' },
-  rejected: { query: GET_REJECTED_PROPERTIES_QUERY, field: 'getRejectedProperties' },
+  rejected: { query: GET_REJECTED_APPROVAL_PROPERTIES_QUERY, field: 'getRejectedProperties' },
 };
 
 @Injectable()
@@ -1321,27 +1481,55 @@ export class TwoBighaPropertyService {
     page?: number;
     limit?: number;
     searchTerm?: string;
+    approvalStatus?: string;
   }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
     const config = getTwoBighaConfig();
     if (!config) return null;
 
+    const input: Record<string, unknown> = {
+      page: params.page ?? 1,
+      limit: params.limit ?? 20,
+      searchTerm: params.searchTerm || undefined,
+    };
+
+    const normApproval = (params.approvalStatus || "").toLowerCase();
+
     try {
-      const data = await twoBighaGraphqlRequest<{
-        getFarms?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
-      }>(config, GET_FARMS_QUERY, {
-        input: {
-          page: params.page ?? 1,
-          limit: params.limit ?? 20,
-          searchTerm: params.searchTerm || undefined,
-        },
-      });
+      let resultData: Record<string, unknown>[] | undefined;
+      let resultMeta: Record<string, unknown> | undefined;
+
+      if (normApproval === "pending" || normApproval === "pending review") {
+        const data = await twoBighaGraphqlRequest<{
+          getPendingApprovalFarms?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_PENDING_APPROVAL_FARMS_QUERY, { input });
+        resultData = data?.getPendingApprovalFarms?.data;
+        resultMeta = data?.getPendingApprovalFarms?.meta;
+      } else if (normApproval === "rejected") {
+        const data = await twoBighaGraphqlRequest<{
+          getRejectedFarms?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_REJECTED_FARMS_QUERY, { input });
+        resultData = data?.getRejectedFarms?.data;
+        resultMeta = data?.getRejectedFarms?.meta;
+      } else if (normApproval === "approved") {
+        const data = await twoBighaGraphqlRequest<{
+          getApprovedFarms?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_APPROVED_FARMS_QUERY, { input });
+        resultData = data?.getApprovedFarms?.data;
+        resultMeta = data?.getApprovedFarms?.meta;
+      } else {
+        const data = await twoBighaGraphqlRequest<{
+          getFarms?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_FARMS_QUERY, { input });
+        resultData = data?.getFarms?.data;
+        resultMeta = data?.getFarms?.meta;
+      }
 
       return {
-        data: data?.getFarms?.data || [],
-        meta: data?.getFarms?.meta,
+        data: resultData || [],
+        meta: resultMeta,
       };
     } catch (e: any) {
-      this.logger.error(`2bigha getFarms failed: ${e?.message}`);
+      this.logger.error(`2bigha listFarms failed: ${e?.message}`);
       return null;
     }
   }
@@ -1469,19 +1657,41 @@ export class TwoBighaPropertyService {
       let resultData: Record<string, unknown>[] | undefined;
       let resultMeta: Record<string, unknown> | undefined;
 
-      try {
+      const normApproval = (params.approvalStatus || "").toLowerCase();
+
+      if (normApproval === "pending" || normApproval === "pending review") {
         const data = await twoBighaGraphqlRequest<{
-          properties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
-        }>(config, GET_PROPERTIES_QUERY, { input });
-        resultData = data?.properties?.data;
-        resultMeta = data?.properties?.meta;
-      } catch (gqlErr: any) {
-        this.logger.warn(`2bigha properties query fallback to getApprovedProperties: ${gqlErr?.message}`);
+          getPendingApprovalProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_PENDING_PROPERTIES_QUERY, { input });
+        resultData = data?.getPendingApprovalProperties?.data;
+        resultMeta = data?.getPendingApprovalProperties?.meta;
+      } else if (normApproval === "rejected") {
+        const data = await twoBighaGraphqlRequest<{
+          getRejectedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+        }>(config, GET_REJECTED_PROPERTIES_QUERY, { input });
+        resultData = data?.getRejectedProperties?.data;
+        resultMeta = data?.getRejectedProperties?.meta;
+      } else if (normApproval === "approved") {
         const data = await twoBighaGraphqlRequest<{
           getApprovedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
         }>(config, GET_APPROVED_PROPERTIES_QUERY, { input });
         resultData = data?.getApprovedProperties?.data;
         resultMeta = data?.getApprovedProperties?.meta;
+      } else {
+        try {
+          const data = await twoBighaGraphqlRequest<{
+            properties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+          }>(config, GET_PROPERTIES_QUERY, { input });
+          resultData = data?.properties?.data;
+          resultMeta = data?.properties?.meta;
+        } catch (gqlErr: any) {
+          this.logger.warn(`2bigha properties query fallback to getApprovedProperties: ${gqlErr?.message}`);
+          const data = await twoBighaGraphqlRequest<{
+            getApprovedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
+          }>(config, GET_APPROVED_PROPERTIES_QUERY, { input });
+          resultData = data?.getApprovedProperties?.data;
+          resultMeta = data?.getApprovedProperties?.meta;
+        }
       }
 
       return {
@@ -1490,6 +1700,83 @@ export class TwoBighaPropertyService {
       };
     } catch (e: any) {
       this.logger.error(`2bigha listProperties failed: ${e?.message}`);
+      return null;
+    }
+  }
+
+  private propertiesStatsCache?: { stats: { total: number; byStatus: Record<string, number> }; expiresAt: number };
+  private farmsStatsCache?: { stats: { total: number; byStatus: Record<string, number> }; expiresAt: number };
+
+  /** Real aggregate status counts from 2bigha GraphQL for properties (cached for 60s). */
+  async getPropertiesStats(): Promise<{ total: number; byStatus: Record<string, number> } | null> {
+    const config = getTwoBighaConfig();
+    if (!config) return null;
+
+    if (this.propertiesStatsCache && Date.now() < this.propertiesStatsCache.expiresAt) {
+      return this.propertiesStatsCache.stats;
+    }
+
+    try {
+      const [allRes, availRes, soldRes, managedRes] = await Promise.all([
+        this.listProperties({ page: 1, limit: 1 }),
+        this.listProperties({ page: 1, limit: 1, availablilityStatus: 'AVAILABLE' }),
+        this.listProperties({ page: 1, limit: 1, availablilityStatus: 'SOLD' }),
+        this.listProperties({ page: 1, limit: 1, availablilityStatus: 'MANAGED' }),
+      ]);
+
+      const total = Number(allRes?.meta?.total ?? 0);
+      const available = Number(availRes?.meta?.total ?? 0);
+      const sold = Number(soldRes?.meta?.total ?? 0);
+      const managed = Number(managedRes?.meta?.total ?? 0);
+
+      const stats = {
+        total,
+        byStatus: {
+          Available: available,
+          'Under Offer': managed,
+          Sold: sold,
+        },
+      };
+
+      this.propertiesStatsCache = {
+        stats,
+        expiresAt: Date.now() + 60_000,
+      };
+
+      return stats;
+    } catch (e: any) {
+      this.logger.error(`2bigha getPropertiesStats failed: ${e?.message}`);
+      return null;
+    }
+  }
+
+  /** Real aggregate status counts from 2bigha GraphQL for farms (cached for 60s). */
+  async getFarmsStats(): Promise<{ total: number; byStatus: Record<string, number> } | null> {
+    const config = getTwoBighaConfig();
+    if (!config) return null;
+
+    if (this.farmsStatsCache && Date.now() < this.farmsStatsCache.expiresAt) {
+      return this.farmsStatsCache.stats;
+    }
+
+    try {
+      const allRes = await this.listFarms({ page: 1, limit: 1 });
+      const total = Number(allRes?.meta?.total ?? 0);
+      const stats = {
+        total,
+        byStatus: {
+          Available: total,
+          'Under Offer': 0,
+          Sold: 0,
+        },
+      };
+      this.farmsStatsCache = {
+        stats,
+        expiresAt: Date.now() + 60_000,
+      };
+      return stats;
+    } catch (e: any) {
+      this.logger.error(`2bigha getFarmsStats failed: ${e?.message}`);
       return null;
     }
   }

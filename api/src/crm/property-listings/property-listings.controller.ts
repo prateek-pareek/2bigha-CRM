@@ -84,11 +84,13 @@ export class PropertyListingsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('searchTerm') searchTerm?: string,
+    @Query('approvalStatus') approvalStatus?: string,
   ) {
     return this.listingsService.listTwoBighaFarms({
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
       searchTerm,
+      approvalStatus,
     });
   }
 

@@ -5,10 +5,47 @@ export function normalizeEmail(email: string | undefined | null): string {
   return String(email).trim().toLowerCase();
 }
 
-/** Digits only — compare phone identity across formats. */
+/** Digits only — compare phone identity across formats. Strips country code extensions (+91, 91, 091, 0091, 0) when digits > 10. */
 export function normalizePhoneDigits(s: string | undefined | null): string {
   if (s == null) return '';
-  return String(s).replace(/\D/g, '');
+  let digits = String(s).replace(/\D/g, '');
+  if (digits.length > 10) {
+    if (digits.startsWith('0091') && digits.length === 14) {
+      digits = digits.slice(4);
+    } else if (digits.startsWith('091') && digits.length === 13) {
+      digits = digits.slice(3);
+    } else if (digits.startsWith('91') && digits.length === 12) {
+      digits = digits.slice(2);
+    } else if (digits.startsWith('0') && digits.length === 11) {
+      digits = digits.slice(1);
+    } else if (digits.length > 10 && digits.startsWith('91')) {
+      const stripped = digits.replace(/^91/, '');
+      if (stripped.length === 10) {
+        digits = stripped;
+      }
+    } else if (digits.length > 10 && digits.startsWith('0')) {
+      const stripped = digits.replace(/^0+/, '');
+      if (stripped.length === 10) {
+        digits = stripped;
+      }
+    }
+  }
+  return digits;
+}
+
+/** Formats a phone number to Indian +91 format (+91XXXXXXXXXX). Handles 10-digit, 91, 091, 0091, or leading 0. */
+export function formatIndianPhoneWithCountryCode(s: string | undefined | null): string {
+  if (s == null) return '';
+  const str = String(s).trim();
+  if (!str) return '';
+  const digits = normalizePhoneDigits(str);
+  if (digits.length === 10) {
+    return `+91${digits}`;
+  }
+  if (str.startsWith('+')) {
+    return `+${digits}`;
+  }
+  return digits ? `+91${digits}` : '';
 }
 
 export function normalizeLinkedInUrl(s: string | undefined | null): string {

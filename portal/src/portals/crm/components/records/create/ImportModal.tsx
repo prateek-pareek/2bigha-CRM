@@ -572,6 +572,64 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
     'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
   ];
 
+  const normalizeImportPhone = (
+    raw: string | number | undefined | null,
+    requireMobilePrefix: boolean = true
+  ): {
+    normalized: string;
+    formatted: string;
+    isValid: boolean;
+    error?: string;
+  } => {
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+      return { normalized: '', formatted: '', isValid: true };
+    }
+    let digits = String(raw).replace(/\D/g, '');
+
+    // Strip country code extension if digits > 10 (e.g. +91, 91, 091, 0091, leading 0)
+    if (digits.length > 10) {
+      if (digits.startsWith('0091') && digits.length === 14) {
+        digits = digits.slice(4);
+      } else if (digits.startsWith('091') && digits.length === 13) {
+        digits = digits.slice(3);
+      } else if (digits.startsWith('91') && digits.length === 12) {
+        digits = digits.slice(2);
+      } else if (digits.startsWith('0') && digits.length === 11) {
+        digits = digits.slice(1);
+      } else if (digits.length > 10 && digits.startsWith('91')) {
+        const stripped = digits.replace(/^91/, '');
+        if (stripped.length === 10) {
+          digits = stripped;
+        }
+      } else if (digits.length > 10 && digits.startsWith('0')) {
+        const stripped = digits.replace(/^0+/, '');
+        if (stripped.length === 10) {
+          digits = stripped;
+        }
+      }
+    }
+
+    if (digits.length !== 10) {
+      return {
+        normalized: digits,
+        formatted: digits ? (String(raw).trim().startsWith('+') ? `+${digits}` : `+91${digits}`) : '',
+        isValid: false,
+        error: 'Phone number must be 10 digits',
+      };
+    }
+
+    if (requireMobilePrefix && !/^[6-9]\d{9}$/.test(digits)) {
+      return {
+        normalized: digits,
+        formatted: `+91${digits}`,
+        isValid: false,
+        error: 'Phone number must start with 6, 7, 8, or 9',
+      };
+    }
+
+    return { normalized: digits, formatted: `+91${digits}`, isValid: true };
+  };
+
   const validateDataset = (
     rows: Record<string, any>[],
     currentMapping: Record<string, string>,
@@ -613,6 +671,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
         const state = String(mapped.state || '').trim();
         const leadVertical = String(mapped.leadVertical || '').trim();
         const planningToBuyLand = String(mapped.planningToBuyLand || '').trim();
+        const phone = String(mapped.phone || '').trim();
 
         // 1. First Name check (Requirement 6.1 & 6.2)
         if (!firstName) {
@@ -633,17 +692,30 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
         if (!mobileNo && !email) {
           errors.push('Either Contact Number or Email is required');
         } else if (mobileNo) {
-          const digits = mobileNo.replace(/\D/g, '');
-          if (digits.length !== 10 || !/^[6-9]\d{9}$/.test(digits)) {
-            errors.push('Contact number must be a valid 10-digit Indian mobile number');
+          const check = normalizeImportPhone(mobileNo, true);
+          if (!check.isValid) {
+            errors.push(check.error || 'Contact number must be a valid 10-digit Indian mobile number');
+          } else {
+            mapped.mobileNo = check.formatted;
           }
         }
 
         // 4. WhatsApp Number (Requirement 6.5)
         if (whatsappNumber) {
-          const wDigits = whatsappNumber.replace(/\D/g, '');
-          if (wDigits.length !== 10 || !/^[6-9]\d{9}$/.test(wDigits)) {
-            errors.push('WhatsApp number must be a valid 10-digit Indian mobile number');
+          const check = normalizeImportPhone(whatsappNumber, true);
+          if (!check.isValid) {
+            errors.push(check.error || 'WhatsApp number must be a valid 10-digit Indian mobile number');
+          } else {
+            mapped.whatsappNumber = check.formatted;
+          }
+        }
+
+        if (phone && phone !== mobileNo) {
+          const check = normalizeImportPhone(phone, false);
+          if (!check.isValid) {
+            errors.push(check.error || 'Phone number must be 10 digits');
+          } else {
+            mapped.phone = check.formatted;
           }
         }
 
@@ -712,6 +784,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
         const organization = String(mapped.organization || '').trim();
         const email = String(mapped.email || '').trim();
         const mobileNo = String(mapped.mobileNo || mapped.phone || '').trim();
+        const phone = String(mapped.phone || '').trim();
         const whatsappNumber = String(mapped.whatsappNumber || '').trim();
 
         if (!firstName && !organization) {
@@ -721,20 +794,33 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
           errors.push('Invalid email format');
         }
         if (mobileNo) {
-          const digits = mobileNo.replace(/\D/g, '');
-          if (digits.length !== 10) {
-            errors.push('Phone number must be 10 digits');
+          const check = normalizeImportPhone(mobileNo, true);
+          if (!check.isValid) {
+            errors.push(check.error || 'Phone number must be 10 digits');
+          } else {
+            mapped.mobileNo = check.formatted;
+          }
+        }
+        if (phone && phone !== mobileNo) {
+          const check = normalizeImportPhone(phone, false);
+          if (!check.isValid) {
+            errors.push(check.error || 'Phone number must be 10 digits');
+          } else {
+            mapped.phone = check.formatted;
           }
         }
         if (whatsappNumber) {
-          const wDigits = whatsappNumber.replace(/\D/g, '');
-          if (wDigits.length !== 10) {
-            errors.push('WhatsApp number must be 10 digits');
+          const check = normalizeImportPhone(whatsappNumber, true);
+          if (!check.isValid) {
+            errors.push(check.error || 'WhatsApp number must be 10 digits');
+          } else {
+            mapped.whatsappNumber = check.formatted;
           }
         }
       } else if (type === 'clients' || type === 'organizations') {
         const name = String(mapped.name || '').trim();
         const phone = String(mapped.phone || '').trim();
+        const whatsappNumber = String(mapped.whatsappNumber || '').trim();
         const email = String(mapped.email || '').trim();
         const role = String(mapped.role || '').trim();
 
@@ -745,9 +831,19 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
           errors.push('Invalid email format');
         }
         if (phone) {
-          const digits = phone.replace(/\D/g, '');
-          if (digits.length !== 10) {
-            errors.push('Phone number must be 10 digits');
+          const check = normalizeImportPhone(phone, false);
+          if (!check.isValid) {
+            errors.push(check.error || 'Phone number must be 10 digits');
+          } else {
+            mapped.phone = check.formatted;
+          }
+        }
+        if (whatsappNumber) {
+          const check = normalizeImportPhone(whatsappNumber, true);
+          if (!check.isValid) {
+            errors.push(check.error || 'WhatsApp number must be 10 digits');
+          } else {
+            mapped.whatsappNumber = check.formatted;
           }
         }
         if (role) {
@@ -859,9 +955,19 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
         errors: r.errors,
       }));
 
+    const getNormalizedRowData = (r: ParsedValidationRow) => {
+      const rowCopy = { ...r.original };
+      Object.entries(mapping).forEach(([crmKey, fileCol]) => {
+        if (fileCol && r.mapped[crmKey] !== undefined) {
+          rowCopy[fileCol] = r.mapped[crmKey];
+        }
+      });
+      return rowCopy;
+    };
+
     let fileToSend: File = file;
     if (importOnlyValid) {
-      const validRawRows = validationRows.filter((r) => r.isValid).map((r) => r.original);
+      const validRawRows = validationRows.filter((r) => r.isValid).map((r) => getNormalizedRowData(r));
       if (validRawRows.length === 0) {
         setError('No valid rows to import.');
         setUploading(false);
@@ -875,7 +981,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
     } else {
-      const allRawRows = validationRows.map((r) => r.original);
+      const allRawRows = validationRows.map((r) => getNormalizedRowData(r));
       const ws = XLSX.utils.json_to_sheet(allRawRows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'ImportData');

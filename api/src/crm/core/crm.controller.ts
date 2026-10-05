@@ -634,7 +634,17 @@ export class CRMController {
 
   // Export/Import
   @Get('export/:type')
-  @Permissions('admin:manage', 'leads:export')
+  @Permissions(
+    'admin:manage',
+    'leads:export',
+    'contacts:export',
+    'clients:export',
+    'leads:read',
+    'contacts:read',
+    'clients:read',
+    'pm-leads:export',
+    'pm-leads:read',
+  )
   async exportData(
     @Param('type') type: string,
     @Query('ids') ids?: string,
@@ -663,14 +673,34 @@ export class CRMController {
   }
 
   @Post('import/preview')
-  @Permissions('admin:manage', 'leads:import')
+  @Permissions(
+    'admin:manage',
+    'leads:import',
+    'contacts:import',
+    'clients:import',
+    'leads:write',
+    'contacts:write',
+    'clients:write',
+    'pm-leads:import',
+    'pm-leads:write',
+  )
   @UseInterceptors(FileInterceptor('file'))
   async getImportPreview(@UploadedFile() file: any) {
     return { headers: this.crmService.getFileHeaders(file.buffer) };
   }
 
   @Post('import/:type')
-  @Permissions('admin:manage', 'leads:import')
+  @Permissions(
+    'admin:manage',
+    'leads:import',
+    'contacts:import',
+    'clients:import',
+    'leads:write',
+    'contacts:write',
+    'clients:write',
+    'pm-leads:import',
+    'pm-leads:write',
+  )
   @UseInterceptors(FileInterceptor('file'))
   async importData(
     @Param('type') type: string,
@@ -690,7 +720,17 @@ export class CRMController {
   }
 
   @Get('import/jobs/:jobId')
-  @Permissions('admin:manage', 'leads:import')
+  @Permissions(
+    'admin:manage',
+    'leads:import',
+    'contacts:import',
+    'clients:import',
+    'leads:write',
+    'contacts:write',
+    'clients:write',
+    'pm-leads:import',
+    'pm-leads:write',
+  )
   getImportJob(@Param('jobId') jobId: string) {
     return this.crmService.getImportJobStatus(jobId);
   }
