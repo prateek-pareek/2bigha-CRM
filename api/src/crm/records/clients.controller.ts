@@ -70,6 +70,12 @@ export class ClientsController {
     return this.clientsService.twoBighaSummary();
   }
 
+  @Get('twobigha/properties')
+  @Permissions('clients:read')
+  getAllTwoBighaProperties(@Query() query: any) {
+    return this.clientsService.getAllTwoBighaProperties(query);
+  }
+
   @Get('clients/:id/twobigha-profile')
   @Permissions('clients:read')
   fetchTwoBighaProfile(@Param('id') id: string) {
@@ -80,6 +86,42 @@ export class ClientsController {
   @Permissions('clients:write')
   resyncTwoBigha(@Param('id') id: string, @Request() req: any) {
     return this.clientsService.resyncTwoBigha(id, req.user);
+  }
+
+  @Get('clients/:id/twobigha-metadata')
+  @Permissions('clients:read')
+  getClientMetaData(@Param('id') id: string) {
+    return this.clientsService.getClientMetaData(id);
+  }
+
+  @Get('clients/:id/twobigha-properties')
+  @Permissions('clients:read')
+  getClientProperties(@Param('id') id: string, @Query() query: any) {
+    return this.clientsService.getClientProperties(id, query);
+  }
+
+  @Get('clients/:id/twobigha-invoices')
+  @Permissions('clients:read')
+  getClientInvoices(@Param('id') id: string) {
+    return this.clientsService.getClientInvoices(id);
+  }
+
+  @Get('clients/:id/twobigha-usage')
+  @Permissions('clients:read')
+  getClientBillingAndUsageSummary(@Param('id') id: string) {
+    return this.clientsService.getClientBillingAndUsageSummary(id);
+  }
+
+  @Get('clients/:id/twobigha-feature-requests')
+  @Permissions('clients:read')
+  getClientFeatureRequests(@Param('id') id: string) {
+    return this.clientsService.getClientFeatureRequests(id);
+  }
+
+  @Get('clients/:id/twobigha-managed-properties')
+  @Permissions('clients:read')
+  getClientManagedProperties(@Param('id') id: string, @Query() query: any) {
+    return this.clientsService.getClientManagedProperties(id, query);
   }
 
   @Get('clients/:id')

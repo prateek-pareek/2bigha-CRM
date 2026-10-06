@@ -165,13 +165,13 @@ export class CRMController {
   }
 
   @Put('leads/:id')
-  @Permissions('leads:write', 'leads:edit', 'leads:move_pipeline', 'pm-leads:write', 'pm-leads:move_pipeline')
+  @Permissions('leads:write', 'leads:move_pipeline', 'pm-leads:write', 'pm-leads:move_pipeline')
   async updateLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateLead(id, dto, req.user);
   }
 
   @Patch('leads/:id')
-  @Permissions('leads:write', 'leads:edit', 'leads:move_pipeline', 'pm-leads:write', 'pm-leads:move_pipeline')
+  @Permissions('leads:write', 'leads:move_pipeline', 'pm-leads:write', 'pm-leads:move_pipeline')
   async patchLead(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateLead(id, dto, req.user);
   }
@@ -229,7 +229,7 @@ export class CRMController {
   }
 
   @Put('organizations/:id')
-  @Permissions('organizations:edit')
+  @Permissions('organizations:write')
   async updateOrganization(
     @Param('id') id: string,
     @Body() dto: any,
@@ -239,7 +239,7 @@ export class CRMController {
   }
 
   @Patch('organizations/:id')
-  @Permissions('organizations:edit')
+  @Permissions('organizations:write')
   async patchOrganization(
     @Param('id') id: string,
     @Body() dto: any,
@@ -323,7 +323,7 @@ export class CRMController {
   }
 
   @Put('contacts/:id')
-  @Permissions('contacts:edit')
+  @Permissions('contacts:write')
   async updateContact(
     @Param('id') id: string,
     @Body() dto: any,
@@ -333,7 +333,7 @@ export class CRMController {
   }
 
   @Patch('contacts/:id')
-  @Permissions('contacts:edit')
+  @Permissions('contacts:write')
   async patchContact(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
     return this.crmService.updateContact(id, dto, req.user);
   }
@@ -633,15 +633,17 @@ export class CRMController {
   }
 
   // Export/Import
-  // Coarse gate: any export grant passes here; exportToCsv enforces the exact
-  // `${type}:export` per record type (§13.2 per-module export).
   @Get('export/:type')
   @Permissions(
     'admin:manage',
     'leads:export',
     'contacts:export',
     'clients:export',
-    'organizations:export',
+    'leads:read',
+    'contacts:read',
+    'clients:read',
+    'pm-leads:export',
+    'pm-leads:read',
   )
   async exportData(
     @Param('type') type: string,
@@ -671,14 +673,34 @@ export class CRMController {
   }
 
   @Post('import/preview')
-  @Permissions('admin:manage', 'leads:import')
+  @Permissions(
+    'admin:manage',
+    'leads:import',
+    'contacts:import',
+    'clients:import',
+    'leads:write',
+    'contacts:write',
+    'clients:write',
+    'pm-leads:import',
+    'pm-leads:write',
+  )
   @UseInterceptors(FileInterceptor('file'))
   async getImportPreview(@UploadedFile() file: any) {
     return { headers: this.crmService.getFileHeaders(file.buffer) };
   }
 
   @Post('import/:type')
-  @Permissions('admin:manage', 'leads:import')
+  @Permissions(
+    'admin:manage',
+    'leads:import',
+    'contacts:import',
+    'clients:import',
+    'leads:write',
+    'contacts:write',
+    'clients:write',
+    'pm-leads:import',
+    'pm-leads:write',
+  )
   @UseInterceptors(FileInterceptor('file'))
   async importData(
     @Param('type') type: string,
@@ -698,7 +720,17 @@ export class CRMController {
   }
 
   @Get('import/jobs/:jobId')
-  @Permissions('admin:manage', 'leads:import')
+  @Permissions(
+    'admin:manage',
+    'leads:import',
+    'contacts:import',
+    'clients:import',
+    'leads:write',
+    'contacts:write',
+    'clients:write',
+    'pm-leads:import',
+    'pm-leads:write',
+  )
   getImportJob(@Param('jobId') jobId: string) {
     return this.crmService.getImportJobStatus(jobId);
   }

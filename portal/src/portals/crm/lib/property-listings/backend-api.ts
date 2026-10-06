@@ -293,12 +293,18 @@ export async function fetchTwoBighaFarms(params: {
   page?: number;
   limit?: number;
   searchTerm?: string;
+  approvalStatus?: string;
 }): Promise<{ data: TwoBighaFarmRaw[]; total: number }> {
   const { data } = await api.get<{
     data?: TwoBighaFarmRaw[];
     meta?: { total?: number };
   } | null>("/crm/property-listings/twobigha/farms", {
-    params: { page: params.page, limit: params.limit, searchTerm: params.searchTerm },
+    params: {
+      page: params.page,
+      limit: params.limit,
+      searchTerm: params.searchTerm,
+      approvalStatus: params.approvalStatus,
+    },
   });
   const rows = data?.data || [];
   return { data: rows, total: data?.meta?.total ?? rows.length };
@@ -309,12 +315,28 @@ export async function fetchTwoBighaProperties(params: {
   page?: number;
   limit?: number;
   searchTerm?: string;
+  status?: string;
+  approvalStatus?: string;
+  priceOrder?: string;
+  newlyCreated?: boolean;
+  lat?: number;
+  lng?: number;
 }): Promise<{ data: any[]; total: number }> {
   const { data } = await api.get<{
     data?: any[];
     meta?: { total?: number };
   } | null>("/crm/property-listings/twobigha/properties", {
-    params: { page: params.page, limit: params.limit, searchTerm: params.searchTerm },
+    params: {
+      page: params.page,
+      limit: params.limit,
+      searchTerm: params.searchTerm,
+      status: params.status,
+      approvalStatus: params.approvalStatus,
+      priceOrder: params.priceOrder,
+      newlyCreated: params.newlyCreated,
+      lat: params.lat,
+      lng: params.lng,
+    },
   });
   const rows = data?.data || [];
   return { data: rows, total: data?.meta?.total ?? rows.length };

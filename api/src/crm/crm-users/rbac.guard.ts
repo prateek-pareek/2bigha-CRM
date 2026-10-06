@@ -127,12 +127,39 @@ export class RbacGuard implements CanActivate {
     const jwtHrms = Array.isArray(user.permissions) ? user.permissions : [];
     const tokenPermissions = [...jwtHrms, ...jwtCrm];
 
+    const isAgent =
+      String(user.role || '').toUpperCase() === 'AGENT' ||
+      String(user.role || '').toLowerCase().includes('agent') ||
+      String(dbUser?.role || '').toLowerCase().includes('agent') ||
+      String(userRole?.name || '').toLowerCase().includes('agent') ||
+      (Array.isArray(user.permittedTools) &&
+        user.permittedTools.map((t: string) => String(t || '').toUpperCase()).includes('CRM'));
+
+    const defaultAgentPerms = isAgent
+      ? [
+          'leads:read',
+          'leads:write',
+          'leads:import',
+          'leads:export',
+          'leads:move_pipeline',
+          'contacts:read',
+          'contacts:write',
+          'contacts:import',
+          'contacts:export',
+          'pm-leads:read',
+          'pm-leads:write',
+          'pm-leads:import',
+          'pm-leads:export',
+        ]
+      : [];
+
     // Merge and unique
     const userPermissions = Array.from(
       new Set([
         ...dbRolePermissions,
         ...tokenPermissions,
         ...dbDirectPermissions,
+        ...defaultAgentPerms,
       ]),
     );
 

@@ -195,10 +195,7 @@ export class Lead {
   source?: string;
 
   /** Planning to buy land timeframe */
-  @Prop({
-    enum: ['just_exploring', 'within_1_month', '1–3_months', '3–6_months', '1-3_months', '3-6_months'],
-    index: true,
-  })
+  @Prop({ trim: true, index: true })
   planningToBuyLand?: string;
 
   /** First call outcome / notes */

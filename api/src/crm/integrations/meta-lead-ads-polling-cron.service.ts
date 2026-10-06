@@ -17,7 +17,7 @@ export class MetaLeadAdsPollingCronService {
 
   constructor(private readonly metaLeadAdsService: MetaLeadAdsService) {}
 
-  @Cron('0 */15 * * * *') // every 15 minutes — not a built-in CronExpression preset
+  @Cron('0 */5 * * * *') // every 5 minutes
   async pollForMissedLeads() {
     try {
       const { created, formsPolled, error } = await this.metaLeadAdsService.pollForNewLeads();

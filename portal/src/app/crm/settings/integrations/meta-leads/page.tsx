@@ -98,6 +98,31 @@ export default function MetaLeadAdsIntegrationPage() {
     }
   };
 
+  const [syncingLeads, setSyncingLeads] = useState(false);
+  const [syncLeadsResult, setSyncLeadsResult] = useState<string | null>(null);
+
+  const handleSyncLeads = async () => {
+    setSyncingLeads(true);
+    setSyncLeadsResult(null);
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/integrations/meta-leadgen/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setSyncLeadsResult(`Synced successfully: ${data.created ?? 0} new lead(s) created from Meta.`);
+      } else {
+        setSyncLeadsResult(data.error || 'Failed to sync leads');
+      }
+    } catch (err) {
+      setSyncLeadsResult('Sync failed due to network error');
+    } finally {
+      setSyncingLeads(false);
+    }
+  };
+
   const handleSyncForms = async () => {
     setSyncingForms(true);
     const token = localStorage.getItem('token');
@@ -313,20 +338,34 @@ export default function MetaLeadAdsIntegrationPage() {
           </form>
 
           <div className="bg-emerald-50 border border-emerald-100 rounded-[var(--crm-radius-ui)] p-8">
-            <h3 className="text-lg font-black text-emerald-900 mb-2 uppercase tracking-tight">Test Connection</h3>
-            <p className="text-emerald-700 text-sm font-medium mb-6">Verify the Page ID and Access Token are correct.</p>
-            <div className="flex gap-4">
+            <h3 className="text-lg font-black text-emerald-900 mb-2 uppercase tracking-tight">Test &amp; Sync</h3>
+            <p className="text-emerald-700 text-sm font-medium mb-6">Verify your connection and pull the latest leads from Meta immediately.</p>
+            <div className="flex flex-wrap gap-4">
               <button
+                type="button"
                 onClick={handleTest}
                 disabled={testing}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-[var(--radius-md)] text-xs font-semibold transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 flex items-center gap-2"
               >
                 {testing ? 'Testing...' : <><Send size={16} /> Test Connection</>}
               </button>
+              <button
+                type="button"
+                onClick={handleSyncLeads}
+                disabled={syncingLeads || !config.pageAccessToken}
+                className="bg-slate-900 hover:bg-black text-white px-8 py-3 rounded-[var(--radius-md)] text-xs font-semibold transition-all shadow-lg shadow-slate-900/20 disabled:opacity-50 flex items-center gap-2"
+              >
+                {syncingLeads ? 'Syncing...' : <><RefreshCw size={16} className={syncingLeads ? 'animate-spin' : ''} /> Sync Leads Now</>}
+              </button>
             </div>
             {testResult && (
               <p className={`text-sm font-semibold mt-4 ${testResult.success ? 'text-emerald-700' : 'text-rose-600'}`}>
                 {testResult.message}
+              </p>
+            )}
+            {syncLeadsResult && (
+              <p className="text-sm font-semibold mt-3 text-slate-800 bg-white/70 p-3 rounded border border-emerald-200">
+                {syncLeadsResult}
               </p>
             )}
           </div>

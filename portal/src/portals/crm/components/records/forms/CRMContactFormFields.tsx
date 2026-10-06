@@ -13,6 +13,7 @@ import CrmMultiEmailListField from '@/components/crm/email/engagement/CrmMultiEm
 import { CrmFormSection, CrmFormGrid } from '@/components/crm/records/forms/crm-form-primitives';
 import { CRM_PHONE_COUNTRY_OPTIONS } from '@/lib/crm/phone-country-codes';
 import { usePermissions } from '@/hooks/usePermissions';
+import { cn } from '@/lib/utils';
 
 const LBL = 'mb-1.5 block text-[13px] font-medium text-[var(--text-main)]';
 const INP =
@@ -72,14 +73,23 @@ export default function CRMContactFormFields({
   onDeleteCustom,
   identifierContext,
 }: CRMContactFormFieldsProps) {
-  const { canViewCrmRevenue } = usePermissions();
+  const { canViewCrmRevenue, user } = usePermissions();
   const keys = canViewCrmRevenue
     ? visibleKeys
     : visibleKeys.filter((k) => k !== 'annualRevenue');
   const [idWarnings, setIdWarnings] = useState<Record<string, string>>({});
+  const [phoneLengths, setPhoneLengths] = useState<Record<string, number>>({});
   const [sourceMetadata, setSourceMetadata] = useState<any>(null);
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [mobileCountryCode, setMobileCountryCode] = useState('+91');
+
+  const handlePhoneInput = (e: React.FormEvent<HTMLInputElement>, fieldName: string) => {
+    const target = e.currentTarget;
+    const digitsOnly = target.value.replace(/\D/g, '').slice(0, 10);
+    target.value = digitsOnly;
+    setPhoneLengths((prev) => ({ ...prev, [fieldName]: digitsOnly.length }));
+    setIdWarnings((prev) => (prev[fieldName] ? { ...prev, [fieldName]: '' } : prev));
+  };
 
   const fetchSourceMetadata = useCallback(async (url: string) => {
     if (!url || !url.startsWith('http')) return;
@@ -195,18 +205,26 @@ export default function CRMContactFormFields({
           </div>
         );
       case 'mobileNo':
+        const mobileLen = phoneLengths.mobileNo ?? 0;
         return (
-          <div key={key}>
-            <label className={LBL}>Mobile no</label>
+          <div key={key} className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className={LBL}>Mobile no</label>
+              <span className={`text-[11px] font-mono ${mobileLen === 10 ? 'text-emerald-600 font-semibold' : 'text-[var(--text-muted)]'}`}>
+                {mobileLen}/10 digits
+              </span>
+            </div>
             <div className="relative flex items-center">
               <select
                 name="mobileNo_countryCode"
                 value={mobileCountryCode}
                 onChange={(e) => setMobileCountryCode(e.target.value)}
-                className="absolute left-0 z-10 w-[7rem] h-9 bg-white text-xs text-[var(--text-main)] outline-none cursor-pointer border-r border-[var(--border-color)] pl-2 pr-1 appearance-none rounded-l-[3px]"
+                className="absolute left-0 z-10 w-[5rem] h-[38px] bg-[var(--surface-dim)] text-xs font-medium text-[var(--text-main)] outline-none cursor-pointer border-r border-[var(--border-color)] pl-2 pr-1 rounded-l-[var(--radius-md)] appearance-none"
               >
                 {CRM_PHONE_COUNTRY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>
+                    {o.label.split(' ')[0]} {o.value}
+                  </option>
                 ))}
               </select>
               <input
@@ -214,9 +232,10 @@ export default function CRMContactFormFields({
                 type="tel"
                 inputMode="numeric"
                 pattern="[0-9]*"
+                maxLength={10}
                 placeholder="9876543210"
-                className={`${INP} pl-[7.5rem]`}
-                onChange={(e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ''); }}
+                className={`${idWarnings.mobileNo ? `${INP} border-rose-500` : INP} pl-[5.5rem] font-mono text-[13px] tracking-wide`}
+                onInput={(e) => handlePhoneInput(e, 'mobileNo')}
                 onBlur={identifierContext ? onBlurId : undefined}
               />
             </div>
@@ -359,10 +378,22 @@ export default function CRMContactFormFields({
           </div>
         );
       case 'leadOwner':
+        const contactOwnerName =
+          [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+          user?.name ||
+          user?.email ||
+          '';
         return (
           <div key={key}>
             <label className={LBL}>Owner</label>
-            <input name="leadOwner" type="text" placeholder="Owner name" className={INP} />
+            <input
+              name="leadOwner"
+              type="text"
+              defaultValue={contactOwnerName}
+              readOnly={!isAdmin}
+              placeholder="Owner name"
+              className={cn(INP, !isAdmin && "bg-[var(--surface-subtle)] opacity-80 cursor-not-allowed")}
+            />
           </div>
         );
       case 'pipeline':

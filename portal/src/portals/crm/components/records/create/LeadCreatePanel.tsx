@@ -411,14 +411,14 @@ export default function LeadCreatePanel({
 
     // 2. Mobile Phone validation
     const rawMobile = (data.mobileNo || "").replace(/\D/g, "");
-    if (entity === "lead") {
-      if (!rawMobile) {
-        errors.mobileNo = "Phone number is required";
-      } else if (rawMobile.length !== 10) {
+    if (rawMobile) {
+      if (rawMobile.length !== 10) {
         errors.mobileNo = "Phone number must be exactly 10 digits";
       } else if (!/^[6-9]\d{9}$/.test(rawMobile)) {
         errors.mobileNo = "Indian phone numbers must start with 6, 7, 8, or 9";
       }
+    } else if (entity === "lead") {
+      errors.mobileNo = "Phone number is required";
     }
 
     // 3. Lead specific mandatory fields
@@ -520,6 +520,24 @@ export default function LeadCreatePanel({
       }
     }
 
+    const normalizePhoneToE164 = (val: unknown): string | undefined => {
+      if (val === undefined || val === null) return undefined;
+      const str = String(val).trim();
+      if (!str) return undefined;
+      let digits = str.replace(/\D/g, '');
+      if (digits.length > 10) {
+        if (digits.startsWith('0091') && digits.length === 14) digits = digits.slice(4);
+        else if (digits.startsWith('091') && digits.length === 13) digits = digits.slice(3);
+        else if (digits.startsWith('91') && digits.length === 12) digits = digits.slice(2);
+        else if (digits.startsWith('0') && digits.length === 11) digits = digits.slice(1);
+        else if (digits.length > 10 && digits.startsWith('91')) digits = digits.replace(/^91/, '');
+        else if (digits.length > 10 && digits.startsWith('0')) digits = digits.replace(/^0+/, '');
+      }
+      if (digits.length === 10) return `+91${digits}`;
+      if (str.startsWith('+')) return `+${digits}`;
+      return digits ? `+91${digits}` : undefined;
+    };
+
     const orgVal = data.organization?.trim?.() ?? data.organization;
     const payload = stripEmpty({
       salutation: data.salutation,
@@ -528,9 +546,9 @@ export default function LeadCreatePanel({
       gender: data.gender,
       email: data.email,
       additionalEmails: additionalEmails.length ? additionalEmails : undefined,
-      mobileNo: data.mobileNo,
-      whatsappNumber: data.whatsappNumber || undefined,
-      phone: data.phone,
+      mobileNo: normalizePhoneToE164(data.mobileNo),
+      whatsappNumber: normalizePhoneToE164(data.whatsappNumber),
+      phone: normalizePhoneToE164(data.phone),
       address: data.address || undefined,
       state: data.state || undefined,
       role: entity === "lead" ? data.role || "USER" : undefined,

@@ -256,6 +256,71 @@ export class ClientsService {
     return this.twoBighaClientService.fetchUser(client.twobighaUserId);
   }
 
+  private async resolveTwobighaUserId(id: string): Promise<string | null> {
+    if (!id) return null;
+    // If it's a 24-hex mongo id, find the client doc
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      const client = await this.clientModel.findById(id).exec();
+      return client?.twobighaUserId || null;
+    }
+    // Otherwise it might already be the twobigha userId (e.g. UUID)
+    return id;
+  }
+
+  async getClientMetaData(id: string): Promise<any> {
+    const twobighaUserId = await this.resolveTwobighaUserId(id);
+    return this.twoBighaClientService.getClientMetaData(twobighaUserId || undefined);
+  }
+
+  async getClientProperties(id: string, query: any = {}): Promise<any> {
+    const twobighaUserId = await this.resolveTwobighaUserId(id);
+    return this.twoBighaClientService.getPropertiesByClientId({
+      clientId: twobighaUserId || undefined,
+      page: query.page ? Number(query.page) : 1,
+      limit: query.limit ? Number(query.limit) : 10,
+      search: query.search,
+      propertyCategory: query.propertyCategory,
+      approvalStatus: query.approvalStatus,
+      createdBy: query.createdBy,
+    });
+  }
+
+  async getAllTwoBighaProperties(query: any = {}): Promise<any> {
+    return this.twoBighaClientService.getPropertiesByClientId({
+      clientId: query.clientId,
+      page: query.page ? Number(query.page) : 1,
+      limit: query.limit ? Number(query.limit) : 10,
+      search: query.search,
+      propertyCategory: query.propertyCategory,
+      approvalStatus: query.approvalStatus,
+      createdBy: query.createdBy,
+    });
+  }
+
+  async getClientInvoices(id: string): Promise<any> {
+    const twobighaUserId = await this.resolveTwobighaUserId(id);
+    return this.twoBighaClientService.getClientInvoices(twobighaUserId || '');
+  }
+
+  async getClientBillingAndUsageSummary(id: string): Promise<any> {
+    const twobighaUserId = await this.resolveTwobighaUserId(id);
+    return this.twoBighaClientService.getClientBillingAndUsageSummary(twobighaUserId || '');
+  }
+
+  async getClientFeatureRequests(id: string): Promise<any> {
+    const twobighaUserId = await this.resolveTwobighaUserId(id);
+    return this.twoBighaClientService.getClientFeatureRequests(twobighaUserId || '');
+  }
+
+  async getClientManagedProperties(id: string, query: any = {}): Promise<any> {
+    const twobighaUserId = await this.resolveTwobighaUserId(id);
+    return this.twoBighaClientService.getManagedPropertiesByClientId(
+      twobighaUserId || '',
+      query.page ? Number(query.page) : 1,
+      query.limit ? Number(query.limit) : 10,
+    );
+  }
+
   /**
    * Sync-health rollup for the Settings → 2bigha Sync hub: per-status counts
    * plus the client rows (trimmed to sync-relevant fields).

@@ -15,6 +15,7 @@ import OpportunitySourcePlatformField from '@/components/crm/platform/Opportunit
 import CrmMultiEmailListField from '@/components/crm/email/engagement/CrmMultiEmailListField';
 import { CrmFormSection, CrmFormGrid } from '@/components/crm/records/forms/crm-form-primitives';
 import { usePermissions } from '@/hooks/usePermissions';
+import { cn } from '@/lib/utils';
 
 const STATUS_OPTIONS = ['New', 'Qualified', 'Replied', 'Opportunity'];
 const CALL_STATUS_OPTIONS = ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'];
@@ -157,7 +158,7 @@ export default function CRMLeadFormFields({
   errors = {},
   onClearError,
 }: CRMLeadFormFieldsProps) {
-  const { canViewCrmRevenue } = usePermissions();
+  const { canViewCrmRevenue, user } = usePermissions();
   const keys = canViewCrmRevenue
     ? visibleKeys
     : visibleKeys.filter((k) => k !== 'annualRevenue');
@@ -488,10 +489,22 @@ export default function CRMLeadFormFields({
           </div>
         );
       case 'leadOwner':
+        const ownerName =
+          [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+          user?.name ||
+          user?.email ||
+          '';
         return (
           <div key={key} className="space-y-1">
             <label className={LBL}>Lead owner</label>
-            <input name="leadOwner" type="text" placeholder="Owner name" className={INP} />
+            <input
+              name="leadOwner"
+              type="text"
+              defaultValue={ownerName}
+              readOnly={!isAdmin}
+              placeholder="Owner name"
+              className={cn(INP, !isAdmin && "bg-[var(--surface-subtle)] opacity-80 cursor-not-allowed")}
+            />
           </div>
         );
       case 'leadVertical':
