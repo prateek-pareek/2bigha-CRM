@@ -58,11 +58,11 @@ export default function AgentPropertiesChart({
 
   if (!chartData) {
     return (
-      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-full flex flex-col justify-center items-center text-[var(--text-muted)] min-h-[300px]">
-        <h3 className="text-sm font-bold text-[var(--text-main)] mb-2 self-start absolute top-6 left-6">
-          Portfolio Distribution
-        </h3>
-        <p className="text-xs">No active listings assigned to these agents.</p>
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-full flex flex-col text-[var(--text-muted)] min-h-[300px]">
+        <h3 className="text-sm font-bold text-[var(--text-main)]">Portfolio Distribution</h3>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-xs">No active listings assigned to these agents.</p>
+        </div>
       </div>
     );
   }

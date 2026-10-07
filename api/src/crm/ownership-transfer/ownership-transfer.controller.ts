@@ -10,13 +10,13 @@ export class OwnershipTransferController {
   constructor(private readonly transferService: OwnershipTransferService) {}
 
   @Post('leads/:id/transfer')
-  @Permissions('leads:write')
+  @Permissions('leads:assign')
   transferLead(@Param('id') id: string, @Body() dto: OwnershipTransferDto, @Request() req: any) {
     return this.transferService.transfer('Lead', id, dto, req.user);
   }
 
   @Post('legal-cases/:id/transfer')
-  @Permissions('legal:write')
+  @Permissions('legal:assign')
   transferLegalCase(@Param('id') id: string, @Body() dto: OwnershipTransferDto, @Request() req: any) {
     return this.transferService.transfer('LegalCase', id, dto, req.user);
   }

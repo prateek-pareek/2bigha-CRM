@@ -51,6 +51,7 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     },
     { perm: 'leads:import', label: 'Import leads (upload)' },
     { perm: 'leads:export', label: 'Export / download leads CSV' },
+    { perm: 'leads:assign', label: 'Assign / transfer lead ownership' },
   ],
   'pm-leads': [
     {
@@ -64,12 +65,19 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     { perm: 'clients:import', label: 'Import clients (upload)' },
     { perm: 'clients:export', label: 'Export / download clients CSV' },
   ],
+  contacts: [
+    { perm: 'contacts:export', label: 'Export / download contacts CSV' },
+  ],
+  organizations: [
+    { perm: 'organizations:export', label: 'Export / download organizations CSV' },
+  ],
   inbox: [{ perm: 'inbox:connect', label: 'Connect email accounts' }],
   legal: [
     {
       perm: 'legal:move_pipeline',
       label: 'Move between pipelines / board stage',
     },
+    { perm: 'legal:assign', label: 'Assign / transfer case ownership' },
   ],
   'property-listings': [
     { perm: 'property-listings:approve', label: 'Approve listings' },
@@ -106,6 +114,7 @@ export const GLOBAL_PERMISSION_KEYS = new Set([
   'leads:move_pipeline',
   'leads:import',
   'leads:export',
+  'leads:assign',
   'pm-leads:read',
   'pm-leads:write',
   'pm-leads:edit',
@@ -115,6 +124,9 @@ export const GLOBAL_PERMISSION_KEYS = new Set([
   'pm-leads:export',
   'clients:import',
   'clients:export',
+  'contacts:export',
+  'organizations:export',
+  'legal:assign',
   'inbox:connect',
   'legal:move_pipeline',
   'property-listings:approve',

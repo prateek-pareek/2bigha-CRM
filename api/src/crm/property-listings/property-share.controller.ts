@@ -22,7 +22,7 @@ export class PropertyShareController {
   ) {}
 
   @Post('generate')
-  @Permissions('leads:write', 'contacts:write', 'inbox:write', 'property_listings:read')
+  @Permissions('leads:write', 'contacts:write', 'inbox:write', 'property-listings:read')
   async generate(
     @Body()
     body: {

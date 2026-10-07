@@ -35,9 +35,8 @@ import {
 } from "@/components/crm/property-listings/PropertyListingCard";
 import { SectionTabs, VisitStatPills } from "@/components/crm/visits/visit-chrome";
 import { CrmHoverActionIcon, CrmTableActionMenu } from "@/components/crm/ui/CrmListCells";
-import { CrmIcon, CrmNavIcon } from "@/lib/crm/shared/icons";
-import { contactWhatsappUrl, contactWhatsappWaId } from "@/lib/crm/crm-messaging-links";
-import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
+import { CrmNavIcon } from "@/lib/crm/shared/icons";
+import { contactWhatsappWaId } from "@/lib/crm/crm-messaging-links";
 import PropertyActivityPopup from "@/components/crm/records/detail/PropertyActivityPopup";
 import {
   deleteThirdPartyProperty,
@@ -51,7 +50,6 @@ import {
   mapTwoBighaFarmToRecord,
   mapTwoBighaPropertyToRecord,
 } from "@/lib/crm/property-listings/backend-api";
-import { CRM_API_URL } from "@/lib/crm/config";
 import {
   LISTING_BUCKETS,
   PROPERTY_STATUSES,
@@ -161,7 +159,6 @@ function PropertyListingsPageContent() {
   const [pageSize, setPageSize] = useState(25);
   const [stats, setStats] = useState<PropertyListingStats | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [callProperty, setCallProperty] = useState<PropertyListingRecord | null>(null);
   const [notesProperty, setNotesProperty] = useState<PropertyListingRecord | null>(null);
 
   const [overallTotal, setOverallTotal] = useState<number>(0);
@@ -390,21 +387,16 @@ function PropertyListingsPageContent() {
       return;
     }
     if (!confirm("Delete this listing?")) return;
-    const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/property-listings/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        await deleteThirdPartyProperty(id);
-      }
+      // Same DELETE endpoint for CRM-only and live 2bigha rows — the API resolves the id.
+      await deleteThirdPartyProperty(id);
       toast.success("Listing deleted");
       setListings((prev) => prev.filter((l) => l._id !== id));
       setTotal((t) => Math.max(0, t - 1));
       void loadStats();
-    } catch {
-      toast.error("Failed to delete listing");
+    } catch (err: any) {
+      const message = err?.response?.data?.message;
+      toast.error(typeof message === "string" && message ? message : "Failed to delete listing");
     }
   };
 
@@ -434,7 +426,10 @@ function PropertyListingsPageContent() {
   const sortedListings = useMemo(() => {
     let result = [...listings];
     if (statusFilter !== "all") {
-      result = result.filter((l) => l.status === statusFilter);
+      // 2bigha MANAGED rows map to "Managed"; the API serves them for the "Under Offer" filter.
+      result = result.filter(
+        (l) => l.status === statusFilter || (statusFilter === "Under Offer" && l.status === "Managed"),
+      );
     }
     if (approvalFilter !== "all") {
       result = result.filter((l) => (l.approvalStatus || "").toLowerCase() === approvalFilter.toLowerCase());
@@ -799,23 +794,14 @@ function PropertyListingsPageContent() {
                   </td>
                   <td className="text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1.5">
-                      {p.contactPhone ? (
-                        <CrmHoverActionIcon
-                          icon={<CrmIcon.PhoneCall size={12} />}
-                          label="Call"
-                          value={p.contactPhone}
-                          tone="primary"
-                          onClick={() => setCallProperty(p)}
-                        />
-                      ) : null}
-                      {contactWhatsappUrl({ phone: p.contactPhone }) ? (
+                      {/* Owner/agent numbers stay hidden — inquiries go through WhatsApp only. */}
+                      {contactWhatsappWaId({ mobileNo: p.whatsappNumber, phone: p.contactPhone }) ? (
                         <CrmHoverActionIcon
                           icon={<CrmNavIcon.WhatsApp size={12} />}
                           label="WhatsApp"
-                          value={p.contactPhone!}
                           tone="whatsapp"
                           onClick={() => {
-                            const waId = contactWhatsappWaId({ phone: p.contactPhone });
+                            const waId = contactWhatsappWaId({ mobileNo: p.whatsappNumber, phone: p.contactPhone });
                             if (waId) router.push(`/crm/whatsapp?wa=${waId}`);
                           }}
                         />
@@ -945,15 +931,6 @@ function PropertyListingsPageContent() {
           className="mt-3 rounded-[var(--crm-radius-ui)] border border-[#e2e8f0]"
         />
       </div>
-
-      <CallLeadModal
-        open={!!callProperty}
-        onClose={() => setCallProperty(null)}
-        phone={callProperty?.contactPhone}
-        leadId={callProperty?._id}
-        leadName={callProperty?.title}
-        relatedType="Property"
-      />
 
       <PropertyActivityPopup
         open={!!notesProperty}

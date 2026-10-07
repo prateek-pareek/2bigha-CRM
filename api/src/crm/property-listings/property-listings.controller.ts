@@ -37,7 +37,7 @@ export class PropertyListingsController {
   constructor(private readonly listingsService: PropertyListingsService) {}
 
   @Post('twobigha/upload-image-proxy')
-  @Permissions('property_listings:write')
+  @Permissions('property-listings:write')
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadImageProxy(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
@@ -47,39 +47,39 @@ export class PropertyListingsController {
   }
 
   @Get()
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   findAll(@Query() query: Record<string, string>, @Request() req?: any) {
     return this.listingsService.findAll({ ...query, user: req?.user });
   }
 
   @Get('pm/assignment-staff')
-  @Permissions('property_listings:read', 'leads:read')
+  @Permissions('property-listings:read', 'leads:read')
   listPmAssignmentStaff(@Query('search') search?: string) {
     return this.listingsService.listPmAssignmentStaff(search);
   }
 
   @Get('pm/lead-overview/:leadId')
-  @Permissions('property_listings:read', 'leads:read')
+  @Permissions('property-listings:read', 'leads:read')
   getLeadPmOverview(@Param('leadId') leadId: string) {
     return this.listingsService.getLeadPmOverview(leadId);
   }
 
   @Get('stats')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   stats(@Query('listingBucket') listingBucket?: string) {
     return this.listingsService.stats(listingBucket);
   }
 
   /** Live read-through to 2bigha's getPropertyBySlug — the property-detail display screen operation per the Integration Handbook. */
   @Get('twobigha/by-slug/:slug')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   getTwoBighaDetailBySlug(@Param('slug') slug: string) {
     return this.listingsService.getTwoBighaDetailBySlug(slug);
   }
 
   /** Live read-through to 2bigha's getFarms — farm search/listing. */
   @Get('twobigha/farms')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   listTwoBighaFarms(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -96,7 +96,7 @@ export class PropertyListingsController {
 
   /** Live read-through to 2bigha's standard properties search/listing. */
   @Get('twobigha/properties')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   listTwoBighaProperties(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -125,7 +125,7 @@ export class PropertyListingsController {
 
   /** Live read-through to 2bigha's getAllManagedPropertiesByRole — PM pipeline list. */
   @Get('twobigha/managed-properties')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   listTwoBighaManagedProperties(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -143,21 +143,21 @@ export class PropertyListingsController {
   }
 
   @Get('twobigha/managed-properties/:id')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   getTwoBighaManagedProperty(@Param('id') id: string) {
     return this.listingsService.getTwoBighaManagedProperty(id);
   }
 
   /** Live read-through to 2bigha's getFarmBySlug — the farm-detail display operation. */
   @Get('twobigha/farms/by-slug/:slug')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   getTwoBighaFarmBySlug(@Param('slug') slug: string) {
     return this.listingsService.getTwoBighaFarmBySlug(slug);
   }
 
   /** Fetch live farm listing images by its slug dynamically. */
   @Get('twobigha/farms/media/:slug')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   async getTwoBighaFarmMedia(@Param('slug') slug: string) {
     const images = await this.listingsService.getTwoBighaFarmMedia(slug);
     return { images };
@@ -165,7 +165,7 @@ export class PropertyListingsController {
 
   /** Get pre-signed Azure Blob upload URLs for property image uploads. */
   @Get('twobigha/image-upload-urls')
-  @Permissions('property_listings:write')
+  @Permissions('property-listings:write')
   getImageUploadUrls(@Query('count') count?: string) {
     const num = count ? Number(count) : 1;
     return this.listingsService.getImageUploadUrls(num);
@@ -178,7 +178,7 @@ export class PropertyListingsController {
    * confirmed approve/reject mutation exists in the documented API yet.
    */
   @Get('twobigha/approval-queue/:bucket')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   listTwoBighaApprovalQueue(
     @Param('bucket') bucket: string,
     @Query('page') page?: string,
@@ -194,14 +194,14 @@ export class PropertyListingsController {
 
   /** Leads-table batch counts (property + farm) — avoids N+1 calls per row. */
   @Post('counts-by-lead')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   countsByLead(@Body() body: { ids?: string[] }) {
     return this.listingsService.countsByLeadIds(body?.ids || []);
   }
 
   /** Agent Performance leaderboard — properties/farms listed per agent, merged client-side. */
   @Get('counts-by-agent')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   countsByAgent(@Query('dateFrom') dateFrom?: string, @Query('dateTo') dateTo?: string) {
     return this.listingsService.countsByCreatedBy({ dateFrom, dateTo });
   }
@@ -220,31 +220,31 @@ export class PropertyListingsController {
   }
 
   @Get(':id')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   findOne(@Param('id') id: string) {
     return this.listingsService.findOne(id);
   }
 
   @Post()
-  @Permissions('property_listings:write')
+  @Permissions('property-listings:write')
   create(@Request() req: any, @Body() dto: CreatePropertyListingDto) {
     return this.listingsService.create(dto, req.user?.userId);
   }
 
   @Put(':id')
-  @Permissions('property_listings:write')
+  @Permissions('property-listings:write')
   update(@Param('id') id: string, @Body() dto: UpdatePropertyListingDto) {
     return this.listingsService.update(id, dto);
   }
 
   @Delete(':id')
-  @Permissions('property_listings:delete')
+  @Permissions('property-listings:delete')
   remove(@Param('id') id: string, @Request() req: any) {
     return this.listingsService.remove(id, req.user?.userId);
   }
 
   @Post('approval-decision')
-  @Permissions('property_listings:write')
+  @Permissions('property-listings:write')
   decideApproval(
     @Request() req: any,
     @Body() body: { id: string; status: 'Approved' | 'Rejected'; message?: string },
@@ -254,14 +254,14 @@ export class PropertyListingsController {
 
   /** Manual retry for a listing whose last sync to 2bigha failed (or is still mock-only). */
   @Post(':id/sync-2bigha')
-  @Permissions('property_listings:write')
+  @Permissions('property-listings:write')
   retrySync(@Param('id') id: string) {
     return this.listingsService.retrySync(id);
   }
 
   /** Update sold status and sync directly to 2bigha updatePropertySoldStatus mutation. */
   @Patch(':id/sold-status')
-  @Permissions('property_listings:write')
+  @Permissions('property-listings:write')
   updateSoldStatus(
     @Param('id') id: string,
     @Body() body: { isSold: boolean },
@@ -271,20 +271,20 @@ export class PropertyListingsController {
 
   /** Live PM aggregated status read-through for Stages 3-6. */
   @Get(':id/pm/live-status')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   getLivePmStatus(@Param('id') id: string) {
     return this.listingsService.getLivePmStatus(id);
   }
 
   /** Drill into full visit report details by reportId. */
   @Get('pm/reports/:reportId')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   getVisitReportDetail(@Param('reportId') reportId: string) {
     return this.listingsService.getVisitReportDetail(Number(reportId));
   }
 
   @Post(':id/pm/assign')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   assignPmStaff(@Param('id') id: string, @Body() body: AssignPmStaffDto) {
     return this.listingsService.assignPmStaff(id, {
       role: body.role,
@@ -295,56 +295,56 @@ export class PropertyListingsController {
   }
 
   @Post(':id/pm/unassign')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   unassignPmStaff(@Param('id') id: string, @Body() body: UnassignPmStaffDto) {
     return this.listingsService.unassignPmStaff(id, body.role);
   }
 
   @Post(':id/pm/legal/start')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   startPmLegal(@Param('id') id: string, @Body() body: PmLegalActionDto) {
     return this.listingsService.startPmLegalVerification(id, body);
   }
 
   @Put(':id/pm/legal/checklist')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   updatePmLegalChecklist(@Param('id') id: string, @Body() body: PmLegalChecklistDto) {
     return this.listingsService.updatePmLegalChecklist(id, body);
   }
 
   @Post(':id/pm/legal/complete')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   completePmLegal(@Param('id') id: string, @Body() body: PmLegalActionDto) {
     return this.listingsService.completePmLegalVerification(id, body);
   }
 
   @Post(':id/pm/visit/schedule')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   schedulePmVisit(@Param('id') id: string, @Body() body: PmScheduleVisitDto) {
     return this.listingsService.schedulePmFieldVisit(id, body);
   }
 
   @Post(':id/pm/visit/status')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   setPmVisitStatus(@Param('id') id: string, @Body() body: PmVisitStatusDto) {
     return this.listingsService.setPmFieldVisitStatus(id, body);
   }
 
   @Post(':id/pm/visit/report/submit')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   submitPmVisitReport(@Param('id') id: string) {
     return this.listingsService.submitPmVisitReport(id);
   }
 
   @Post(':id/pm/visit/report/review')
-  @Permissions('property_listings:write', 'leads:write')
+  @Permissions('property-listings:write', 'leads:write')
   reviewPmVisitReport(@Param('id') id: string, @Body() body: PmReviewReportDto) {
     return this.listingsService.reviewPmVisitReport(id, body);
   }
 
   /** Read-only hand-off: PM property views associated legal cases (legal status snapshot only). */
   @Get(':id/associated-legal-status')
-  @Permissions('property_listings:read')
+  @Permissions('property-listings:read')
   getPropertyAssociatedLegalStatus(@Param('id') id: string) {
     return this.listingsService.getPropertyAssociatedLegalStatus(id);
   }

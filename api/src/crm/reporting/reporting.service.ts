@@ -3547,25 +3547,49 @@ export class ReportingService {
    * listed are fetched separately (PropertyListingsService lives outside this
    * module) and merged client-side.
    */
-  async getAgentPerformanceLeaderboard(window: string) {
+  /**
+   * Agent filter for the Agent Performance report: comma-separated HRMS user ids → a
+   * `$match` value for the actor field (initiatedByUserId / createdBy / author). Ids are matched
+   * as ObjectId and string so legacy string-typed rows still count. `null` = all agents.
+   */
+  private agentActorMatch(agentIds?: string[]): Record<string, unknown> {
+    if (!agentIds?.length) return { $exists: true, $ne: null };
+    const oids = agentIds.filter((id) => Types.ObjectId.isValid(id)).map((id) => new Types.ObjectId(id));
+    return { $in: [...oids, ...agentIds] };
+  }
+
+  /**
+   * CRM user ObjectIds and 2bigha agent ids (UUIDs, for agents not on the CRM). A 2bigha-only
+   * agent has no CRM calls/leads/activities, so they get a zero row instead of being dropped.
+   */
+  parseAgentIdsParam(raw?: string): string[] {
+    return String(raw || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => /^[A-Za-z0-9-]{1,64}$/.test(s))
+      .slice(0, 200);
+  }
+
+  async getAgentPerformanceLeaderboard(window: string, agentIds: string[] = []) {
     const range = this.resolveWorkspaceWindow(window);
     const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+    const actor = this.agentActorMatch(agentIds);
 
     const [callRows, leadRows, convertedRows, activityRows, targets, users] = await Promise.all([
       this.callLogModel.aggregate([
-        { $match: { ...dateMatch, initiatedByUserId: { $exists: true, $ne: null } } },
+        { $match: { ...dateMatch, initiatedByUserId: actor } },
         { $group: { _id: '$initiatedByUserId', count: { $sum: 1 } } },
       ]),
       this.leadModel.aggregate([
-        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null } } },
+        { $match: { ...dateMatch, createdBy: actor } },
         { $group: { _id: '$createdBy', count: { $sum: 1 } } },
       ]),
       this.leadModel.aggregate([
-        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null }, converted: true } },
+        { $match: { ...dateMatch, createdBy: actor, converted: true } },
         { $group: { _id: '$createdBy', count: { $sum: 1 } } },
       ]),
       this.activityModel.aggregate([
-        { $match: { ...dateMatch, type: { $nin: ['System'] }, author: { $exists: true, $ne: null } } },
+        { $match: { ...dateMatch, type: { $nin: ['System'] }, author: actor } },
         { $group: { _id: '$author', count: { $sum: 1 } } },
       ]),
       this.agentTargetModel.find().lean(),
@@ -3574,7 +3598,9 @@ export class ReportingService {
 
     const userById = new Map(users.map((u: any) => [String(u._id), u]));
     const targetById = new Map(targets.map((t: any) => [String(t.agentId), t]));
-    const agentIds = new Set<string>([
+    // Selected agents always get a row (zeros when idle in the window).
+    const rowIds = new Set<string>([
+      ...agentIds,
       ...callRows.map((r) => String(r._id)),
       ...leadRows.map((r) => String(r._id)),
       ...activityRows.map((r) => String(r._id)),
@@ -3587,7 +3613,7 @@ export class ReportingService {
     const leadsConverted = countMap(convertedRows);
     const activities = countMap(activityRows);
 
-    const leaderboard = [...agentIds].map((id) => {
+    const leaderboard = [...rowIds].map((id) => {
       const user = userById.get(id);
       const target = targetById.get(id);
       const name = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown agent';
@@ -3644,13 +3670,14 @@ export class ReportingService {
   /**
    * Agent Performance Time-Series Trend
    */
-  async getAgentPerformanceTrend(window: string) {
+  async getAgentPerformanceTrend(window: string, agentIds: string[] = []) {
     const range = this.resolveWorkspaceWindow(window);
     const dateMatch = { createdAt: { $gte: range.start, $lte: range.end } };
+    const actor = this.agentActorMatch(agentIds);
 
     const [callRows, leadRows, convertedRows] = await Promise.all([
       this.callLogModel.aggregate([
-        { $match: { ...dateMatch, initiatedByUserId: { $exists: true, $ne: null } } },
+        { $match: { ...dateMatch, initiatedByUserId: actor } },
         {
           $group: {
             _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
@@ -3659,7 +3686,7 @@ export class ReportingService {
         },
       ]).exec(),
       this.leadModel.aggregate([
-        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null } } },
+        { $match: { ...dateMatch, createdBy: actor } },
         {
           $group: {
             _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
@@ -3668,7 +3695,7 @@ export class ReportingService {
         },
       ]).exec(),
       this.leadModel.aggregate([
-        { $match: { ...dateMatch, createdBy: { $exists: true, $ne: null }, converted: true } },
+        { $match: { ...dateMatch, createdBy: actor, converted: true } },
         {
           $group: {
             _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },

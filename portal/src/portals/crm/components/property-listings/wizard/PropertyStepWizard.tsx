@@ -8,8 +8,11 @@ import { CrmPageHeader } from "@/components/crm/ui";
 import {
   Step1LandDetails,
   INITIAL_PROPERTY_WIZARD_DRAFT,
+  buildListingTitle,
+  mapLandTypeToPropertyType,
   type PropertyListingWizardDraft,
 } from "./Step1LandDetails";
+import { priceToRupees } from "@/lib/crm/property-listings/types";
 import { Step2UploadImages } from "./Step2UploadImages";
 import { Step3ContactDetails } from "./Step3ContactDetails";
 import { Step4MapLocation } from "./Step4MapLocation";
@@ -155,8 +158,11 @@ export function PropertyStepWizard({
       if (!draft.area?.trim() || isNaN(Number(draft.area)) || Number(draft.area) <= 0) {
         newErrors.area = "Valid positive area is required";
       }
-      if (!draft.totalPrice?.trim() || isNaN(Number(draft.totalPrice)) || Number(draft.totalPrice) <= 0) {
+      if (!draft.totalPrice?.trim() || !(priceToRupees(draft.totalPrice, draft.priceUnit) > 0)) {
         newErrors.totalPrice = "Valid total price is required";
+      }
+      if (draft.ownersCount?.trim() && !(parseInt(draft.ownersCount, 10) >= 1)) {
+        newErrors.ownersCount = "No. of owners must be at least 1";
       }
       if (draft.description?.trim() && draft.description.trim().split(/\s+/).length > 250) {
         newErrors.description = "Description cannot exceed 250 words";
@@ -218,10 +224,14 @@ export function PropertyStepWizard({
       } else if (Number(draft.area) > 10000000) {
         newErrors.area = "Area value is unrealistically large";
       }
-      if (!draft.totalPrice?.trim() || isNaN(Number(draft.totalPrice)) || Number(draft.totalPrice) <= 0) {
-        newErrors.totalPrice = "Valid positive total price is required (e.g. 500000)";
-      } else if (Number(draft.totalPrice) < 1000) {
+      const totalPriceRupees = priceToRupees(draft.totalPrice || "", draft.priceUnit);
+      if (!draft.totalPrice?.trim() || !(totalPriceRupees > 0)) {
+        newErrors.totalPrice = "Valid positive total price is required (e.g. 500000, or 5 Lakh)";
+      } else if (totalPriceRupees < 1000) {
         newErrors.totalPrice = "Total price must be at least ₹1,000";
+      }
+      if (draft.ownersCount?.trim() && !(parseInt(draft.ownersCount, 10) >= 1)) {
+        newErrors.ownersCount = "No. of owners must be at least 1";
       }
       if (draft.khasraNumber?.trim() && !/^[a-zA-Z0-9\/\-_\s]{1,30}$/.test(draft.khasraNumber.trim())) {
         newErrors.khasraNumber = "Khasra number can only contain letters, numbers, slashes, or dashes";
@@ -311,44 +321,10 @@ export function PropertyStepWizard({
 
     setSubmitting(true);
     try {
-      const title = `${draft.landType} Land in ${draft.city}, ${draft.district || draft.state}`;
+      const title = buildListingTitle(draft);
       const validImages = draft.images
         .map((img) => img.url)
         .filter(Boolean);
-
-      const mapLandTypeToPropertyType = (
-        type?: string
-      ): "Apartment" | "Villa" | "Independent House" | "Plot" | "Commercial" | "Office" | "Warehouse" | "Farm" | "Other" => {
-        if (bucket === "farm") return "Farm";
-        if (!type) return "Plot";
-        const allowed = [
-          "Apartment",
-          "Villa",
-          "Independent House",
-          "Plot",
-          "Commercial",
-          "Office",
-          "Warehouse",
-          "Farm",
-          "Other",
-        ];
-        if (allowed.includes(type)) return type as any;
-        switch (type.toLowerCase()) {
-          case "agricultural":
-          case "farmland":
-          case "farmhouse":
-          case "farm":
-            return "Farm";
-          case "residential":
-            return "Independent House";
-          case "commercial":
-            return "Commercial";
-          case "industrial":
-            return "Warehouse";
-          default:
-            return "Plot";
-        }
-      };
 
       const payload = {
         title,
@@ -358,9 +334,10 @@ export function PropertyStepWizard({
         state: draft.state,
         zipCode: draft.pincode || undefined,
         country: "India",
-        price: parseFloat(draft.totalPrice) || 0,
+        price: priceToRupees(draft.totalPrice, draft.priceUnit) || 0,
         currency: "INR",
-        propertyType: mapLandTypeToPropertyType(draft.landType),
+        propertyType: mapLandTypeToPropertyType(draft.landType, bucket),
+        landType: draft.landType && draft.landType !== "None" ? draft.landType : undefined,
         listedFor: "Sale" as const,
         areaSqft: parseFloat(draft.area) || 0,
         areaUnit: draft.areaUnit,
@@ -373,14 +350,16 @@ export function PropertyStepWizard({
         highwayConn: draft.highwayConn,
         landZoning: draft.landZoning,
         ownershipYes: draft.ownershipYes,
-        soilType: draft.soilType,
+        ownersCount: draft.ownersCount ? parseInt(draft.ownersCount, 10) : undefined,
+        soilType: draft.soilType && draft.soilType !== "None" ? draft.soilType : undefined,
         roadAccess: draft.roadAccess,
         roadAccessDistance: draft.roadAccessDistance ? parseInt(draft.roadAccessDistance, 10) : undefined,
         roadAccessWidth: draft.roadAccessWidth ? parseInt(draft.roadAccessWidth, 10) : undefined,
         roadAccessDistanceUnit: draft.roadAccessDistanceUnit || undefined,
         description: draft.description || undefined,
         status: "Available",
-        approvalStatus: "Approved",
+        // New listings enter the Approval Queue; an edit keeps its current moderation state.
+        approvalStatus: editMode ? undefined : ("Pending" as const),
         images: validImages.length ? validImages : undefined,
         listerType: draft.listerType,
         contactName: draft.ownerName,
@@ -428,7 +407,7 @@ export function PropertyStepWizard({
         }
         breadcrumbs={[
           { label: "Home", href: "/crm/workspace/summary" },
-          { label: "My Properties", href: `/crm/property-listings?bucket=${bucket}` },
+          { label: "My Properties", href: "/crm/property-listings/mine" },
           { label: editMode ? "Edit Property" : "Add Property" },
         ]}
         className="mb-6"

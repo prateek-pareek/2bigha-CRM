@@ -194,10 +194,15 @@ export class CreatePropertyListingDto {
   soilType?: string;
 
   @IsOptional()
+  @IsString()
+  landType?: string;
+
+  @IsOptional()
   ownershipYes?: boolean;
 
   @IsOptional()
   @IsNumber()
+  @Min(1)
   ownersCount?: number;
 
   @IsOptional()

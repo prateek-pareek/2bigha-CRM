@@ -25,7 +25,7 @@ export class Role {
    * unrelated categorization: 'CRM'/'Users'/'Settings'). Defaults to 'ALL' (unrestricted)
    * so existing roles created before this field existed keep their current behavior.
    */
-  @Prop({ enum: CRM_ROLE_MODULES, default: 'ALL', index: true })
+  @Prop({ type: String, enum: [...CRM_ROLE_MODULES], default: 'ALL', index: true })
   workspaceModule: CrmRoleModule;
 }
 

@@ -7,7 +7,7 @@ import {
   Home,
   Loader2,
   Mail,
-  Phone,
+  Send,
   Trash2,
   User,
   MapPin,
@@ -23,7 +23,6 @@ import {
   ImageIcon,
   Tag,
   ArrowLeft,
-  MessageSquare,
   IndianRupee,
   Clock,
   AlertCircle,
@@ -59,9 +58,13 @@ import ManagedPropertySummaryCard from "@/components/crm/property-listings/Manag
 import LegalVerificationReviewPanel from "@/components/crm/property-listings/LegalVerificationReviewPanel";
 import PropertyDetailMapView from "@/portals/crm/components/property-listings/PropertyDetailMapView";
 import { resolveUploadedImageUrl } from "@/lib/media/upload-image";
+import { CrmNavIcon } from "@/lib/crm/shared/icons";
+import { whatsappUrlFromPhone } from "@/lib/crm/crm-messaging-links";
 import {
+  displayPropertyType,
   formatAddress,
   formatIndianLandAmount,
+  formatLandMarkName,
   formatListingArea,
   formatPrice,
   legalStatusBadgeTone,
@@ -207,6 +210,7 @@ export default function PropertyListingDetailPage() {
       sub.legalVerificationUsed < sub.legalVerificationAllowance);
 
   const images = Array.isArray(listing.images) ? listing.images.filter(Boolean) : [];
+  const whatsappHref = whatsappUrlFromPhone(listing.whatsappNumber || listing.contactPhone);
 
   const normStatus = normalizeListingStatus(listing.status);
   const normApproval = normalizeApprovalStatus(listing.approvalStatus);
@@ -433,12 +437,12 @@ export default function PropertyListingDetailPage() {
                 : formatListingArea(listing)}
             </p>
             <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">
-              {listing.propertyType || "Agricultural"} Land
+              {listing.landType || displayPropertyType(listing.propertyType)} Land
             </p>
           </div>
           <div className="mt-2.5 flex items-center justify-between border-t border-[var(--border-color)] pt-2 text-[11px] text-[var(--text-muted)]">
             <span>Property Type</span>
-            <strong className="text-[var(--text-main)]">{listing.propertyType || "Agricultural"}</strong>
+            <strong className="text-[var(--text-main)]">{listing.landType || displayPropertyType(listing.propertyType)}</strong>
           </div>
         </div>
 
@@ -630,8 +634,13 @@ export default function PropertyListingDetailPage() {
                   </>
                 ) : null}
                 <DetailRow
+                  label="Land Type"
+                  value={listing.landType}
+                  icon={<Building size={15} className="text-[var(--text-muted)]" />}
+                />
+                <DetailRow
                   label="Property Type"
-                  value={listing.propertyType}
+                  value={listing.propertyType ? displayPropertyType(listing.propertyType) : undefined}
                   icon={<Building size={15} className="text-[var(--text-muted)]" />}
                 />
                 <DetailRow
@@ -673,6 +682,11 @@ export default function PropertyListingDetailPage() {
                   label="Sole Ownership"
                   value={listing.ownershipYes ? "Yes (Sole Owner)" : listing.ownershipYes === false ? "No (Joint / Multiple)" : undefined}
                   icon={<ShieldCheck size={15} className="text-emerald-500" />}
+                />
+                <DetailRow
+                  label="No. of Owners"
+                  value={listing.ownersCount != null ? String(listing.ownersCount) : undefined}
+                  icon={<ShieldCheck size={15} className="text-[var(--text-muted)]" />}
                 />
                 <DetailRow
                   label="Highway Connectivity"
@@ -721,9 +735,9 @@ export default function PropertyListingDetailPage() {
                         </span>
                       ))}
                     </div>
-                    {listing.landMarkName && (
+                    {formatLandMarkName(listing.landMarkName) && (
                       <p className="mt-2 text-xs text-[var(--text-muted)]">
-                        Name / Note: <strong className="text-[var(--text-main)]">{listing.landMarkName}</strong>
+                        Name / Note: <strong className="text-[var(--text-main)]">{formatLandMarkName(listing.landMarkName)}</strong>
                       </p>
                     )}
                   </div>
@@ -792,55 +806,21 @@ export default function PropertyListingDetailPage() {
                   </div>
                 </div>
 
-                {/* Quick Action Buttons */}
-                <div className="grid grid-cols-2 gap-2">
-                  {listing.contactPhone && (
-                    <a
-                      href={`tel:${listing.contactPhone}`}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 transition-colors shadow-xs"
-                    >
-                      <Phone size={13} /> Call
-                    </a>
-                  )}
-                  {listing.whatsappNumber && (
-                    <a
-                      href={`https://wa.me/${listing.whatsappNumber.replace(/[^0-9]/g, "")}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors shadow-xs"
-                    >
-                      <MessageSquare size={13} /> WhatsApp
-                    </a>
-                  )}
-                </div>
+                {/* Owner/agent numbers stay hidden — inquiries go through WhatsApp only. */}
+                {whatsappHref && (
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors shadow-xs"
+                  >
+                    <CrmNavIcon.WhatsApp size={14} /> WhatsApp
+                    <Send size={13} />
+                  </a>
+                )}
 
                 {/* Contact Rows */}
                 <div className="divide-y divide-[var(--border-color)] text-xs">
-                  {listing.contactPhone && (
-                    <div className="py-2 flex items-center justify-between">
-                      <span className="text-[var(--text-muted)] flex items-center gap-1.5">
-                        <Phone size={13} /> Phone
-                      </span>
-                      <a href={`tel:${listing.contactPhone}`} className="font-mono font-medium text-[var(--primary)] hover:underline">
-                        {listing.contactPhone}
-                      </a>
-                    </div>
-                  )}
-                  {listing.whatsappNumber && (
-                    <div className="py-2 flex items-center justify-between">
-                      <span className="text-[var(--text-muted)] flex items-center gap-1.5">
-                        <MessageSquare size={13} className="text-emerald-500" /> WhatsApp
-                      </span>
-                      <a
-                        href={`https://wa.me/${listing.whatsappNumber.replace(/[^0-9]/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-mono font-medium text-emerald-600 hover:underline"
-                      >
-                        {listing.whatsappNumber}
-                      </a>
-                    </div>
-                  )}
                   {listing.contactEmail && (
                     <div className="py-2 flex items-center justify-between">
                       <span className="text-[var(--text-muted)] flex items-center gap-1.5">

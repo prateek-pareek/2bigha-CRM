@@ -57,6 +57,8 @@ export default function AgentPerformancePage() {
   const { hasAccess } = usePermissions();
   const canSetTargets = hasAccess("settings:admin");
   const [agents, setAgents] = useState<AgentRow[]>([]);
+  /** Every CRM-portal user, so the Agent filter lists the whole team — not only agents active in the window. */
+  const [roster, setRoster] = useState<Array<{ agentId: string; name: string }>>([]);
   const [propertyCounts, setPropertyCounts] = useState<PropertyCounts>({});
   const [trendData, setTrendData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,24 +79,49 @@ export default function AgentPerformancePage() {
     return h;
   }, []);
 
+  useEffect(() => {
+    // CRM team + 2bigha agents in one list (merged by email server-side). Agents who are on
+    // both use their CRM id, so their CRM activity counts; 2bigha-only agents are tagged.
+    fetch(`${CRM_API_URL}/crm-users/list/task-assignees`, { headers: authHeaders(), cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: Array<{ _id: string; firstName?: string; lastName?: string; email?: string; source?: "crm" | "twobigha" }>) =>
+        setRoster(
+          (Array.isArray(rows) ? rows : []).map((u) => {
+            const name = `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email || "Unknown";
+            return { agentId: String(u._id), name: u.source === "twobigha" ? `${name} · 2bigha` : name };
+          }),
+        ),
+      )
+      .catch(() => setRoster([]));
+  }, [authHeaders]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const windowParam = filter.dateRange === "custom" && filter.customDateStart && filter.customDateEnd
         ? `${filter.customDateStart},${filter.customDateEnd}`
         : filter.dateRange;
+      const agentsParam = filter.selectedAgents.length
+        ? `&agents=${encodeURIComponent(filter.selectedAgents.join(","))}`
+        : "";
 
       const [leaderboardRes, propertiesRes, trendRes] = await Promise.all([
-        fetch(`${CRM_API_URL}/crm/reports/agents?window=${windowParam}`, { headers: authHeaders(), cache: "no-store" }),
+        fetch(`${CRM_API_URL}/crm/reports/agents?window=${windowParam}${agentsParam}`, { headers: authHeaders(), cache: "no-store" }),
         fetch(`${CRM_API_URL}/crm/property-listings/counts-by-agent`, { headers: authHeaders(), cache: "no-store" }),
-        fetch(`${CRM_API_URL}/crm/reports/agents/trend?window=${windowParam}`, { headers: authHeaders(), cache: "no-store" }),
+        fetch(`${CRM_API_URL}/crm/reports/agents/trend?window=${windowParam}${agentsParam}`, { headers: authHeaders(), cache: "no-store" }),
       ]);
       const leaderboard = leaderboardRes.ok ? await leaderboardRes.json() : { agents: [] };
       const properties = propertiesRes.ok ? await propertiesRes.json() : {};
       const trend = trendRes.ok ? await trendRes.json() : [];
       
-      const allAgents = Array.isArray(leaderboard.agents) ? leaderboard.agents : [];
-      setAgents(allAgents);
+      const allAgents: AgentRow[] = Array.isArray(leaderboard.agents) ? leaderboard.agents : [];
+      // 2bigha-only agents aren't CRM users, so the API can't name them — use the roster name.
+      const rosterNames = new Map(roster.map((r) => [r.agentId, r.name]));
+      setAgents(
+        allAgents.map((a) =>
+          a.name === "Unknown agent" && rosterNames.has(a.agentId) ? { ...a, name: rosterNames.get(a.agentId)! } : a,
+        ),
+      );
       setPropertyCounts(properties || {});
       setTrendData(trend || []);
     } catch {
@@ -104,7 +131,35 @@ export default function AgentPerformancePage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, authHeaders]);
+  }, [
+    filter.dateRange,
+    filter.customDateStart,
+    filter.customDateEnd,
+    filter.selectedAgents,
+    authHeaders,
+    roster,
+  ]);
+
+  // Filter options: full roster, plus anyone active in the window who isn't on it.
+  const agentOptions = (() => {
+    const byId = new Map(roster.map((r) => [r.agentId, r]));
+    agents.forEach((a) => {
+      if (!byId.has(a.agentId)) byId.set(a.agentId, { agentId: a.agentId, name: a.name });
+    });
+    const stats = new Map(agents.map((a) => [a.agentId, a]));
+    return [...byId.values()]
+      .sort((x, y) => x.name.localeCompare(y.name))
+      .map(({ agentId, name }) => {
+        const a = stats.get(agentId);
+        return {
+          agentId,
+          name,
+          conversionRate: a && a.leadsCreated > 0 ? Math.round((a.leadsConverted / a.leadsCreated) * 100) : 0,
+          followUpAdherence: a && a.leadsCreated > 0 ? Math.round((a.activities / (a.leadsCreated * 3)) * 100) : 0,
+          leadsCreated: a?.leadsCreated ?? 0,
+        };
+      });
+  })();
 
   useEffect(() => {
     void load();
@@ -211,15 +266,7 @@ export default function AgentPerformancePage() {
       {/* Advanced Report Filters */}
       <div className="mb-6">
         <AdvancedReportFilters
-          agents={agents.map((a) => ({
-            agentId: a.agentId,
-            name: a.name,
-            conversionRate:
-              a.leadsCreated > 0 ? Math.round((a.leadsConverted / a.leadsCreated) * 100) : 0,
-            followUpAdherence:
-              a.leadsCreated > 0 ? Math.round((a.activities / (a.leadsCreated * 3)) * 100) : 0,
-            leadsCreated: a.leadsCreated,
-          }))}
+          agents={agentOptions}
           filter={filter}
           onFilterChange={setFilter}
           onClearFilters={() =>

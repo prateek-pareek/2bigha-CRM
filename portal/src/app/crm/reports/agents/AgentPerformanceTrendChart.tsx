@@ -51,7 +51,7 @@ export default function AgentPerformanceTrendChart({
 
   if (formattedData.length === 0) {
     return (
-      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-full flex flex-col justify-center items-center text-[var(--text-muted)] min-h-[350px]">
+      <div className="relative rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-full flex flex-col justify-center items-center text-[var(--text-muted)] min-h-[350px]">
         <h3 className="text-sm font-bold text-[var(--text-main)] mb-2 self-start absolute top-6 left-6">
           Performance Over Time
         </h3>

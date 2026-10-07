@@ -7,6 +7,16 @@ import {
   CrmSelect,
   CrmTextarea,
 } from "@/components/crm/ui";
+import {
+  PRICE_UNITS,
+  PROPERTY_TYPES,
+  formatIndianLandAmount,
+  parseLatLngInput,
+  priceToRupees,
+  type PriceUnit,
+  type PropertyListingType,
+} from "@/lib/crm/property-listings/types";
+import { GOOGLE_MAPS_API_KEY } from "@/lib/crm/property-listings/google-maps";
 
 export const INDIAN_STATES_DISTRICTS: Record<string, string[]> = {
   "Andhra Pradesh": ["Alluri Sitharama Raju", "Anakapalli", "Ananthapuramu", "Annamayya", "Bapatla", "Chittoor", "Dr. B.R. Ambedkar Konaseema", "East Godavari", "Eluru", "Guntur", "Kakinada", "Krishna", "Kurnool", "Nandyal", "NTR", "Palnadu", "Parvathipuram Manyam", "Prakasam", "Sri Potti Sriramulu Nellore", "Sri Sathya Sai", "Srikakulam", "Tirupati", "Visakhapatnam", "Vizianagaram", "West Godavari", "YSR Kadapa"],
@@ -59,9 +69,12 @@ export const AREA_UNITS_OPTIONS = [
   "Kanal",
   "Gunta",
   "Cent",
+  "Biswa",
 ] as const;
 
+/** "None" = no land type picked — never coerced into a type on save. */
 export const LAND_TYPES_OPTIONS = [
+  "None",
   "Agricultural",
   "Residential",
   "Commercial",
@@ -71,11 +84,31 @@ export const LAND_TYPES_OPTIONS = [
 ] as const;
 
 export const SOIL_TYPES_OPTIONS = [
+  "None",
   "Clay",
   "Sandy",
   "Loam",
   "Black Soil",
 ] as const;
+
+/**
+ * Wizard land type → backend `propertyType`. Only the Farms stream maps to
+ * "Farm" (2bigha's separate Farm API, which drops boundaries / road access /
+ * soil etc. and never reaches the property approval queue) — "Agricultural"
+ * stays Agricultural so it syncs through the Property API with all details.
+ */
+export function mapLandTypeToPropertyType(landType: string | undefined, bucket?: string): PropertyListingType {
+  if (bucket === "farm") return "Farm";
+  if (!landType || landType === "None") return "Plot";
+  const known = PROPERTY_TYPES.find((t) => t.toLowerCase() === landType.toLowerCase());
+  return known && known !== "Farm" ? known : "Other";
+}
+
+/** "Agricultural Land in Jaipur, Jaipur" — or just "Land in …" when no land type was picked. */
+export function buildListingTitle(draft: Pick<PropertyListingWizardDraft, "landType" | "city" | "district" | "state">): string {
+  const kind = draft.landType && draft.landType !== "None" ? `${draft.landType} Land` : "Land";
+  return `${kind} in ${draft.city}, ${draft.district || draft.state}`;
+}
 
 export const OWNERSHIP_CATEGORIES_OPTIONS = [
   "None",
@@ -96,7 +129,10 @@ export interface PropertyListingWizardDraft {
   khasraNumber: string;
   area: string;
   areaUnit: string;
+  /** Amount as typed, in `priceUnit` — convert with priceToRupees before saving. */
   totalPrice: string;
+  priceUnit: PriceUnit;
+  /** Rupees per area unit (derived from the rupee total). */
   pricePerUnit: string;
 
   // Step 1: Site Details
@@ -109,6 +145,7 @@ export interface PropertyListingWizardDraft {
   landType: string;
   soilType: string;
   ownershipYes: boolean;
+  ownersCount: string;
   category: string;
   landZoning: "Applicable" | "Not Applicable";
   description: string;
@@ -163,6 +200,7 @@ export const INITIAL_PROPERTY_WIZARD_DRAFT: PropertyListingWizardDraft = {
   area: "",
   areaUnit: "Bigha",
   totalPrice: "",
+  priceUnit: "Rupees",
   pricePerUnit: "0",
 
   roadAccess: false,
@@ -171,9 +209,10 @@ export const INITIAL_PROPERTY_WIZARD_DRAFT: PropertyListingWizardDraft = {
   roadAccessDistanceUnit: "Meter",
   highwayConn: false,
   waterLevel: "",
-  landType: "Agricultural",
-  soilType: "Loam",
+  landType: "None",
+  soilType: "None",
   ownershipYes: false,
+  ownersCount: "",
   category: "None",
   landZoning: "Not Applicable",
   description: "",
@@ -312,6 +351,14 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isSearchingMap, setIsSearchingMap] = useState(false);
   const [mapSearchQuery, setMapSearchQuery] = useState("");
+  const [roadAccessMode, setRoadAccessMode] = useState<"width" | "distance">(
+    draft.roadAccessDistance && !draft.roadAccessWidth ? "distance" : "width",
+  );
+  // Edit mode loads the draft after mount — follow whichever road value the listing has.
+  useEffect(() => {
+    if (draft.roadAccessDistance && !draft.roadAccessWidth) setRoadAccessMode("distance");
+    else if (draft.roadAccessWidth && !draft.roadAccessDistance) setRoadAccessMode("width");
+  }, [draft.roadAccessDistance, draft.roadAccessWidth]);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -402,7 +449,35 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
         });
 
         toast.success(`Location set: ${matchedDistrict || city || "Pointed on Map"}`);
+      } else {
+        // No address for this spot (e.g. open farmland) — still keep the exact point picked.
+        const coordsLabel = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        setMapSearchQuery(coordsLabel);
+        onChange("mapLocation", { address: coordsLabel, lat, lng });
+        toast.success(`Location set: ${coordsLabel}`);
       }
+    });
+  };
+
+  /** Move (or create) the draggable pin and center the map on an exact point. */
+  const placePin = (lat: number, lng: number, zoom: number) => {
+    if (!mapInstanceRef.current || !window.google?.maps) return;
+    mapInstanceRef.current.setCenter({ lat, lng });
+    mapInstanceRef.current.setZoom(zoom);
+    if (markerInstanceRef.current) {
+      markerInstanceRef.current.setPosition({ lat, lng });
+      return;
+    }
+    const marker = new window.google.maps.Marker({
+      position: { lat, lng },
+      map: mapInstanceRef.current,
+      draggable: true,
+      animation: window.google.maps.Animation.DROP,
+    });
+    markerInstanceRef.current = marker;
+    marker.addListener("dragend", () => {
+      const pos = marker.getPosition();
+      if (pos) void reverseGeocodeGoogle(pos.lat(), pos.lng());
     });
   };
 
@@ -410,12 +485,7 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    const apiKey =
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-      process.env.GOOGLE_MAPS_API_KEY ||
-      "";
-
-    loadGoogleMapsScript(apiKey).then(() => {
+    loadGoogleMapsScript(GOOGLE_MAPS_API_KEY).then(() => {
       if (!window.google?.maps || !mapContainerRef.current || mapInstanceRef.current) return;
 
       const initialLat = draft.mapLocation?.lat || 20.5937;
@@ -429,6 +499,8 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
         streetViewControl: false,
         fullscreenControl: true,
         zoomControl: true,
+        // Drag to pan and wheel to zoom without Ctrl — clicks still drop the pin.
+        gestureHandling: "greedy",
       });
 
       mapInstanceRef.current = map;
@@ -482,6 +554,15 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
   // Search location on Google Map via Geocoder
   const handleMapSearch = async () => {
     if (!mapSearchQuery.trim() || !window.google?.maps?.Geocoder) return;
+
+    // Typed coordinates are pinned exactly — geocoding them would snap to the nearest address.
+    const typed = parseLatLngInput(mapSearchQuery);
+    if (typed) {
+      placePin(typed.lat, typed.lng, 17);
+      void reverseGeocodeGoogle(typed.lat, typed.lng);
+      return;
+    }
+
     setIsSearchingMap(true);
 
     const geocoder = new window.google.maps.Geocoder();
@@ -554,8 +635,9 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
           toast.success(`Resolved pincode ${cleanPin}: ${matchedDistrict || detectedDistrict}, ${matchedState}`);
         }
 
-        // Sync Google Map pin to the manually entered PIN code
-        if (window.google?.maps?.Geocoder) {
+        // Move the map to the PIN code only while no pin is placed — a pin the user already
+        // set (click, drag or typed coordinates) is more exact than the PIN code's centroid.
+        if (window.google?.maps?.Geocoder && draft.mapLocation?.lat == null) {
           const geocoder = new window.google.maps.Geocoder();
           geocoder.geocode(
             { address: `${cleanPin}, India`, componentRestrictions: { country: "IN" } },
@@ -607,17 +689,39 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
     }
   };
 
-  const handlePriceOrAreaChange = (field: "totalPrice" | "area", val: string) => {
-    onChange(field, val);
-    const newPrice = field === "totalPrice" ? parseFloat(val) : parseFloat(draft.totalPrice);
-    const newArea = field === "area" ? parseFloat(val) : parseFloat(draft.area);
+  /** Rupees → amount in a price unit, e.g. 625000 + "Lakh" → "6.25". */
+  const toUnitAmount = (rupees: number, unit: string) =>
+    rupees > 0 ? String(Number((rupees / priceToRupees(1, unit)).toFixed(4))) : "";
 
-    if (!isNaN(newPrice) && !isNaN(newArea) && newArea > 0) {
-      const calculated = Math.round(newPrice / newArea);
-      onChange("pricePerUnit", String(calculated));
-    } else {
-      onChange("pricePerUnit", "0");
+  // Total ⇄ per-unit price: whichever the user typed last stays fixed, the other is derived.
+  const [priceAnchor, setPriceAnchor] = useState<"total" | "perUnit">("total");
+  // Raw text while the per-unit box is being typed in ("6." must not be reformatted mid-entry).
+  const [perUnitInput, setPerUnitInput] = useState<string | null>(null);
+  const perUnitDisplay = perUnitInput ?? toUnitAmount(Number(draft.pricePerUnit) || 0, draft.priceUnit);
+
+  const handlePriceOrAreaChange = (
+    field: "totalPrice" | "pricePerUnit" | "area" | "priceUnit",
+    val: string,
+  ) => {
+    const anchor = field === "totalPrice" ? "total" : field === "pricePerUnit" ? "perUnit" : priceAnchor;
+    if (field === "totalPrice" || field === "pricePerUnit") setPriceAnchor(anchor);
+    if (field !== "pricePerUnit") onChange(field, val as never);
+
+    const unit = field === "priceUnit" ? val : draft.priceUnit;
+    const area = parseFloat(field === "area" ? val : draft.area);
+
+    if (anchor === "total") {
+      const total = priceToRupees(field === "totalPrice" ? val : draft.totalPrice, unit);
+      onChange("pricePerUnit", total > 0 && area > 0 ? String(Math.round(total / area)) : "0");
+      return;
     }
+
+    // Per-unit anchored: the per-unit number as typed/shown is read in the (new) unit.
+    const perUnitAmount =
+      field === "pricePerUnit" ? val : toUnitAmount(Number(draft.pricePerUnit) || 0, draft.priceUnit);
+    const perUnit = priceToRupees(perUnitAmount, unit);
+    onChange("pricePerUnit", perUnit > 0 ? String(Math.round(perUnit)) : "0");
+    if (perUnit > 0 && area > 0) onChange("totalPrice", toUnitAmount(perUnit * area, unit));
   };
 
   const handleLandmarkToggle = (type: "Airport" | "Highway" | "Tourist Spot") => {
@@ -834,27 +938,62 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
           </div>
 
           <div>
-            <CrmLabel htmlFor="totalPrice">Total Price (₹) *</CrmLabel>
-            <CrmInput
-              id="totalPrice"
-              type="number"
-              min="0"
-              value={draft.totalPrice}
-              onChange={(e) => handlePriceOrAreaChange("totalPrice", e.target.value)}
-              placeholder="Enter total price in figures"
-              className={errors.totalPrice ? "border-rose-500" : ""}
-            />
-            {errors.totalPrice && <p className="mt-1 text-xs text-rose-500">{errors.totalPrice}</p>}
+            <CrmLabel htmlFor="totalPrice">Total Price *</CrmLabel>
+            <div className="flex gap-2">
+              <CrmInput
+                id="totalPrice"
+                type="number"
+                min="0"
+                step="any"
+                value={draft.totalPrice}
+                onChange={(e) => handlePriceOrAreaChange("totalPrice", e.target.value)}
+                placeholder={draft.priceUnit === "Rupees" ? "Enter total price in figures" : `Enter price in ${draft.priceUnit}`}
+                className={`flex-1 ${errors.totalPrice ? "border-rose-500" : ""}`}
+              />
+              <CrmSelect
+                id="priceUnit"
+                value={draft.priceUnit}
+                onChange={(e) => handlePriceOrAreaChange("priceUnit", e.target.value)}
+                className="w-28"
+              >
+                {PRICE_UNITS.map((u) => (
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
+                ))}
+              </CrmSelect>
+            </div>
+            {errors.totalPrice ? (
+              <p className="mt-1 text-xs text-rose-500">{errors.totalPrice}</p>
+            ) : draft.totalPrice && priceToRupees(draft.totalPrice, draft.priceUnit) > 0 ? (
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                = {formatIndianLandAmount(priceToRupees(draft.totalPrice, draft.priceUnit))}
+              </p>
+            ) : null}
           </div>
 
           <div>
-            <CrmLabel htmlFor="pricePerUnit">Price per Unit (₹)</CrmLabel>
+            <CrmLabel htmlFor="pricePerUnit">
+              Price per {draft.areaUnit || "Unit"} ({draft.priceUnit === "Rupees" ? "₹" : draft.priceUnit})
+            </CrmLabel>
             <CrmInput
               id="pricePerUnit"
-              value={draft.pricePerUnit}
-              onChange={(e) => onChange("pricePerUnit", e.target.value)}
-              placeholder="0"
+              type="number"
+              min="0"
+              step="any"
+              value={perUnitDisplay}
+              onChange={(e) => {
+                setPerUnitInput(e.target.value);
+                handlePriceOrAreaChange("pricePerUnit", e.target.value);
+              }}
+              onBlur={() => setPerUnitInput(null)}
+              placeholder={`Price per ${draft.areaUnit || "unit"} — fills Total Price`}
             />
+            {Number(draft.pricePerUnit) > 0 ? (
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                = {formatIndianLandAmount(Number(draft.pricePerUnit))} per {draft.areaUnit || "unit"}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -877,7 +1016,13 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
             </div>
             <button
               type="button"
-              onClick={() => onChange("roadAccess", !draft.roadAccess)}
+              onClick={() => {
+                if (draft.roadAccess) {
+                  onChange("roadAccessWidth", "");
+                  onChange("roadAccessDistance", "");
+                }
+                onChange("roadAccess", !draft.roadAccess);
+              }}
               className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                 draft.roadAccess ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-700"
               }`}
@@ -891,9 +1036,36 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
           </div>
 
           {draft.roadAccess && (
-            <div className="grid grid-cols-1 gap-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 sm:grid-cols-2">
-              <div>
-                <CrmLabel htmlFor="roadAccessWidth">Road Access Width</CrmLabel>
+            <div className="space-y-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+              {/* Width applies when the plot touches the road, distance when it doesn't — never both. */}
+              <div className="inline-flex overflow-hidden rounded-lg border border-[var(--border-color)] text-xs font-medium">
+                {(
+                  [
+                    { mode: "width", label: "Directly on road" },
+                    { mode: "distance", label: "Away from road" },
+                  ] as const
+                ).map(({ mode, label }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      setRoadAccessMode(mode);
+                      if (mode === "width") onChange("roadAccessDistance", "");
+                      else onChange("roadAccessWidth", "");
+                    }}
+                    className={`px-3.5 py-1.5 transition-colors ${
+                      roadAccessMode === mode
+                        ? "bg-emerald-600 text-white"
+                        : "bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-dim)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {roadAccessMode === "width" ? (
+              <div className="sm:max-w-xs">
+                <CrmLabel htmlFor="roadAccessWidth">Road Access Width (ft)</CrmLabel>
                 <CrmInput
                   id="roadAccessWidth"
                   type="number"
@@ -902,7 +1074,8 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
                   onChange={(e) => onChange("roadAccessWidth", e.target.value)}
                 />
               </div>
-              <div>
+              ) : (
+              <div className="sm:max-w-sm">
                 <CrmLabel htmlFor="roadAccessDistance">Road Access Distance</CrmLabel>
                 <div className="flex gap-2">
                   <CrmInput
@@ -924,6 +1097,7 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
                   </CrmSelect>
                 </div>
               </div>
+              )}
             </div>
           )}
 
@@ -962,12 +1136,16 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
             </div>
 
             <div>
-              <CrmLabel htmlFor="landType">Land Type *</CrmLabel>
+              <CrmLabel htmlFor="landType">Land Type</CrmLabel>
               <CrmSelect
                 id="landType"
-                value={LAND_TYPES_OPTIONS.find((lt) => lt.toLowerCase() === (draft.landType || "").toLowerCase()) || draft.landType || "Agricultural"}
+                value={LAND_TYPES_OPTIONS.find((lt) => lt.toLowerCase() === (draft.landType || "").toLowerCase()) || draft.landType || "None"}
                 onChange={(e) => onChange("landType", e.target.value)}
               >
+                {/* Keep a legacy value (e.g. "Plot" from an older listing) visible instead of silently showing another option. */}
+                {draft.landType && !LAND_TYPES_OPTIONS.some((lt) => lt.toLowerCase() === draft.landType.toLowerCase()) ? (
+                  <option value={draft.landType}>{draft.landType}</option>
+                ) : null}
                 {LAND_TYPES_OPTIONS.map((lt) => (
                   <option key={lt} value={lt}>
                     {lt}
@@ -980,7 +1158,7 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
               <CrmLabel htmlFor="soilType">Soil Type</CrmLabel>
               <CrmSelect
                 id="soilType"
-                value={SOIL_TYPES_OPTIONS.find((st) => st.toLowerCase() === (draft.soilType || "").toLowerCase()) || draft.soilType}
+                value={SOIL_TYPES_OPTIONS.find((st) => st.toLowerCase() === (draft.soilType || "").toLowerCase()) || draft.soilType || "None"}
                 onChange={(e) => onChange("soilType", e.target.value)}
               >
                 {SOIL_TYPES_OPTIONS.map((st) => (
@@ -1004,6 +1182,21 @@ export function Step1LandDetails({ draft, onChange, errors = {} }: Step1LandDeta
                   </option>
                 ))}
               </CrmSelect>
+            </div>
+
+            <div>
+              <CrmLabel htmlFor="ownersCount">No. of Owners</CrmLabel>
+              <CrmInput
+                id="ownersCount"
+                type="number"
+                min="1"
+                step="1"
+                value={draft.ownersCount}
+                onChange={(e) => onChange("ownersCount", e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="e.g. 2"
+                className={errors.ownersCount ? "border-rose-500" : ""}
+              />
+              {errors.ownersCount && <p className="mt-1 text-xs text-rose-500">{errors.ownersCount}</p>}
             </div>
           </div>
 

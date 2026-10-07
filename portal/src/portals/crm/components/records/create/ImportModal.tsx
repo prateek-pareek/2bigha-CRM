@@ -21,6 +21,8 @@ interface ImportModalProps {
  onClose: () => void;
  onSuccess: () => void;
  type: CrmImportEntityType;
+ /** Leads only: vertical applied to rows whose Lead Vertical cell is blank. */
+ leadVertical?: 'property_listing' | 'property_management';
 }
 
 /** Extra mapping rows for HubSpot-style exports (companies ↔ contacts). */
@@ -363,7 +365,7 @@ export interface ImportSummaryData {
   error?: string;
 }
 
-export default function ImportModal({ isOpen, onClose, onSuccess, type }: ImportModalProps) {
+export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVertical: defaultLeadVertical }: ImportModalProps) {
   const [step, setStep] = useState<'upload' | 'mapping' | 'validate' | 'summary'>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -506,7 +508,13 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
+        // CSV/TSV text: decode as UTF-8 ourselves — SheetJS reads BOM-less bytes as Latin-1,
+        // garbling names like "Rāhul" or Devanagari text. xlsx (PK zip) / xls (D0 CF) stay binary.
+        const isBinaryWorkbook =
+          (data[0] === 0x50 && data[1] === 0x4b) || (data[0] === 0xd0 && data[1] === 0xcf);
+        const workbook = isBinaryWorkbook
+          ? XLSX.read(data, { type: 'array' })
+          : XLSX.read(new TextDecoder('utf-8').decode(data).replace(/^﻿/, ''), { type: 'string' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const jsonData: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
@@ -550,6 +558,16 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
     '2 BIGHA USER', 'REAL ESTATE AGENT', 'PROPERTY OWNER'
   ];
 
+  /** Accepted Call Status spellings (squashed lower-case); mirrors the API's lead-import-normalize.util. */
+  const ALLOWED_CALL_STATUSES = [
+    'not called', 'not yet called', 'pending', 'new', 'yet to call',
+    'completed', 'complete', 'connected', 'answered', 'called', 'done',
+    'missed', 'missed call', 'busy', 'line busy',
+    'failed', 'fail', 'unreachable', 'not reachable', 'switched off', 'invalid number',
+    'not answered', 'no answer', 'unanswered', 'not picked', 'not picked up',
+    'no response', 'did not pick', 'dnp', 'rnr',
+  ];
+
   const ALLOWED_LEAD_SOURCES = [
     'WEBSITE', 'GOOGLE LEAD', 'META ADS', 'REFERRAL', 'WALK IN',
     'DIRECT CALL', 'OTHER', 'ORGANIC SEARCH', 'SOCIAL MEDIA',
@@ -584,7 +602,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
     if (raw === undefined || raw === null || String(raw).trim() === '') {
       return { normalized: '', formatted: '', isValid: true };
     }
-    let digits = String(raw).replace(/\D/g, '');
+    // Excel number cells can arrive as "9876543210.0" — drop the decimal tail before extracting digits.
+    let digits = String(raw).trim().replace(/\.0+$/, '').replace(/\D/g, '');
 
     // Strip country code extension if digits > 10 (e.g. +91, 91, 091, 0091, leading 0)
     if (digits.length > 10) {
@@ -777,6 +796,15 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
           const normVert = leadVertical.toUpperCase().replace(/[\s_-]+/g, ' ').trim();
           if (!['PROPERTY LISTING', 'PROPERTY MANAGEMENT', 'PROPERTY_LISTING', 'PROPERTY_MANAGEMENT'].includes(normVert)) {
             errors.push(`Invalid Lead Vertical "${leadVertical}" (allowed: Property Listing, Property Management)`);
+          }
+        }
+
+        // 12. Call Status — blank defaults to "Not Called" on import
+        const callStatus = String(mapped.callStatus || '').trim();
+        if (callStatus) {
+          const normCall = callStatus.toLowerCase().replace(/[\s_\-./]+/g, ' ').trim();
+          if (!ALLOWED_CALL_STATUSES.includes(normCall)) {
+            errors.push(`Invalid Call Status "${callStatus}" (allowed: Not Called, Completed, Missed, Busy, Failed, Not Answered)`);
           }
         }
       } else if (type === 'contacts') {
@@ -1019,6 +1047,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
     }
     formData.append('mapping', JSON.stringify(finalMapping));
     formData.append('duplicateStrategy', duplicateStrategy);
+    if (type === 'leads' && defaultLeadVertical) {
+      formData.append('leadVertical', defaultLeadVertical);
+    }
 
     setStep('summary');
     setSummaryData({
@@ -2332,7 +2363,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type }: Import
                                   onChange={(e) => handleUpdateRowField(editingRowIndex, 'callStatus', e.target.value)}
                                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-primary bg-white cursor-pointer"
                                 >
-                                  {['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'].map((s) => (
+                                  {['Not Called', 'Completed', 'Missed', 'Busy', 'Failed', 'Not Answered'].map((s) => (
                                     <option key={s} value={s}>{s}</option>
                                   ))}
                                 </select>

@@ -199,7 +199,7 @@ export default function AdvancedReportFilters({
           {filter.selectedAgents.map(id => {
             const agent = agents.find(a => a.agentId === id);
             return (
-              <span key={id} className="flex items-center gap-1 bg-[var(--primary)]/10 text-[var(--primary)] px-2 py-1 rounded-[4px] text-xs font-bold">
+              <span key={id} className="flex items-center gap-1 bg-[var(--primary-light)] text-[var(--primary)] px-2 py-1 rounded-[4px] text-xs font-bold">
                 {agent?.name || "Unknown"}
                 <button onClick={() => onFilterChange({ ...filter, selectedAgents: filter.selectedAgents.filter(a => a !== id) })} className="hover:text-red-500">
                   <X size={12} />

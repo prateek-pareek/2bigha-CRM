@@ -110,6 +110,11 @@ const GET_CLIENT_METADATA_QUERY = `
   }
 `;
 
+/** CRM-side category for agricultural land (matched on upstream propertyType). */
+const AGRICULTURAL_CATEGORY = 'AGRICULTURAL';
+/** Max rows pulled per upstream bucket when filtering agricultural land locally. */
+const AGRICULTURAL_SCAN_LIMIT = 500;
+
 const GET_PROPERTIES_BY_CLIENT_ID_QUERY = `
   query GetPropertiesByClientId(
     $clientId: ID
@@ -571,6 +576,10 @@ export class TwoBighaClientService {
       };
     }
 
+    if (params.propertyCategory === AGRICULTURAL_CATEGORY) {
+      return this.getAgriculturalPropertiesByClientId(params);
+    }
+
     try {
       const variables: Record<string, any> = {
         page: params.page ? Number(params.page) : 1,
@@ -625,7 +634,72 @@ export class TwoBighaClientService {
     }
   }
 
-  // ── 3. getClientInvoices ─────────────────────────────────────────────────
+  /**
+   * "Agricultural Land" is a propertyType, not an upstream propertyCategory
+   * (which only knows PROPERTY / FARM). Pull both buckets, keep AGRICULTURAL
+   * rows, then derive status counts + approval filter + pagination locally.
+   */
+  private async getAgriculturalPropertiesByClientId(params: {
+    clientId?: string;
+    page?: number;
+    limit?: number;
+    createdBy?: string;
+    search?: string;
+    approvalStatus?: string;
+  }): Promise<any> {
+    const page = params.page ? Number(params.page) : 1;
+    const limit = params.limit ? Number(params.limit) : 10;
+
+    const buckets = await Promise.all(
+      ['PROPERTY', 'FARM'].map((propertyCategory) =>
+        this.getPropertiesByClientId({
+          clientId: params.clientId,
+          createdBy: params.createdBy,
+          search: params.search,
+          propertyCategory,
+          page: 1,
+          limit: AGRICULTURAL_SCAN_LIMIT,
+        }),
+      ),
+    );
+
+    const seen = new Set<string>();
+    const agricultural = buckets
+      .flatMap((b) => (Array.isArray(b?.result) ? b.result : []))
+      .filter((p: any) => {
+        if (String(p?.propertyType || '').toUpperCase() !== AGRICULTURAL_CATEGORY) return false;
+        if (!p?.id || seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+
+    const byStatus = (s: string) =>
+      agricultural.filter((p: any) => String(p?.approvalStatus || '').toUpperCase() === s).length;
+    const counts = {
+      all: agricultural.length,
+      pending: byStatus('PENDING'),
+      approved: byStatus('APPROVED'),
+      rejected: byStatus('REJECTED'),
+      flagged: byStatus('FLAGGED'),
+    };
+
+    const filtered = params.approvalStatus
+      ? agricultural.filter(
+          (p: any) => String(p?.approvalStatus || '').toUpperCase() === params.approvalStatus!.toUpperCase(),
+        )
+      : agricultural;
+
+    const failed = buckets.find((b) => b?.STATUS_CODES === 500);
+    return {
+      result: filtered.slice((page - 1) * limit, page * limit),
+      totalCount: filtered.length,
+      counts,
+      message: failed?.message,
+      STATUS_CODES: failed && !agricultural.length ? 500 : 200,
+    };
+  }
+
+  // ── 3. getClientInvoices─────────────────────────────────────────────────
   async getClientInvoices(clientId: string): Promise<any> {
     const id = clientId?.trim();
     if (!id) {

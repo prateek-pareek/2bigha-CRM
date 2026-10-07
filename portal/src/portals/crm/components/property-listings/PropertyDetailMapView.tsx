@@ -11,6 +11,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { GOOGLE_MAPS_API_KEY } from "@/lib/crm/property-listings/google-maps";
 import { CrmSectionCard } from "@/components/crm/ui";
 import { toast } from "sonner";
 
@@ -233,9 +234,27 @@ export default function PropertyDetailMapView({
     return ha && !isNaN(ha) ? ha : null;
   });
 
-  // Center point priority: explicit parsed center -> centroid / 1st vertex of boundary -> geocoded address
+  // The location pin saved by the listing wizard (`mapLocation`) — the exact point the user picked.
+  const pinnedLocation: LatLngPoint | null = (() => {
+    const src = location?.coordinates && typeof location.coordinates === "object" ? location.coordinates : location;
+    const lat = Number(src?.lat);
+    const lng = Number(src?.lng);
+    return src?.lat != null && src?.lng != null && Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  })();
+
+  const boundaryCentroid: LatLngPoint | null =
+    parsedBoundaries.length >= 3
+      ? {
+          lat: parsedBoundaries.reduce((s, p) => s + p.lat, 0) / parsedBoundaries.length,
+          lng: parsedBoundaries.reduce((s, p) => s + p.lng, 0) / parsedBoundaries.length,
+        }
+      : null;
+
+  // Center point priority: saved pin -> explicit parsed center -> boundary centroid -> geocoded address
   const activeCenter: LatLngPoint | null =
+    pinnedLocation ||
     parsedCoords ||
+    boundaryCentroid ||
     (parsedBoundaries.length > 0 ? parsedBoundaries[0] : null) ||
     geocodedPos;
 
@@ -324,16 +343,23 @@ export default function PropertyDetailMapView({
         const ha = areaSqMeters / 10000;
         setComputedHectares(parseFloat(ha.toFixed(4)));
       }
-    } else if (parsedCoords) {
-      bounds.extend(parsedCoords);
-      map.setCenter(parsedCoords);
+    } else if (pinnedLocation || parsedCoords) {
+      const center = (pinnedLocation || parsedCoords)!;
+      bounds.extend(center);
+      map.setCenter(center);
       map.setZoom(17);
     }
 
     // 4. Place Center Marker Pin
+    // With a boundary, use its center so the pin doesn't sit on (and hide) boundary point #1
+    const boundaryCenter =
+      parsedBoundaries.length >= 3
+        ? { lat: bounds.getCenter().lat(), lng: bounds.getCenter().lng() }
+        : null;
     const pinPos =
+      pinnedLocation ||
       parsedCoords ||
-      (parsedBoundaries.length > 0 ? parsedBoundaries[0] : null) ||
+      boundaryCenter ||
       geocodedPos;
 
     if (pinPos) {
@@ -386,15 +412,12 @@ export default function PropertyDetailMapView({
     geocodedPos,
     parsedBoundaries,
     parsedCoords,
+    pinnedLocation,
     title,
   ]);
 
   useEffect(() => {
-    const apiKey =
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-      "AIzaSyCr0RqrqbwLz7YzZU3ZjtDeS9vK5idU700";
-
-    loadGoogleMapsScript(apiKey).then(() => {
+    loadGoogleMapsScript(GOOGLE_MAPS_API_KEY).then(() => {
       renderMapOverlays();
     });
   }, [renderMapOverlays]);

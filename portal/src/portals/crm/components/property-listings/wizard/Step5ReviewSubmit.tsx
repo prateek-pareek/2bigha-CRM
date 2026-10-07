@@ -2,6 +2,7 @@
 
 import { Check, Loader2, MapPin, Building, User, Image as ImageIcon } from "lucide-react";
 import type { PropertyListingWizardDraft } from "./Step1LandDetails";
+import { priceToRupees } from "@/lib/crm/property-listings/types";
 
 interface Step5ReviewSubmitProps {
   draft: PropertyListingWizardDraft;
@@ -55,8 +56,18 @@ export function Step5ReviewSubmit({ draft, submitting, onSubmit }: Step5ReviewSu
               Area: <span className="font-medium text-[var(--foreground)] uppercase">{draft.area || "0"} {draft.areaUnit}</span>
             </p>
             <p className="text-[var(--text-muted)]">
-              Price: <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono">₹{draft.totalPrice ? Number(draft.totalPrice).toLocaleString("en-IN") : "0"}</span>
+              Price: <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono">₹{draft.totalPrice ? priceToRupees(draft.totalPrice, draft.priceUnit).toLocaleString("en-IN") : "0"}</span>
             </p>
+            {draft.soilType && draft.soilType !== "None" && (
+              <p className="text-[var(--text-muted)]">
+                Soil: <span className="font-medium text-[var(--foreground)]">{draft.soilType}</span>
+              </p>
+            )}
+            {draft.ownersCount && (
+              <p className="text-[var(--text-muted)]">
+                Owners: <span className="font-medium text-[var(--foreground)]">{draft.ownersCount}</span>
+              </p>
+            )}
             {draft.pricePerUnit && draft.pricePerUnit !== "0" && (
               <p className="text-[var(--text-muted)] text-[11px]">
                 Rate: ₹{Number(draft.pricePerUnit).toLocaleString("en-IN")}/{draft.areaUnit}

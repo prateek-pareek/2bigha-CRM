@@ -12,6 +12,7 @@ import {
   hrmsPermissionListHasOverviewModuleAccess,
 } from '@/lib/suite/auth';
 
+// Keep in sync with api/src/crm/crm-users/permission-actions.util.ts
 const WRITE_IMPLIES_ACTIONS = new Set([
   'read',
   'create',
@@ -22,15 +23,34 @@ const WRITE_IMPLIES_ACTIONS = new Set([
 /**
  * Sensitive CRM/HRMS actions that require an explicit grant.
  * `module:write` alone must NOT unlock these (admin bypasses via isAdmin).
+ * `assign` (reassign / transfer ownership) is a distinct §13.2 action — a plain
+ * writer must not be able to reassign records.
  */
-const WRITE_DOES_NOT_IMPLY = new Set(['delete', 'export', 'import']);
+const WRITE_DOES_NOT_IMPLY = new Set(['delete', 'export', 'import', 'assign']);
+
+/**
+ * Legacy module ids stored before the registry became the source of truth —
+ * read as the canonical id. Keep in sync with LEGACY_MODULE_ALIASES in the API.
+ */
+const LEGACY_MODULE_ALIASES: Record<string, string> = {
+  property_listings: 'property-listings',
+};
+
+function normalizePermissionKey(perm: string): string {
+  const key = String(perm || '').trim();
+  const colon = key.indexOf(':');
+  const moduleId = colon === -1 ? key : key.slice(0, colon);
+  const canonical = LEGACY_MODULE_ALIASES[moduleId];
+  return canonical ? canonical + key.slice(moduleId.length) : key;
+}
 
 /** Whether a permission list grants a module:action (or bare module id). */
 export function userPermissionsInclude(
-  permissions: string[],
+  rawPermissions: string[],
   required: string,
 ): boolean {
-  const key = String(required || '').trim();
+  const permissions = rawPermissions.map(normalizePermissionKey);
+  const key = normalizePermissionKey(required);
   if (!key) return false;
   if (permissions.includes('all')) return true;
   if (permissions.includes(key)) return true;
