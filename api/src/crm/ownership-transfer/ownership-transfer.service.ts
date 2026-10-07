@@ -16,6 +16,7 @@ import {
   CRM_WORKSPACE_MODULES,
   resolveRoleModule,
   roleAllowsModule,
+  leadWorkspace,
 } from '../shared/crm-workspace-module.util';
 import { RoleAuditLogService } from '../../users/role-audit-log.service';
 import { CrmNotifyService } from '../notifications/crm-notify.service';
@@ -122,7 +123,7 @@ export class OwnershipTransferService {
     if (!entity) throw new NotFoundException(`${entityType} not found`);
 
     const currentModule: CrmWorkspaceModule =
-      entityType === 'Lead' ? ((entity as any).module || '2Bigha') : 'LEGAL';
+      entityType === 'Lead' ? leadWorkspace(entity as any) : 'LEGAL';
     const targetModule: CrmWorkspaceModule = dto.newModule || currentModule;
     const moduleChanging = targetModule !== currentModule;
 
@@ -168,7 +169,12 @@ export class OwnershipTransferService {
 
     const newOwnerLabel = this.ownerLabel(newOwner);
     const update: Record<string, unknown> = { [ownerField]: newOwnerLabel };
-    if (moduleChanging) update.module = targetModule;
+    if (moduleChanging) {
+      update.module = targetModule;
+      // The vertical decides which lead list (Leads vs PM Leads) the record lives in.
+      if (targetModule === 'PROPERTY_MGMT') update.leadVertical = 'property_management';
+      else if (targetModule === '2Bigha') update.leadVertical = 'property_listing';
+    }
 
     const updated = await model.findByIdAndUpdate(id, update, { new: true }).exec();
 

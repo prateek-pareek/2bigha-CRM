@@ -76,8 +76,11 @@ import {
   isMongoObjectIdString,
 } from '../shared/crm-record-id.util';
 import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
+import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
 import {
   leadModuleFilter,
+  roleAllowsLead,
+  workspaceForNewLead,
   roleAllowsModule,
   resolveRoleModule,
   DEFAULT_LEAD_WORKSPACE_MODULE,
@@ -193,6 +196,7 @@ export class CRMService {
     private readonly notificationsService: NotificationsService,
     private readonly crmNotify: CrmNotifyService,
     private readonly crmUsersService: CRMUsersService,
+    private readonly assignmentPolicy: CrmAssignmentPolicyService,
     @InjectModel(ReportSchedule.name, 'crmConnection')
     private reportScheduleModel?: Model<ReportScheduleDocument>,
   ) { }
@@ -2471,12 +2475,12 @@ export class CRMService {
       delete dto.annualRevenue;
     }
 
-    // Workspace boundary: keep an explicit valid module, else inherit the creator's
-    // own workspace-scoped role, else fall back to the 2Bigha default.
-    if (!CRM_WORKSPACE_MODULES.includes(dto.module)) {
-      const roleModule = resolveRoleModule(user?.crmDbUser);
-      dto.module =
-        roleModule === CRM_ROLE_MODULE_ALL ? DEFAULT_LEAD_WORKSPACE_MODULE : roleModule;
+    // Workspace boundary: a PM role always creates PM leads, a 2Bigha role 2Bigha leads;
+    // Super Admin keeps its choice (the PM vertical ⇒ PROPERTY_MGMT).
+    {
+      const placed = workspaceForNewLead(user?.crmDbUser, dto);
+      dto.module = placed.module;
+      if (placed.leadVertical) dto.leadVertical = placed.leadVertical;
     }
 
     if (dto.organization) await this.ensureOrganization(dto.organization, dto);
@@ -3082,7 +3086,7 @@ export class CRMService {
         return null;
       }
     }
-    if (lead && user && !roleAllowsModule(user.crmDbUser, (lead as any).module)) {
+    if (lead && user && !roleAllowsLead(user.crmDbUser, lead as any)) {
       return null;
     }
     if (lead && user && !this.canReadAllModuleData('leads', user)) {
@@ -3223,7 +3227,7 @@ export class CRMService {
           return true;
         });
     }
-    if (oldLead && user && !roleAllowsModule(user.crmDbUser, (oldLead as any).module)) {
+    if (oldLead && user && !roleAllowsLead(user.crmDbUser, oldLead as any)) {
       throw new ForbiddenException('This lead belongs to a different workspace.');
     }
     if (oldLead && user && !this.canReadAllModuleData('leads', user)) {
@@ -3251,6 +3255,17 @@ export class CRMService {
       if (!isMineByOwner && !isMineByCreator && !isSharedWithMe && !isMineByTeam) {
         throw new ForbiddenException('You can only edit your assigned leads.');
       }
+    }
+    // Changing the owner is a reassignment, not an edit — `leads:write` alone never allows it.
+    if (
+      oldLead &&
+      user &&
+      dto.leadOwner !== undefined &&
+      String(dto.leadOwner || '').trim() !== String((oldLead as any).leadOwner || '').trim()
+    ) {
+      const tier = this.assignmentPolicy.requireTier('leads', user);
+      const assignee = await this.assignmentPolicy.assertAssignee(tier, user, String(dto.leadOwner || ''));
+      dto.leadOwner = assignee.label || dto.leadOwner;
     }
     if (user) {
       assertCrmPipelineScopedUpdate(user, {
@@ -5685,10 +5700,20 @@ export class CRMService {
       );
     }
 
+    // RBAC: only roles with `leads:assign` reassign; Team Leads only within their team,
+    // own-tier assigners (Social Media) only their own leads to their own workspace.
+    const tier = this.assignmentPolicy.requireTier('leads', user);
+    const assignee = await this.assignmentPolicy.assertAssignee(tier, user, ownerName);
+    const ownerLabel = assignee.label || ownerName;
+
     const clauses: Record<string, unknown>[] = [{ _id: { $in: oids } }];
-    if (user && !this.canReadAllModuleData('leads', user)) {
+    if (tier === 'team') {
+      clauses.push(await this.teamOwnershipFilter('leadOwner', user));
+    } else if (tier === 'own') {
       clauses.push(this.leadOwnershipFilter(user));
     }
+    const moduleScope = leadModuleFilter(user?.crmDbUser);
+    if (Object.keys(moduleScope).length) clauses.push(moduleScope);
     const filter: Record<string, unknown> =
       clauses.length === 1 ? clauses[0] : { $and: clauses };
 
@@ -5700,7 +5725,7 @@ export class CRMService {
 
     const result = await this.leadModel
       .updateMany(filter as Record<string, any>, {
-        $set: { leadOwner: ownerName },
+        $set: { leadOwner: ownerLabel },
       })
       .exec();
 
@@ -5710,9 +5735,9 @@ export class CRMService {
       actor: user,
       action: 'ownership_changed',
       targetType: 'Lead',
-      targetLabel: `Bulk reassign ${previousOwners.length} lead(s) to ${ownerName}`,
+      targetLabel: `Bulk reassign ${previousOwners.length} lead(s) to ${ownerLabel}`,
       before: { owners: previousOwners.map((l: any) => ({ id: l._id, leadOwner: l.leadOwner })) },
-      after: { leadOwner: ownerName, ids: oids },
+      after: { leadOwner: ownerLabel, ids: previousOwners.map((l: any) => l._id) },
     });
 
     const hadPrevious = previousOwners.some(
@@ -5723,7 +5748,7 @@ export class CRMService {
         event: hadPrevious ? 'lead_reassigned' : 'lead_assigned',
         title: 'Leads assigned to you',
         message: `${previousOwners.length} lead(s) were assigned to you.`,
-        recipient: { label: ownerName },
+        recipient: { label: ownerLabel },
         link: '/crm/leads',
         metadata: {
           link: '/crm/leads',
@@ -5761,7 +5786,7 @@ export class CRMService {
     }
 
     return {
-      ownerName,
+      ownerName: ownerLabel,
       requested: oids.length,
       matched: result.matchedCount ?? 0,
       modified: result.modifiedCount ?? 0,

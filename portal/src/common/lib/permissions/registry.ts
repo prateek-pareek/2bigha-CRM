@@ -52,6 +52,7 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     { perm: 'leads:import', label: 'Import leads (upload)' },
     { perm: 'leads:export', label: 'Export / download leads CSV' },
     { perm: 'leads:assign', label: 'Assign / transfer lead ownership' },
+    { perm: 'leads:read:team', label: "Team scope — see the team's leads (Team Lead)" },
   ],
   'pm-leads': [
     {
@@ -60,6 +61,8 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     },
     { perm: 'pm-leads:import', label: 'Import PM leads (upload)' },
     { perm: 'pm-leads:export', label: 'Export / download PM leads CSV' },
+    { perm: 'pm-leads:assign', label: 'Assign / reassign / transfer PM leads' },
+    { perm: 'pm-leads:read:team', label: "Team scope — see the team's PM leads (Team Lead)" },
   ],
   clients: [
     { perm: 'clients:import', label: 'Import clients (upload)' },
@@ -67,6 +70,7 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
   ],
   contacts: [
     { perm: 'contacts:export', label: 'Export / download contacts CSV' },
+    { perm: 'contacts:read:team', label: "Team scope — see the team's contacts" },
   ],
   organizations: [
     { perm: 'organizations:export', label: 'Export / download organizations CSV' },
@@ -78,6 +82,8 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
       label: 'Move between pipelines / board stage',
     },
     { perm: 'legal:assign', label: 'Assign / transfer case ownership' },
+    { perm: 'legal:read:team', label: "Team scope — see the team's cases (Team Lead)" },
+    { perm: 'legal:status', label: 'Read-only legal status on own leads (2Bigha / PM hand-off)' },
   ],
   'property-listings': [
     { perm: 'property-listings:approve', label: 'Approve listings' },
@@ -103,7 +109,24 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     { perm: 'ivr-service:configure', label: 'Configure IVR settings' },
     { perm: 'ivr-service:manage', label: 'Manage IVR queues & rules' },
   ],
+  activities: [{ perm: 'ivr:call', label: 'Place IVR calls & see own call logs' }],
+  dashboard: [{ perm: 'team:read', label: 'Team hierarchy view (direct reports)' }],
 };
+
+/**
+ * Functional-role keys (see api/src/crm/shared/crm-role-catalog.ts). Matched exactly —
+ * `leads:write` never implies `leads:assign`, `:read:team` is a scope, not an action.
+ */
+export const CRM_ROLE_SCOPE_KEYS = [
+  'leads:assign',
+  'leads:read:team',
+  'contacts:read:team',
+  'legal:assign',
+  'legal:read:team',
+  'legal:status',
+  'ivr:call',
+  'team:read',
+] as const;
 
 export const GLOBAL_PERMISSION_KEYS = new Set([
   'all',
@@ -141,6 +164,16 @@ export const GLOBAL_PERMISSION_KEYS = new Set([
   'visits:complete',
   'ivr-service:configure',
   'ivr-service:manage',
+  'leads:assign',
+  'leads:read:team',
+  'contacts:read:team',
+  'pm-leads:assign',
+  'pm-leads:read:team',
+  'legal:assign',
+  'legal:read:team',
+  'legal:status',
+  'ivr:call',
+  'team:read',
   ...SOCIAL_PERMISSION_KEYS,
 ]);
 
@@ -249,7 +282,7 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
   { id: 'contacts', label: 'Contacts', routes: ['/crm/contacts'] },
   { id: 'organizations', label: 'Organizations', routes: ['/crm/organizations'] },
   { id: 'activities', label: 'Notes, tasks & calls', routes: ['/crm/notes', '/crm/tasks', '/crm/calls'] },
-  { id: 'inbox', label: 'Inbox', routes: ['/crm/inbox', '/crm/whatsapp'] },
+  { id: 'inbox', label: 'Inbox & WhatsApp', routes: ['/crm/inbox', '/crm/whatsapp'] },
   { id: 'outreach', label: 'Outreach', routes: ['/crm/outreach', '/crm/campaigns'] },
   { id: 'workflows', label: 'Workflows & automation', routes: ['/crm/workflows'] },
   { id: 'property-listings', label: 'Property Listings', routes: ['/crm/property-listings'] },

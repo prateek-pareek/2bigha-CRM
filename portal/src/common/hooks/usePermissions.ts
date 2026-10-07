@@ -18,6 +18,8 @@ import {
   getEffectiveHrmsPermissions,
 } from '@/lib/suite/auth';
 import { checkRegistryPermissionAccess } from "@/lib/permissions/access";
+import { crmLandingRoute } from "@/lib/crm/shared/crm-landing";
+import { crmWorkspaceOf } from "@/lib/crm/shared/crm-workspace-nav";
 import { permissionSuite } from "@/lib/permissions/registry";
 
 export function usePermissions() {
@@ -252,10 +254,10 @@ export function usePermissions() {
     [isLoaded, isUnrestrictedAdmin, permissions, hasVaultHrmsAccess, hasToolAccess, activeUser],
   );
 
-  // Helper to get default accessible module for redirection
+  // First CRM screen this user's role can open (never an access-denied page on login).
   const getDefaultRoute = () => {
     if (!isLoaded) return "/";
-    return "/crm/workspace";
+    return crmLandingRoute(hasAccess, { canViewCrmRevenue, workspace: crmWorkspaceOf(activeUser) });
   };
 
   /**
@@ -266,7 +268,7 @@ export function usePermissions() {
     (toolId: string) => {
       if (!isLoaded) return "/";
       if (toolId === "client-portals") return "/client-portals";
-      if (toolId === "crm" || isAdmin) return "/crm/workspace";
+      if (toolId === "crm" || isAdmin) return crmLandingRoute(hasAccess, { canViewCrmRevenue });
 
       const perms = permissions;
       if (
@@ -285,7 +287,7 @@ export function usePermissions() {
       }
       return "/crm/workspace";
     },
-    [isLoaded, isAdmin, permissions],
+    [isLoaded, isAdmin, permissions, hasAccess, canViewCrmRevenue],
   );
 
   return {

@@ -42,3 +42,6 @@ Thumbs.db
 plan/
 BIM_CRM_IMPLEMENTATION_PLAN_v2.md
 .claude/
+
+# Local role test logins (api/scripts/seed-role-test-users.ts)
+ROLE_TEST_LOGINS.local.md

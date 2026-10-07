@@ -1,4 +1,4 @@
-import { isHrmsManagementAdmin, isPlatformTechServicesAdmin } from '../../auth/hrms-management-admin.util';
+import { isPlatformTechServicesAdmin } from '../../auth/hrms-management-admin.util';
 import { isPlatformSuperAdminUser } from '../../auth/platform-super-admin.util';
 
 /** Revenue amounts / annual revenue / pipeline money — ceo@mathionix.com only. */
@@ -93,24 +93,44 @@ export function normalizeCrmRoleKey(value: unknown): string {
     .replace(/[\s\-_]+/g, '');
 }
 
+/**
+ * Role names that get the full CRM admin bypass: Admin / Super Admin and the platform
+ * owner aliases only. Functional roles ("Team Lead / Manager", "Legal Executive", a
+ * legacy "Manager", HRMS "Executive"/"HR") must work through their explicit permission
+ * set and workspace scope — never through a name match.
+ */
 const CRM_MANAGEMENT_ROLE_KEYS = new Set([
   'ADMIN',
   'ADMINISTRATOR',
   'SUPERADMIN',
   'SUPERADMINISTRATOR',
   'OWNER',
-  'SUBADMIN',
   'CRMADMIN',
   'CEO',
   'CTO',
-  'MANAGER',
-  'EXECUTIVE',
-  'SENIORMEMBER',
-  'DIRECTOR',
 ]);
 
 export function isCrmManagementRoleKey(key: string): boolean {
   return CRM_MANAGEMENT_ROLE_KEYS.has(key);
+}
+
+/** HRMS roles that can open the CRM portal without an explicit CRM tool grant. */
+export const CRM_PORTAL_MANAGEMENT_ROLES = new Set(
+  ['ADMIN', 'CEO', 'CTO', 'MANAGER', 'EXECUTIVE', 'SENIOR MEMBER', 'ADMINISTRATOR'].map((r) =>
+    r.toUpperCase(),
+  ),
+);
+
+/** Mongo filter on HRMS `users`: active people who can use the CRM portal. */
+export function crmPortalAccessUserFilter(): Record<string, unknown> {
+  return {
+    isActive: { $ne: false },
+    $or: [
+      { role: { $in: Array.from(CRM_PORTAL_MANAGEMENT_ROLES).map((r) => new RegExp(`^${r}$`, 'i')) } },
+      { permittedTools: 'CRM' },
+      { 'crmPermissions.0': { $exists: true } },
+    ],
+  };
 }
 
 export function jwtCrmPermissionSet(user?: any): Set<string> {
@@ -124,24 +144,35 @@ export function jwtCrmPermissionSet(user?: any): Set<string> {
 /** JWT / HRMS session — management role or explicit admin permission. */
 export function hasCrmAdminJwtBypass(user?: any): boolean {
   if (!user) return false;
-  if (isHrmsManagementAdmin(user)) return true;
+  if (isPlatformSuperAdminUser(user)) return true;
   const perms = jwtCrmPermissionSet(user);
   if (perms.has('admin:manage')) return true;
   const roleKey = normalizeCrmRoleKey(user.role);
   return isCrmManagementRoleKey(roleKey);
 }
 
-function permissionNamesFromDbUser(dbUser?: any): string[] {
+/**
+ * Permission names granted by a CRM `Role` doc: plain `crmPermissions` strings plus the
+ * legacy `permissions` refs (populated `Permission` docs → their `name`). Inactive roles
+ * grant nothing.
+ */
+export function rolePermissionNames(role?: any): string[] {
+  if (!role || typeof role !== 'object' || role.isActive === false) return [];
+  const legacy = Array.isArray(role.permissions)
+    ? role.permissions
+        .map((p: any) => (typeof p === 'string' ? p : p?.name || p?.key || ''))
+        .filter((p: string) => p && !/^[0-9a-f]{24}$/i.test(p))
+    : [];
+  const plain = Array.isArray(role.crmPermissions) ? role.crmPermissions : [];
+  return [...legacy, ...plain].map((p) => String(p).trim()).filter(Boolean);
+}
+
+/** Role grants + the CRM user's direct grants. */
+export function permissionNamesFromDbUser(dbUser?: any): string[] {
   if (!dbUser) return [];
-  const userRole = dbUser.roleId;
-  const fromRole =
-    userRole?.permissions
-      ?.map((p: any) =>
-        typeof p === 'string' ? p : p?.name || p?.key || '',
-      )
-      .filter(Boolean) || [];
+  const fromRole = rolePermissionNames(dbUser.roleId);
   const direct = Array.isArray(dbUser.permissions) ? dbUser.permissions : [];
-  return [...fromRole, ...direct].map((p) => String(p).trim());
+  return [...new Set([...fromRole, ...direct].map((p) => String(p).trim()).filter(Boolean))];
 }
 
 /** CRM Users collection record (roleId populated or legacy `role` string). */

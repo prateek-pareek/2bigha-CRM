@@ -64,6 +64,16 @@ export class LegalCaseController {
     );
   }
 
+  /**
+   * Read-only legal status of the cases linked to a lead — the 2Bigha / PM hand-off
+   * (requirement §8). `legal:status` is exempt from RbacGuard's LEGAL workspace pin.
+   */
+  @Get('status/by-lead/:leadId')
+  @Permissions('legal:read', 'legal:status')
+  statusByLead(@Param('leadId') leadId: string, @Request() req: any) {
+    return this.legalCaseService.statusByLead(leadId, req.user);
+  }
+
   @Post()
   @Permissions('legal:write')
   create(@Body() dto: CreateLegalCaseDto, @Request() req: any) {
@@ -102,8 +112,8 @@ export class LegalCaseController {
 
   @Get(':id')
   @Permissions('legal:read')
-  findOne(@Param('id') id: string) {
-    return this.legalCaseService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req: any) {
+    return this.legalCaseService.findOne(id, req.user);
   }
 
   @Patch(':id')
@@ -115,48 +125,48 @@ export class LegalCaseController {
   @Delete(':id')
   @Permissions('legal:delete')
   remove(@Param('id') id: string, @Request() req: any) {
-    return this.legalCaseService.remove(id, req.user?.userId);
+    return this.legalCaseService.remove(id, req.user?.userId, req.user);
   }
 
   @Post('bulk-delete')
   @Permissions('legal:delete')
   bulkDelete(@Body('ids') ids: string[], @Request() req: any) {
-    return this.legalCaseService.bulkDelete(ids, req.user?.userId);
+    return this.legalCaseService.bulkDelete(ids, req.user?.userId, req.user);
   }
 
   @Post('bulk-assign')
-  @Permissions('legal:write')
-  bulkAssign(@Body() body: { caseOwner?: string; ids?: string[] }) {
-    return this.legalCaseService.bulkAssign(body);
+  @Permissions('legal:assign')
+  bulkAssign(@Body() body: { caseOwner?: string; ids?: string[] }, @Request() req: any) {
+    return this.legalCaseService.bulkAssign(body, req.user);
   }
 
   @Patch(':id/stage')
   @Permissions('legal:move_pipeline')
-  updateStage(@Param('id') id: string, @Body('stage') stage: string) {
-    return this.legalCaseService.updateStage(id, stage);
+  updateStage(@Param('id') id: string, @Body('stage') stage: string, @Request() req: any) {
+    return this.legalCaseService.updateStage(id, stage, req.user);
   }
 
   @Post(':id/link-lead')
   @Permissions('legal:write')
-  linkLead(@Param('id') id: string, @Body('leadId') leadId: string) {
-    return this.legalCaseService.linkLead(id, leadId);
+  linkLead(@Param('id') id: string, @Body('leadId') leadId: string, @Request() req: any) {
+    return this.legalCaseService.linkLead(id, leadId, req.user);
   }
 
   @Post(':id/unlink-lead')
   @Permissions('legal:write')
-  unlinkLead(@Param('id') id: string, @Body('leadId') leadId: string) {
-    return this.legalCaseService.unlinkLead(id, leadId);
+  unlinkLead(@Param('id') id: string, @Body('leadId') leadId: string, @Request() req: any) {
+    return this.legalCaseService.unlinkLead(id, leadId, req.user);
   }
 
   @Post(':id/link-contact')
   @Permissions('legal:write')
-  linkContact(@Param('id') id: string, @Body('contactId') contactId: string) {
-    return this.legalCaseService.linkContact(id, contactId);
+  linkContact(@Param('id') id: string, @Body('contactId') contactId: string, @Request() req: any) {
+    return this.legalCaseService.linkContact(id, contactId, req.user);
   }
 
   @Post(':id/unlink-contact')
   @Permissions('legal:write')
-  unlinkContact(@Param('id') id: string, @Body('contactId') contactId: string) {
-    return this.legalCaseService.unlinkContact(id, contactId);
+  unlinkContact(@Param('id') id: string, @Body('contactId') contactId: string, @Request() req: any) {
+    return this.legalCaseService.unlinkContact(id, contactId, req.user);
   }
 }

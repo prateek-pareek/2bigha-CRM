@@ -41,7 +41,7 @@ function makeListingsService(listingModel: any, twoBigha: Partial<TwoBighaProper
   return new PropertyListingsService(
     listingModel, none, none, none, none,
     twoBigha as TwoBighaPropertyService,
-    none, none, none, none, none, none, none, none, none, none,
+    none, none, none, none, none, none, none, none, none, none, none,
   );
 }
 

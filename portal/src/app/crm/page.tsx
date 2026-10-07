@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
 export default function CRMPage() {
-  redirect('/crm/workspace/work');
+  // Root dispatcher picks the first screen the user's role can open.
+  redirect('/');
 }

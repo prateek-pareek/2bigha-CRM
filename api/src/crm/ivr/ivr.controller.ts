@@ -16,29 +16,46 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RbacGuard } from '../crm-users/rbac.guard';
 import { Permissions } from '../crm-users/permissions.decorator';
-import { isCrmTopAdmin } from '../shared/crm-admin-access.util';
+import { hasCrmFullDataAccess, isCrmTopAdmin, jwtCrmPermissionSet } from '../shared/crm-admin-access.util';
+import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
 import { IvrService } from './ivr.service';
 
 @Controller('crm/ivr')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class IvrController {
-  constructor(private readonly ivrService: IvrService) {}
+  constructor(
+    private readonly ivrService: IvrService,
+    private readonly assignmentPolicy: CrmAssignmentPolicyService,
+  ) {}
+
+  /**
+   * Whose call logs the caller may list: everyone (Super Admin), self + direct reports
+   * (Team Lead / Manager — `:read:team`), or only their own calls.
+   */
+  private async callLogScope(user: any): Promise<string[] | undefined> {
+    if (hasCrmFullDataAccess(user)) return undefined;
+    const perms = jwtCrmPermissionSet(user);
+    if (perms.has('leads:read:team') || perms.has('legal:read:team')) {
+      return (await this.assignmentPolicy.teamOf(user)).ids;
+    }
+    return [String(user?.userId ?? user?._id ?? '')];
+  }
 
   @Post('calls')
-  @Permissions('leads:write')
+  @Permissions('leads:write', 'ivr:call')
   initiateCall(@Body() dto: any, @Request() req: any) {
     return this.ivrService.initiateOutboundCall(dto, req.user);
   }
 
   @Get('call-logs')
-  @Permissions('leads:read')
-  listAll(@Query() query: Record<string, string>) {
-    return this.ivrService.listCallLogs(query);
+  @Permissions('leads:read', 'ivr:call')
+  async listAll(@Query() query: Record<string, string>, @Request() req: any) {
+    return this.ivrService.listCallLogs(query, await this.callLogScope(req.user));
   }
 
   /** Call Activity Form ("Set Activity") — logs a disposition without placing a live call. */
   @Post('call-activity')
-  @Permissions('leads:write')
+  @Permissions('leads:write', 'ivr:call')
   logCallActivity(
     @Body() dto: { leadId: string; status: string; notes?: string; followUpAt?: string; intents?: string[] },
     @Request() req: any,
@@ -47,7 +64,7 @@ export class IvrController {
   }
 
   @Get('call-logs/mine')
-  @Permissions('leads:read')
+  @Permissions('leads:read', 'ivr:call')
   listMine(@Query() query: Record<string, string>, @Request() req: any) {
     return this.ivrService.listCallLogs(query, req.user?.userId);
   }

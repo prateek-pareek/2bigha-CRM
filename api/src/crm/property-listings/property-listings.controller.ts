@@ -178,7 +178,7 @@ export class PropertyListingsController {
    * confirmed approve/reject mutation exists in the documented API yet.
    */
   @Get('twobigha/approval-queue/:bucket')
-  @Permissions('property-listings:read')
+  @Permissions('approval-queue:read')
   listTwoBighaApprovalQueue(
     @Param('bucket') bucket: string,
     @Query('page') page?: string,
@@ -211,12 +211,13 @@ export class PropertyListingsController {
    * the lead already has ≥1 property/farm listed (per the FRD's restriction).
    */
   @Post('transfer-lead/:leadId')
-  @Permissions('leads:write')
+  @Permissions('leads:assign')
   transferLead(
     @Param('leadId') leadId: string,
     @Body() body: { ownerName?: string },
+    @Request() req: any,
   ) {
-    return this.listingsService.transferLead(leadId, body?.ownerName || '');
+    return this.listingsService.transferLead(leadId, body?.ownerName || '', req.user);
   }
 
   @Get(':id')

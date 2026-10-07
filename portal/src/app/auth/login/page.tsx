@@ -86,7 +86,8 @@ function LoginContent() {
         } else if (tools.includes("PM")) {
           router.push("/pm/boards");
         } else if (tools.includes("CRM")) {
-          router.push("/crm/workspace");
+          // "/" waits for permissions, then opens the first screen this role can access.
+          router.push("/");
         } else if (tools.includes("SOCIAL")) {
           router.push("/social");
         } else if (tools.includes("VAULT") || hasVaultAccess) {

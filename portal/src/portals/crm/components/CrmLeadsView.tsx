@@ -102,6 +102,7 @@ import { CrmCustomFieldValue } from '@/components/crm/records/forms/CrmCustomFie
 import DeleteCustomFieldMergeDialog from '@/components/crm/records/detail/DeleteCustomFieldMergeDialog';
 import { CrmPropertyManagerModal } from '@/components/crm/records/detail/CrmPropertyManagerModal';
 import { CrmBulkDeleteConfirmModal } from '@/components/crm/records/detail/CrmBulkDeleteConfirmModal';
+import CrmTeammatePicker, { type CrmAssignableUser } from '@/components/crm/records/detail/CrmTeammatePicker';
 import {
   CrmPageHeader,
   CrmCountBadge,
@@ -571,6 +572,8 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
     canWrite;
   // Export is an explicit grant (write does not imply it) — hide the menu otherwise.
   const canExport = hasAccess('leads:export') || (isPm && hasAccess('pm-leads:export' as any));
+  // Reassign / transfer is its own grant (Team Lead / Manager, Social Media) — write never implies it.
+  const canAssign = hasAccess('leads:assign') || (isPm && hasAccess('pm-leads:assign' as any));
   const canMoveLeadsAcrossPipelines =
     canWrite ||
     hasAccess('leads:move_pipeline') ||
@@ -582,10 +585,8 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
   const [bulkMovePipelineId, setBulkMovePipelineId] = useState('');
   const [isBulkMoving, setIsBulkMoving] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
-  const [assignOwner, setAssignOwner] = useState('');
+  const [assignOwner, setAssignOwner] = useState<CrmAssignableUser | null>(null);
   const [assigning, setAssigning] = useState(false);
-  const [ownerOptions, setOwnerOptions] = useState<string[]>([]);
-  const [ownersLoading, setOwnersLoading] = useState(false);
   const [stageRulesPanelOpen, setStageRulesPanelOpen] = useState(false);
 
   const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
@@ -1149,45 +1150,12 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       toast.error('Select at least one lead');
       return;
     }
-    setAssignOwner('');
+    setAssignOwner(null);
     setAssignOpen(true);
   };
 
-  useEffect(() => {
-    if (!assignOpen) return;
-    let cancelled = false;
-    setOwnersLoading(true);
-    void fetch(`${CRM_API_URL}/crm-users/list/crm-portal`, {
-      headers: {
-        Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') || '' : ''}`,
-      },
-    })
-      .then(async (res) => {
-        if (!res.ok) return [];
-        const data = await res.json();
-        return Array.isArray(data) ? data : [];
-      })
-      .then((users: Array<{ firstName?: string; lastName?: string; email?: string }>) => {
-        if (cancelled) return;
-        const labels = users
-          .map((u) => `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || String(u.email || '').trim())
-          .filter(Boolean);
-        setOwnerOptions(Array.from(new Set(labels)).sort((a, b) => a.localeCompare(b)));
-      })
-      .catch(() => {
-        if (!cancelled) setOwnerOptions([]);
-      })
-      .finally(() => {
-        if (!cancelled) setOwnersLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assignOpen]);
-
   const handleBulkAssign = async () => {
-    const ownerName = assignOwner.trim();
-    if (!ownerName) {
+    if (!assignOwner) {
       toast.error('Choose an owner');
       return;
     }
@@ -1205,7 +1173,8 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          ownerName,
+          // The user id — the server resolves it to the owner label and re-checks the team scope.
+          ownerName: assignOwner._id,
           ids: Array.from(selectedIds),
         }),
       });
@@ -1215,11 +1184,11 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       }
       const modified = Number(data?.modified ?? 0);
       toast.success(
-        `Assigned ${modified} lead${modified === 1 ? '' : 's'} to ${ownerName}`,
+        `Assigned ${modified} lead${modified === 1 ? '' : 's'} to ${assignOwner.label}`,
       );
       setLeads((prev) =>
         prev.map((l) =>
-          selectedIds.has(l._id) ? { ...l, leadOwner: ownerName } : l,
+          selectedIds.has(l._id) ? { ...l, leadOwner: assignOwner.label } : l,
         ),
       );
       setAssignOpen(false);
@@ -2274,7 +2243,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                     />
                   </div>
                 )}
-                {selectedIds.size > 0 && canWrite && (
+                {selectedIds.size > 0 && canAssign && (
                   <CrmButton
                     variant="secondary"
                     onClick={openAssignDialog}
@@ -2608,7 +2577,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                     />
                   </div>
                 )}
-                {canWrite && (
+                {canAssign && (
                   <CrmButton
                     variant="secondary"
                     onClick={openAssignDialog}
@@ -2779,16 +2748,16 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                                     onAddProperty={() => setPropertyLead(lead)}
                                     onAddFarm={() => setFarmLead(lead)}
                                     onReassign={
-                                      canWrite
+                                      canAssign
                                         ? () => {
                                             setSelectedIds(new Set([lead._id]));
-                                            setAssignOwner('');
+                                            setAssignOwner(null);
                                             setAssignOpen(true);
                                           }
                                         : undefined
                                     }
                                     onTransfer={
-                                      canWrite
+                                      canAssign
                                         ? () => {
                                             setTransferOwnerName('');
                                             setTransferLeadTarget(lead);
@@ -3110,16 +3079,16 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                                     onAddProperty={() => setPropertyLead(lead)}
                                     onAddFarm={() => setFarmLead(lead)}
                                     onReassign={
-                                      canWrite
+                                      canAssign
                                         ? () => {
                                             setSelectedIds(new Set([lead._id]));
-                                            setAssignOwner('');
+                                            setAssignOwner(null);
                                             setAssignOpen(true);
                                           }
                                         : undefined
                                     }
                                     onTransfer={
-                                      canWrite
+                                      canAssign
                                         ? () => {
                                             setTransferOwnerName('');
                                             setTransferLeadTarget(lead);
@@ -3242,44 +3211,10 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
               Reassign {selectedIds.size} selected lead
               {selectedIds.size === 1 ? '' : 's'} to another CRM user.
             </p>
-            <label className="block space-y-1.5">
+            <div className="space-y-1.5">
               <span className="text-xs font-medium text-[var(--text-muted)]">New owner</span>
-              {ownersLoading ? (
-                <div className="flex items-center gap-2 py-2 text-sm text-[var(--text-muted)]">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading users…
-                </div>
-              ) : (
-                <select
-                  value={assignOwner}
-                  onChange={(e) => setAssignOwner(e.target.value)}
-                  className="w-full rounded-md border border-[var(--border-color)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
-                >
-                  <option value="">Select a teammate…</option>
-                  {ownerOptions.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </label>
-            {!ownersLoading && ownerOptions.length === 0 ? (
-              <p className="text-xs text-amber-700">
-                No CRM users found. You can still type an owner name below.
-              </p>
-            ) : null}
-            <label className="block space-y-1.5">
-              <span className="text-xs font-medium text-[var(--text-muted)]">
-                Or enter owner name
-              </span>
-              <input
-                value={assignOwner}
-                onChange={(e) => setAssignOwner(e.target.value)}
-                placeholder="First Last"
-                className="w-full rounded-md border border-[var(--border-color)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
-              />
-            </label>
+              <CrmTeammatePicker value={assignOwner} onChange={setAssignOwner} />
+            </div>
           </div>
           <DialogFooter>
             <button
@@ -3291,7 +3226,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
             </button>
             <button
               type="button"
-              disabled={assigning || !assignOwner.trim()}
+              disabled={assigning || !assignOwner}
               onClick={() => void handleBulkAssign()}
               className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >

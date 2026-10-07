@@ -21,18 +21,15 @@ import {
 } from '../shared/crm-role-permissions.util';
 import { TwoBighaAgentService } from './twobigha-agent.service';
 import { KommunoAgentService } from './kommuno-agent.service';
-
-const CRM_PORTAL_MANAGEMENT_ROLES = new Set(
-  [
-    'ADMIN',
-    'CEO',
-    'CTO',
-    'MANAGER',
-    'EXECUTIVE',
-    'SENIOR MEMBER',
-    'ADMINISTRATOR',
-  ].map((r) => r.toUpperCase()),
-);
+import {
+  CRM_FUNCTIONAL_PERMISSIONS,
+  CRM_ROLE_SEED_VERSION,
+  CRM_ROLE_SEEDS,
+} from '../shared/crm-role-catalog';
+import {
+  CRM_PORTAL_MANAGEMENT_ROLES,
+  crmPortalAccessUserFilter,
+} from '../shared/crm-admin-access.util';
 
 function hrmsUserHasCrmPortalAccess(doc: {
   role?: string;
@@ -134,6 +131,59 @@ export class CRMUsersService implements OnModuleInit {
         this.logger.warn(`Could not upsert permission ${p.name}: ${e}`);
       }
     }
+    try {
+      await this.seedFunctionalRoles();
+    } catch (e) {
+      this.logger.warn(`Could not seed functional CRM roles: ${e}`);
+    }
+  }
+
+  /**
+   * Upserts the functional roles from `CRM_ROLE_SEEDS` (requirement doc "Roles Overview"):
+   * matched by `seedKey`, then `name`. Grants are stored as Permission refs (this
+   * codebase's role model). A role is (re)written only when created or when its stored
+   * `seedVersion` is behind `CRM_ROLE_SEED_VERSION`.
+   */
+  async seedFunctionalRoles(): Promise<{ created: string[]; upgraded: string[] }> {
+    for (const p of CRM_FUNCTIONAL_PERMISSIONS) {
+      await this.permissionModel.updateOne(
+        { name: p.name },
+        { $setOnInsert: { name: p.name, module: p.name.split(':')[0], description: p.description } },
+        { upsert: true },
+      );
+    }
+    const created: string[] = [];
+    const upgraded: string[] = [];
+    for (const seed of CRM_ROLE_SEEDS) {
+      const existing: any = await this.roleModel
+        .findOne({ $or: [{ seedKey: seed.key }, { name: seed.name }] })
+        .lean()
+        .exec();
+      if (existing && (existing.seedVersion || 0) >= CRM_ROLE_SEED_VERSION) continue;
+      const doc = {
+        description: seed.description,
+        workspaceModule: seed.workspaceModule,
+        permissions: await this.resolvePermissionIds(seed.crmPermissions),
+        crmPermissions: [],
+        isActive: true,
+        isSystem: true,
+        seedKey: seed.key,
+        seedVersion: CRM_ROLE_SEED_VERSION,
+      };
+      if (existing) {
+        await this.roleModel.updateOne({ _id: existing._id }, { $set: doc }).exec();
+        upgraded.push(seed.name);
+      } else {
+        await this.roleModel.create({ name: seed.name, ...doc });
+        created.push(seed.name);
+      }
+    }
+    if (created.length || upgraded.length) {
+      this.logger.log(
+        `Functional CRM roles — created: [${created.join(', ')}], upgraded: [${upgraded.join(', ')}]`,
+      );
+    }
+    return { created, upgraded };
   }
 
   async findOne(email: string): Promise<CRMUserDocument | undefined> {
@@ -206,16 +256,8 @@ export class CRMUsersService implements OnModuleInit {
       email?: string;
     }>
   > {
-    const managementRoleList = Array.from(CRM_PORTAL_MANAGEMENT_ROLES);
     const users = await this.hrmsUserModel
-      .find({
-        isActive: { $ne: false },
-        $or: [
-          { role: { $in: managementRoleList.map((r) => new RegExp(`^${r}$`, 'i')) } },
-          { permittedTools: 'CRM' },
-          { 'crmPermissions.0': { $exists: true } },
-        ],
-      })
+      .find(crmPortalAccessUserFilter())
       .select('firstName lastName email')
       .lean()
       .exec();

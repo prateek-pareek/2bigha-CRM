@@ -388,12 +388,16 @@ export class IvrService {
     }
   }
 
-  async listCallLogs(query: CallLogListQuery, onlyUserId?: string) {
+  /** `onlyUserId` — one agent's id, or the list of agent ids the caller may see (team scope). */
+  async listCallLogs(query: CallLogListQuery, onlyUserId?: string | string[]) {
     const page = Math.max(1, parseInt(String(query.page || 1), 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(String(query.pageSize ?? 25), 10) || 25), 200);
     const filter: Record<string, unknown> = {};
 
-    if (onlyUserId && Types.ObjectId.isValid(onlyUserId)) {
+    if (Array.isArray(onlyUserId)) {
+      const ids = onlyUserId.filter((id) => Types.ObjectId.isValid(id)).map((id) => new Types.ObjectId(id));
+      filter.initiatedByUserId = { $in: ids };
+    } else if (onlyUserId && Types.ObjectId.isValid(onlyUserId)) {
       filter.initiatedByUserId = new Types.ObjectId(onlyUserId);
     }
     if (query.agentNumber) filter.agentNumber = query.agentNumber;

@@ -11,6 +11,7 @@ import {
   hasCrmAdminFromDbUser,
   hasCrmAdminJwtBypass,
 } from '../crm/shared/crm-admin-access.util';
+import { crmPermissionNamesFromRole } from '../crm/shared/crm-role-permissions.util';
 
 @Injectable()
 export class RbacGuard implements CanActivate {
@@ -103,12 +104,15 @@ export class RbacGuard implements CanActivate {
       throw new ForbiddenException('User is inactive');
     }
 
-    // Get permissions from both Token and DB (support name or key on populated Permission docs)
+    // CRM role grants (Permission refs + plain crmPermissions; inactive role = none),
+    // the CRM user's direct grants, and the JWT grants.
     const userRole = dbUser.roleId as any;
+    // Populated role doc (an unpopulated ObjectId has neither field).
+    const hasCrmRole = !!(
+      userRole && typeof userRole === 'object' && ('permissions' in userRole || 'name' in userRole)
+    );
     const dbRolePermissions =
-      userRole?.permissions
-        ?.map((p: any) => (typeof p === 'string' ? p : p?.name || p?.key))
-        .filter(Boolean) || [];
+      hasCrmRole && userRole.isActive !== false ? crmPermissionNamesFromRole(userRole) : [];
     const dbDirectPermissions = dbUser.permissions || [];
 
     const jwtCrm = Array.isArray(user.crmPermissions)
@@ -117,13 +121,17 @@ export class RbacGuard implements CanActivate {
     const jwtHrms = Array.isArray(user.permissions) ? user.permissions : [];
     const tokenPermissions = [...jwtHrms, ...jwtCrm];
 
-    const isAgent =
+    // Legacy fallback for CRM users WITHOUT a CRM role only. A user holding a functional
+    // role (Team Lead, Legal Executive, …) gets exactly that role's grants — the old
+    // "everyone with the CRM tool is an agent" default also handed out leads/contacts
+    // export and lead access to Legal.
+    const isAgent = !hasCrmRole && (
       String(user.role || '').toUpperCase() === 'AGENT' ||
       String(user.role || '').toLowerCase().includes('agent') ||
       String(dbUser?.role || '').toLowerCase().includes('agent') ||
       String(userRole?.name || '').toLowerCase().includes('agent') ||
       (Array.isArray(user.permittedTools) &&
-        user.permittedTools.map((t: string) => String(t || '').toUpperCase()).includes('CRM'));
+        user.permittedTools.map((t: string) => String(t || '').toUpperCase()).includes('CRM')));
 
     const defaultAgentPerms = isAgent
       ? [
@@ -152,6 +160,13 @@ export class RbacGuard implements CanActivate {
         ...defaultAgentPerms,
       ]),
     );
+    // Publish the effective CRM grants so services' tier checks (`leads:read:team`,
+    // `leads:assign`, …) see the role template, not only the HRMS user's own list.
+    if (request.user) {
+      request.user.crmPermissions = Array.from(
+        new Set([...jwtCrm, ...dbRolePermissions, ...dbDirectPermissions, ...defaultAgentPerms]),
+      );
+    }
 
     const hasPermission = requiredPermissions.some((permission) => {
       if (userPermissions.includes(permission)) return true;

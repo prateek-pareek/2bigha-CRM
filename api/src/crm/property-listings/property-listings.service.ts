@@ -32,6 +32,7 @@ import type {
 import { CRMUsersService } from '../crm-users/crm-users.service';
 import { Client, ClientDocument } from '../records/schemas/client.schema';
 import { Contact, ContactDocument } from '../records/schemas/contact.schema';
+import { CRMService } from '../core/crm.service';
 
 const APPROVAL_QUEUE_BUCKETS: ApprovalQueueBucket[] = ['pending', 'approved', 'rejected'];
 
@@ -81,6 +82,7 @@ export class PropertyListingsService {
     private readonly storageService: StorageService,
     private readonly pmTasks: PmTaskBridgeService,
     private readonly crmNotify: CrmNotifyService,
+    private readonly crmService: CRMService,
   ) {}
 
   async create(
@@ -1133,7 +1135,7 @@ export class PropertyListingsService {
    * bulk Reassign (`CRMService.bulkAssignLeads`). Restricted once the lead
    * already has ≥1 property/farm listed, per the FRD.
    */
-  async transferLead(leadId: string, ownerName: string) {
+  async transferLead(leadId: string, ownerName: string, user?: any) {
     const trimmedOwner = ownerName.trim();
     if (!trimmedOwner) throw new BadRequestException('Owner is required');
     if (!Types.ObjectId.isValid(leadId)) {
@@ -1148,9 +1150,9 @@ export class PropertyListingsService {
         'Cannot transfer a lead with properties/farms already listed — remove or reassign the listings first.',
       );
     }
-    const updated = await this.leadModel
-      .findByIdAndUpdate(leadId, { $set: { leadOwner: trimmedOwner } }, { new: true })
-      .exec();
+    // Through CRMService.updateLead so the same RBAC applies as every other owner change:
+    // workspace boundary, own/team scope on the lead, `leads:assign` tier + assignee check.
+    const updated: any = await this.crmService.updateLead(leadId, { leadOwner: trimmedOwner }, user);
     if (!updated) throw new NotFoundException('Lead not found');
 
     const leadLabel =
@@ -1162,7 +1164,7 @@ export class PropertyListingsService {
         event: 'lead_transferred',
         title: 'Lead assigned to you',
         message: `${leadLabel} has been transferred to you.`,
-        recipient: { label: trimmedOwner },
+        recipient: { label: updated.leadOwner || trimmedOwner },
         link,
         metadata: {
           link,
@@ -1176,7 +1178,7 @@ export class PropertyListingsService {
 
     // `_id` here (not just `leadId`) so the global AuditLogInterceptor attributes this
     // action to the lead's entityId — surfaces in the lead's own Update History tab.
-    return { _id: leadId, leadId, ownerName: trimmedOwner };
+    return { _id: leadId, leadId, ownerName: updated.leadOwner || trimmedOwner };
   }
 
   async decideApproval(

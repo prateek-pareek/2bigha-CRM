@@ -15,6 +15,25 @@ import {
   CRM_PM_MODULE_ACTIONS,
 } from "@/lib/permissions/registry";
 
+type WorkspaceModule = "2Bigha" | "PROPERTY_MGMT" | "LEGAL" | "ALL";
+
+/** Workspace boundary a role is scoped to (api crm-workspace-module.util). */
+const WORKSPACE_OPTIONS: { value: WorkspaceModule; label: string }[] = [
+  { value: "2Bigha", label: "2Bigha" },
+  { value: "PROPERTY_MGMT", label: "Property Management (PM)" },
+  { value: "LEGAL", label: "Legal" },
+  { value: "ALL", label: "All workspaces (Super Admin only)" },
+];
+const WORKSPACE_LABEL: Record<WorkspaceModule, string> = {
+  "2Bigha": "2Bigha",
+  PROPERTY_MGMT: "PM",
+  LEGAL: "Legal",
+  ALL: "All",
+};
+
+/** Hand-off / scope keys that must NOT drag in their module's `:read` when ticked. */
+const NO_IMPLIED_READ = new Set(["legal:status", "ivr:call", "team:read"]);
+
 type RoleDoc = {
   _id: string;
   name: string;
@@ -22,6 +41,8 @@ type RoleDoc = {
   isActive?: boolean;
   /** Seeded hierarchy role (Admin, Manager, Team Lead, …) — cannot be renamed, re-scoped, or deleted. */
   isSystem?: boolean;
+  seedKey?: string;
+  workspaceModule?: WorkspaceModule;
   permissions: string[];
   crmPermissions: string[];
   pmPermissions: string[];
@@ -61,6 +82,7 @@ export function CrmRolesSettings() {
     name: "",
     description: "",
     isActive: true,
+    workspaceModule: "2Bigha" as WorkspaceModule,
     permissions: [] as string[],
     crmPermissions: [] as string[],
     pmPermissions: [] as string[],
@@ -114,6 +136,7 @@ export function CrmRolesSettings() {
       name: r.name || "",
       description: r.description || "",
       isActive: r.isActive !== false,
+      workspaceModule: r.workspaceModule || "ALL",
       permissions: r.permissions || [],
       crmPermissions: r.crmPermissions || [],
       pmPermissions: r.pmPermissions || [],
@@ -129,6 +152,7 @@ export function CrmRolesSettings() {
       name: "",
       description: "",
       isActive: true,
+      workspaceModule: "2Bigha",
       permissions: [],
       crmPermissions: [],
       pmPermissions: [],
@@ -172,7 +196,7 @@ export function CrmRolesSettings() {
       const cur = [...prev.crmPermissions];
       const has = cur.includes(perm);
       const next = has ? cur.filter((x) => x !== perm) : [...cur, perm];
-      if (!has) {
+      if (!has && !NO_IMPLIED_READ.has(perm)) {
         const mod = perm.split(":")[0];
         if (mod && !next.some((x) => x === `${mod}:read`)) {
           next.push(`${mod}:read`);
@@ -229,7 +253,7 @@ export function CrmRolesSettings() {
         name: form.name.trim(),
         description: form.description.trim(),
         isActive: form.isActive,
-        permissions: [],
+        workspaceModule: form.workspaceModule,
         crmPermissions: form.crmPermissions,
         pmPermissions: [],
         permittedTools: ["CRM"],
@@ -243,9 +267,9 @@ export function CrmRolesSettings() {
       }
       await load();
       resetForm();
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to save role:", e);
-      alert("Failed to save role.");
+      alert(e?.response?.data?.message || "Failed to save role.");
     } finally {
       setSaving(false);
     }
@@ -259,9 +283,9 @@ export function CrmRolesSettings() {
       await api.delete(`/crm-users/roles/${selectedId}`);
       await load();
       resetForm();
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to delete role:", e);
-      alert("Failed to delete role.");
+      alert(e?.response?.data?.message || "Failed to delete role.");
     } finally {
       setSaving(false);
     }
@@ -274,14 +298,17 @@ export function CrmRolesSettings() {
       <div>
         <h1 className="text-xl font-medium text-text-main tracking-tight">CRM Role Templates</h1>
         <p className="text-sm text-text-muted mt-0.5">
-          Reusable CRM roles with module, data-scope, and field-level permissions.
+          Each role is scoped to one workspace (2Bigha, PM or Legal) and sees only its own
+          records — or its team's with a Team scope grant. Only Super Admin spans every
+          workspace. System roles come from the requirement doc and can be tuned but not
+          renamed or deleted.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="rounded-[3px] border border-border bg-white p-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Custom Roles</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Roles</p>
             <Button size="sm" variant="outline" onClick={resetForm} className="gap-1.5">
               <Plus className="h-3.5 w-3.5" />
               New
@@ -301,7 +328,22 @@ export function CrmRolesSettings() {
                       : "border-border hover:border-primary/40"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-text-main">{r.name}</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-sm font-semibold text-text-main">{r.name}</p>
+                    <span className="rounded border border-border px-1.5 text-[10px] font-bold uppercase tracking-wide text-text-muted">
+                      {WORKSPACE_LABEL[r.workspaceModule || "ALL"]}
+                    </span>
+                    {r.isSystem ? (
+                      <span className="rounded border border-primary/40 px-1.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                        System
+                      </span>
+                    ) : null}
+                    {r.isActive === false ? (
+                      <span className="rounded border border-border px-1.5 text-[10px] font-bold uppercase tracking-wide text-text-muted">
+                        Inactive
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="text-xs text-text-muted line-clamp-1">{r.description || "No description"}</p>
                 </button>
               ))}
@@ -315,7 +357,9 @@ export function CrmRolesSettings() {
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="Role name"
-              className="h-9 rounded-lg border border-border px-3 text-sm"
+              disabled={!!selected?.isSystem}
+              title={selected?.isSystem ? "System roles cannot be renamed" : undefined}
+              className="h-9 rounded-lg border border-border px-3 text-sm disabled:opacity-60"
             />
             <input
               value={form.description}
@@ -323,7 +367,38 @@ export function CrmRolesSettings() {
               placeholder="Description"
               className="h-9 rounded-lg border border-border px-3 text-sm"
             />
+            <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
+              Workspace
+              <select
+                value={form.workspaceModule}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, workspaceModule: e.target.value as WorkspaceModule }))
+                }
+                disabled={selected?.seedKey === "super_admin"}
+                className="h-9 rounded-lg border border-border px-2 text-sm font-normal text-text-main disabled:opacity-60"
+              >
+                {WORKSPACE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 self-end h-9 text-sm text-text-main">
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                disabled={selected?.seedKey === "super_admin"}
+                onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+              />
+              Active
+            </label>
           </div>
+          {form.workspaceModule === "ALL" && selected?.seedKey !== "super_admin" ? (
+            <p className="text-xs text-red-600">
+              "All workspaces" lets this role see 2Bigha, PM and Legal data — reserve it for administrators.
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-dim/30 p-1">
             {TABS.map((t) => (

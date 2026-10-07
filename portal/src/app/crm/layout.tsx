@@ -18,6 +18,13 @@ import {
   defaultReadPermission,
 } from "@/lib/permissions/registry";
 import { applyCrmAccent, readCrmThemePrefs } from "@/lib/crm/settings/theme-prefs";
+import { dashboardMasterKeyApplies } from "@/lib/crm/shared/dashboard-access";
+import { crmLandingRoute, isCrmEntryPath } from "@/lib/crm/shared/crm-landing";
+import {
+  crmWorkspaceOf,
+  isCrmPathHiddenForWorkspace,
+  workspaceLeadListHref,
+} from "@/lib/crm/shared/crm-workspace-nav";
 
 /**
  * CRM app root — owned by CRM (no PM/Jira CSS imports).
@@ -29,7 +36,7 @@ export default function CRMLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isLoaded, permittedTools, isAdmin, getDefaultRoute, hasAccess } =
+  const { isLoaded, permittedTools, isAdmin, getDefaultRoute, hasAccess, user } =
     usePermissions();
   const router = useRouter();
   const pathname = usePathname();
@@ -44,17 +51,30 @@ export default function CRMLayout({
       router.replace("/unauthorized");
       return;
     }
+    // Lead lists are per workspace: a PM role opening /crm/leads goes to PM Leads, a 2Bigha
+    // role opening /crm/pm/leads goes to Leads (instead of an empty list or a denial).
+    const workspace = crmWorkspaceOf(user);
+    if (isCrmPathHiddenForWorkspace(pathname, workspace)) {
+      router.replace(workspaceLeadListHref(workspace) || crmLandingRoute(hasAccess));
+      return;
+    }
     const module = crmModuleForPathname(pathname);
     if (!module || isAdmin) return;
+    // Entry points (/crm, /crm/workspace) are "take me home", not a screen the user asked
+    // for — the workspace layout sends them to the role's landing screen, so never deny here.
+    if (isCrmEntryPath(pathname)) return;
     const required = defaultReadPermission(module.id);
+    const isDashboardPage =
+      module.id.startsWith("workspace-") ||
+      module.id === "workspace" ||
+      module.id.startsWith("reports-") ||
+      module.id === "reports";
     const masterKey =
       module.id.startsWith("settings-")
         ? "settings:read"
-        : module.id.startsWith("workspace-") || module.id === "workspace"
+        : isDashboardPage && dashboardMasterKeyApplies(hasAccess)
           ? "dashboard:read"
-          : module.id.startsWith("reports-") || module.id === "reports"
-            ? "dashboard:read"
-            : null;
+          : null;
     if (
       !hasAccess(required) &&
       !hasAccess(module.id) &&
@@ -70,6 +90,7 @@ export default function CRMLayout({
     getDefaultRoute,
     pathname,
     hasAccess,
+    user,
   ]);
 
   if (!isLoaded) {

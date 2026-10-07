@@ -74,6 +74,7 @@ export default function LeadDetailPage() {
   const leadsListHref = isPm ? '/crm/pm/leads' : '/crm/leads';
   const leadsListLabel = isPm ? 'PM Leads' : 'Leads';
   const canWrite = hasAccess('leads:write') || (isPm && hasAccess('pm-leads:write' as any));
+  const canAssign = hasAccess('leads:assign') || (isPm && hasAccess('pm-leads:assign' as any));
   const canDelete = hasAccess('leads:delete') || (isPm && hasAccess('pm-leads:delete' as any));
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -925,7 +926,7 @@ export default function LeadDetailPage() {
             <CrmRecordOwnerCard
               ownerLabel={lead.leadOwner}
               leadId={entityId}
-              canReassign={canWrite}
+              canReassign={canAssign}
               onReassigned={() => void fetchLead()}
             />
             <CrmRecordRemindersPanel

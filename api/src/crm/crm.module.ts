@@ -4,6 +4,7 @@ import { CrmGlobalSettings, CrmGlobalSettingsSchema } from './schemas/crm-global
 import { CRMUsersModule } from './crm-users/crm-users.module';
 import { CRMController } from './core/crm.controller';
 import { CRMService } from './core/crm.service';
+import { CrmAssignmentPolicyService } from './shared/crm-assignment-policy.service';
 import { Lead, LeadSchema } from './schemas/lead.schema';
 import {
   Organization,
@@ -456,6 +457,7 @@ import {
     CrmNotificationPreferencesController,
   ],
   providers: [
+    CrmAssignmentPolicyService,
     LeadEngagementAutomationService,
     WorkflowsService,
     DuplicatesService,
@@ -547,6 +549,7 @@ import {
   ],
   exports: [
     CRMService,
+    CrmAssignmentPolicyService,
     AuditLogService,
     ColumnPreferencesService,
     CustomFieldsService,

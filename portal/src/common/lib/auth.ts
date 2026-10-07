@@ -59,17 +59,30 @@ export function hrmsModuleKeyFromHref(href: string): string | null {
     return null;
 }
 
+/**
+ * The CRM "Super Admin" role (api crm-role-catalog) — unrestricted across every workspace.
+ * Detected from the CRM role the API attaches to /auth/me (`crmRole`), not the HRMS role.
+ */
+const hasCrmSuperAdminRole = (user: User | null | undefined): boolean => {
+    const u = user as any;
+    if (!u) return false;
+    const perms: string[] = Array.isArray(u.crmPermissions) ? u.crmPermissions : [];
+    return perms.includes('admin:manage') && (!u.crmRole || u.crmRole.workspaceModule === 'ALL');
+};
+
+/**
+ * Admin / Super Admin only. Functional roles — Team Lead / Manager, Executive, Director,
+ * Sub Admin, Calling Agent, Legal … — never get the admin view; they work through their
+ * explicit permission set (requirement: no complete admin view except Admin & Super Admin).
+ */
 export const isAdmin = (user: User | null): boolean => {
     if (!user) return false;
     if (isPlatformSuperAdminUser(user)) return true;
+    if (hasCrmSuperAdminRole(user)) return true;
     const adminRoles = [
         'ADMIN',
         'CEO',
         'CTO',
-        'MANAGER',
-        'EXECUTIVE',
-        'SENIOR_MEMBER',
-        'SENIOR MEMBER',
         'ADMINISTRATOR',
         'ADMINISTRATION',
         'SUPERADMIN',
@@ -77,9 +90,6 @@ export const isAdmin = (user: User | null): boolean => {
         'SUPERADMINISTRATOR',
         'SUPER_ADMINISTRATOR',
         'OWNER',
-        'SUBADMIN',
-        'SUB_ADMIN',
-        'DIRECTOR',
         'CRMADMIN',
         'CRM_ADMIN',
     ];
@@ -103,6 +113,7 @@ export const isAdmin = (user: User | null): boolean => {
 export const isUnrestrictedAdmin = (user: User | null | undefined): boolean => {
     if (!user) return false;
     if (isPlatformSuperAdminUser(user)) return true;
+    if (hasCrmSuperAdminRole(user)) return true;
     const fullAdminRoles = [
         'ADMIN',
         'CEO',
@@ -114,7 +125,6 @@ export const isUnrestrictedAdmin = (user: User | null | undefined): boolean => {
         'SUPERADMINISTRATOR',
         'SUPER_ADMINISTRATOR',
         'OWNER',
-        'DIRECTOR',
         'CRMADMIN',
         'CRM_ADMIN',
     ];
