@@ -116,6 +116,7 @@ export class AiSensyWebhookController {
             inbound.text,
             inbound.messageId,
             inbound.attachment,
+            inbound.receivedAt,
           );
         }
         return;
@@ -154,6 +155,7 @@ export class AiSensyWebhookController {
     text: string;
     messageId: string;
     sender: string;
+    receivedAt?: Date | string | number;
     attachment?: {
       type: 'image' | 'document' | 'video' | 'audio';
       url: string;
@@ -167,6 +169,7 @@ export class AiSensyWebhookController {
       const waId = String(rawPhone || '').replace(/\D/g, '');
       const messageId = String(data.messageId || data.id || `aisensy_${Date.now()}`);
       const sender = String(data.sender || (body.topic.endsWith('.user') ? 'USER' : 'AGENT')).toUpperCase();
+      const receivedAt = data.timestamp || data.created_at || data.createdAt || data.time || body.timestamp || body.created_at;
 
       if (waId.length >= 10) {
         let text = '';
@@ -187,7 +190,7 @@ export class AiSensyWebhookController {
           text = data.message_content?.text || data.content || '';
         }
 
-        return { waId, text, messageId, sender, attachment };
+        return { waId, text, messageId, sender, receivedAt, attachment };
       }
     }
 
@@ -198,6 +201,7 @@ export class AiSensyWebhookController {
       const waId = String(metaMessage.from).replace(/\D/g, '');
       const messageId = String(metaMessage.id);
       const sender = 'USER';
+      const receivedAt = metaMessage.timestamp ? Number(metaMessage.timestamp) * 1000 : undefined;
 
       if (waId.length >= 10) {
         let text = '';
@@ -218,7 +222,7 @@ export class AiSensyWebhookController {
         }
 
         if (text || attachment) {
-          return { waId, text, messageId, sender, attachment };
+          return { waId, text, messageId, sender, receivedAt, attachment };
         }
       }
     }
@@ -235,11 +239,12 @@ export class AiSensyWebhookController {
         c.body ||
         c.messageText;
       const rawId = c.id || c.messageId || c.msgId || c.message_id;
+      const rawTimestamp = c.timestamp || c.created_at || c.createdAt || c.time || c.receivedAt;
 
       const waId = String(rawPhone || '').replace(/\D/g, '');
       const text = String(rawText || '').trim();
       if (waId.length >= 10 && text) {
-        return { waId, text, messageId: String(rawId || `aisensy_${Date.now()}`), sender: 'USER' };
+        return { waId, text, messageId: String(rawId || `aisensy_${Date.now()}`), sender: 'USER', receivedAt: rawTimestamp };
       }
     }
 

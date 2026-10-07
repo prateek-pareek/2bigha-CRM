@@ -50,6 +50,7 @@ interface WhatsAppMessage {
   direction: "inbound" | "outbound";
   body: string;
   createdAt: string;
+  receivedAt?: string;
   status?: string;
   attachment?: {
     type: "image" | "document" | "video" | "audio";

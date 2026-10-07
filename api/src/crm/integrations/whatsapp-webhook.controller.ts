@@ -104,10 +104,11 @@ export class WhatsAppWebhookController {
           for (const msg of messages) {
             const from = msg.from;
             const id = msg.id;
+            const msgTimestamp = msg.timestamp ? Number(msg.timestamp) * 1000 : undefined;
 
             if (msg.type === 'text') {
               const text = msg.text?.body || '';
-              await this.whatsappService.saveIncoming(String(from), text, id);
+              await this.whatsappService.saveIncoming(String(from), text, id, undefined, msgTimestamp);
             } else if (['image', 'document', 'video', 'audio'].includes(msg.type)) {
               const mediaObj = msg[msg.type];
               if (mediaObj?.id) {
@@ -117,6 +118,7 @@ export class WhatsAppWebhookController {
                   msg.type,
                   msg.caption,
                   id,
+                  msgTimestamp,
                 ).catch((err) => this.logger.error(`Media download failed: ${err.message}`));
               }
             }

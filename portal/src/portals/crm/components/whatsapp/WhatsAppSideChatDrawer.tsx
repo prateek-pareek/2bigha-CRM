@@ -26,6 +26,10 @@ import WhatsAppTemplatePicker from "@/components/crm/inbox/WhatsAppTemplatePicke
 import CallLeadModal from "@/components/crm/records/detail/CallLeadModal";
 import SharePropertyModal from "@/components/crm/whatsapp/SharePropertyModal";
 import GrantAccessModal from "@/components/crm/whatsapp/GrantAccessModal";
+import {
+  formatWaWindowCountdown,
+  getWhatsAppCareWindow,
+} from "@/lib/crm/whatsapp/care-window";
 import { useWhatsAppSideChatStore } from "@/portals/crm/stores/whatsappSideChatStore";
 
 interface WhatsAppMessage {
@@ -34,6 +38,7 @@ interface WhatsAppMessage {
   direction: "inbound" | "outbound";
   body: string;
   createdAt: string;
+  receivedAt?: string;
   status?: string;
   attachment?: {
     type: "image" | "document" | "video" | "audio";
@@ -103,6 +108,12 @@ export default function WhatsAppSideChatDrawer() {
   } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const lastWaParamRef = useRef<string | null>(null);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const waId = target?.waId || (target?.phone ? target.phone.replace(/\D/g, "") : "");
 
@@ -264,8 +275,11 @@ export default function WhatsAppSideChatDrawer() {
     return () => clearInterval(interval);
   }, [isOpen, waId, fetchThread, scrollToBottom, pathname]);
 
+  const careWindow = useMemo(() => getWhatsAppCareWindow(messages, nowMs), [messages, nowMs]);
+  const canSendFreeform = careWindow.status === "open" || careWindow.status === "expiring_soon";
+
   const handleSend = async () => {
-    if (!text.trim() || !waId) return;
+    if (!text.trim() || !waId || !canSendFreeform) return;
     const bodyText = text.trim();
     setText("");
     setSending(true);
@@ -585,6 +599,30 @@ export default function WhatsAppSideChatDrawer() {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Care Window Status Banner */}
+        <div className="border-t border-slate-100 bg-slate-50 px-3 py-1.5">
+          {careWindow.status === "open" && (
+            <p className="text-[10px] font-medium text-[#008069]">
+              Free-form window expires in {formatWaWindowCountdown(careWindow.remainingMs)}
+            </p>
+          )}
+          {careWindow.status === "expiring_soon" && (
+            <p className="text-[10px] font-medium text-amber-700">
+              Window expires in {formatWaWindowCountdown(careWindow.remainingMs)}. Reply soon or use a template.
+            </p>
+          )}
+          {careWindow.status === "expired" && (
+            <p className="text-[10px] font-medium text-rose-700">
+              24-hour window expired. Send an approved template to continue.
+            </p>
+          )}
+          {careWindow.status === "no_inbound" && (
+            <p className="text-[10px] font-medium text-slate-500">
+              No inbound message yet — send an approved template to start.
+            </p>
+          )}
+        </div>
+
         {/* Composer Footer */}
         <div className="border-t border-slate-200 bg-white p-3 space-y-2">
           <div className="flex items-center gap-2">
@@ -600,15 +638,20 @@ export default function WhatsAppSideChatDrawer() {
             <textarea
               rows={1}
               value={text}
+              disabled={sending || !canSendFreeform}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message…"
-              className="flex-1 resize-none rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#008069] focus:ring-1 focus:ring-[#008069]/20"
+              placeholder={
+                canSendFreeform
+                  ? "Type a message…"
+                  : "Outside 24h window — send a template"
+              }
+              className="flex-1 resize-none rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#008069] focus:ring-1 focus:ring-[#008069]/20 disabled:bg-slate-50 disabled:text-slate-400"
             />
 
             <button
               type="button"
-              disabled={sending || !text.trim()}
+              disabled={sending || !text.trim() || !canSendFreeform}
               onClick={handleSend}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#008069] text-white disabled:opacity-50 hover:bg-[#00705c] transition-all"
               title="Send Message"

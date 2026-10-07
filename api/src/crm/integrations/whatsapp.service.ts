@@ -794,6 +794,27 @@ export class WhatsAppService {
     this.emitWhatsAppEvent(message.waId, message);
   }
 
+  private parseReceivedAt(receivedAt?: Date | string | number): Date {
+    if (receivedAt) {
+      if (typeof receivedAt === 'number') {
+        const d = new Date(receivedAt > 1e11 ? receivedAt : receivedAt * 1000);
+        if (!Number.isNaN(d.getTime())) return d;
+      } else if (typeof receivedAt === 'string') {
+        const num = Number(receivedAt);
+        if (!Number.isNaN(num) && num > 0) {
+          const d = new Date(num > 1e11 ? num : num * 1000);
+          if (!Number.isNaN(d.getTime())) return d;
+        } else {
+          const d = new Date(receivedAt);
+          if (!Number.isNaN(d.getTime())) return d;
+        }
+      } else if (receivedAt instanceof Date && !Number.isNaN(receivedAt.getTime())) {
+        return receivedAt;
+      }
+    }
+    return new Date();
+  }
+
   async saveIncoming(
     waId: string,
     body: string,
@@ -803,7 +824,9 @@ export class WhatsAppService {
       url: string;
       filename?: string;
     },
+    receivedAt?: Date | string | number,
   ): Promise<void> {
+    const parsedReceivedAt = this.parseReceivedAt(receivedAt);
     const saved = await this.messageModel.create({
       waId,
       direction: 'inbound',
@@ -812,6 +835,8 @@ export class WhatsAppService {
       status: 'delivered',
       isRead: false,
       attachment,
+      receivedAt: parsedReceivedAt,
+      createdAt: parsedReceivedAt,
     });
     this.emitWhatsAppEvent(waId, saved);
   }
@@ -1344,6 +1369,7 @@ export class WhatsAppService {
     type: 'image' | 'document' | 'video' | 'audio',
     caption?: string,
     messageId?: string,
+    receivedAt?: Date | string | number,
   ): Promise<void> {
     const config = await this.getConfig();
     if (!config) {
@@ -1403,7 +1429,7 @@ export class WhatsAppService {
 
       const body = caption || `[${type.toUpperCase()}]`;
 
-      await this.saveIncoming(waId, body, messageId || `meta_${mediaId}`, attachment);
+      await this.saveIncoming(waId, body, messageId || `meta_${mediaId}`, attachment, receivedAt);
     } catch (e: any) {
       this.logger.error(`Error handling media message ${mediaId}: ${e?.message}`);
     }

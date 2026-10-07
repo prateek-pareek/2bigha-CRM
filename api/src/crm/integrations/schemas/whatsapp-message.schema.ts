@@ -49,6 +49,15 @@ export class WhatsAppMessage {
   @Prop({ type: Object })
   meta?: Record<string, any>;
 
+  @Prop({ type: Date })
+  receivedAt?: Date;
+
+  @Prop({ type: Date })
+  createdAt?: Date;
+
+  @Prop({ type: Date })
+  updatedAt?: Date;
+
   @Prop({ type: WhatsAppAttachmentSchema })
   attachment?: WhatsAppAttachment;
 }

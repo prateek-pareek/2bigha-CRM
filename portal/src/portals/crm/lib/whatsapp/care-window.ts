@@ -13,7 +13,9 @@ export const WA_WINDOW_WARN_MS = 60 * 60 * 1000; // warn under 1 hour
 
 export interface WhatsAppCareWindowMessage {
   direction: "inbound" | "outbound";
-  createdAt: string;
+  receivedAt?: string | Date;
+  createdAt?: string | Date;
+  timestamp?: string | number;
 }
 
 export type WhatsAppCareWindowStatus =
@@ -43,9 +45,18 @@ export function getWhatsAppCareWindow(
   nowMs: number,
 ): WhatsAppCareWindow {
   const lastInbound = messages
-    .filter((m) => m.direction === "inbound" && m.createdAt)
+    .filter((m) => m.direction === "inbound")
     .reduce<Date | null>((latest, m) => {
-      const d = new Date(m.createdAt);
+      // 24h WhatsApp response window starts from when the client's message is received,
+      // not when it is seen / marked read. Prioritize receivedAt / timestamp over createdAt.
+      const rawDate = m.receivedAt || m.timestamp || m.createdAt;
+      if (!rawDate) return latest;
+      let d: Date;
+      if (typeof rawDate === "number") {
+        d = new Date(rawDate > 1e11 ? rawDate : rawDate * 1000);
+      } else {
+        d = new Date(rawDate);
+      }
       if (Number.isNaN(d.getTime())) return latest;
       if (!latest || d > latest) return d;
       return latest;
