@@ -478,31 +478,31 @@ export default function ClientDetailPage() {
 
               {activeTab === 'Properties' && (
                 <div className="animate-in fade-in duration-300">
-                  <Client2BighaPropertiesTab clientId={client?.twobighaUserId || recordId} />
+                  <Client2BighaPropertiesTab clientId={recordId} />
                 </div>
               )}
 
               {activeTab === 'Invoices' && (
                 <div className="animate-in fade-in duration-300">
-                  <Client2BighaInvoicesTab clientId={client?.twobighaUserId || recordId} />
+                  <Client2BighaInvoicesTab clientId={recordId} />
                 </div>
               )}
 
               {activeTab === 'Usage' && (
                 <div className="animate-in fade-in duration-300">
-                  <Client2BighaUsageTab clientId={client?.twobighaUserId || recordId} />
+                  <Client2BighaUsageTab clientId={recordId} />
                 </div>
               )}
 
               {activeTab === 'Requests' && (
                 <div className="animate-in fade-in duration-300">
-                  <Client2BighaRequestsTab clientId={client?.twobighaUserId || recordId} />
+                  <Client2BighaRequestsTab clientId={recordId} />
                 </div>
               )}
 
               {activeTab === 'Managed' && (
                 <div className="animate-in fade-in duration-300">
-                  <Client2BighaManagedTab clientId={client?.twobighaUserId || recordId} />
+                  <Client2BighaManagedTab clientId={recordId} />
                 </div>
               )}
             </div>

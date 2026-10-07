@@ -591,30 +591,11 @@ export class TwoBighaClientService {
       if (params.propertyCategory) variables.propertyCategory = params.propertyCategory;
       if (params.approvalStatus) variables.approvalStatus = params.approvalStatus;
 
-      let data = await twoBighaGraphqlRequest<{ getPropertiesByClientId?: any }>(
+      const data = await twoBighaGraphqlRequest<{ getPropertiesByClientId?: any }>(
         config,
         GET_PROPERTIES_BY_CLIENT_ID_QUERY,
         variables,
       );
-
-      // If user had 0 results under clientId filter and no explicit createdBy was passed, check createdBy filter
-      if (
-        params.clientId &&
-        !params.createdBy &&
-        (!data?.getPropertiesByClientId?.result || data.getPropertiesByClientId.result.length === 0)
-      ) {
-        const fallbackVars = { ...variables };
-        delete fallbackVars.clientId;
-        fallbackVars.createdBy = params.clientId;
-        const createdData = await twoBighaGraphqlRequest<{ getPropertiesByClientId?: any }>(
-          config,
-          GET_PROPERTIES_BY_CLIENT_ID_QUERY,
-          fallbackVars,
-        ).catch(() => null);
-        if (createdData?.getPropertiesByClientId?.result?.length) {
-          data = createdData;
-        }
-      }
 
       return data?.getPropertiesByClientId || {
         result: [],

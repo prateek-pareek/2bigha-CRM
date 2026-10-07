@@ -328,9 +328,110 @@ export class WhatsAppService {
     }
   }
 
+  private normalizeLanguageCode(lang?: string): string {
+    const raw = String(lang || '').trim().toLowerCase();
+    if (!raw) return 'en';
+    const map: Record<string, string> = {
+      'english': 'en_US',
+      'english (us)': 'en_US',
+      'english (uk)': 'en_GB',
+      'en': 'en',
+      'en_us': 'en_US',
+      'en_gb': 'en_GB',
+      'en-us': 'en_US',
+      'en-gb': 'en_GB',
+      'hindi': 'hi',
+      'hi': 'hi',
+      'hi_in': 'hi',
+      'hi-in': 'hi',
+      'gujarati': 'gu',
+      'gu': 'gu',
+      'gu_in': 'gu',
+      'gu-in': 'gu',
+      'marathi': 'mr',
+      'mr': 'mr',
+      'mr_in': 'mr',
+      'mr-in': 'mr',
+      'bengali': 'bn',
+      'bn': 'bn',
+      'tamil': 'ta',
+      'ta': 'ta',
+      'telugu': 'te',
+      'te': 'te',
+      'kannada': 'kn',
+      'kn': 'kn',
+      'malayalam': 'ml',
+      'ml': 'ml',
+      'punjabi': 'pa',
+      'pa': 'pa',
+      'spanish': 'es',
+      'es': 'es',
+      'spanish (la)': 'es_LA',
+      'portuguese': 'pt_BR',
+      'portuguese (br)': 'pt_BR',
+      'portuguese (pt)': 'pt_PT',
+      'pt': 'pt_BR',
+      'pt_br': 'pt_BR',
+      'arabic': 'ar',
+      'ar': 'ar',
+      'french': 'fr',
+      'fr': 'fr',
+      'german': 'de',
+      'de': 'de',
+    };
+    if (map[raw]) return map[raw];
+    const clean = raw.replace('-', '_');
+    const parts = clean.split('_');
+    if (parts.length === 2) {
+      return `${parts[0].toLowerCase()}_${parts[1].toUpperCase()}`;
+    }
+    return parts[0].toLowerCase();
+  }
+
+  private getLanguageCandidates(lang: string): string[] {
+    const raw = String(lang || '').trim();
+    const normalized = this.normalizeLanguageCode(raw);
+    const candidates: string[] = [];
+    const add = (c: string) => {
+      if (c && !candidates.includes(c)) candidates.push(c);
+    };
+
+    add(raw);
+    add(normalized);
+
+    if (normalized === 'en_US') {
+      add('en');
+      add('en_GB');
+    } else if (normalized === 'en') {
+      add('en_US');
+      add('en_GB');
+    } else if (normalized === 'en_GB') {
+      add('en_US');
+      add('en');
+    } else if (normalized === 'hi') {
+      add('hi_IN');
+    } else if (normalized === 'hi_IN') {
+      add('hi');
+    } else if (normalized === 'gu') {
+      add('gu_IN');
+    } else if (normalized === 'mr') {
+      add('mr_IN');
+    } else if (normalized === 'bn') {
+      add('bn_IN');
+    } else if (normalized === 'es') {
+      add('es_LA');
+    } else if (normalized === 'pt_BR') {
+      add('pt_PT');
+      add('pt');
+    }
+
+    return candidates;
+  }
+
   async sendTemplateMessage(params: {
     to: string;
     name: string;
+    campaignName?: string;
     language: string;
     components?: WhatsAppTemplateSendComponent[];
     bodyPreview?: string;
@@ -359,24 +460,24 @@ export class WhatsAppService {
     await this.validateSendAccess(phone, params.userId);
 
     const templateName = String(params.name || '').trim();
-    const language = String(params.language || '').trim();
-    if (!templateName || !language) {
+    const rawLanguage = String(params.language || '').trim();
+    if (!templateName || !rawLanguage) {
       return { success: false, error: 'Template name and language are required' };
     }
 
+    const normalizedLang = this.normalizeLanguageCode(rawLanguage);
+
     if (config.provider === 'aisensy') {
-      // For AiSensy, `params.name` is expected to be the AiSensy dashboard
-      // Campaign name this template maps to (WhatsAppTemplate.aisensyCampaignName)
-      // — see AiSensyClient's doc comment for why there's no template-id
-      // lookup here.
+      // For AiSensy, use campaignName if supplied or templateName
+      const campaignOrTemplateName = String(params.campaignName || templateName).trim();
       const client = new AiSensyClient(config.apiKey, {
         projectId: config.aisensyProjectId || '',
         projectApiPassword: config.aisensyProjectApiPassword || '',
       });
       const result = await client.sendCampaignMessage({
         destination: phone,
-        campaignName: templateName,
-        language,
+        campaignName: campaignOrTemplateName,
+        language: normalizedLang,
         source: config.sourceLabel,
         components: params.components,
         templateParams: this.flattenParamsForAiSensy(params.components),
@@ -388,7 +489,7 @@ export class WhatsAppService {
 
       const body =
         String(params.bodyPreview || '').trim() ||
-        `[Template] ${templateName} (${language})`;
+        `[Template] ${templateName} (${normalizedLang})`;
 
       if (!result.success) {
         this.logger.error(`AiSensy template send failed: ${result.error}`);
@@ -416,7 +517,7 @@ export class WhatsAppService {
         meta: {
           ...result.raw,
           provider: 'aisensy',
-          template: { name: templateName, language, components: params.components || [] },
+          template: { name: templateName, language: normalizedLang, components: params.components || [] },
         },
       });
       this.emitWhatsAppEvent(phone, saved);
@@ -441,45 +542,84 @@ export class WhatsAppService {
     }
 
     try {
-      const res = await fetch(`${META_API}/${config.phoneNumberId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: phone,
-          type: 'template',
-          template: {
-            name: templateName,
-            language: { code: language },
-            ...(params.components?.length
-              ? { components: params.components }
-              : {}),
-          },
-        }),
-      });
+      // Find cached template if available to check exact registered language code
+      const integrationDoc = await this.integrationModel.findOne({ type: 'whatsapp' }).lean().exec();
+      const cachedList: WhatsAppCachedTemplate[] = Array.isArray(integrationDoc?.templates) ? integrationDoc.templates : [];
+      const cachedTemplate = cachedList.find(
+        (t) =>
+          String(t.name || '').toLowerCase() === templateName.toLowerCase() &&
+          (t.language === rawLanguage || this.normalizeLanguageCode(t.language) === normalizedLang),
+      );
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      const languageCandidates = this.getLanguageCandidates(cachedTemplate?.language || rawLanguage);
+      let lastError: any = null;
+      let successfulData: any = null;
+      let successfulLanguage = rawLanguage;
+
+      for (const langCandidate of languageCandidates) {
+        const res = await fetch(`${META_API}/${config.phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: phone,
+            type: 'template',
+            template: {
+              name: templateName,
+              language: { code: langCandidate },
+              ...(params.components?.length
+                ? { components: params.components }
+                : {}),
+            },
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.messages?.[0]?.id) {
+          successfulData = data;
+          successfulLanguage = langCandidate;
+          break;
+        }
+
+        lastError = data;
+        const errCode = data?.error?.code;
+        const errMsg = String(data?.error?.message || '').toLowerCase();
+        const isTranslationError =
+          errCode === 132000 ||
+          errMsg.includes('does not exist in') ||
+          errMsg.includes('translation') ||
+          errMsg.includes('language');
+
+        if (!isTranslationError) {
+          // If the error is NOT a language translation error (e.g. invalid phone number, auth error), stop retrying
+          break;
+        }
+        this.logger.warn(
+          `Template "${templateName}" failed with language "${langCandidate}", trying alternative candidates...`,
+        );
+      }
+
+      if (!successfulData) {
         this.logger.error(
-          `WhatsApp template send failed: ${JSON.stringify(data)}`,
+          `WhatsApp template send failed: ${JSON.stringify(lastError)}`,
         );
         return {
           success: false,
           error:
-            data?.error?.message ||
-            data?.error?.error_user_msg ||
+            lastError?.error?.message ||
+            lastError?.error?.error_user_msg ||
             'Template send failed',
         };
       }
 
-      const msgId = data?.messages?.[0]?.id;
+      const msgId = successfulData?.messages?.[0]?.id;
       const body =
         String(params.bodyPreview || '').trim() ||
-        `[Template] ${templateName} (${language})`;
+        `[Template] ${templateName} (${successfulLanguage})`;
 
       const saved = await this.messageModel.create({
         waId: phone,
@@ -494,10 +634,10 @@ export class WhatsAppService {
         status: 'sent',
         isRead: true,
         meta: {
-          ...data,
+          ...successfulData,
           template: {
             name: templateName,
-            language,
+            language: successfulLanguage,
             components: params.components || [],
           },
         },
@@ -584,15 +724,6 @@ export class WhatsAppService {
         let hasMore = true;
         let after: string | undefined = undefined;
 
-        const reverseLanguageMap: Record<string, string> = {
-          'english': 'en',
-          'english (us)': 'en_US',
-          'english (uk)': 'en_GB',
-          'hindi': 'hi',
-          'spanish': 'es',
-          'portuguese': 'pt',
-        };
-
         while (hasMore) {
           let url = `https://apis.aisensy.com/project-apis/v1/project/${config.aisensyProjectId}/wa_template?limit=100`;
           if (after) url += `&after=${after}`;
@@ -612,8 +743,7 @@ export class WhatsAppService {
 
           const page = Array.isArray(data?.template) ? data.template : [];
           for (const row of page) {
-            const langLower = String(row.language || '').toLowerCase();
-            const language = reverseLanguageMap[langLower] || langLower.substring(0, 2);
+            const language = this.normalizeLanguageCode(row.language);
 
             const components: any[] = [];
             components.push({

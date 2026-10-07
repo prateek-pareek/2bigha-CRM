@@ -21,6 +21,7 @@ export type WhatsAppCachedTemplate = {
   status: string;
   language: string;
   category?: string;
+  aisensyCampaignName?: string;
   components?: WhatsAppTemplateComponent[];
 };
 

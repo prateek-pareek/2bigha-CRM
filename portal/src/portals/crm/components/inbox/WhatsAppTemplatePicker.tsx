@@ -54,6 +54,44 @@ export default function WhatsAppTemplatePicker({
     }
     return <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 shrink-0">{category || 'Template'}</span>;
   };
+
+  const formatLanguageLabel = (lang?: string): string => {
+    if (!lang) return "English (en)";
+    const key = String(lang).trim().toLowerCase().replace(/[-_]/g, "_");
+    const map: Record<string, string> = {
+      en: "English (en)",
+      en_us: "English (US)",
+      en_gb: "English (UK)",
+      hi: "Hindi (hi)",
+      hi_in: "Hindi (hi)",
+      gu: "Gujarati (gu)",
+      gu_in: "Gujarati (gu)",
+      mr: "Marathi (mr)",
+      mr_in: "Marathi (mr)",
+      bn: "Bengali (bn)",
+      bn_in: "Bengali (bn)",
+      ta: "Tamil (ta)",
+      ta_in: "Tamil (ta)",
+      te: "Telugu (te)",
+      te_in: "Telugu (te)",
+      kn: "Kannada (kn)",
+      kn_in: "Kannada (kn)",
+      ml: "Malayalam (ml)",
+      ml_in: "Malayalam (ml)",
+      pa: "Punjabi (pa)",
+      pa_in: "Punjabi (pa)",
+      es: "Spanish (es)",
+      es_la: "Spanish (es)",
+      pt: "Portuguese (pt)",
+      pt_br: "Portuguese (BR)",
+      pt_pt: "Portuguese (PT)",
+      ar: "Arabic (ar)",
+      fr: "French (fr)",
+      de: "German (de)",
+    };
+    return map[key] || map[key.split("_")[0]] || lang;
+  };
+
   const [search, setSearch] = useState("");
   const [templates, setTemplates] = useState<WhatsAppCachedTemplate[]>([]);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
@@ -84,7 +122,10 @@ export default function WhatsAppTemplatePicker({
     return liveCampaigns.filter(
       (c) =>
         c.status === "LIVE" &&
-        c.message_payload?.template?.name === selected.name
+        c.message_payload?.template?.name === selected.name &&
+        (!c.message_payload?.template?.language?.code ||
+          c.message_payload?.template?.language?.code.toLowerCase().replace(/[-_]/g, '_') === selected.language.toLowerCase().replace(/[-_]/g, '_') ||
+          c.message_payload?.template?.language?.code.toLowerCase().startsWith(selected.language.toLowerCase().substring(0, 2)))
     );
   }, [selected, liveCampaigns]);
 
@@ -104,7 +145,7 @@ export default function WhatsAppTemplatePicker({
     if (matchingCampaigns.length > 0) {
       setSelectedCampaignName(matchingCampaigns[0].name);
     } else {
-      setSelectedCampaignName(selected.name);
+      setSelectedCampaignName(selected.aisensyCampaignName || selected.name);
     }
   }, [selected, matchingCampaigns]);
 
@@ -118,6 +159,7 @@ export default function WhatsAppTemplatePicker({
       (t) =>
         t.name.toLowerCase().includes(q) ||
         t.language.toLowerCase().includes(q) ||
+        formatLanguageLabel(t.language).toLowerCase().includes(q) ||
         String(t.category || "")
           .toLowerCase()
           .includes(q),
@@ -425,7 +467,8 @@ export default function WhatsAppTemplatePicker({
         },
         body: JSON.stringify({
           to,
-          name: selectedCampaignName || selected.name,
+          name: selected.name,
+          campaignName: selectedCampaignName || selected.aisensyCampaignName || selected.name,
           language: selected.language,
           components,
           bodyPreview: bodyPreview(selected, values),
@@ -506,7 +549,7 @@ export default function WhatsAppTemplatePicker({
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search templates..."
+                  placeholder="Search templates, languages..."
                   className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-xs outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
@@ -532,10 +575,12 @@ export default function WhatsAppTemplatePicker({
                 </div>
               ) : (
                 filtered.map((t) => {
-                  const isSelected = selected?.id === t.id;
+                  const isSelected =
+                    (selected?.id && t.id && selected.id === t.id) ||
+                    (selected?.name === t.name && selected?.language === t.language);
                   return (
                     <button
-                      key={t.id}
+                      key={`${t.id || t.name}_${t.language}`}
                       type="button"
                       onClick={() => setSelected(t)}
                       className={cn(
@@ -549,10 +594,15 @@ export default function WhatsAppTemplatePicker({
                         <span className="text-xs font-bold text-slate-800 break-all">
                           {t.name}
                         </span>
-                        {getCategoryBadge(t.category)}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {formatLanguageLabel(t.language)}
+                          </span>
+                          {getCategoryBadge(t.category)}
+                        </div>
                       </div>
-                      <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
-                        <span>Language: {t.language}</span>
+                      <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-400">
+                        <span className="font-mono text-slate-500">Code: {t.language}</span>
                         {t.components?.some(
                           (c: any) => String(c.type).toUpperCase() === "HEADER",
                         ) && (
@@ -580,10 +630,15 @@ export default function WhatsAppTemplatePicker({
                 <div>
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="text-xs font-extrabold text-slate-800 break-all">{selected.name}</h3>
-                    {getCategoryBadge(selected.category)}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        {formatLanguageLabel(selected.language)}
+                      </span>
+                      {getCategoryBadge(selected.category)}
+                    </div>
                   </div>
-                  <p className="text-[10px] font-bold text-slate-400 mt-1">
-                    Language: {selected.language}
+                  <p className="text-[10px] font-semibold text-slate-500 mt-1">
+                    Language Code: <span className="font-mono font-bold text-slate-700">{selected.language}</span>
                   </p>
                 </div>
 

@@ -27,7 +27,9 @@ type CallLogRow = {
   agentNumber?: string;
   customerName?: string;
   customerNumber?: string;
-  duration: number;
+  duration?: number;
+  connectedDuration?: number;
+  ringingDuration?: number;
   direction: "Incoming" | "Outgoing";
   status: string;
   callDate?: string;
@@ -47,11 +49,47 @@ type Stats = {
   connected: number;
 };
 
-function formatDuration(seconds: number): string {
-  if (!seconds) return "—";
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+function formatDuration(val: unknown, row?: CallLogRow): string {
+  let seconds = 0;
+  if (typeof val === "number" && !Number.isNaN(val)) {
+    seconds = Math.max(0, Math.round(val));
+  } else if (typeof val === "string") {
+    const str = val.trim();
+    if (str.includes(":")) {
+      const parts = str.split(":").map((p) => Number(p.replace(/[^0-9.]/g, "")) || 0);
+      if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      else if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+    } else {
+      const num = parseFloat(str.replace(/[^0-9.]/g, ""));
+      if (!Number.isNaN(num)) seconds = Math.max(0, Math.round(num));
+    }
+  }
+
+  if (!seconds && row?.connectedDuration) {
+    seconds = Number(row.connectedDuration) || 0;
+  }
+
+  if (!seconds && row?.callDate && row?.callEndDate) {
+    const start = new Date(row.callDate).getTime();
+    const end = new Date(row.callEndDate).getTime();
+    if (!Number.isNaN(start) && !Number.isNaN(end) && end > start) {
+      seconds = Math.round((end - start) / 1000);
+    }
+  }
+
+  if (seconds <= 0) {
+    const s = String(row?.status || "").toLowerCase();
+    if (s === "connected" || s === "completed") return "0s";
+    return "—";
+  }
+
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 function formatDate(v?: string | null): string {
@@ -277,7 +315,7 @@ export default function IvrCallLogsView({ mine }: { mine: boolean }) {
                   <td>
                     <CrmListMutedText>{row.customerNumber || "—"}</CrmListMutedText>
                   </td>
-                  <td>{formatDuration(row.duration)}</td>
+                  <td>{formatDuration(row.duration, row)}</td>
                   <td>
                     <CrmListStatusBadge label={row.direction === "Incoming" ? "INCOMING" : "OUTGOING"} />
                   </td>

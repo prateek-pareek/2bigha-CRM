@@ -378,16 +378,39 @@ export class WhatsAppTemplatesService {
         }
       }
 
-      let languageMap: Record<string, string> = {
+      const languageMap: Record<string, string> = {
         'en': 'English',
         'en_us': 'English',
-        'en_gb': 'English',
+        'en_gb': 'English (UK)',
         'hi': 'Hindi',
+        'hi_in': 'Hindi',
+        'gu': 'Gujarati',
+        'gu_in': 'Gujarati',
+        'mr': 'Marathi',
+        'mr_in': 'Marathi',
+        'bn': 'Bengali',
+        'bn_in': 'Bengali',
+        'ta': 'Tamil',
+        'ta_in': 'Tamil',
+        'te': 'Telugu',
+        'te_in': 'Telugu',
+        'kn': 'Kannada',
+        'kn_in': 'Kannada',
+        'ml': 'Malayalam',
+        'ml_in': 'Malayalam',
+        'pa': 'Punjabi',
+        'pa_in': 'Punjabi',
         'es': 'Spanish',
+        'es_la': 'Spanish',
         'pt': 'Portuguese',
+        'pt_br': 'Portuguese (BR)',
+        'pt_pt': 'Portuguese (PT)',
+        'ar': 'Arabic',
+        'fr': 'French',
+        'de': 'German',
       };
-      const langKey = String(template.language || '').toLowerCase().replace('_', '-');
-      const langName = languageMap[langKey] || languageMap[langKey.split('-')[0]] || 'English';
+      const langKey = String(template.language || '').toLowerCase().replace(/[-_]/g, '_');
+      const langName = languageMap[langKey] || languageMap[langKey.split('_')[0]] || 'English';
 
       const category = String(template.category || 'MARKETING').toUpperCase();
 
@@ -569,12 +592,43 @@ export class WhatsAppTemplatesService {
         let after: string | undefined = undefined;
 
         const reverseLanguageMap: Record<string, string> = {
-          'english': 'en',
+          'english': 'en_US',
           'english (us)': 'en_US',
           'english (uk)': 'en_GB',
+          'en': 'en',
+          'en_us': 'en_US',
+          'en_gb': 'en_GB',
           'hindi': 'hi',
+          'hi': 'hi',
+          'hi_in': 'hi',
+          'gujarati': 'gu',
+          'gu': 'gu',
+          'gu_in': 'gu',
+          'marathi': 'mr',
+          'mr': 'mr',
+          'mr_in': 'mr',
+          'bengali': 'bn',
+          'bn': 'bn',
+          'tamil': 'ta',
+          'ta': 'ta',
+          'telugu': 'te',
+          'te': 'te',
+          'kannada': 'kn',
+          'kn': 'kn',
+          'malayalam': 'ml',
+          'ml': 'ml',
+          'punjabi': 'pa',
+          'pa': 'pa',
           'spanish': 'es',
-          'portuguese': 'pt',
+          'es': 'es',
+          'portuguese': 'pt_BR',
+          'portuguese (br)': 'pt_BR',
+          'portuguese (pt)': 'pt_PT',
+          'pt': 'pt_BR',
+          'pt_br': 'pt_BR',
+          'arabic': 'ar',
+          'french': 'fr',
+          'german': 'de',
         };
 
         while (hasMore) {
@@ -596,8 +650,8 @@ export class WhatsAppTemplatesService {
 
           const page = Array.isArray(data?.template) ? data.template : [];
           for (const row of page) {
-            const langLower = String(row.language || '').toLowerCase();
-            const language = reverseLanguageMap[langLower] || langLower.substring(0, 2);
+            const langLower = String(row.language || '').trim().toLowerCase();
+            const language = reverseLanguageMap[langLower] || (langLower.includes('_') || langLower.includes('-') ? langLower.replace('-', '_') : langLower);
             const name = String(row.name || '');
             const status = String(row.status || 'PENDING');
             const metaId = row.template_id ? String(row.template_id) : undefined;

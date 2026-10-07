@@ -256,6 +256,22 @@ export class IvrService {
     return { sessionId, message: data?.message || 'Call initiated', raw: data };
   }
 
+  parseCallDuration(val: unknown): number {
+    if (typeof val === 'number') return Math.max(0, Math.round(val));
+    if (typeof val === 'string') {
+      const str = val.trim();
+      if (!str) return 0;
+      if (str.includes(':')) {
+        const parts = str.split(':').map((p) => Number(p.replace(/[^0-9.]/g, '')) || 0);
+        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        if (parts.length === 2) return parts[0] * 60 + parts[1];
+      }
+      const parsed = parseFloat(str.replace(/[^0-9.]/g, ''));
+      if (!Number.isNaN(parsed)) return Math.max(0, Math.round(parsed));
+    }
+    return 0;
+  }
+
   /**
    * Upserts a CallLog from Kommuno's `call/event/callback` webhook. Defensive
    * about the exact shape of `agent_details` (not fully documented) — falls
@@ -264,21 +280,49 @@ export class IvrService {
    * retry indefinitely).
    */
   async handleKommunoCallback(body: any): Promise<void> {
-    const callDetails = body?.call_details || {};
-    const customerDetails = body?.customer_details || {};
-    const recordingDetails = body?.recording_details || {};
-    const agentDetailsRaw = Array.isArray(body?.agent_details) ? body.agent_details[0] : body?.agent_details;
+    const callDetails =
+      body?.call_details ||
+      body?.callDetails ||
+      body?.data?.call_details ||
+      body?.data ||
+      body ||
+      {};
+    const customerDetails =
+      body?.customer_details ||
+      body?.customerDetails ||
+      body?.data?.customer_details ||
+      body?.customer ||
+      {};
+    const recordingDetails =
+      body?.recording_details ||
+      body?.recordingDetails ||
+      body?.data?.recording_details ||
+      {};
+    const agentDetailsRaw = Array.isArray(body?.agent_details)
+      ? body.agent_details[0]
+      : Array.isArray(body?.data?.agent_details)
+      ? body.data.agent_details[0]
+      : body?.agent_details || body?.data?.agent_details;
 
-    const sessionId = String(callDetails.session_id || recordingDetails.session_id || '').trim();
+    const sessionId = String(
+      callDetails.session_id ||
+        callDetails.sessionId ||
+        recordingDetails.session_id ||
+        body?.session_id ||
+        body?.sessionId ||
+        '',
+    ).trim();
     if (!sessionId) {
       this.logger.warn('Kommuno callback missing session_id — skipping. Raw: ' + JSON.stringify(body).slice(0, 500));
       return;
     }
 
     const direction: 'Incoming' | 'Outgoing' =
-      String(callDetails.call_direction || '').toUpperCase() === 'INCOMING' ? 'Incoming' : 'Outgoing';
+      String(callDetails.call_direction || callDetails.direction || body?.direction || '').toUpperCase() === 'INCOMING'
+        ? 'Incoming'
+        : 'Outgoing';
 
-    const rawStatus = String(callDetails.overall_call_status || '').trim();
+    const rawStatus = String(callDetails.overall_call_status || callDetails.status || body?.status || '').trim();
     const status = rawStatus.toLowerCase() === 'patched' ? 'Connected' : rawStatus ? 'Completed' : 'Missed';
 
     const agentNumber =
@@ -292,18 +336,63 @@ export class IvrService {
       return Number.isNaN(d.getTime()) ? undefined : d;
     };
 
+    const rawDuration =
+      callDetails.duration ??
+      callDetails.call_duration ??
+      callDetails.total_duration ??
+      callDetails.callDuration ??
+      callDetails.talk_duration ??
+      callDetails.conversation_duration ??
+      callDetails.billsec ??
+      callDetails.pulse ??
+      body?.duration ??
+      body?.call_duration ??
+      body?.total_duration ??
+      body?.callDuration;
+
+    const rawConnectedDuration =
+      callDetails.connected_duration ??
+      callDetails.connectedDuration ??
+      callDetails.answered_duration ??
+      body?.connected_duration ??
+      body?.connectedDuration;
+
+    const rawRingingDuration =
+      callDetails.ringing_duration ??
+      callDetails.ringingDuration ??
+      body?.ringing_duration ??
+      body?.ringingDuration;
+
+    let duration = this.parseCallDuration(rawDuration);
+    const connectedDuration = this.parseCallDuration(rawConnectedDuration);
+    const ringingDuration = this.parseCallDuration(rawRingingDuration);
+
+    const callDate = parseDate(
+      callDetails.start_date_time || callDetails.call_date || body?.start_date_time || body?.call_date,
+    );
+    const callEndDate = parseDate(
+      callDetails.end_date_time || callDetails.call_end_date || body?.end_date_time || body?.call_end_date,
+    );
+
+    if (duration === 0 && connectedDuration > 0) {
+      duration = connectedDuration;
+    }
+    if (duration === 0 && callDate && callEndDate && callEndDate > callDate) {
+      duration = Math.round((callEndDate.getTime() - callDate.getTime()) / 1000);
+    }
+
     const update: Partial<CallLog> = {
       direction,
-      customerNumber: customerDetails.customer_number || callDetails.customer_number,
-      customerName: customerDetails.customer_name || undefined,
-      duration: Number(callDetails.duration) || 0,
-      connectedDuration: Number(callDetails.connected_duration) || 0,
-      ringingDuration: Number(callDetails.ringing_duration) || 0,
+      customerNumber: customerDetails.customer_number || customerDetails.phone || callDetails.customer_number || body?.customer_number,
+      customerName: customerDetails.customer_name || customerDetails.name || undefined,
+      duration,
+      connectedDuration,
+      ringingDuration,
       rawStatus,
       status,
-      callDate: parseDate(callDetails.start_date_time),
-      callEndDate: parseDate(callDetails.end_date_time),
-      recordingUrl: recordingDetails.recording_path || undefined,
+      callDate,
+      callEndDate,
+      recordingUrl: recordingDetails.recording_path || recordingDetails.url || body?.recording_path || undefined,
       rawPayload: body,
     };
     if (agentNumber) update.agentNumber = normalizeE164(String(agentNumber));
@@ -615,15 +704,23 @@ export class IvrService {
         return;
       }
       const direction = String(get(row, 'direction') || 'Outgoing').trim();
+      const durationRaw =
+        get(row, 'duration') ??
+        get(row, 'Duration') ??
+        get(row, 'call_duration') ??
+        get(row, 'Call Duration') ??
+        get(row, 'total_duration');
+      const duration = this.parseCallDuration(durationRaw);
+
       const doc: Record<string, unknown> = {
         sessionId: `import-${new Types.ObjectId().toString()}`,
         direction: direction === 'Incoming' ? 'Incoming' : 'Outgoing',
         customerNumber,
-        customerName: String(get(row, 'customerName') || '').trim() || undefined,
-        status: String(get(row, 'status') || 'Completed').trim() || 'Completed',
-        duration: Number(get(row, 'duration')) || 0,
-        agentName: String(get(row, 'agentName') || '').trim() || undefined,
-        agentNumber: String(get(row, 'agentNumber') || '').trim() || undefined,
+        customerName: String(get(row, 'customerName') || get(row, 'Client Name') || '').trim() || undefined,
+        status: String(get(row, 'status') || get(row, 'Status') || 'Completed').trim() || 'Completed',
+        duration,
+        agentName: String(get(row, 'agentName') || get(row, 'Agent Name') || '').trim() || undefined,
+        agentNumber: String(get(row, 'agentNumber') || get(row, 'Agent Number') || '').trim() || undefined,
         notes: String(get(row, 'notes') || '').trim() || undefined,
         loggedManually: true,
         initiatedByUserId:
@@ -631,10 +728,18 @@ export class IvrService {
             ? new Types.ObjectId(String(user.userId))
             : undefined,
       };
-      const callDateRaw = get(row, 'callDate');
+      const callDateRaw = get(row, 'callDate') || get(row, 'Call Date');
       if (callDateRaw) {
         const parsed = new Date(String(callDateRaw));
         if (!Number.isNaN(parsed.getTime())) doc.callDate = parsed;
+      }
+      const callEndDateRaw = get(row, 'callEndDate') || get(row, 'Call End Date');
+      if (callEndDateRaw) {
+        const parsed = new Date(String(callEndDateRaw));
+        if (!Number.isNaN(parsed.getTime())) doc.callEndDate = parsed;
+      }
+      if (!doc.duration && doc.callDate && doc.callEndDate && (doc.callEndDate as Date) > (doc.callDate as Date)) {
+        doc.duration = Math.round(((doc.callEndDate as Date).getTime() - (doc.callDate as Date).getTime()) / 1000);
       }
       docs.push(doc);
     });

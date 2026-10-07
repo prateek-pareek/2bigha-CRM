@@ -9,7 +9,8 @@ type CallLogRow = {
   _id: string;
   direction: "Incoming" | "Outgoing";
   status: string;
-  duration?: number;
+  duration?: number | string;
+  connectedDuration?: number | string;
   notes?: string;
   recordingUrl?: string;
   followUpAt?: string;
@@ -23,11 +24,28 @@ type Props = {
   leadName?: string;
 };
 
-function formatDuration(seconds?: number): string {
+function formatDuration(val?: number | string): string {
+  let seconds = 0;
+  if (typeof val === "number" && !Number.isNaN(val)) {
+    seconds = Math.max(0, Math.round(val));
+  } else if (typeof val === "string") {
+    const str = val.trim();
+    if (str.includes(":")) {
+      const parts = str.split(":").map((p) => Number(p.replace(/[^0-9.]/g, "")) || 0);
+      if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      else if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+    } else {
+      const num = parseFloat(str.replace(/[^0-9.]/g, ""));
+      if (!Number.isNaN(num)) seconds = Math.max(0, Math.round(num));
+    }
+  }
   if (!seconds) return "—";
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}m ${s}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 /** Lead Action Menu → Call History: all call activity for one lead (records, recordings, follow-up notes). */
