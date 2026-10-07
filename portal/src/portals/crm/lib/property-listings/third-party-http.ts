@@ -21,7 +21,7 @@
  */
 
 import api from "../api";
-import { mapTwoBighaPropertyToRecord } from "./backend-api";
+import { mapCrmListingToRecord as mapLocalListing, mapTwoBighaPropertyToRecord } from "./backend-api";
 
 import type {
   LeadSubscriptionMock,
@@ -59,61 +59,6 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(message);
   }
   return data as T;
-}
-
-function mapLocalListing(item: any): PropertyListingRecord {
-  return {
-    _id: String(item._id),
-    listingBucket: item.listingBucket || (item.propertyType === "Farm" ? "farm" : "properties"),
-    title: item.title,
-    address: item.address,
-    city: item.city,
-    state: item.state,
-    district: item.district,
-    village: item.village,
-    tehsil: item.tehsil,
-    country: item.country || "India",
-    zipCode: item.zipCode,
-    price: item.price || 0,
-    currency: item.currency || "INR",
-    propertyType: item.propertyType || "Plot",
-    listedFor: item.listedFor || "Sale",
-    areaSqft: item.areaSqft,
-    areaValue: item.areaValue,
-    areaUnit: item.areaUnit,
-    status: item.status || "Available",
-    approvalStatus: item.approvalStatus || "Approved",
-    verified: Boolean(item.userPropertyId || item.twobighaPropertyId),
-    images: Array.isArray(item.images) ? item.images : [],
-    amenities: item.amenities || [],
-    description: item.description,
-    khasraNumber: item.khasraNumber,
-    googleMapsLink: item.googleMapsLink,
-    contactName: item.contactName,
-    contactPhone: item.contactPhone,
-    contactEmail: item.contactEmail,
-    createdAt: item.createdAt || new Date().toISOString(),
-    updatedAt: item.updatedAt || new Date().toISOString(),
-    twobighaPropertyId: item.twobighaPropertyId,
-    twobighaSyncStatus: item.twobighaSyncStatus,
-    twobighaSyncError: item.twobighaSyncError,
-    userPropertyId: item.userPropertyId,
-    leadId: item.leadId ? String(item.leadId) : undefined,
-    pmPlan: item.pmPlan,
-    pmStage: item.pmStage,
-    rmAssigneeId: item.rmAssigneeId,
-    rmAssigneeName: item.rmAssigneeName,
-    legalAssigneeId: item.legalAssigneeId,
-    legalAssigneeName: item.legalAssigneeName,
-    fieldAssigneeId: item.fieldAssigneeId,
-    fieldAssigneeName: item.fieldAssigneeName,
-    pmAssignmentSyncStatus: item.pmAssignmentSyncStatus,
-    pmAssignmentSyncError: item.pmAssignmentSyncError,
-    legalVerification: item.legalVerification,
-    fieldVisit: item.fieldVisit,
-    visitReport: item.visitReport,
-    pmWorkflowIds: item.pmWorkflowIds,
-  };
 }
 
 function toQuery(params: Record<string, string | number | undefined>): string {

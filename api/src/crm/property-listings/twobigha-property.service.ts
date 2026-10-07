@@ -86,7 +86,7 @@ export interface TwoBighaSyncResult {
  * This maps onto the larger of the two declared sets (the handbook's best
  * guess at what's actually accepted); reconfirm before relying on it.
  */
-const PROPERTY_TYPE_MAP: Record<string, string> = {
+export const PROPERTY_TYPE_MAP: Record<string, string> = {
   Apartment: 'APARTMENT',
   Villa: 'VILLA',
   'Independent House': 'RESIDENTIAL',
@@ -154,6 +154,7 @@ export const PROPERTY_DETAIL_FIELDS = `
   geoJson
   calculatedArea
   availablilityStatus
+  propertySold
   isVerified
   isActive
   isFeatured
@@ -214,6 +215,7 @@ export const PROPERTY_LIST_FIELDS = `
   geoJson
   calculatedArea
   availablilityStatus
+  propertySold
   isVerified
   isActive
   isFeatured
@@ -314,6 +316,12 @@ const UPDATE_PROPERTY_SOLD_STATUS_MUTATION = `
   }
 `;
 
+const DELETE_PROPERTY_MUTATION = `
+  mutation DeleteProperty($id: ID!) {
+    deleteProperty(id: $id)
+  }
+`;
+
 const APPROVE_PROPERTY_MUTATION = `
   mutation ApproveProperty($input: PropertyApprovalInput!) {
     approveProperty(input: $input) {
@@ -409,11 +417,7 @@ const GET_APPROVED_PROPERTIES_QUERY = `
         seo {
           slug
         }
-        images {
-          variants {
-            thumbnail
-          }
-        }
+        ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
       }
       meta {
         page
@@ -435,11 +439,7 @@ const GET_PENDING_PROPERTIES_QUERY = `
         seo {
           slug
         }
-        images {
-          variants {
-            thumbnail
-          }
-        }
+        ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
       }
       meta {
         page
@@ -461,11 +461,7 @@ const GET_REJECTED_PROPERTIES_QUERY = `
         seo {
           slug
         }
-        images {
-          variants {
-            thumbnail
-          }
-        }
+        ${PROPERTY_ENVELOPE_IMAGE_FIELDS}
       }
       meta {
         page
@@ -926,6 +922,19 @@ export class TwoBighaPropertyService {
     return envelope;
   }
 
+  /**
+   * List queries only carry envelope `images`, which are empty/unprocessed for
+   * freshly uploaded listings — backfill those rows from getPropertyMedia so
+   * every card shows its uploaded photos (same fallback the detail read uses).
+   */
+  private async hydrateListImages(
+    config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
+    rows: Record<string, unknown>[] | undefined,
+  ): Promise<Record<string, unknown>[]> {
+    if (!rows?.length) return [];
+    return Promise.all(rows.map((row) => this.hydrateEnvelopeImages(config, row)));
+  }
+
   private async hydrateEnvelopeUser(
     config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
     envelope: Record<string, unknown>,
@@ -1341,6 +1350,9 @@ export class TwoBighaPropertyService {
           propertySoldStatus,
         },
       });
+      // Sold/Under-Offer views and stats must reflect the change immediately.
+      this.availabilityIndexCache.clear();
+      this.propertiesStatsCache = undefined;
       return {
         success: true,
         id: data?.updatePropertySoldStatus?.id || twobighaPropertyId,
@@ -1525,7 +1537,7 @@ export class TwoBighaPropertyService {
       }
 
       return {
-        data: resultData || [],
+        data: await this.hydrateListImages(config, resultData),
         meta: resultMeta,
       };
     } catch (e: any) {
@@ -1634,6 +1646,10 @@ export class TwoBighaPropertyService {
       else if (params.status === "Managed" || params.status === "Under Offer") availablilityStatus = "MANAGED";
     }
 
+    if (availablilityStatus === "SOLD" || availablilityStatus === "MANAGED") {
+      return this.listPropertiesByAvailability(config, availablilityStatus, params);
+    }
+
     const input: Record<string, unknown> = {
       page: params.page ?? 1,
       limit: params.limit ?? 20,
@@ -1695,11 +1711,139 @@ export class TwoBighaPropertyService {
       }
 
       return {
-        data: resultData || [],
+        data: await this.hydrateListImages(config, resultData),
         meta: resultMeta || { total: (resultData || []).length },
       };
     } catch (e: any) {
       this.logger.error(`2bigha listProperties failed: ${e?.message}`);
+      return null;
+    }
+  }
+
+  /** `deleteProperty(id)` — removes a marketplace property on 2bigha (CRM "Delete listing"). */
+  async deleteProperty(twobighaPropertyId: string): Promise<{ success: boolean; error?: string }> {
+    const config = getTwoBighaConfig();
+    if (!config) return { success: true };
+
+    try {
+      const data = await twoBighaGraphqlRequest<{ deleteProperty?: boolean }>(
+        config,
+        DELETE_PROPERTY_MUTATION,
+        { id: twobighaPropertyId },
+      );
+      if (data?.deleteProperty === false) {
+        return { success: false, error: '2bigha declined the delete' };
+      }
+      this.availabilityIndexCache.clear();
+      this.propertiesStatsCache = undefined;
+      return { success: true };
+    } catch (e: any) {
+      this.logger.error(`2bigha deleteProperty failed for ${twobighaPropertyId}: ${e?.message}`);
+      return { success: false, error: e?.message || 'Unknown error' };
+    }
+  }
+
+  /**
+   * 2bigha's list resolvers (`properties`, `getSoldProperties`, the approval queues)
+   * accept `availablilityStatus` but ignore it — every row comes back, so a Sold view
+   * built on them shows page 1 of everything and the portal's status filter empties it.
+   * Instead: scan a light id + sold-flag projection once (cached), filter here, and
+   * hydrate only the requested page by slug.
+   */
+  private availabilityIndexCache = new Map<
+    string,
+    { rows: Promise<Array<{ slug: string; availability: 'SOLD' | 'MANAGED' | 'AVAILABLE' }>>; expiresAt: number }
+  >();
+
+  private static readonly AVAILABILITY_INDEX_TTL_MS = 120_000;
+
+  /** Sold = 2bigha's `propertySold` flag (what updatePropertySoldStatus sets) or a SOLD enum. */
+  private static availabilityOf(p: Record<string, unknown> | undefined): 'SOLD' | 'MANAGED' | 'AVAILABLE' {
+    if (p?.propertySold === true || p?.availablilityStatus === 'SOLD') return 'SOLD';
+    if (p?.availablilityStatus === 'MANAGED') return 'MANAGED';
+    return 'AVAILABLE';
+  }
+
+  private getAvailabilityIndex(
+    config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
+    searchTerm?: string,
+    approvalStatus?: string,
+  ): Promise<Array<{ slug: string; availability: 'SOLD' | 'MANAGED' | 'AVAILABLE' }>> {
+    const norm = (approvalStatus || '').toLowerCase();
+    const queryName =
+      norm === 'pending' || norm === 'pending review'
+        ? 'getPendingApprovalProperties'
+        : norm === 'rejected'
+          ? 'getRejectedProperties'
+          : norm === 'approved'
+            ? 'getApprovedProperties'
+            : 'properties';
+    const key = `${queryName}|${(searchTerm || '').trim().toLowerCase()}`;
+    const cached = this.availabilityIndexCache.get(key);
+    if (cached && Date.now() < cached.expiresAt) return cached.rows;
+
+    const PAGE = 1000;
+    const query = `
+      query AvailabilityIndex($input: GetPropertiesInput!) {
+        ${queryName}(input: $input) {
+          data { property { id propertySold availablilityStatus } seo { slug } }
+          meta { total totalPages }
+        }
+      }
+    `;
+    const fetchPage = async (page: number) => {
+      const data = await twoBighaGraphqlRequest<Record<string, { data?: any[]; meta?: any } | null>>(
+        config,
+        query,
+        { input: { page, limit: PAGE, searchTerm: searchTerm || undefined } },
+      );
+      return data?.[queryName] || null;
+    };
+    const rows = (async () => {
+      const first = await fetchPage(1);
+      const totalPages = Math.min(Number(first?.meta?.totalPages) || 1, 50);
+      const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, i) => fetchPage(i + 2)),
+      );
+      return [first, ...rest]
+        .flatMap((r) => r?.data || [])
+        .map((row: any) => ({
+          slug: String(row?.seo?.slug || row?.property?.id || ''),
+          availability: TwoBighaPropertyService.availabilityOf(row?.property),
+        }))
+        .filter((r) => r.slug);
+    })();
+    rows.catch(() => this.availabilityIndexCache.delete(key));
+    this.availabilityIndexCache.set(key, {
+      rows,
+      expiresAt: Date.now() + TwoBighaPropertyService.AVAILABILITY_INDEX_TTL_MS,
+    });
+    return rows;
+  }
+
+  private async listPropertiesByAvailability(
+    config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
+    availability: 'SOLD' | 'MANAGED',
+    params: { page?: number; limit?: number; searchTerm?: string; approvalStatus?: string },
+  ): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.max(1, params.limit ?? 20);
+    try {
+      const index = await this.getAvailabilityIndex(config, params.searchTerm, params.approvalStatus);
+      const matches = index.filter((r) => r.availability === availability);
+      const slice = matches.slice((page - 1) * limit, page * limit);
+      const details = await Promise.all(slice.map((r) => this.getPropertyDetailBySlug(r.slug)));
+      return {
+        data: details.filter((d): d is Record<string, unknown> => !!d),
+        meta: {
+          page,
+          limit,
+          total: matches.length,
+          totalPages: Math.ceil(matches.length / limit),
+        },
+      };
+    } catch (e: any) {
+      this.logger.error(`2bigha listPropertiesByAvailability(${availability}) failed: ${e?.message}`);
       return null;
     }
   }
@@ -1717,17 +1861,13 @@ export class TwoBighaPropertyService {
     }
 
     try {
-      const [allRes, availRes, soldRes, managedRes] = await Promise.all([
-        this.listProperties({ page: 1, limit: 1 }),
-        this.listProperties({ page: 1, limit: 1, availablilityStatus: 'AVAILABLE' }),
-        this.listProperties({ page: 1, limit: 1, availablilityStatus: 'SOLD' }),
-        this.listProperties({ page: 1, limit: 1, availablilityStatus: 'MANAGED' }),
-      ]);
-
-      const total = Number(allRes?.meta?.total ?? 0);
-      const available = Number(availRes?.meta?.total ?? 0);
-      const sold = Number(soldRes?.meta?.total ?? 0);
-      const managed = Number(managedRes?.meta?.total ?? 0);
+      // Counted from the availability index — 2bigha ignores availablilityStatus, so
+      // per-status `meta.total`s all equal the overall total.
+      const index = await this.getAvailabilityIndex(config);
+      const total = index.length;
+      const sold = index.filter((r) => r.availability === 'SOLD').length;
+      const managed = index.filter((r) => r.availability === 'MANAGED').length;
+      const available = total - sold - managed;
 
       const stats = {
         total,

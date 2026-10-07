@@ -213,6 +213,10 @@ export class PropertyListing {
   @Prop({ trim: true })
   soilType?: string;
 
+  /** Land type exactly as picked in the listing wizard (e.g. Agricultural) — `propertyType` is the 2bigha-mapped value. Unset = "None". */
+  @Prop({ trim: true })
+  landType?: string;
+
   @Prop()
   ownershipYes?: boolean;
 

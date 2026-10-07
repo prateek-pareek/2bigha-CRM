@@ -23,10 +23,13 @@ import CrmRecordDetailSkeleton from "@/components/crm/records/detail/CrmRecordDe
 import {
   Step1LandDetails,
   INITIAL_PROPERTY_WIZARD_DRAFT,
+  buildListingTitle,
+  mapLandTypeToPropertyType,
   normalizeIndianState,
   normalizeIndianDistrict,
   type PropertyListingWizardDraft,
 } from "@/components/crm/property-listings/wizard/Step1LandDetails";
+import { priceToRupees, splitRupeesToPriceUnit } from "@/lib/crm/property-listings/types";
 import { Step2UploadImages } from "@/components/crm/property-listings/wizard/Step2UploadImages";
 import { Step3ContactDetails } from "@/components/crm/property-listings/wizard/Step3ContactDetails";
 import { Step4MapLocation } from "@/components/crm/property-listings/wizard/Step4MapLocation";
@@ -51,6 +54,8 @@ export default function EditPropertyListingPage() {
   const [originalTitle, setOriginalTitle] = useState("");
   const [propertyIdToUpdate, setPropertyIdToUpdate] = useState<string>(slugOrId);
   const [canonicalSlug, setCanonicalSlug] = useState<string>("");
+  /** Farm-typed listings must keep propertyType "Farm" so the save still routes to 2bigha's Farm API. */
+  const [isFarmListing, setIsFarmListing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +77,7 @@ export default function EditPropertyListingPage() {
         if (docRes.ok) {
           const doc = await docRes.json().catch(() => null);
           setPropertyIdToUpdate(doc?._id || slugOrId);
+          setIsFarmListing(doc?.propertyType === "Farm" || doc?.listingBucket === "farm");
 
           const resolvedSlug =
             doc?.slug ||
@@ -152,6 +158,7 @@ export default function EditPropertyListingPage() {
           KANAL: "Kanal",
           GUNTA: "Gunta",
           CENT: "Cent",
+          BISWA: "Biswa",
         };
         const resolvedAreaUnit = areaUnitMap[String(rawAreaUnit).toUpperCase()] || "Bigha";
 
@@ -170,7 +177,11 @@ export default function EditPropertyListingPage() {
           APARTMENT: "Apartment",
           VILLA: "Villa",
         };
-        const resolvedLandType = landTypeMap[String(rawType).toUpperCase()] || "Agricultural";
+        // The wizard's own pick wins (CRM stores it as `landType`); never default to Agricultural.
+        const resolvedLandType =
+          prop.landType || (prop.propertyType ? landTypeMap[String(rawType).toUpperCase()] : undefined) || "None";
+        if (String(prop.propertyType || "").toUpperCase() === "FARM") setIsFarmListing(true);
+        const resolvedPrice = splitRupeesToPriceUnit(prop.price != null ? Number(prop.price) : undefined);
 
         // Map Location & coordinates
         let resolvedMapCoords: Array<{ lat: number; lng: number }> | null = null;
@@ -313,7 +324,8 @@ export default function EditPropertyListingPage() {
           khasraNumber: resolvedKhasra,
           area: resolvedArea,
           areaUnit: resolvedAreaUnit,
-          totalPrice: prop.price != null ? String(prop.price) : "",
+          totalPrice: resolvedPrice.amount,
+          priceUnit: resolvedPrice.unit,
           pricePerUnit: prop.pricePerUnit != null ? String(prop.pricePerUnit) : "",
           waterLevel: prop.waterLevel != null ? String(prop.waterLevel) : "",
           landMark: Array.isArray(prop.landMark) ? prop.landMark : [],
@@ -325,7 +337,8 @@ export default function EditPropertyListingPage() {
               ? "Applicable"
               : "Not Applicable",
           ownershipYes: prop.ownershipYes !== false,
-          soilType: prop.soilType || "Loam",
+          ownersCount: prop.ownersCount != null ? String(prop.ownersCount) : "",
+          soilType: prop.soilType || "None",
           roadAccess: prop.roadAccess !== false,
           roadAccessDistance:
             prop.roadAccessDistance != null ? String(prop.roadAccessDistance) : "",
@@ -392,58 +405,18 @@ export default function EditPropertyListingPage() {
     try {
       const validImages = draft.images.map((img) => img.url).filter(Boolean);
 
-      const mapLandTypeToPropertyType = (
-        type?: string
-      ):
-        | "Apartment"
-        | "Villa"
-        | "Independent House"
-        | "Plot"
-        | "Commercial"
-        | "Office"
-        | "Warehouse"
-        | "Farm"
-        | "Other" => {
-        if (!type) return "Plot";
-        const allowed = [
-          "Apartment",
-          "Villa",
-          "Independent House",
-          "Plot",
-          "Commercial",
-          "Office",
-          "Warehouse",
-          "Farm",
-          "Other",
-        ];
-        if (allowed.includes(type)) return type as any;
-        switch (type.toLowerCase()) {
-          case "agricultural":
-            return "Plot";
-          case "residential":
-            return "Independent House";
-          case "commercial":
-            return "Commercial";
-          case "industrial":
-            return "Warehouse";
-          case "farmhouse":
-            return "Farm";
-          default:
-            return "Plot";
-        }
-      };
-
       const payload = {
-        title: `${draft.landType} Land in ${draft.city}, ${draft.district || draft.state}`,
+        title: buildListingTitle(draft),
         address: `${draft.city}, ${draft.district ? draft.district + ", " : ""}${draft.state}`,
         city: draft.city,
         district: draft.district,
         state: draft.state,
         zipCode: draft.pincode || undefined,
         country: "India",
-        price: parseFloat(draft.totalPrice) || 0,
+        price: priceToRupees(draft.totalPrice, draft.priceUnit) || 0,
         currency: "INR",
-        propertyType: mapLandTypeToPropertyType(draft.landType),
+        propertyType: mapLandTypeToPropertyType(draft.landType, isFarmListing ? "farm" : undefined),
+        landType: draft.landType && draft.landType !== "None" ? draft.landType : undefined,
         listedFor: "Sale" as const,
         areaSqft: parseFloat(draft.area) || 0,
         areaUnit: draft.areaUnit,
@@ -456,7 +429,8 @@ export default function EditPropertyListingPage() {
         highwayConn: draft.highwayConn,
         landZoning: draft.landZoning,
         ownershipYes: draft.ownershipYes,
-        soilType: draft.soilType,
+        ownersCount: draft.ownersCount ? parseInt(draft.ownersCount, 10) : undefined,
+        soilType: draft.soilType && draft.soilType !== "None" ? draft.soilType : undefined,
         roadAccess: draft.roadAccess,
         roadAccessDistance: draft.roadAccessDistance
           ? parseInt(draft.roadAccessDistance, 10)

@@ -559,26 +559,18 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
   const [emailSentFilter, setEmailSentFilter] = useState<'all' | 'not-sent'>('all');
   const [leadEmailStatsById, setLeadEmailStatsById] = useState<Record<string, CrmEmailEngagementStats>>({});
   const [exporting, setExporting] = useState(false);
-  const { hasAccess, user, isAdmin, permittedTools } = usePermissions();
-  const canRead = hasAccess('leads:read') || (isPm && hasAccess('pm-leads:read' as any)) || !isAdmin;
-  const canWrite =
-    hasAccess('leads:write') ||
-    (isPm && hasAccess('pm-leads:write' as any)) ||
-    user?.role === 'AGENT' ||
-    permittedTools?.includes('CRM') ||
-    !isAdmin;
+  const { hasAccess, user, isAdmin } = usePermissions();
+  const canRead = hasAccess('leads:read') || (isPm && hasAccess('pm-leads:read' as any));
+  // Role Manager "Create" = leads:write → Add Lead.
+  const canWrite = hasAccess('leads:write') || (isPm && hasAccess('pm-leads:write' as any));
   const canDelete = hasAccess('leads:delete') || (isPm && hasAccess('pm-leads:delete' as any));
+  // Mirrors POST /crm/import/:type, which accepts leads:import OR leads:write.
   const canImport =
     hasAccess('leads:import') ||
     (isPm && hasAccess('pm-leads:import' as any)) ||
     canWrite;
-  const canExport =
-    hasAccess('leads:export') ||
-    (isPm && hasAccess('pm-leads:export' as any)) ||
-    canRead ||
-    user?.role === 'AGENT' ||
-    permittedTools?.includes('CRM') ||
-    isAdmin;
+  // Export is an explicit grant (write does not imply it) — hide the menu otherwise.
+  const canExport = hasAccess('leads:export') || (isPm && hasAccess('pm-leads:export' as any));
   const canMoveLeadsAcrossPipelines =
     canWrite ||
     hasAccess('leads:move_pipeline') ||
@@ -3320,6 +3312,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
           onClose={() => setIsImportModalOpen(false)}
           onSuccess={fetchData}
           type="leads"
+          leadVertical={activeLeadVertical || undefined}
         />
       )}
 

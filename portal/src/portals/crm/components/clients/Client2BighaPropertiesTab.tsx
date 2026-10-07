@@ -14,13 +14,10 @@ import {
   ExternalLink,
   MapPin,
   RefreshCw,
-  Globe,
-  UserCheck,
 } from "lucide-react";
 import { CrmButton } from "@/components/crm/ui";
 import {
   fetchTwoBighaClientProperties,
-  fetchTwoBighaAllProperties,
   type LeadProperty,
   type LeadPropertyCounts,
 } from "@/portals/crm/lib/twobigha-client-api";
@@ -37,7 +34,7 @@ export default function Client2BighaPropertiesTab({ clientId }: Props) {
   const [search, setSearch] = useState("");
   const [approvalStatus, setApprovalStatus] = useState<string>("");
   const [propertyCategory, setPropertyCategory] = useState<string>("");
-  const [scope, setScope] = useState<"client" | "all">("client");
+  const [notLinked, setNotLinked] = useState(false);
   const [page, setPage] = useState(1);
 
   const loadData = useCallback(async () => {
@@ -51,11 +48,10 @@ export default function Client2BighaPropertiesTab({ clientId }: Props) {
         propertyCategory: propertyCategory || undefined,
       };
 
-      const res =
-        scope === "all"
-          ? await fetchTwoBighaAllProperties(params)
-          : await fetchTwoBighaClientProperties(clientId, params);
+      // Only this client's properties — the full marketplace lives under Property Listings → Properties.
+      const res = await fetchTwoBighaClientProperties(clientId, params);
 
+      setNotLinked(res.clientLinked === false);
       setProperties(res.result || []);
       setCounts(res.counts || {});
       setTotalCount(res.totalCount || 0);
@@ -64,7 +60,7 @@ export default function Client2BighaPropertiesTab({ clientId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [clientId, page, search, approvalStatus, propertyCategory, scope]);
+  }, [clientId, page, search, approvalStatus, propertyCategory]);
 
   useEffect(() => {
     loadData();
@@ -84,40 +80,6 @@ export default function Client2BighaPropertiesTab({ clientId }: Props) {
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3.5 rounded-[var(--crm-radius-ui)] border border-border">
         {/* Scope switcher & status pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
-          {/* Scope Toggle */}
-          <div className="flex bg-muted p-0.5 rounded-lg border border-border shrink-0">
-            <button
-              onClick={() => {
-                setScope("client");
-                setPage(1);
-              }}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-all ${
-                scope === "client"
-                  ? "bg-background text-text shadow-xs"
-                  : "text-text-muted hover:text-text"
-              }`}
-            >
-              <UserCheck size={12} />
-              Client Only
-            </button>
-            <button
-              onClick={() => {
-                setScope("all");
-                setPage(1);
-              }}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-all ${
-                scope === "all"
-                  ? "bg-background text-text shadow-xs"
-                  : "text-text-muted hover:text-text"
-              }`}
-            >
-              <Globe size={12} />
-              All 2Bigha Live
-            </button>
-          </div>
-
-          <div className="h-4 w-px bg-border shrink-0" />
-
           {/* Status Tabs */}
           {statusTabs.map((tab) => (
             <button
@@ -159,6 +121,7 @@ export default function Client2BighaPropertiesTab({ clientId }: Props) {
             <option value="">All Categories</option>
             <option value="PROPERTY">Urban / Commercial</option>
             <option value="FARM">Farmhouse / Farmland</option>
+            <option value="AGRICULTURAL">Agricultural Land</option>
           </select>
 
           <div className="relative w-48 sm:w-56">
@@ -196,20 +159,14 @@ export default function Client2BighaPropertiesTab({ clientId }: Props) {
       ) : properties.length === 0 ? (
         <div className="text-center p-12 bg-card rounded-[var(--crm-radius-ui)] border border-dashed border-border space-y-3">
           <Building2 size={36} className="mx-auto text-text-muted opacity-50" />
-          <h4 className="text-sm font-semibold text-text">No properties found for this client</h4>
+          <h4 className="text-sm font-semibold text-text">
+            {notLinked ? "Client not linked to a 2Bigha account" : "No properties found for this client"}
+          </h4>
           <p className="text-xs text-text-muted max-w-sm mx-auto">
-            This client does not currently have any properties linked to their account on 2Bigha.
+            {notLinked
+              ? "Properties are matched through the client's 2Bigha user account. Link this client to their 2Bigha account to see the properties they listed."
+              : "This client has not listed any properties on 2Bigha yet."}
           </p>
-          <CrmButton
-            variant="secondary"
-            className="!h-8 text-xs gap-1.5 mx-auto"
-            onClick={() => {
-              setScope("all");
-              setPage(1);
-            }}
-          >
-            <Globe size={13} /> View All 2Bigha Live Properties (5,600+)
-          </CrmButton>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

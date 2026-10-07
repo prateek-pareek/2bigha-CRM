@@ -10,7 +10,7 @@ import { UpdatePropertyListingDto } from './dto/update-property-listing.dto';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 import { roleAllowsModule } from '../shared/crm-workspace-module.util';
 import { Lead, LeadDocument } from '../records/schemas/lead.schema';
-import { ApprovalQueueBucket, TwoBighaPropertyService } from './twobigha-property.service';
+import { ApprovalQueueBucket, PROPERTY_TYPE_MAP, TwoBighaPropertyService } from './twobigha-property.service';
 import {
   PmAssignRole,
   TwoBighaPmAssignmentService,
@@ -46,6 +46,8 @@ export interface PropertyListingListQuery {
   leadId?: string;
   listingBucket?: string;
   pmStage?: string;
+  /** '1'/'true' → only listings created by the calling user ("My Properties"). */
+  mine?: string;
   user?: any;
 }
 
@@ -375,6 +377,7 @@ export class PropertyListingsService {
       mapBoundaries: listing.mapBoundaries,
       mapCoordinates: listing.mapCoordinates,
       mapLocation: listing.mapLocation,
+      ...this.toTwoBighaGeometry(listing),
       images: listing.images,
       twobighaPropertyId: listing.twobighaPropertyId,
     };
@@ -394,6 +397,34 @@ export class PropertyListingsService {
     listing.twobighaSyncedAt = result.syncedAt;
     if (result.detail) listing.twobighaDetail = result.detail;
     await listing.save();
+  }
+
+  /**
+   * The wizard's drawn polygon (`mapCoordinates`) + pin (`mapLocation`) in
+   * 2bigha's typed geometry inputs — BoundaryInput / CoordinateInput (lat, lng,
+   * index) / MarkerInput per the handbook. Sent alongside the free-form `map`
+   * JSON because the handbook can't confirm which channel 2bigha persists.
+   */
+  private toTwoBighaGeometry(listing: PropertyListingDocument): {
+    boundaries?: Array<{ type: string; coordinates: Array<{ lat: number; lng: number; index: number }> }>;
+    coordinates?: Array<{ lat: number; lng: number; index: number }>;
+    markers?: Array<{ lat: number; lng: number }>;
+  } {
+    const raw = Array.isArray(listing.mapCoordinates) ? (listing.mapCoordinates as any[]) : [];
+    const points = raw
+      .map((c, index) => ({ lat: Number(c?.lat), lng: Number(c?.lng), index }))
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    const pin = listing.mapLocation as { lat?: unknown; lng?: unknown } | undefined;
+    const pinLat = Number(pin?.lat);
+    const pinLng = Number(pin?.lng);
+    return {
+      boundaries: points.length >= 3 ? [{ type: 'Polygon', coordinates: points }] : undefined,
+      coordinates: points.length >= 3 ? points : undefined,
+      markers:
+        pin?.lat != null && pin?.lng != null && Number.isFinite(pinLat) && Number.isFinite(pinLng)
+          ? [{ lat: pinLat, lng: pinLng }]
+          : undefined,
+    };
   }
 
   /** Manual retry for a listing whose last 2bigha sync failed (or is still mock-only). */
@@ -460,10 +491,14 @@ export class PropertyListingsService {
     if (liveData && crmListing) {
       const prop = (liveData.property as Record<string, unknown>) || {};
       const crmObj = crmListing.toObject() as unknown as Record<string, unknown>;
+      // CRM copy wins (image edits aren't re-synced to 2bigha), but only its
+      // displayable URLs — temp blob paths would otherwise hide the live photos.
+      const crmImages = (crmListing.images || []).filter(
+        (img) => typeof img === 'string' && /^(https?:\/\/|\/\/|\/)/i.test(img.trim()),
+      );
+      const liveImages = (liveData.images as any) || (prop.images as any) || [];
       const mergedImages =
-        crmListing.images && crmListing.images.length > 0
-          ? crmListing.images
-          : (prop.images as any) || (liveData.images as any) || [];
+        crmImages.length > 0 ? crmImages : liveImages;
 
       return {
         ...liveData,
@@ -484,7 +519,9 @@ export class PropertyListingsService {
           highwayConn: crmObj.highwayConn ?? prop.highwayConn,
           landZoning: crmObj.landZoning || prop.landZoning,
           ownershipYes: crmObj.ownershipYes ?? prop.ownershipYes,
+          ownersCount: crmObj.ownersCount ?? prop.ownersCount,
           soilType: crmObj.soilType || prop.soilType,
+          landType: crmObj.landType || prop.landType,
           roadAccess: crmObj.roadAccess ?? prop.roadAccess,
           roadAccessDistance: crmObj.roadAccessDistance ?? prop.roadAccessDistance,
           roadAccessWidth: crmObj.roadAccessWidth ?? prop.roadAccessWidth,
@@ -545,7 +582,8 @@ export class PropertyListingsService {
       nearMe?: { lat: number; lng: number };
     };
   }): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
-    return this.twoBighaService.listProperties(params);
+    const live = await this.twoBighaService.listProperties(params);
+    return this.mergeLocalUnsyncedProperties(params, live);
   }
 
   /** Live read-through to 2bigha's `getAllManagedPropertiesByRole`. */
@@ -580,7 +618,8 @@ export class PropertyListingsService {
         `Invalid approval-queue bucket "${bucket}" — expected one of ${APPROVAL_QUEUE_BUCKETS.join(', ')}`,
       );
     }
-    const result = await this.twoBighaService.listApprovalQueue(bucket as ApprovalQueueBucket, params);
+    const live = await this.twoBighaService.listApprovalQueue(bucket as ApprovalQueueBucket, params);
+    const result = await this.mergeLocalApprovalQueue(bucket as ApprovalQueueBucket, params, live);
     if (result?.data && Array.isArray(result.data) && result.data.length > 0) {
       const propertyIds = result.data
         .map((item: any) => item?.property?.id)
@@ -620,6 +659,154 @@ export class PropertyListingsService {
     return result;
   }
 
+  /**
+   * 2bigha's approval queue only holds listings its Property API accepted —
+   * CRM listings whose sync failed / is mock-only, or Farm-typed ones (sent to
+   * the separate Farm API), never reach it. Surface those from CRM Mongo in the
+   * same envelope shape (id = Mongo _id, which `decideApproval` accepts) on
+   * page 1 so a newly listed property always lands in the review queue.
+   */
+  private async mergeLocalApprovalQueue(
+    bucket: ApprovalQueueBucket,
+    params: { page?: number; limit?: number; searchTerm?: string },
+    live: { data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null,
+  ): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
+    if ((params.page ?? 1) !== 1) return live;
+
+    const approvalStatus =
+      bucket === 'approved' ? 'Approved' : bucket === 'rejected' ? 'Rejected' : 'Pending';
+    const filter: Record<string, unknown> = {
+      approvalStatus,
+      listingBucket: { $ne: 'pm' },
+      $or: [{ twobighaSyncStatus: { $ne: 'synced' } }, { propertyType: 'Farm' }],
+    };
+    const search = String(params.searchTerm || '').trim();
+    if (search) {
+      const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$and = [{ $or: [{ title: re }, { address: re }, { city: re }, { khasraNumber: re }, { contactName: re }] }];
+    }
+    const local = await this.listingModel.find(filter).sort({ createdAt: -1 }).limit(50).lean().exec();
+    if (!local.length) return live;
+
+    const liveIds = new Set(
+      (live?.data || []).map((row: any) => row?.property?.id).filter(Boolean).map(String),
+    );
+    const rows = local
+      .filter((l: any) => !liveIds.has(String(l._id)) && !(l.twobighaPropertyId && liveIds.has(String(l.twobighaPropertyId))))
+      .map((l: any) => this.localListingEnvelope(l));
+    if (!rows.length) return live;
+
+    const liveTotal = Number(live?.meta?.total ?? live?.data?.length ?? 0);
+    return {
+      data: [...rows, ...(live?.data || [])],
+      meta: { ...(live?.meta || {}), total: liveTotal + rows.length },
+    };
+  }
+
+  /** A CRM Mongo listing in 2bigha's list-envelope shape (id/slug = Mongo _id). */
+  private localListingEnvelope(l: any): Record<string, unknown> {
+    const loc = (l.mapLocation || {}) as { address?: string; name?: string; lat?: number; lng?: number };
+    return {
+      property: {
+        id: String(l._id),
+        title: l.title,
+        description: l.description,
+        // 2bigha's type codes (AGRICULTURAL, PLOT…) — the portal maps those back, raw labels fall to "Other".
+        propertyType: (() => {
+          const t = String(l.landType || l.propertyType || '');
+          return t ? PROPERTY_TYPE_MAP[t] || t.toUpperCase() : undefined;
+        })(),
+        status: l.status,
+        // Same sold/availability fields 2bigha rows carry, so Sold / Under Offer views treat both alike.
+        propertySold: l.status === 'Sold',
+        availablilityStatus:
+          l.status === 'Sold' ? 'SOLD' : l.status === 'Under Offer' ? 'MANAGED' : 'AVAILABLE',
+        price: l.price,
+        pricePerUnit: l.pricePerUnit,
+        area: l.areaSqft != null ? String(l.areaSqft) : undefined,
+        areaUnit: l.areaUnit,
+        address: l.address,
+        city: l.city,
+        district: l.district,
+        state: l.state,
+        country: l.country,
+        pinCode: l.zipCode,
+        approvalStatus: l.approvalStatus,
+        approvalMessage: l.approvalMessage,
+        ownerName: l.contactName,
+        ownerPhone: l.contactPhone,
+        ownerWhatsapp: l.whatsappNumber,
+        khasraNumber: l.khasraNumber,
+        landZoning: l.landZoning,
+        soilType: l.soilType,
+        waterLevel: l.waterLevel,
+        roadAccess: l.roadAccess,
+        highwayConn: l.highwayConn,
+        category: l.category,
+        ownersCount: l.ownersCount,
+        location:
+          loc.lat != null && loc.lng != null
+            ? { name: loc.name, address: loc.address, coordinates: { lat: loc.lat, lng: loc.lng } }
+            : undefined,
+        boundary: l.mapBoundaries,
+        images: l.images,
+        createdAt: l.createdAt,
+        updatedAt: l.updatedAt,
+        createdBy: l.createdBy ? String(l.createdBy) : undefined,
+      },
+      seo: { slug: String(l._id) },
+      source: 'crm',
+    };
+  }
+
+  /**
+   * The Properties bucket reads 2bigha live, so a CRM-created property whose 2bigha
+   * sync failed / is still mock-only never appeared in the list or its search (e.g. a
+   * new listing in "Baradari, Patiala, Punjab"). Merge those CRM rows in on page 1,
+   * matching the same search (incl. district/state/village) and status/approval filters.
+   */
+  private async mergeLocalUnsyncedProperties(
+    params: { page?: number; searchTerm?: string; status?: string; approvalStatus?: string },
+    live: { data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null,
+  ): Promise<{ data: Record<string, unknown>[]; meta?: Record<string, unknown> } | null> {
+    if ((params.page ?? 1) !== 1) return live;
+
+    const and: Record<string, unknown>[] = [
+      { isDeleted: { $ne: true } },
+      { twobighaSyncStatus: { $ne: 'synced' } },
+      { listingBucket: { $nin: ['pm', 'farm'] } },
+      { propertyType: { $ne: 'Farm' } },
+    ];
+    if (params.status) {
+      and.push({ status: params.status === 'Under Offer' ? { $in: ['Under Offer', 'Managed'] } : params.status });
+    }
+    const approval = String(params.approvalStatus || '').toLowerCase();
+    if (approval) {
+      and.push({
+        approvalStatus: approval.startsWith('pending') ? 'Pending' : approval === 'rejected' ? 'Rejected' : 'Approved',
+      });
+    }
+    const search = String(params.searchTerm || '').trim();
+    if (search) {
+      const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      and.push({
+        $or: [
+          { title: re }, { address: re }, { city: re }, { district: re }, { state: re },
+          { village: re }, { tehsil: re }, { zipCode: re }, { khasraNumber: re },
+        ],
+      });
+    }
+    const local = await this.listingModel.find({ $and: and }).sort({ createdAt: -1 }).limit(50).lean().exec();
+    if (!local.length) return live;
+
+    const rows = local.map((l: any) => this.localListingEnvelope(l));
+    const liveTotal = Number(live?.meta?.total ?? live?.data?.length ?? 0);
+    return {
+      data: [...rows, ...(live?.data || [])],
+      meta: { ...(live?.meta || {}), total: liveTotal + rows.length },
+    };
+  }
+
   async findAll(query: PropertyListingListQuery = {}): Promise<{
     data: PropertyListingDocument[];
     total: number;
@@ -651,6 +838,14 @@ export class PropertyListingsService {
     }
     if (query.pmStage && query.pmStage !== 'all') {
       filter.pmStage = query.pmStage;
+    }
+    if (query.mine === '1' || query.mine === 'true') {
+      // Same id `create` stamps as createdBy (req.user.userId) — no id → nothing is "mine".
+      const userId = query.user?.userId;
+      if (!userId || !Types.ObjectId.isValid(String(userId))) {
+        return { data: [], total: 0, page, pageSize };
+      }
+      filter.createdBy = new Types.ObjectId(String(userId));
     }
 
     const search = String(query.search || '').trim();
@@ -1019,11 +1214,41 @@ export class PropertyListingsService {
     return { success: true, id, status, message };
   }
 
+  /**
+   * The Properties bucket lists live 2bigha rows keyed by their slug, most of which
+   * have no CRM Mongo copy — so resolve either side: delete on 2bigha (`deleteProperty`)
+   * for marketplace properties, and soft-delete the CRM copy when there is one.
+   */
   async remove(id: string, deletedBy?: string): Promise<{ success: boolean }> {
-    await this.findOne(id);
-    await this.listingModel
-      .findByIdAndUpdate(id, softDeleteUpdate(deletedBy))
-      .exec();
+    const listing = await this.findOne(id).catch((e) => {
+      if (e instanceof NotFoundException) return null;
+      throw e;
+    });
+
+    // Farm / PM rows live in other 2bigha APIs — only marketplace properties are deleted there.
+    const isMarketplaceProperty =
+      !listing || (listing.listingBucket !== 'farm' && listing.listingBucket !== 'pm' && listing.propertyType !== 'Farm');
+    let twobighaPropertyId = listing?.twobighaPropertyId;
+    if (!listing) {
+      const detail = await this.twoBighaService.getPropertyDetailBySlug(id);
+      const liveId = (detail?.property as Record<string, unknown> | undefined)?.id;
+      if (liveId) twobighaPropertyId = String(liveId);
+    }
+    if (!listing && !twobighaPropertyId) {
+      throw new NotFoundException('Property listing not found');
+    }
+
+    if (isMarketplaceProperty && twobighaPropertyId) {
+      const result = await this.twoBighaService.deleteProperty(twobighaPropertyId);
+      if (!result.success) {
+        throw new BadRequestException(`Could not delete the listing on 2bigha: ${result.error}`);
+      }
+    }
+    if (listing) {
+      await this.listingModel
+        .findByIdAndUpdate(listing._id, softDeleteUpdate(deletedBy))
+        .exec();
+    }
     return { success: true };
   }
 

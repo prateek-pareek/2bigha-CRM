@@ -9,6 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
+  CRM_MODULE_EXTRA_PERMS,
   CRM_PERMISSION_MODULES,
   CRM_PM_MODULE_ACTIONS,
 } from "@/lib/permissions/registry";
@@ -989,21 +990,25 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                                                         </button>
                                                                     );
                                                                 })}
-                                                                {mod.id === 'inbox' && (() => {
-                                                                    const connectKey = 'inbox:connect';
-                                                                    const connectOn = crmPerms.includes(connectKey);
+                                                                {(CRM_MODULE_EXTRA_PERMS[mod.id] || []).map(({ perm, label }) => {
+                                                                    const extraOn = crmPerms.includes(perm);
                                                                     return (
-                                                                        <button key={connectKey} type="button"
+                                                                        <button key={perm} type="button"
                                                                             onClick={() => {
                                                                                 const p = [...(editingUser.crmPermissions || [])];
-                                                                                setEditingUser({ ...editingUser, crmPermissions: connectOn ? p.filter(x => x !== connectKey) : [...p, connectKey] });
+                                                                                if (extraOn) {
+                                                                                    setEditingUser({ ...editingUser, crmPermissions: p.filter(x => x !== perm) });
+                                                                                    return;
+                                                                                }
+                                                                                if (!p.includes(`${mod.id}:read`)) p.push(`${mod.id}:read`);
+                                                                                setEditingUser({ ...editingUser, crmPermissions: [...p, perm] });
                                                                             }}
-                                                                            className={`px-2.5 py-1 rounded-md border text-[9px] font-bold uppercase tracking-wide transition-all ${connectOn ? "bg-emerald-600 border-emerald-600 text-white" : "bg-[var(--background)] border-[var(--border-color)] text-[var(--primary-muted)] hover:border-emerald-200 hover:text-emerald-700"}`}
-                                                                            title="Allow this employee to connect their own email account in CRM Inbox">
-                                                                            Connect
+                                                                            className={`px-2.5 py-1 rounded-md border text-[9px] font-bold uppercase tracking-wide transition-all ${extraOn ? "bg-emerald-600 border-emerald-600 text-white" : "bg-[var(--background)] border-[var(--border-color)] text-[var(--primary-muted)] hover:border-emerald-200 hover:text-emerald-700"}`}
+                                                                            title={label}>
+                                                                            {label}
                                                                         </button>
                                                                     );
-                                                                })()}
+                                                                })}
                                                                 {supportsDataScope && (
                                                                     <button
                                                                         key={readAllKey}
@@ -1209,6 +1214,10 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                             <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                                                 Turn on <span className="font-semibold text-[var(--text-main)]">Read All Data</span> only for users who should see all records.
                                                 If this is off, users see only assigned/owned data for the selected CRM modules.
+                                            </p>
+                                            <p className="text-xs text-[var(--text-muted)] leading-relaxed mt-1.5">
+                                                To grant access to a module itself (e.g. <span className="font-semibold text-[var(--text-main)]">Property Listings</span> — View / Create to add properties), use the{" "}
+                                                <button type="button" onClick={() => setActivePermissionTab("crm")} className="font-semibold text-[var(--hs-link)] hover:underline">CRM Permissions</button> tab.
                                             </p>
                                         </div>
                                         {(["clients", "leads", "contacts"] as const).map((modId) => {

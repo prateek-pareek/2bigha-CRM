@@ -86,11 +86,11 @@ export default function TargetVsActualChart({
 
   if (targetData.length === 0) {
     return (
-      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-[350px] flex flex-col items-center justify-center">
-        <h3 className="text-sm font-bold text-[var(--text-main)] self-start absolute top-6 left-6">Target vs Actual</h3>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">
-          No agents with targets set yet
-        </p>
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-[350px] flex flex-col">
+        <h3 className="text-sm font-bold text-[var(--text-main)]">Target vs Actual</h3>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-xs text-[var(--text-muted)]">No agents with targets set yet</p>
+        </div>
       </div>
     );
   }

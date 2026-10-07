@@ -1,13 +1,152 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { UserCheck, User, Phone, MessageSquare } from "lucide-react";
+import { UserCheck, User, Phone, Search, Loader2, X } from "lucide-react";
 import {
   CrmInput,
   CrmLabel,
   CrmSelect,
 } from "@/components/crm/ui";
 import type { PropertyListingWizardDraft } from "./Step1LandDetails";
+import {
+  searchOwnerContacts,
+  type OwnerContactMatch,
+} from "@/lib/crm/property-listings/owner-contact-search";
+
+/** Stored phone shape used across the wizard: "+91 9876543210". */
+function toWizardPhone(raw?: string): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return "";
+  if (trimmed.startsWith("+")) {
+    // "+91 98…" — code already separated.
+    const spaced = trimmed.match(/^\+(\d{1,4})[\s-]+(.+)$/);
+    if (spaced) return `+${spaced[1]} ${spaced[2].replace(/\D/g, "")}`;
+    // "+919810112233" — match a known code (a greedy \d{1,3} would read "+919" and drop a digit).
+    const known = [...COUNTRY_PHONE_CODES]
+      .map((c) => c.code.slice(1))
+      .sort((a, b) => b.length - a.length)
+      .find((code) => digits.startsWith(code) && digits.length - code.length >= 7);
+    return known ? `+${known} ${digits.slice(known.length)}` : `+${digits}`;
+  }
+  if (digits.length === 12 && digits.startsWith("91")) return `+91 ${digits.slice(2)}`;
+  if (digits.length === 11 && digits.startsWith("0")) return `+91 ${digits.slice(1)}`;
+  return `+91 ${digits}`;
+}
+
+/** Find an existing client / contact and reuse their name + number instead of retyping them. */
+function OwnerContactSearch({
+  onSelect,
+}: {
+  onSelect: (match: OwnerContactMatch) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<OwnerContactMatch[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    const t = window.setTimeout(() => {
+      searchOwnerContacts(term)
+        .then((rows) => {
+          if (active) setResults(rows);
+        })
+        .catch(() => {
+          if (active) setResults([]);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(t);
+    };
+  }, [query]);
+
+  return (
+    <div className="relative">
+      <CrmLabel htmlFor="ownerSearch">Search Existing Client / Contact</CrmLabel>
+      <div className="relative">
+        <CrmInput
+          id="ownerSearch"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          placeholder="Search by name, phone or email…"
+          className="pl-9 pr-9"
+          autoComplete="off"
+        />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+        {loading ? (
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-emerald-600" />
+        ) : query ? (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setResults([]);
+            }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--foreground)]"
+            aria-label="Clear search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+      {open && query.trim().length >= 2 && !loading ? (
+        <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--surface)] shadow-lg">
+          {results.length === 0 ? (
+            <p className="px-3 py-2.5 text-xs text-[var(--text-muted)]">
+              No matching client or contact — enter the details below.
+            </p>
+          ) : (
+            results.map((m) => (
+              <button
+                key={`${m.source}-${m.id}`}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onSelect(m);
+                  setQuery("");
+                  setResults([]);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-3 border-b border-[var(--border-color)] px-3 py-2 text-left last:border-b-0 hover:bg-[var(--surface-dim)]"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-[var(--foreground)]">{m.name}</span>
+                  <span className="block truncate text-xs text-[var(--text-muted)]">
+                    {[m.phone, m.email].filter(Boolean).join(" · ") || "No phone or email on file"}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full border border-[var(--border-color)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--text-muted)]">
+                  {m.source}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+      <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+        Pick an existing record to fill the owner name and number below.
+      </p>
+    </div>
+  );
+}
 
 export const COUNTRY_PHONE_CODES = [
   { code: "+91", country: "India", flag: "🇮🇳" },
@@ -114,6 +253,20 @@ export function Step3ContactDetails({
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <OwnerContactSearch
+                onSelect={(m) => {
+                  const phone = toWizardPhone(m.phone);
+                  onChange("ownerName", m.name);
+                  if (phone) {
+                    onChange("phoneNumber", phone);
+                    onChange("whatsappNumber", toWizardPhone(m.whatsappNumber) || phone);
+                  }
+                  if (m.email) onChange("email", m.email);
+                }}
+              />
+            </div>
+
             <div>
               <CrmLabel htmlFor="listerType">Lister Type *</CrmLabel>
               <CrmSelect

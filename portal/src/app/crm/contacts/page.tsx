@@ -150,24 +150,15 @@ export default function ContactsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<FilterCriteria[]>([]);
   const [filterProperties, setFilterProperties] = useState<FilterProperty[]>([]);
-  const { hasAccess, isAdmin, user, permittedTools } = usePermissions();
-  const canRead = hasAccess('contacts:read') || !isAdmin;
-  const canWrite =
-    hasAccess('contacts:write') ||
-    user?.role === 'AGENT' ||
-    permittedTools?.includes('CRM') ||
-    !isAdmin;
+  const { hasAccess, isAdmin, user } = usePermissions();
+  const canWrite = hasAccess('contacts:write');
+  // Mirrors POST /crm/import/:type, which accepts contacts:import OR contacts:write.
   const canImport =
     hasAccess('contacts:import') ||
     hasAccess('admin:manage') ||
     canWrite;
-  const canExport =
-    hasAccess('contacts:export') ||
-    hasAccess('admin:manage') ||
-    canRead ||
-    user?.role === 'AGENT' ||
-    permittedTools?.includes('CRM') ||
-    isAdmin;
+  // GET /crm/export/contacts enforces contacts:export — hide the menu otherwise.
+  const canExport = hasAccess('contacts:export') || hasAccess('admin:manage');
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -650,8 +641,8 @@ export default function ContactsPage() {
             exportMenuOpen={isActionsOpen}
             onExportMenuToggle={() => setIsActionsOpen(!isActionsOpen)}
             exportMenu={
+              canExport ? (
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-[var(--radius-md)] shadow-[var(--crm-shadow-raised)] border border-[var(--border-color)] p-2 z-50 animate-in slide-in-from-top-2 duration-200">
-                {canExport && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -665,8 +656,8 @@ export default function ContactsPage() {
                     <CrmIcon.FileXls size={16} />
                     Export as Excel
                   </button>
-                )}
               </div>
+              ) : undefined
             }
             onRefresh={() => void fetchContacts({ force: true })}
             canImport={canImport}

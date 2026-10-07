@@ -75,6 +75,22 @@ export function permissionSatisfies(
 }
 
 /**
+ * Legacy module ids that were stored before the portal registry became the
+ * single source of truth. Grants using the old id are read as the canonical one.
+ */
+const LEGACY_MODULE_ALIASES: Record<string, string> = {
+  property_listings: 'property-listings',
+};
+
+export function normalizePermissionKey(perm: string): string {
+  const key = String(perm || '').trim();
+  const colon = key.indexOf(':');
+  const moduleId = colon === -1 ? key : key.slice(0, colon);
+  const canonical = LEGACY_MODULE_ALIASES[moduleId];
+  return canonical ? canonical + key.slice(moduleId.length) : key;
+}
+
+/**
  * True when the user's permissions satisfy AT LEAST ONE of the required
  * permissions (matches the @Permissions decorator's OR semantics).
  */
@@ -82,5 +98,8 @@ export function permissionsSatisfyAny(
   userPermissions: string[],
   required: string[],
 ): boolean {
-  return required.some((r) => permissionSatisfies(userPermissions, r));
+  const normalized = userPermissions.map(normalizePermissionKey);
+  return required.some((r) =>
+    permissionSatisfies(normalized, normalizePermissionKey(r)),
+  );
 }

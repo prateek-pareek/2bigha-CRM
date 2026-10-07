@@ -525,7 +525,8 @@ export function CrmTableActionMenu({
 type CrmHoverActionIconProps = {
   icon: ReactNode;
   label: string;
-  value: string;
+  /** Omit to keep the number private — the icon then shows only its label on hover. */
+  value?: string;
   onClick?: () => void;
   tone?: "primary" | "whatsapp";
   className?: string;
@@ -553,7 +554,7 @@ export function CrmHoverActionIcon({
             e.stopPropagation();
             onClick?.();
           }}
-          aria-label={`${label}: ${value}`}
+          aria-label={value ? `${label}: ${value}` : label}
           className={cn(
             "crm-table-action-btn inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white shadow-[0_4px_4px_0_rgba(219,219,219,0.25)]",
             tone === "whatsapp" ? "text-[#25d366]" : "text-[#2f80ed]",
@@ -570,8 +571,14 @@ export function CrmHoverActionIcon({
         className="w-auto px-3 py-2"
       >
         <div className="flex items-center gap-1.5 whitespace-nowrap text-xs">
-          <span className="font-medium text-[#707070]">{label}:</span>
-          <span className="font-semibold text-[#1f2020]">{value}</span>
+          {value ? (
+            <>
+              <span className="font-medium text-[#707070]">{label}:</span>
+              <span className="font-semibold text-[#1f2020]">{value}</span>
+            </>
+          ) : (
+            <span className="font-medium text-[#707070]">{label}</span>
+          )}
         </div>
       </PopoverContent>
     </Popover>
