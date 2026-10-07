@@ -47,6 +47,12 @@ import {
 } from '../email/crm-email-engagement-filter.service';
 import * as XLSX from 'xlsx';
 import {
+  isBlankImportValue,
+  LeadVertical,
+  normalizeLeadImportRow,
+  resolveImportStageName,
+} from '../shared/lead-import-normalize.util';
+import {
   displayName,
   hasAtLeastOneContactOrPortalListing,
   hasValidPlatformLeadIdentity,
@@ -2137,12 +2143,18 @@ export class CRMService {
     return this.reportingService.getAgentPerformanceSummary(agentId);
   }
 
-  async getAgentPerformanceLeaderboard(window: string) {
-    return this.reportingService.getAgentPerformanceLeaderboard(window);
+  async getAgentPerformanceLeaderboard(window: string, agents?: string) {
+    return this.reportingService.getAgentPerformanceLeaderboard(
+      window,
+      this.reportingService.parseAgentIdsParam(agents),
+    );
   }
 
-  async getAgentPerformanceTrend(window: string) {
-    return this.reportingService.getAgentPerformanceTrend(window);
+  async getAgentPerformanceTrend(window: string, agents?: string) {
+    return this.reportingService.getAgentPerformanceTrend(
+      window,
+      this.reportingService.parseAgentIdsParam(agents),
+    );
   }
 
   async getAgentTargets() {
@@ -2409,6 +2421,21 @@ export class CRMService {
 
   private ownerLabel(user?: any): string {
     return this.repOwnerLabelFromUser(user).trim();
+  }
+
+  /**
+   * Single-record twin of `leadOwnershipFilter`: a lead is "mine" when `leadOwner` holds my
+   * display name (case/spacing-insensitive), my email, or (legacy rows) my user ObjectId hex.
+   * Keeps lead detail (e.g. opened from a notification) consistent with what the list shows.
+   */
+  private leadOwnerMatchesUser(leadOwner: unknown, user?: any): boolean {
+    const norm = (v: unknown) => String(v ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const owner = norm(leadOwner);
+    if (!owner) return false;
+    const candidates = [this.ownerLabel(user), user?.email, this.userObjectId(user)?.toString()]
+      .map(norm)
+      .filter(Boolean);
+    return candidates.includes(owner);
   }
 
   private leadOwnershipFilter(user?: any): Record<string, unknown> {
@@ -3059,9 +3086,8 @@ export class CRMService {
       return null;
     }
     if (lead && user && !this.canReadAllModuleData('leads', user)) {
-      const ownerName = this.ownerLabel(user);
       const userId = this.userObjectId(user);
-      const byOwner = String((lead as any).leadOwner || '').trim() === ownerName;
+      const byOwner = this.leadOwnerMatchesUser((lead as any).leadOwner, user);
       const byCreator =
         !!userId && String((lead as any).createdBy || '') === String(userId);
       const byShared =
@@ -5142,19 +5168,36 @@ export class CRMService {
       }
       filter.$and = [...(filter.$and || []), { $or: listingOr }];
     }
+    const activitiesFullAccess = hasCrmFullDataAccess(extras?.user);
+    const activitiesSelfId = this.userObjectId(extras?.user);
     if (extras?.assignee && Types.ObjectId.isValid(extras.assignee)) {
-      filter.assignee = new Types.ObjectId(extras.assignee);
-    } else if (extras?.teamScope === '1' || extras?.teamScope === 'true') {
-      const selfId = this.userObjectId(extras?.user);
-      const { ids } = await this.teamMemberIdsAndNames(extras?.user);
-      const allIds = selfId ? [selfId, ...ids] : ids;
-      if (allIds.length) filter.assignee = { $in: allIds };
-    } else {
-      const fullAccess = hasCrmFullDataAccess(extras?.user);
-      if (!fullAccess) {
-        const selfId = this.userObjectId(extras?.user);
-        if (selfId) filter.assignee = selfId;
+      // §13.3 — a caller may only inspect a specific assignee's tasks/calls when
+      // they have full access, it is themselves, or it is a direct report.
+      // Without this, any agent could read another user's activities via
+      // `?assignee=<id>`, bypassing own-only scope.
+      const requested = new Types.ObjectId(extras.assignee);
+      if (activitiesFullAccess) {
+        filter.assignee = requested;
+      } else {
+        const { ids } = await this.teamMemberIdsAndNames(extras?.user);
+        const allowed = new Set(
+          [activitiesSelfId?.toString(), ...ids.map((id) => String(id))].filter(
+            Boolean,
+          ) as string[],
+        );
+        if (!allowed.has(requested.toString())) {
+          throw new ForbiddenException(
+            "You can only view your own or your team members' activities.",
+          );
+        }
+        filter.assignee = requested;
       }
+    } else if (extras?.teamScope === '1' || extras?.teamScope === 'true') {
+      const { ids } = await this.teamMemberIdsAndNames(extras?.user);
+      const allIds = activitiesSelfId ? [activitiesSelfId, ...ids] : ids;
+      if (allIds.length) filter.assignee = { $in: allIds };
+    } else if (!activitiesFullAccess && activitiesSelfId) {
+      filter.assignee = activitiesSelfId;
     }
     try {
       const activities = await this.activityModel
@@ -5801,6 +5844,22 @@ export class CRMService {
     },
     user?: any,
   ): Promise<string> {
+    // §13.2 — export is a per-module action that requires an explicit grant
+    // (never implied by write). The single export endpoint serves every record
+    // type, so enforce `${type}:export` here where the type is known. Admins /
+    // full-data-access roles bypass.
+    const exportModuleKey = String(type || '').trim();
+    if (exportModuleKey && !hasCrmFullDataAccess(user)) {
+      const perms = this.crmPermissionSet(user);
+      if (
+        !perms.has(`${exportModuleKey}:export`) &&
+        !perms.has('admin:manage')
+      ) {
+        throw new ForbiddenException(
+          `You do not have permission to export ${exportModuleKey}.`,
+        );
+      }
+    }
     await this.exportQuotaService.checkQuota(user?.userId);
     let data: any[] = [];
     let headers: string[] = [];
@@ -6058,8 +6117,21 @@ export class CRMService {
     return patch;
   }
 
+  /**
+   * xlsx (PK zip) / xls (D0 CF) are read as binary; anything else is CSV/TSV text and is
+   * decoded as UTF-8 first — SheetJS treats BOM-less bytes as Latin-1, garbling "Rāhul"/Hindi.
+   */
+  private readImportWorkbook(buffer: Buffer): XLSX.WorkBook {
+    const isBinaryWorkbook =
+      (buffer[0] === 0x50 && buffer[1] === 0x4b) ||
+      (buffer[0] === 0xd0 && buffer[1] === 0xcf);
+    return isBinaryWorkbook
+      ? XLSX.read(buffer, { type: 'buffer' })
+      : XLSX.read(buffer.toString('utf8').replace(/^﻿/, ''), { type: 'string' });
+  }
+
   getFileHeaders(buffer: Buffer): string[] {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = this.readImportWorkbook(buffer);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
@@ -6067,9 +6139,10 @@ export class CRMService {
   }
 
   private parseExcelToRows(buffer: Buffer): Record<string, unknown>[] {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = this.readImportWorkbook(buffer);
     const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
+    const worksheet = sheetName ? workbook.Sheets[sheetName] : undefined;
+    if (!worksheet) return [];
     return XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
   }
 
@@ -6086,6 +6159,7 @@ export class CRMService {
     mapping?: Record<string, string>,
     user?: any,
     duplicateStrategy?: string,
+    options: { defaultLeadVertical?: LeadVertical } = {},
   ): { jobId: string; total: number } {
     this.pruneOldImportJobs();
     const jsonData = this.parseExcelToRows(buffer);
@@ -6117,6 +6191,7 @@ export class CRMService {
       user,
       jobId,
       strategy,
+      options,
     ).catch(
       (err: Error) => {
         const job = this.importJobs.get(jobId);
@@ -6166,10 +6241,31 @@ export class CRMService {
     user?: any,
     jobId?: string,
     duplicateStrategy: ImportDuplicateStrategy = 'merge',
+    options: { defaultLeadVertical?: LeadVertical } = {},
   ): Promise<{ count: number }> {
     const jsonData = this.parseExcelToRows(buffer);
     const job = jobId ? this.importJobs.get(jobId) : undefined;
     if (job) job.total = jsonData.length;
+
+    // One pipeline lookup per vertical per import, not per row.
+    const pipelineByVertical = new Map<LeadVertical, any>();
+    const getImportPipeline = async (vertical: LeadVertical) => {
+      if (!pipelineByVertical.has(vertical)) {
+        let chosen: any = null;
+        // Restricted employees import into their assigned pipeline, as in createLead.
+        if (user?.assignedLeadsPipeline) {
+          chosen = await this.pipelinesService
+            .findOne(String(user.assignedLeadsPipeline))
+            .catch(() => null);
+        }
+        if (!chosen) {
+          const pipelines = await this.pipelinesService.findAll('leads', vertical);
+          chosen = pipelines.find((p) => (p as any).isDefault) || pipelines[0] || null;
+        }
+        pipelineByVertical.set(vertical, chosen);
+      }
+      return pipelineByVertical.get(vertical);
+    };
 
     let count = 0;
     let rowIndex = 0;
@@ -6183,7 +6279,9 @@ export class CRMService {
         // Use mapping if provided, otherwise fallback to heuristics
         if (mapping) {
           Object.entries(mapping).forEach(([crmField, fileCol]) => {
-            if (fileCol && row[fileCol] !== undefined) {
+            // Blank cells mean "not provided": copying "" would bypass schema defaults
+            // and fail enum fields (callStatus, leadVertical, role, …).
+            if (fileCol && !isBlankImportValue(row[fileCol])) {
               if (crmField.startsWith('cf_')) {
                 customFields[crmField.replace('cf_', '')] = String(
                   row[fileCol],
@@ -6260,20 +6358,25 @@ export class CRMService {
               row.phone;
           }
 
-          // Ensure pipeline and stage for board visibility
-          if (!mappedData.pipeline || !mappedData.stage) {
-            const pipelines = await this.pipelinesService.findAll('leads');
-            const defaultPipeline =
-              pipelines.find((p) => (p as any).isDefault) || pipelines[0];
-            if (defaultPipeline) {
-              mappedData.pipeline = (defaultPipeline as any)._id;
-              const firstStage = (defaultPipeline as any).stages?.sort(
-                (a: any, b: any) => a.order - b.order,
-              )[0];
-              if (firstStage) {
-                mappedData.stage = firstStage.name;
-                mappedData.status = firstStage.name;
-              }
+          const { invalidRole } = normalizeLeadImportRow(mappedData, {
+            defaultLeadVertical: options.defaultLeadVertical,
+          });
+          if (invalidRole && job) job.invalidRoleCount++;
+
+          // Pipeline + stage for board visibility: the vertical's default pipeline (or the
+          // employee's assigned one), keeping the file's Stage when it names a real stage.
+          const vertical: LeadVertical =
+            mappedData.leadVertical || 'property_listing';
+          const pipeline = await getImportPipeline(vertical);
+          if (pipeline) {
+            mappedData.pipeline = (pipeline as any)._id;
+            const stageName = resolveImportStageName(
+              (pipeline as any).stages,
+              mappedData.stage,
+            );
+            if (stageName) {
+              mappedData.stage = stageName;
+              mappedData.status = stageName;
             }
           }
 
@@ -6286,19 +6389,7 @@ export class CRMService {
           const leadClient = await this.resolveImportClientId(mappedData);
           if (leadClient) {
             mappedData.clientId = leadClient.clientId;
-            if (job) {
-              if (leadClient.wasExisting) job.existingClientCount++;
-              if (leadClient.invalidRole) job.invalidRoleCount++;
-            }
-          }
-          if (mappedData.role) {
-            const r = String(mappedData.role).trim().toUpperCase();
-            if (['USER', 'AGENT', 'OWNER', 'BUILDER', 'BUYER', 'TENANT', 'SELLER', '2 BIGHA USER', 'REAL ESTATE AGENT', 'PROPERTY OWNER'].includes(r)) {
-              if (r === '2 BIGHA USER') mappedData.role = 'USER';
-              else if (r === 'REAL ESTATE AGENT') mappedData.role = 'AGENT';
-              else if (r === 'PROPERTY OWNER') mappedData.role = 'OWNER';
-              else mappedData.role = r;
-            }
+            if (job && leadClient.wasExisting) job.existingClientCount++;
           }
           if (mappedData.planningToBuyLand) {
             const p = String(mappedData.planningToBuyLand).trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -6306,11 +6397,6 @@ export class CRMService {
             else if (p.includes('within_1') || p.includes('1_month')) mappedData.planningToBuyLand = 'within_1_month';
             else if (p.includes('1') && p.includes('3')) mappedData.planningToBuyLand = '1–3_months';
             else if (p.includes('3') && p.includes('6')) mappedData.planningToBuyLand = '3–6_months';
-          }
-          if (mappedData.leadVertical) {
-            const v = String(mappedData.leadVertical).trim().toLowerCase().replace(/[\s-]+/g, '_');
-            if (v.includes('listing')) mappedData.leadVertical = 'property_listing';
-            else if (v.includes('management')) mappedData.leadVertical = 'property_management';
           }
           const leadRequestedRid =
             mappedData.recordId != null &&

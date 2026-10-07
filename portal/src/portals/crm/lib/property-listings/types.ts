@@ -66,7 +66,8 @@ export type AreaUnit =
   | "Kanal"
   | "Guntha"
   | "Cent"
-  | "Nali";
+  | "Nali"
+  | "Biswa";
 
 export const AREA_UNITS: AreaUnit[] = [
   "Bigha",
@@ -81,6 +82,7 @@ export const AREA_UNITS: AreaUnit[] = [
   "Guntha",
   "Cent",
   "Nali",
+  "Biswa",
 ];
 
 /**
@@ -221,13 +223,16 @@ export interface PropertyListingRecord {
   pricePerUnit?: string;
   waterLevel?: number;
   landMark?: string[];
-  landMarkName?: string;
+  /** Wizard stores `{ airport, highway, touristSpot }`; older / 2bigha rows may hold a plain string. */
+  landMarkName?: string | Record<string, string | undefined>;
   category?: string;
   highwayConn?: boolean;
   landZoning?: string;
   ownersCount?: number;
   ownershipYes?: boolean;
   soilType?: string;
+  /** Land type exactly as picked in the wizard (e.g. "Agricultural"); unset = None. */
+  landType?: string;
   roadAccess?: boolean;
   roadAccessDistance?: number;
   roadAccessWidth?: number;
@@ -394,6 +399,62 @@ export function formatIndianLandAmount(amount: number): string {
     return `₹ ${trimNum(amount / 1_00_000)} Lakh`;
   }
   return formatPrice(amount);
+}
+
+/** Units the listing price can be entered in — stored on the record as plain rupees. */
+export type PriceUnit = "Rupees" | "Thousand" | "Lakh" | "Cr";
+
+export const PRICE_UNITS: { value: PriceUnit; label: string; multiplier: number }[] = [
+  { value: "Rupees", label: "₹", multiplier: 1 },
+  { value: "Thousand", label: "Thousand", multiplier: 1_000 },
+  { value: "Lakh", label: "Lakh", multiplier: 1_00_000 },
+  { value: "Cr", label: "Cr", multiplier: 1_00_00_000 },
+];
+
+/** "25" + "Lakh" → 2500000. NaN when the amount isn't a number. */
+export function priceToRupees(amount: string | number, unit: PriceUnit | string | undefined): number {
+  const value = typeof amount === "number" ? amount : parseFloat(amount);
+  const multiplier = PRICE_UNITS.find((u) => u.value === unit)?.multiplier ?? 1;
+  return Math.round(value * multiplier);
+}
+
+/** Rupees → the largest whole-ish unit for editing, e.g. 2500000 → { amount: "25", unit: "Lakh" }. */
+export function splitRupeesToPriceUnit(price: number | undefined | null): { amount: string; unit: PriceUnit } {
+  if (price == null || !Number.isFinite(price) || price <= 0) return { amount: "", unit: "Rupees" };
+  // Largest unit that round-trips exactly — re-saving an edit must never change the price
+  // (e.g. 9,99,99,999 must not become "100 Lakh" = 1 Cr).
+  for (const { value, multiplier } of [...PRICE_UNITS].reverse()) {
+    if (value === "Rupees" || price < multiplier) continue;
+    const amount = Number((price / multiplier).toFixed(4));
+    if (Math.round(amount * multiplier) === price) return { amount: String(amount), unit: value };
+  }
+  return { amount: String(price), unit: "Rupees" };
+}
+
+/**
+ * Coordinates typed as text — "30.3398, 76.3869", "30.3398 76.3869", "30.3398° N, 76.3869° E" —
+ * as an exact point. Null when the text isn't a lat/lng pair (treat it as an address instead).
+ * Used so typed coordinates are pinned exactly, never snapped by the geocoder to a nearby address.
+ */
+export function parseLatLngInput(text: string): { lat: number; lng: number } | null {
+  const m = String(text || "")
+    .trim()
+    .match(/^(?:lat[a-z]*\s*[:=]?\s*)?(-?\d{1,3}\.\d+)\s*°?\s*([NS])?\s*[,;\s]\s*(?:l(?:ng|on)[a-z]*\s*[:=]?\s*)?(-?\d{1,3}\.\d+)\s*°?\s*([EW])?$/i);
+  if (!m) return null;
+  let lat = Number(m[1]);
+  let lng = Number(m[3]);
+  if (m[2]?.toUpperCase() === "S") lat = -Math.abs(lat);
+  if (m[4]?.toUpperCase() === "W") lng = -Math.abs(lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+/** Landmark names as one line — handles the wizard's `{ airport, highway, touristSpot }` object and plain strings. */
+export function formatLandMarkName(value: PropertyListingRecord["landMarkName"]): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === "string") return value.trim() || undefined;
+  const parts = Object.values(value).filter((v): v is string => typeof v === "string" && Boolean(v.trim()));
+  return parts.length ? parts.join(", ") : undefined;
 }
 
 /** Convert a native area into Bigha using the 2Bigha (Rajasthan) convention. Regional units stay unconverted. */

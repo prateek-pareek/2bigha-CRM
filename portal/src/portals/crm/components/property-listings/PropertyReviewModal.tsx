@@ -8,7 +8,7 @@ import {
   Layers,
   MapPin,
   Navigation,
-  Phone,
+  Send,
   Tag,
   User,
   XCircle,
@@ -16,6 +16,8 @@ import {
 import { CrmCenterModalShell } from "@/components/crm/shell/CrmCenterModalShell";
 import { CrmButton, CrmStatusBadge, crmStatusToneFromLabel } from "@/components/crm/ui";
 import type { ApprovalQueueProperty } from "@/lib/crm/property-listings/approval-queue-api";
+import { CrmNavIcon } from "@/lib/crm/shared/icons";
+import { whatsappUrlFromPhone } from "@/lib/crm/crm-messaging-links";
 
 interface PropertyReviewModalProps {
   isOpen: boolean;
@@ -49,6 +51,7 @@ export function PropertyReviewModal({
   if (!item) return null;
 
   const p = item.property;
+  const whatsappHref = whatsappUrlFromPhone(p.ownerWhatsapp || p.ownerPhone);
   const fullAddress =
     [p.address, p.city, p.district, p.state, p.pinCode].filter(Boolean).join(", ") ||
     "No address specified";
@@ -172,29 +175,17 @@ export function PropertyReviewModal({
                 <span className="text-[var(--text-muted)]">Name: </span>
                 <strong className="text-[var(--text-main)]">{p.ownerName || "—"}</strong>
               </div>
-              {p.ownerPhone && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[var(--text-muted)]">Phone: </span>
-                  <a
-                    href={`tel:${p.ownerPhone}`}
-                    className="inline-flex items-center gap-1 font-semibold text-[var(--primary)] hover:underline"
-                  >
-                    <Phone size={11} /> {p.ownerPhone}
-                  </a>
-                </div>
-              )}
-              {p.ownerWhatsapp && (
-                <div>
-                  <span className="text-[var(--text-muted)]">WhatsApp: </span>
-                  <a
-                    href={`https://wa.me/${p.ownerWhatsapp.replace(/\D/g, "")}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-emerald-600 hover:underline"
-                  >
-                    {p.ownerWhatsapp}
-                  </a>
-                </div>
+              {/* Owner numbers stay hidden — inquiries go through WhatsApp only. */}
+              {whatsappHref && (
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 font-semibold text-white transition-colors hover:bg-emerald-700"
+                >
+                  <CrmNavIcon.WhatsApp size={12} /> WhatsApp
+                  <Send size={11} />
+                </a>
               )}
             </div>
           </div>

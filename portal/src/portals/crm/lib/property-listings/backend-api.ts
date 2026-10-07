@@ -1,4 +1,5 @@
 import api from "@/lib/crm/api";
+import { resolveUploadedImageUrl } from "@/lib/media/upload-image";
 import type {
   AreaUnit,
   PropertyListingRecord,
@@ -93,6 +94,7 @@ export interface CreateBackendPropertyListingInput {
   ownersCount?: number;
   ownershipYes?: boolean;
   soilType?: string;
+  landType?: string;
   roadAccess?: boolean;
   roadAccessDistance?: number;
   roadAccessWidth?: number;
@@ -199,6 +201,112 @@ export async function fetchBackendPropertyListingsByLead(
     params: { leadId, pageSize: 200 },
   });
   return data?.data || [];
+}
+
+/**
+ * Maps a CRM Mongo `PropertyListing` document (GET /crm/property-listings[/:id])
+ * onto `PropertyListingRecord` — every land/site/map field the wizard saves, so
+ * the detail page shows road access, connectivity and the drawn boundary.
+ */
+export function mapCrmListingToRecord(item: any): PropertyListingRecord {
+  const num = (v: unknown) => (v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : undefined);
+  return {
+    _id: String(item._id),
+    listingBucket: item.listingBucket || (item.propertyType === "Farm" ? "farm" : "properties"),
+    title: item.title,
+    address: item.address,
+    city: item.city,
+    state: item.state,
+    district: item.district,
+    village: item.village,
+    tehsil: item.tehsil,
+    country: item.country || "India",
+    zipCode: item.zipCode,
+    price: item.price || 0,
+    currency: item.currency || "INR",
+    propertyType: item.propertyType || "Plot",
+    landType: item.landType || undefined,
+    listedFor: item.listedFor || "Sale",
+    areaSqft: item.areaSqft,
+    // The wizard sends the native value in `areaSqft` alongside its `areaUnit`.
+    areaValue: num(item.areaValue) ?? (item.areaUnit ? num(item.areaSqft) : undefined),
+    areaUnit: item.areaUnit,
+    status: normalizeListingStatus(item.status),
+    // CRM docs always carry approvalStatus (schema default Pending); live 2bigha PM rows don't.
+    approvalStatus: item.approvalStatus ? normalizeApprovalStatus(item.approvalStatus) : "Approved",
+    verified: Boolean(item.userPropertyId || item.twobighaPropertyId),
+    images: extractTwoBighaImageUrls(item.images),
+    amenities: item.amenities || [],
+    description: item.description,
+    listedDate: item.listedDate,
+    khasraNumber: item.khasraNumber,
+    murabbaNumber: item.murabbaNumber,
+    khewatNumber: item.khewatNumber,
+    googleMapsLink: item.googleMapsLink,
+    pricePerUnit: item.pricePerUnit,
+    waterLevel: num(item.waterLevel),
+    landMark: Array.isArray(item.landMark) && item.landMark.length ? item.landMark : undefined,
+    landMarkName: item.landMarkName || undefined,
+    category: item.category,
+    highwayConn: typeof item.highwayConn === "boolean" ? item.highwayConn : undefined,
+    landZoning: item.landZoning,
+    ownersCount: num(item.ownersCount),
+    ownershipYes: typeof item.ownershipYes === "boolean" ? item.ownershipYes : undefined,
+    soilType: item.soilType,
+    roadAccess: typeof item.roadAccess === "boolean" ? item.roadAccess : undefined,
+    roadAccessDistance: num(item.roadAccessDistance),
+    roadAccessWidth: num(item.roadAccessWidth),
+    roadAccessDistanceUnit: item.roadAccessDistanceUnit,
+    listerType: item.listerType,
+    whatsappNumber: item.whatsappNumber,
+    mapBoundaries: item.mapBoundaries || undefined,
+    mapCoordinates: item.mapCoordinates || undefined,
+    mapLocation: item.mapLocation || undefined,
+    contactName: item.contactName,
+    contactPhone: item.contactPhone,
+    contactEmail: item.contactEmail,
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+    twobighaPropertyId: item.twobighaPropertyId,
+    twobighaSyncStatus: item.twobighaSyncStatus,
+    twobighaSyncError: item.twobighaSyncError,
+    userPropertyId: item.userPropertyId,
+    leadId: item.leadId ? String(item.leadId) : undefined,
+    pmPlan: item.pmPlan,
+    pmStage: item.pmStage,
+    rmAssigneeId: item.rmAssigneeId,
+    rmAssigneeName: item.rmAssigneeName,
+    legalAssigneeId: item.legalAssigneeId,
+    legalAssigneeName: item.legalAssigneeName,
+    fieldAssigneeId: item.fieldAssigneeId,
+    fieldAssigneeName: item.fieldAssigneeName,
+    pmAssignmentSyncStatus: item.pmAssignmentSyncStatus,
+    pmAssignmentSyncError: item.pmAssignmentSyncError,
+    legalVerification: item.legalVerification,
+    fieldVisit: item.fieldVisit,
+    visitReport: item.visitReport,
+    pmWorkflowIds: item.pmWorkflowIds,
+  };
+}
+
+/** "My Properties" — CRM listings created by the signed-in user (backend filters `createdBy` from the JWT). */
+export async function fetchMyPropertyListings(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  approvalStatus?: string;
+}): Promise<{ data: PropertyListingRecord[]; total: number }> {
+  const { data } = await api.get<{ data?: any[]; total?: number }>("/crm/property-listings", {
+    params: {
+      mine: "1",
+      page: params.page,
+      pageSize: params.pageSize,
+      search: params.search || undefined,
+      approvalStatus: params.approvalStatus || undefined,
+    },
+  });
+  const rows = (data?.data || []).map(mapCrmListingToRecord);
+  return { data: rows, total: data?.total ?? rows.length };
 }
 
 /** Retry a listing's last (failed/mock) sync to 2bigha — see PropertyListingsService.retrySync. */
@@ -364,18 +472,19 @@ const AREA_UNIT_REVERSE: Record<string, AreaUnit> = {
   GUNTA: "Guntha",
   CENT: "Cent",
   NALI: "Nali",
+  BISWA: "Biswa",
 };
 
+/** Hosted (http/protocol-relative) or CRM-uploaded (`/uploads/...`) image paths. */
 function isUsableImageUrl(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const url = value.trim();
   if (!url) return false;
-  if (/^https?:\/\//i.test(url) || url.startsWith("//")) return true;
-  return false;
+  return /^https?:\/\//i.test(url) || url.startsWith("/");
 }
 
 function pickImageUrl(img: unknown): string | null {
-  if (isUsableImageUrl(img)) return img.trim();
+  if (isUsableImageUrl(img)) return resolveUploadedImageUrl(img);
   if (!img || typeof img !== "object") return null;
   const row = img as Record<string, unknown>;
   const variants =
@@ -392,18 +501,20 @@ function pickImageUrl(img: unknown): string | null {
     row.url,
   ];
   const found = candidates.find(isUsableImageUrl);
-  return found ? found.trim() : null;
+  return found ? resolveUploadedImageUrl(found) : null;
 }
 
-/** Pull hosted photo URLs from a 2bigha envelope `images` list, `PropertyImage` objects, or raw strings. */
-export function extractTwoBighaImageUrls(raw: unknown): string[] {
+/** Pull hosted photo URLs from 2bigha envelope `images` lists, `PropertyImage` objects, or raw strings. */
+export function extractTwoBighaImageUrls(...sources: unknown[]): string[] {
   const items: unknown[] = [];
-  if (Array.isArray(raw)) {
-    items.push(...raw);
-  } else if (raw && typeof raw === "object") {
-    const row = raw as Record<string, unknown>;
-    if (Array.isArray(row.images)) items.push(...row.images);
-    else if (row.images) items.push(row.images);
+  for (const raw of sources) {
+    if (Array.isArray(raw)) {
+      items.push(...raw);
+    } else if (raw && typeof raw === "object") {
+      const row = raw as Record<string, unknown>;
+      if (Array.isArray(row.images)) items.push(...row.images);
+      else if (row.images) items.push(row.images);
+    }
   }
   const seen = new Set<string>();
   const urls: string[] = [];
@@ -483,7 +594,7 @@ export function mapTwoBighaFarmToRecord(raw: TwoBighaFarmRaw): PropertyListingRe
   const now = new Date().toISOString();
   const p = raw.property || {};
   const area = mapTwoBighaArea(p.area, p.areaUnit);
-  const images = extractTwoBighaImageUrls(raw.images ?? p.images);
+  const images = extractTwoBighaImageUrls(raw.images, p.images);
   const contact = contactFromEnvelope(raw);
 
   return {
@@ -599,7 +710,8 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
     listedFor: "Sale",
     ...area,
     status: normalizeListingStatus(
-      p.availablilityStatus === "SOLD"
+      // `propertySold` is what 2bigha's updatePropertySoldStatus sets; the enum may stay AVAILABLE.
+      p.propertySold === true || p.availablilityStatus === "SOLD"
         ? "Sold"
         : p.availablilityStatus === "MANAGED"
           ? "Managed"
@@ -612,7 +724,7 @@ export function mapTwoBighaPropertyToRecord(raw: any, bucket?: string): Property
     description: p.description || undefined,
     viewCount: typeof p.viewCount === "number" ? p.viewCount : undefined,
     likeCount: typeof p.saveCount === "number" ? p.saveCount : undefined,
-    images: extractTwoBighaImageUrls(raw.images ?? p.images),
+    images: extractTwoBighaImageUrls(raw.images, p.images),
     amenities: Array.isArray(p.amenities) ? p.amenities.filter((a: unknown) => typeof a === "string") : p.amenities || [],
     khasraNumber: p.khasraNumber || undefined,
     murabbaNumber: p.murabbaNumber || undefined,

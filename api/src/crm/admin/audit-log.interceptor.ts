@@ -157,6 +157,10 @@ export class AuditLogInterceptor implements NestInterceptor {
     }
 
     if (urlWithoutQuery.includes('/audit-logs')) return 'audit-logs';
+    // Role & permission changes (§13.2) — tag as `roles` so the audit log can be
+    // filtered to RBAC changes distinctly from ordinary user-record edits.
+    if (/\/crm-users\/roles/.test(urlWithoutQuery)) return 'roles';
+    if (/\/crm-users\/permissions/.test(urlWithoutQuery)) return 'roles';
     if (urlWithoutQuery.includes('/crm-users')) return 'crm-users';
     if (urlWithoutQuery.includes('/custom-fields')) return 'custom-fields';
     if (urlWithoutQuery.includes('/email-templates')) return 'email-templates';

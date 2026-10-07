@@ -524,7 +524,6 @@ function PropertyApprovalQueuePageContent() {
                   {p.ownerName && (
                     <p className="mt-1 text-[11px] text-slate-500 truncate">
                       Seller: <strong className="text-slate-700 dark:text-slate-300">{p.ownerName}</strong>
-                      {p.ownerPhone ? ` · ${p.ownerPhone}` : ""}
                     </p>
                   )}
 
@@ -681,7 +680,6 @@ function PropertyApprovalQueuePageContent() {
                         {p.ownerName && (
                           <p className="truncate text-[11px] text-slate-400 mt-0.5">
                             Seller: <span className="text-slate-600 dark:text-slate-300 font-medium">{p.ownerName}</span>
-                            {p.ownerPhone ? ` · ${p.ownerPhone}` : ""}
                           </p>
                         )}
                       </div>

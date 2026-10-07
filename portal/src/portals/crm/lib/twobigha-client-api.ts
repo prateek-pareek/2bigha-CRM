@@ -174,6 +174,8 @@ export interface LeadPropertiesResponse {
   counts?: LeadPropertyCounts;
   message?: string;
   STATUS_CODES?: number;
+  /** false when the CRM client has no linked 2bigha user, so no properties can be matched. */
+  clientLinked?: boolean;
 }
 
 // ── 3. Client Invoices ───────────────────────────────────────────────────────

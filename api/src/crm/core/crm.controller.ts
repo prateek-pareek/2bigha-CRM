@@ -14,6 +14,7 @@ import {
   Request,
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -160,8 +161,12 @@ export class CRMController {
 
   @Get('leads/:id')
   @Permissions('leads:read', 'pm-leads:read')
-  findOneLead(@Param('id') id: string, @Request() req: any) {
-    return this.crmService.findOneLead(id, req.user);
+  async findOneLead(@Param('id') id: string, @Request() req: any) {
+    const lead = await this.crmService.findOneLead(id, req.user);
+    // Missing / out-of-scope must not go out as an empty 200 — the portal can't parse that
+    // and shows a generic "Failed to load lead." (e.g. when opened from a notification).
+    if (!lead) throw new NotFoundException('Lead not found');
+    return lead;
   }
 
   @Put('leads/:id')
@@ -495,14 +500,20 @@ export class CRMController {
   /** Agent Performance baseline report — calls/activities/leads per human agent, target-vs-actual. */
   @Get('reports/agents')
   @Permissions('dashboard:read', 'leads:read')
-  async getAgentPerformanceLeaderboard(@Query('window') window?: string) {
-    return this.crmService.getAgentPerformanceLeaderboard(window || 'this_month');
+  async getAgentPerformanceLeaderboard(
+    @Query('window') window?: string,
+    @Query('agents') agents?: string,
+  ) {
+    return this.crmService.getAgentPerformanceLeaderboard(window || 'this_month', agents);
   }
 
   @Get('reports/agents/trend')
   @Permissions('dashboard:read', 'leads:read')
-  async getAgentPerformanceTrend(@Query('window') window?: string) {
-    return this.crmService.getAgentPerformanceTrend(window || 'this_month');
+  async getAgentPerformanceTrend(
+    @Query('window') window?: string,
+    @Query('agents') agents?: string,
+  ) {
+    return this.crmService.getAgentPerformanceTrend(window || 'this_month', agents);
   }
 
   @Get('agent-targets')
@@ -707,15 +718,30 @@ export class CRMController {
     @UploadedFile() file: any,
     @Body('mapping') mappingJson?: string,
     @Body('duplicateStrategy') duplicateStrategy?: string,
+    @Body('leadVertical') leadVertical?: string,
     @Request() req?: any,
   ) {
-    const mapping = mappingJson ? JSON.parse(mappingJson) : undefined;
+    if (!file?.buffer) {
+      throw new BadRequestException('Upload a CSV or Excel file to import');
+    }
+    let mapping: Record<string, string> | undefined;
+    try {
+      mapping = mappingJson ? JSON.parse(mappingJson) : undefined;
+    } catch {
+      throw new BadRequestException('Invalid column mapping');
+    }
+    // Blank "Lead Vertical" cells default to the board the import was started from.
+    const defaultLeadVertical =
+      leadVertical === 'property_management' || leadVertical === 'property_listing'
+        ? leadVertical
+        : undefined;
     return this.crmService.startImportFromExcel(
       type,
       file.buffer,
       mapping,
       req?.user,
       duplicateStrategy,
+      { defaultLeadVertical },
     );
   }
 

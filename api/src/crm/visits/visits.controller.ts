@@ -28,13 +28,13 @@ function qStr(value?: string): string | undefined {
  * Frontend never talks to 2bigha GraphQL directly — same boundary as
  * legal-verification-queue and property-listings twobigha routes.
  *
- * Any of leads:read / property_listings:read / clients:read is enough:
+ * Any of leads:read / property-listings:read / clients:read is enough:
  * PM calling agents need this on a lead call, property staff need the
  * admin listing, client detail needs the same history.
  */
 @Controller('crm/visits')
 @UseGuards(JwtAuthGuard, RbacGuard)
-@Permissions('leads:read', 'property_listings:read', 'clients:read')
+@Permissions('leads:read', 'property-listings:read', 'clients:read')
 export class VisitsController {
   constructor(private readonly visits: TwoBighaVisitsService) {}
 

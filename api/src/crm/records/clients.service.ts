@@ -274,8 +274,20 @@ export class ClientsService {
 
   async getClientProperties(id: string, query: any = {}): Promise<any> {
     const twobighaUserId = await this.resolveTwobighaUserId(id);
+    // Without a linked 2bigha user the upstream query has no clientId filter
+    // and would return every platform property — scope to nothing instead.
+    if (!twobighaUserId) {
+      return {
+        result: [],
+        totalCount: 0,
+        counts: { all: 0, pending: 0, approved: 0, rejected: 0, flagged: 0 },
+        message: 'Client is not linked to a 2bigha user',
+        clientLinked: false,
+        STATUS_CODES: 200,
+      };
+    }
     return this.twoBighaClientService.getPropertiesByClientId({
-      clientId: twobighaUserId || undefined,
+      clientId: twobighaUserId,
       page: query.page ? Number(query.page) : 1,
       limit: query.limit ? Number(query.limit) : 10,
       search: query.search,

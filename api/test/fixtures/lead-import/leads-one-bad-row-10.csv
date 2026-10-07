@@ -1,0 +1,11 @@
+Salutation,First Name,Last Name,Role,Email,Additional Emails,Gender,Contact Number,WhatsApp Number,Phone (Alternate),Lead Vertical,Lead Type,Lead Source,Group,Planning To Buy Land,City / Address,State,PinCode,X (Twitter) handle,Lead Owner,Stage,Status,Call Status,Notes
+,Simran,Bansal,OWNER,simran.bansal.t1.4-1@example.com,,,9861400001,,,,Lead,Website,,3-6 Months,Ludhiana,Punjab,141001,,,,,,Bad-row test t1 #1
+,Rakesh,Yadav,OWNER,rakesh.yadav.t1.4-2@example.com,,,9861400002,,,,Lead,Website,,1-3 Months,Karnal,Haryana,132001,,,,,,Bad-row test t1 #2
+,Diya,Gupta,USER,diya.gupta.t1.4-3@example.com,,,9861400003,,,,Lead,Website,,Just Exploring,Karnal,Haryana,132001,,,,,,Bad-row test t1 #3
+,Simran,Gupta,AGENT,simran.gupta.t1.4-4@example.com,,,9861400004,,,,Lead,Direct Call,,Just Exploring,Ludhiana,Punjab,141001,,,,,,Bad-row test t1 #4
+,Neha,Gill,USER,neha.gill.t1.4-5@example.com,,,9861400005,,,,Lead,Direct Call,,1-3 Months,Patiala,Punjab,147001,,,,,Maybe later,EXPECT: this row fails (unknown Call Status)
+,Priya,Yadav,OWNER,priya.yadav.t1.4-6@example.com,,,9861400006,,,,Lead,Walk In,,Within 1 Month,Ludhiana,Punjab,141001,,,,,,Bad-row test t1 #6
+,Kabir,Gill,AGENT,kabir.gill.t1.4-7@example.com,,,9861400007,,,,Lead,Referral,,Just Exploring,Jaipur,Rajasthan,302001,,,,,,Bad-row test t1 #7
+,Aarav,Sharma,USER,aarav.sharma.t1.4-8@example.com,,,9861400008,,,,Lead,Direct Call,,Within 1 Month,Ludhiana,Punjab,141001,,,,,,Bad-row test t1 #8
+,Diya,Gupta,AGENT,diya.gupta.t1.4-9@example.com,,,9861400009,,,,Lead,Walk In,,3-6 Months,Karnal,Haryana,132001,,,,,,Bad-row test t1 #9
+,Diya,Gill,AGENT,diya.gill.t1.4-10@example.com,,,9861400010,,,,Lead,Walk In,,Within 1 Month,Jaipur,Rajasthan,302001,,,,,,Bad-row test t1 #10

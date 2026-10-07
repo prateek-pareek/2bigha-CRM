@@ -135,6 +135,7 @@ export default function LeadDetailPage() {
     try {
       const res = await fetch(`${CRM_API_URL}/crm/leads/${recordId}`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.status === 401) { router.push('/auth/login?error=unauthorized'); return; }
+      if (!res.ok) return;
       const data = await res.json();
       setLead(data);
     } catch (err) { console.error(err); }
@@ -235,7 +236,9 @@ export default function LeadDetailPage() {
             setLoadError(
               leadRes.status === 403
                 ? 'You do not have access to this lead.'
-                : 'Lead not found.',
+                : leadRes.status === 404
+                  ? 'This lead has been deleted or is no longer assigned to you.'
+                  : 'Lead not found.',
             );
             setLoading(false);
           }

@@ -14,6 +14,8 @@ import {
   Check,
 } from "lucide-react";
 import type { PropertyListingWizardDraft } from "./Step1LandDetails";
+import { parseLatLngInput } from "@/lib/crm/property-listings/types";
+import { GOOGLE_MAPS_API_KEY } from "@/lib/crm/property-listings/google-maps";
 
 interface Step4MapLocationProps {
   draft: PropertyListingWizardDraft;
@@ -85,9 +87,14 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
   const pointMarkersRef = useRef<any[]>([]);
   const isDrawingActiveRef = useRef<boolean>(true);
   const renderedCoordsKeyRef = useRef<string>("");
+  // Latest draft for map listeners registered once at init (avoids stale closures)
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
 
   const [isCompleted, setIsCompleted] = useState(false);
   const [pointCount, setPointCount] = useState(0);
+  const [cornerInput, setCornerInput] = useState("");
+  const [cornerError, setCornerError] = useState("");
 
   const defaultCenter = useMemo(() => {
     return {
@@ -98,10 +105,7 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
 
   // Load Google Maps API
   useEffect(() => {
-    const key =
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-      "AIzaSyCr0RqrqbwLz7YzZU3ZjtDeS9vK5idU700";
-    loadGoogleMapsScript(key).then(() => {
+    loadGoogleMapsScript(GOOGLE_MAPS_API_KEY).then(() => {
       if (window.google?.maps) {
         setGoogleAvailable(true);
       }
@@ -126,7 +130,9 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
         mapTypeControl: false,
         fullscreenControl: true,
         clickableIcons: false,
-        draggable: false, // In drawing mode initially
+        // Panning stays on while drawing: Google fires "click" only when the mouse didn't move,
+        // so a drag pans and a click places a corner. Wheel zooms without Ctrl.
+        gestureHandling: "greedy",
         draggableCursor: "crosshair",
       });
 
@@ -187,7 +193,9 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
 
-        // If clicking near the first point after ≥ 3 points, complete polygon
+        // If clicking near the first point after ≥ 3 points, complete polygon.
+        // Threshold is in screen pixels (converted to meters for the current zoom),
+        // so a genuine vertex placed close to the first one on a small plot is not swallowed.
         if (drawnPointsRef.current.length >= 3) {
           const first = drawnPointsRef.current[0];
           if (google.maps.geometry?.spherical) {
@@ -195,7 +203,7 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
               new google.maps.LatLng(lat, lng),
               new google.maps.LatLng(first.lat, first.lng)
             );
-            if (dist < 15) {
+            if (dist < pixelsToMeters(10, first.lat)) {
               completeManualPolygon();
               return;
             }
@@ -237,11 +245,7 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
       }
     }
 
-    const key = JSON.stringify({
-      coords,
-      lat: draft.mapLocation?.lat,
-      lng: draft.mapLocation?.lng,
-    });
+    const key = buildRenderKey(coords, draft.mapLocation?.lat, draft.mapLocation?.lng);
     if (key === renderedCoordsKeyRef.current) return;
     renderedCoordsKeyRef.current = key;
 
@@ -267,6 +271,45 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
       mapType === "satellite" ? google.maps.MapTypeId.HYBRID : google.maps.MapTypeId.ROADMAP
     );
   }, [mapType]);
+
+  // Ground distance (meters) covered by `px` screen pixels at the current zoom level
+  const pixelsToMeters = (px: number, lat: number) => {
+    const zoom = mapInstanceRef.current?.getZoom?.() ?? 17;
+    const metersPerPixel = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom);
+    return px * metersPerPixel;
+  };
+
+  /** Vertex centroid — inside the plot for the convex shapes boundaries are drawn as. */
+  const boundaryCenter = (coords: Array<{ lat: number; lng: number }>) => ({
+    lat: coords.reduce((s, c) => s + c.lat, 0) / coords.length,
+    lng: coords.reduce((s, c) => s + c.lng, 0) / coords.length,
+  });
+
+  /** Move (or recreate, after "Clear Location") the red location pin. */
+  const showPin = (lat: number, lng: number) => {
+    if (!window.google?.maps || !mapInstanceRef.current) return;
+    if (!markerInstanceRef.current) {
+      markerInstanceRef.current = new window.google.maps.Marker({
+        map: mapInstanceRef.current,
+        zIndex: 999999,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: "#ef4444",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+        },
+      });
+    }
+    markerInstanceRef.current.setPosition({ lat, lng });
+  };
+
+  const buildRenderKey = (
+    coords: Array<{ lat: number; lng: number }>,
+    lat?: number,
+    lng?: number
+  ) => JSON.stringify({ coords, lat, lng });
 
   const addPoint = (pt: { lat: number; lng: number }) => {
     if (!window.google?.maps || !mapInstanceRef.current) return;
@@ -322,8 +365,24 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
 
   const completeManualPolygon = () => {
     if (drawnPointsRef.current.length < 3) return;
-    const coords = [...drawnPointsRef.current];
-    renderCompletedPolygon(coords);
+    // Drop consecutive duplicate vertices (a double-click to finish fires two extra clicks
+    // on the same spot), so each selected corner is kept exactly once.
+    const coords = drawnPointsRef.current.filter((pt, i, arr) => {
+      if (i === 0) return true;
+      const prev = arr[i - 1];
+      if (window.google?.maps?.geometry?.spherical) {
+        const dist = window.google.maps.geometry.spherical.computeDistanceBetween(
+          new window.google.maps.LatLng(pt.lat, pt.lng),
+          new window.google.maps.LatLng(prev.lat, prev.lng)
+        );
+        return dist >= pixelsToMeters(3, pt.lat);
+      }
+      return pt.lat !== prev.lat || pt.lng !== prev.lng;
+    });
+    if (coords.length < 3) return;
+    const polygon = renderCompletedPolygon(coords);
+    // Persist the drawn boundary immediately (previously only saved after a vertex drag)
+    if (polygon) syncPolygonData(polygon);
   };
 
   const renderCompletedPolygon = (coords: Array<{ lat: number; lng: number }>) => {
@@ -359,38 +418,63 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
     setPointCount(coords.length);
 
     setupPolygonEventListeners(polygon);
+    return polygon;
+  };
+
+  const syncPolygonData = (polygon: any) => {
+    const currentDraft = draftRef.current;
+    const path = polygon.getPath();
+    const coords: Array<{ lat: number; lng: number }> = [];
+    for (let i = 0; i < path.getLength(); i++) {
+      const pt = path.getAt(i);
+      coords.push({ lat: pt.lat(), lng: pt.lng() });
+    }
+
+    let areaHectares = 0;
+    if (window.google?.maps?.geometry?.spherical) {
+      const areaSqMeters = window.google.maps.geometry.spherical.computeArea(path);
+      areaHectares = Number((areaSqMeters / 10000).toFixed(2));
+    }
+
+    let locLat = currentDraft.mapLocation?.lat;
+    let locLng = currentDraft.mapLocation?.lng;
+
+    setPointCount(coords.length);
+    onChange("mapBoundaries", [{ type: "Polygon", coordinates: coords }]);
+    onChange("mapCoordinates", coords);
+    onChange("calculatedAreaHectares", areaHectares);
+
+    // The saved location must sit on the drawn plot. A pin outside it (typically the
+    // town-level point auto-picked on step 1) is moved to the boundary's center.
+    const pinInside =
+      currentDraft.mapLocation?.lat != null &&
+      currentDraft.mapLocation?.lng != null &&
+      !!window.google?.maps?.geometry?.poly &&
+      window.google.maps.geometry.poly.containsLocation(
+        new window.google.maps.LatLng(currentDraft.mapLocation.lat, currentDraft.mapLocation.lng),
+        polygon
+      );
+    if (coords.length > 0 && !pinInside) {
+      const center = boundaryCenter(coords);
+      const addr = `${currentDraft.city || ""}${currentDraft.district ? ", " + currentDraft.district : ""}${currentDraft.state ? ", " + currentDraft.state : ""}` || "Selected Location";
+      locLat = center.lat;
+      locLng = center.lng;
+      onChange("mapLocation", {
+        ...(currentDraft.mapLocation || {}),
+        name: currentDraft.mapLocation?.name || currentDraft.city || "Property Location",
+        address: currentDraft.mapLocation?.address || addr,
+        lat: locLat,
+        lng: locLng,
+      });
+      showPin(locLat, locLng);
+    }
+
+    // Polygon on the map already reflects these coords; skip the reactive re-render
+    renderedCoordsKeyRef.current = buildRenderKey(coords, locLat, locLng);
   };
 
   const setupPolygonEventListeners = (polygon: any) => {
-    const updateData = () => {
-      const path = polygon.getPath();
-      const coords: Array<{ lat: number; lng: number }> = [];
-      for (let i = 0; i < path.getLength(); i++) {
-        const pt = path.getAt(i);
-        coords.push({ lat: pt.lat(), lng: pt.lng() });
-      }
-
-      let areaHectares = 0;
-      if (window.google?.maps?.geometry?.spherical) {
-        const areaSqMeters = window.google.maps.geometry.spherical.computeArea(path);
-        areaHectares = Number((areaSqMeters / 10000).toFixed(2));
-      }
-
-      setPointCount(coords.length);
-      onChange("mapBoundaries", [{ type: "Polygon", coordinates: coords }]);
-      onChange("mapCoordinates", coords);
-      onChange("calculatedAreaHectares", areaHectares);
-
-      if (!draft.mapLocation && coords.length > 0) {
-        const addr = `${draft.city || ""}${draft.district ? ", " + draft.district : ""}${draft.state ? ", " + draft.state : ""}` || "Selected Location";
-        onChange("mapLocation", {
-          name: draft.city || "Property Location",
-          address: addr,
-          lat: coords[0].lat,
-          lng: coords[0].lng,
-        });
-      }
-    };
+    const updateData = () => syncPolygonData(polygon);
 
     polygon.addListener("rightclick", () => {
       clearBoundaries();
@@ -420,7 +504,7 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
 
     if (mapInstanceRef.current) {
       mapInstanceRef.current.setOptions({
-        draggable: false, // Disables map panning so clicking adds points immediately
+        draggable: true, // Drag still pans; a click (no drag) places a corner
         draggableCursor: "crosshair",
       });
     }
@@ -435,6 +519,26 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
         draggableCursor: null,
       });
     }
+  };
+
+  /** Add a boundary corner from typed coordinates (e.g. read off a survey / GPS app). */
+  const handleAddCornerByCoords = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pt = parseLatLngInput(cornerInput);
+    if (!pt) {
+      setCornerError("Enter coordinates as latitude, longitude — e.g. 30.339812, 76.386912");
+      return;
+    }
+    if (isCompleted) {
+      setCornerError("Boundary is already complete — clear it to enter corners again.");
+      return;
+    }
+    setCornerError("");
+    isDrawingActiveRef.current = true;
+    setMapMode("draw");
+    addPoint(pt);
+    mapInstanceRef.current?.panTo(pt);
+    setCornerInput("");
   };
 
   const clearBoundaries = () => {
@@ -472,6 +576,21 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
+    // Typed coordinates are saved exactly as entered — geocoding would snap them to an address.
+    const typed = parseLatLngInput(searchQuery);
+    if (typed && mapInstanceRef.current) {
+      mapInstanceRef.current.setCenter(typed);
+      mapInstanceRef.current.setZoom(18);
+      showPin(typed.lat, typed.lng);
+      onChange("mapLocation", {
+        name: draft.city || "Property Location",
+        address: `${typed.lat.toFixed(6)}, ${typed.lng.toFixed(6)}`,
+        lat: typed.lat,
+        lng: typed.lng,
+      });
+      return;
+    }
+
     if (window.google?.maps?.Geocoder && mapInstanceRef.current) {
       const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ address: searchQuery }, (results: any, status: any) => {
@@ -484,22 +603,7 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
 
           mapInstanceRef.current.setCenter({ lat, lng });
           mapInstanceRef.current.setZoom(17);
-
-          if (!markerInstanceRef.current) {
-            markerInstanceRef.current = new window.google.maps.Marker({
-              map: mapInstanceRef.current,
-              zIndex: 999999,
-              icon: {
-                path: window.google.maps.SymbolPath.CIRCLE,
-                scale: 8,
-                fillColor: "#ef4444",
-                fillOpacity: 1,
-                strokeColor: "#ffffff",
-                strokeWeight: 2,
-              },
-            });
-          }
-          markerInstanceRef.current.setPosition({ lat, lng });
+          showPin(lat, lng);
 
           onChange("mapLocation", {
             name,
@@ -641,6 +745,33 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
           </div>
         </div>
 
+        {/* Corner entry by exact coordinates */}
+        {!isCompleted && (
+          <form onSubmit={handleAddCornerByCoords} className="mb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={cornerInput}
+                onChange={(e) => {
+                  setCornerInput(e.target.value);
+                  if (cornerError) setCornerError("");
+                }}
+                placeholder="Add corner by coordinates — e.g. 30.339812, 76.386912"
+                aria-label="Boundary corner coordinates"
+                className="min-w-[260px] flex-1 rounded-lg border border-[var(--border-color)] bg-[var(--surface)] px-3.5 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-muted)] focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 px-3.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                Add Corner
+              </button>
+            </div>
+            {cornerError ? <p className="mt-1 text-xs text-rose-500">{cornerError}</p> : null}
+          </form>
+        )}
+
         {/* 4. Google Maps Container */}
         <div className="relative h-[480px] w-full overflow-hidden rounded-xl border border-[var(--border-color)] bg-zinc-900 shadow-inner">
           {/* Map / Satellite Toggle */}
@@ -688,7 +819,7 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
           {mapMode === "draw" && !isCompleted && (
             <div className="pointer-events-none absolute bottom-4 inset-x-0 flex justify-center z-30">
               <span className="rounded-full bg-emerald-600/90 px-4 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-sm border border-white/20">
-                ✏️ Drawing Mode Active: Click points on the map to create boundary. Click the first green dot, double-click, or click &quot;Complete Boundary&quot; to finish.
+                ✏️ Drawing Mode Active: Click points on the map to create boundary (drag to move the map). Click the first green dot, double-click, or click &quot;Complete Boundary&quot; to finish.
               </span>
             </div>
           )}
@@ -701,7 +832,9 @@ export function Step4MapLocation({ draft, onChange, error }: Step4MapLocationPro
             <span>How to use the property boundary tool:</span>
           </div>
           <ul className="grid grid-cols-1 gap-1.5 text-xs text-[var(--text-muted)] md:grid-cols-2">
-            <li>• Search for a location using the search box above to set a reference point</li>
+            <li>• Search for a location using the search box above to set a reference point — or type exact coordinates (e.g. 30.3398, 76.3869)</li>
+            <li>• Drag the map to move around and use the mouse wheel to zoom, even while drawing</li>
+            <li>• Type corner coordinates in &quot;Add corner by coordinates&quot; to place exact boundary points</li>
             <li>• The red marker shows your selected location with detailed information</li>
             <li>• Click &quot;Start Drawing&quot; to activate drawing mode</li>
             <li>• Click on the map to place points and create your property boundary</li>
