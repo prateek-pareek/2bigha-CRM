@@ -249,9 +249,24 @@ export function canAccessCrmDashboardPage(
     requiredPermission.startsWith("workspace-") ||
     requiredPermission.startsWith("reports-");
   if (isScoped) {
-    return hasAccess("dashboard:read") || hasAccess(requiredPermission);
+    if (hasAccess(requiredPermission)) return true;
+    return dashboardMasterKeyApplies(hasAccess) && hasAccess("dashboard:read");
   }
   return hasAccess(requiredPermission);
+}
+
+/**
+ * `dashboard:read` is the legacy "every dashboard + report" master key (and routes to the
+ * Admin dashboard). Once a user holds ANY specific `workspace-*` / `reports-*` page key,
+ * only the specific keys count, so a role with a stray `dashboard:read` never reaches
+ * org-wide reports.
+ */
+export function dashboardMasterKeyApplies(
+  hasAccess: (permission: string) => boolean,
+): boolean {
+  return ![...CRM_WORKSPACE_ACCESS_ITEMS, ...CRM_REPORT_ACCESS_ITEMS].some((i) =>
+    hasAccess(i.requiredPermission),
+  );
 }
 
 export function permissionForWorkspaceSlug(slug: string): string {

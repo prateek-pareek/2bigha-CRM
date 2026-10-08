@@ -7,10 +7,12 @@ import { CRM_API_URL } from '@/lib/crm/config';
 import {
   fetchLegalCase,
   fetchLegalCases,
+  fetchLegalStatusByLead,
   linkLegalCaseLead,
   unlinkLegalCaseLead,
   type LegalCase,
 } from '@/lib/crm/legal-cases-api';
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -73,16 +75,28 @@ export default function LeadAssociationsPanel({
   const [legalResults, setLegalResults] = useState<LegalCase[] | null>(null);
   const [legalSearching, setLegalSearching] = useState(false);
 
+  // Legal workspace users manage links; 2Bigha / PM users only get the read-only status
+  // hand-off (`legal:status`) — they never open Legal's internal case workspace.
+  const { hasAccess } = usePermissions();
+  const canManageLegal = hasAccess("legal:read");
+  const legalStatusOnly = !canManageLegal && hasAccess("legal:status");
+  const showLegal = canManageLegal || legalStatusOnly;
+
   useEffect(() => {
-    if (legalCaseIds.length === 0) {
+    if (legalCaseIds.length === 0 || !showLegal) {
       setLegalCases([]);
       return;
     }
     let cancelled = false;
     setLegalCasesLoading(true);
-    Promise.all(legalCaseIds.map((id) => fetchLegalCase(id)))
+    const load: Promise<LegalCase[]> = legalStatusOnly
+      ? (fetchLegalStatusByLead(leadId) as Promise<LegalCase[]>)
+      : Promise.all(legalCaseIds.map((id) => fetchLegalCase(id))).then((rows) =>
+          rows.filter((r): r is LegalCase => Boolean(r)),
+        );
+    load
       .then((rows) => {
-        if (!cancelled) setLegalCases(rows.filter((r): r is LegalCase => Boolean(r)));
+        if (!cancelled) setLegalCases(rows);
       })
       .finally(() => {
         if (!cancelled) setLegalCasesLoading(false);
@@ -90,8 +104,8 @@ export default function LeadAssociationsPanel({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when the id list changes
-  }, [legalCaseIds.join(",")]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when the id list / access mode changes
+  }, [legalCaseIds.join(","), legalStatusOnly, showLegal]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -417,22 +431,25 @@ export default function LeadAssociationsPanel({
           )}
         </div>
 
+        {showLegal && (
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-text-muted">
               <Scale size={12} />
-              Legal cases
+              {legalStatusOnly ? "Legal status" : "Legal cases"}
             </div>
-            <button
-              type="button"
-              onClick={() => setLegalAddOpen((o) => !o)}
-              className="text-xs font-semibold text-primary hover:underline"
-            >
-              {legalAddOpen ? "Close" : "Link case"}
-            </button>
+            {canManageLegal && (
+              <button
+                type="button"
+                onClick={() => setLegalAddOpen((o) => !o)}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                {legalAddOpen ? "Close" : "Link case"}
+              </button>
+            )}
           </div>
 
-          {legalAddOpen && (
+          {canManageLegal && legalAddOpen && (
             <div className="mb-3 p-3 rounded-[var(--radius-md)] border border-border bg-surface-dim/30 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
@@ -473,6 +490,23 @@ export default function LeadAssociationsPanel({
             <p className="text-xs text-text-muted italic">Loading…</p>
           ) : legalCases.length === 0 ? (
             <p className="text-xs text-text-muted italic">No legal cases linked</p>
+          ) : legalStatusOnly ? (
+            <ul className="space-y-2">
+              {legalCases.map((lc) => (
+                <li
+                  key={lc._id}
+                  className="flex items-center justify-between gap-2 px-3 py-2 rounded-[var(--radius-md)] border"
+                  style={{ borderColor: "var(--border-color)" }}
+                >
+                  <span className="text-sm font-medium truncate" style={{ color: "var(--text-main)" }}>
+                    {lc.title}
+                  </span>
+                  <span className="text-xs font-semibold shrink-0" style={{ color: "var(--text-muted)" }}>
+                    {lc.stage || "—"}
+                  </span>
+                </li>
+              ))}
+            </ul>
           ) : (
             <div className="space-y-2">
               {legalCases.map((lc) => (
@@ -487,6 +521,7 @@ export default function LeadAssociationsPanel({
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

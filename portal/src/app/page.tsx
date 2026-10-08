@@ -15,8 +15,8 @@ export default function RootDispatcher() {
 
     useEffect(() => {
         if (!isLoaded) return;
-        const standalone = process.env.NEXT_PUBLIC_CRM_STANDALONE === 'true';
-        router.replace(standalone ? '/crm/workspace' : getDefaultRoute());
+        // getDefaultRoute() resolves the first CRM screen the user's role can open.
+        router.replace(getDefaultRoute());
     }, [isLoaded, router, getDefaultRoute]);
 
     return (

@@ -125,6 +125,31 @@ export async function fetchLegalCase(id: string, token?: string | null): Promise
   return data?._id ? data : null;
 }
 
+/**
+ * Read-only legal status of the cases linked to a lead (`legal:status` hand-off for
+ * 2Bigha / PM users who cannot open the Legal workspace).
+ */
+export type LegalCaseStatusSummary = Pick<LegalCase, '_id' | 'title' | 'stage'> & {
+  recordId?: string;
+  caseType?: string;
+  priority?: string;
+  caseOwner?: string;
+  updatedAt?: string;
+};
+
+export async function fetchLegalStatusByLead(
+  leadId: string,
+  token?: string | null,
+): Promise<LegalCaseStatusSummary[]> {
+  const res = await fetch(`${CRM_API_URL}/crm/legal-cases/status/by-lead/${leadId}`, {
+    headers: authHeaders(token),
+    cache: 'no-store',
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
 export async function createLegalCase(
   payload: Record<string, unknown>,
   token?: string | null,

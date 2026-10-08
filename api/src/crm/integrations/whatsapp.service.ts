@@ -16,6 +16,7 @@ import { WhatsAppLeadLink } from '../whatsapp-links/schemas/whatsapp-lead-link.s
 import { CRMUser } from '../crm-users/schemas/user.schema';
 import { User, UserDocument } from '../../users/schemas/user.schema';
 import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
+import { leadVisibilityFilter } from '../shared/crm-lead-visibility.util';
 
 const META_API = 'https://graph.facebook.com/v18.0';
 
@@ -160,12 +161,12 @@ export class WhatsAppService {
 
   private async validateSendAccess(waId: string, userIdStr?: string): Promise<void> {
     if (!userIdStr) return; // System processes or cron jobs can send
-    let dbUser = await this.crmUserModel.findById(userIdStr).populate('roleId').lean().exec();
+    let dbUser = await this.crmUserModel.findById(userIdStr).populate({ path: 'roleId', populate: { path: 'permissions' } }).lean().exec();
     let suiteUser: any = null;
     if (!dbUser) {
       suiteUser = await this.userModel.findById(userIdStr).lean().exec();
       if (suiteUser && (suiteUser as any).email) {
-        dbUser = await this.crmUserModel.findOne({ email: (suiteUser as any).email }).populate('roleId').lean().exec();
+        dbUser = await this.crmUserModel.findOne({ email: (suiteUser as any).email }).populate({ path: 'roleId', populate: { path: 'permissions' } }).lean().exec();
       }
     } else {
       suiteUser = await this.userModel.findOne({ email: dbUser.email }).lean().exec();
@@ -1019,12 +1020,12 @@ export class WhatsAppService {
     const email = user.email;
     if (!email) return [];
 
-    let dbUser = await this.crmUserModel.findOne({ email }).lean().exec();
+    let dbUser = await this.crmUserModel.findOne({ email }).populate({ path: 'roleId', populate: { path: 'permissions' } }).lean().exec();
     let suiteUser: any = null;
     if (!dbUser) {
       suiteUser = await this.userModel.findOne({ email }).lean().exec();
       if (suiteUser) {
-        dbUser = await this.crmUserModel.findOne({ email: suiteUser.email }).lean().exec();
+        dbUser = await this.crmUserModel.findOne({ email: suiteUser.email }).populate({ path: 'roleId', populate: { path: 'permissions' } }).lean().exec();
       }
     } else {
       suiteUser = await this.userModel.findOne({ email: dbUser.email }).lean().exec();
@@ -1039,28 +1040,21 @@ export class WhatsAppService {
     if (user._id && Types.ObjectId.isValid(user._id)) userIdSet.add(String(user._id));
 
     const userIds = Array.from(userIdSet).map((id) => new Types.ObjectId(id));
-    const ownerName = dbUser ? this.repOwnerLabelFromUser(dbUser).trim() : '';
 
-    // 1. Find all Lead IDs that this user owns/has access to (explicit permissions)
-    const leadFilters: any[] = [];
-    if (ownerName) {
-      leadFilters.push({ leadOwner: ownerName });
-    }
-    for (const uid of userIds) {
-      leadFilters.push({ createdBy: uid });
-      leadFilters.push({ sharedWith: uid });
-      leadFilters.push({ leadOwner: String(uid) });
-    }
+    // 1. Leads whose chats this user may see — the same rule as the Leads / PM Leads lists:
+    // agents only their ASSIGNED leads, Team Leads every lead of their workspace.
+    const viewer = {
+      ...user,
+      userId: user.userId ?? suiteUser?._id,
+      firstName: user.firstName ?? dbUser?.firstName ?? suiteUser?.firstName,
+      lastName: user.lastName ?? dbUser?.lastName ?? suiteUser?.lastName,
+      crmDbUser: user.crmDbUser ?? dbUser,
+    };
+    const visibleLeads = leadVisibilityFilter(viewer);
+    if (visibleLeads === null) return null;
 
-    let allowedLeadIds: Types.ObjectId[] = [];
-    if (leadFilters.length > 0) {
-      const leads = await this.leadModel
-        .find({ $or: leadFilters })
-        .select('_id')
-        .lean()
-        .exec();
-      allowedLeadIds = leads.map((l) => l._id);
-    }
+    const leads = await this.leadModel.find(visibleLeads).select('_id').lean().exec();
+    const allowedLeadIds: Types.ObjectId[] = leads.map((l) => l._id as Types.ObjectId);
 
     // 2. Query all links that have active temporary grants for this user.
     // These chats should NOT be forbidden for this user.
@@ -1309,8 +1303,11 @@ export class WhatsAppService {
     if (search) {
       const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
+      // Only leads this user may see (agents: assigned; Team Lead: workspace; admin: all).
+      const leadScope = leadVisibilityFilter(user);
       matchingLeads = await this.leadModel
         .find({
+          ...(leadScope ? { $and: [leadScope] } : {}),
           isDeleted: { $ne: true },
           $or: [
             { firstName: searchRegex },

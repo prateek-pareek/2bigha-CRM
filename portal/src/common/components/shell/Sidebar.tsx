@@ -27,6 +27,7 @@ import {
     canShowCrmDashboardNavItem,
 } from '@/lib/crm/shared/dashboard-access';
 import { CrmNavIcon } from '@/lib/crm/shared/icons';
+import { crmWorkspaceOf, isCrmPathHiddenForWorkspace } from '@/lib/crm/shared/crm-workspace-nav';
 
 function suiteNavHasAccess(
     hasAccess: (permission: string) => boolean,
@@ -373,7 +374,7 @@ const crmGroups = [
                 ],
             },
             { name: 'PM Leads', href: '/crm/pm/leads', icon: CrmNavIcon.Leads, permission: 'pm-leads:read' },
-            { name: 'Approval Queue', href: '/crm/property-approval', icon: CrmNavIcon.Home, permission: 'property-listings:read' },
+            { name: 'Approval Queue', href: '/crm/property-approval', icon: CrmNavIcon.Home, permission: 'approval-queue:read' },
             { name: 'Visit tracking', href: '/crm/visits', icon: CrmNavIcon.MapPin, permission: 'leads:read' },
         ],
     },
@@ -419,10 +420,10 @@ const crmGroups = [
                 name: 'IVR Service',
                 href: '/crm/ivr/call-logs',
                 icon: CrmNavIcon.Phone,
-                permission: 'leads:read',
+                permission: 'ivr-service:read',
                 children: [
-                    { name: 'Call Logs', href: '/crm/ivr/call-logs', icon: CrmNavIcon.Phone, permission: 'leads:read' },
-                    { name: 'My Call Logs', href: '/crm/ivr/my-call-logs', icon: CrmNavIcon.Phone, permission: 'leads:read' },
+                    { name: 'Call Logs', href: '/crm/ivr/call-logs', icon: CrmNavIcon.Phone, permission: 'ivr-service:read' },
+                    { name: 'My Call Logs', href: '/crm/ivr/my-call-logs', icon: CrmNavIcon.Phone, permission: 'ivr-service:read' },
                 ],
             },
         ],
@@ -671,7 +672,9 @@ export default function Sidebar({
 }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { hasAccess, isAdmin, hasExecutiveAccess, permittedTools, permissions } = usePermissions();
+    const { hasAccess, isAdmin, hasExecutiveAccess, permittedTools, permissions, user: permUser } = usePermissions();
+    // PM roles see PM Leads only, 2Bigha roles Leads only (crm-workspace-nav.ts).
+    const crmWorkspace = crmWorkspaceOf(permUser);
     
     const [localIsPinned, setLocalIsPinned] = useState(readSuiteSidebarPinned);
     const isPinned = controlledIsPinned !== undefined ? controlledIsPinned : localIsPinned;
@@ -880,6 +883,7 @@ export default function Sidebar({
                     const normalizedItems = group.items.map((item) => item);
                     const filteredItems = normalizedItems.filter((item) => {
                         if ('adminOnly' in item && item.adminOnly && !isAdmin) return false;
+                        if (isCrmPathHiddenForWorkspace(item.href, crmWorkspace)) return false;
                         const childList =
                             'children' in item && Array.isArray(item.children) ? item.children : [];
                         if (childList.length > 0) {

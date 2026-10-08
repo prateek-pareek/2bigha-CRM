@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -24,7 +25,12 @@ import {
   ScalableListResult,
 } from '../../common/lib/pagination/list-pagination';
 import { countDocumentsCapped } from '../../common/lib/pagination/capped-count';
-import { roleAllowsModule } from '../shared/crm-workspace-module.util';
+import { hasCrmFullDataAccess, jwtCrmPermissionSet } from '../shared/crm-admin-access.util';
+import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
+import { roleAllowsLead, roleAllowsModule, roleBelongsToWorkspace } from '../shared/crm-workspace-module.util';
+
+/** Fields a 2Bigha/PM user sees through the read-only `legal:status` hand-off. */
+const LEGAL_STATUS_FIELDS = 'recordId title stage caseType priority caseOwner updatedAt createdAt';
 
 export type LegalCaseListOpts = {
   page?: number;
@@ -48,7 +54,65 @@ export class LegalCaseService {
     @InjectModel(Contact.name, 'crmConnection')
     private readonly contactModel: Model<ContactDocument>,
     private readonly notificationService: LegalCaseNotificationService,
+    private readonly assignmentPolicy: CrmAssignmentPolicyService,
   ) {}
+
+  private ownerLabel(user?: any): string {
+    return [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.email || '';
+  }
+
+  /**
+   * Record scope for the caller (requirement §8 / §13.3): Super Admin or `legal:read:all`
+   * → every case; Legal Team Lead (`legal:read:team`) → cases owned/created by self + direct
+   * reports; Legal Executive → only their own cases. `null` = no restriction.
+   */
+  async scopeFilter(user?: any): Promise<Record<string, unknown> | null> {
+    if (!user || hasCrmFullDataAccess(user)) return null;
+    const perms = jwtCrmPermissionSet(user);
+    if (perms.has('legal:read:all')) return null;
+    let ids: string[];
+    let labels: string[];
+    if (perms.has('legal:read:team')) {
+      ({ ids, labels } = await this.assignmentPolicy.teamOf(user));
+    } else {
+      const self = String(user.userId ?? user._id ?? '');
+      ids = self ? [self] : [];
+      labels = [this.ownerLabel(user)].filter(Boolean);
+    }
+    const or: Record<string, unknown>[] = [];
+    if (labels.length) or.push({ caseOwner: { $in: labels } });
+    const oids = ids.filter((i) => Types.ObjectId.isValid(i)).map((i) => new Types.ObjectId(i));
+    if (oids.length) or.push({ createdBy: { $in: oids } });
+    return or.length ? { $or: or } : { _id: null };
+  }
+
+  private async withScope(base: Record<string, unknown>, user?: any) {
+    const scope = await this.scopeFilter(user);
+    return scope ? { $and: [base, scope] } : base;
+  }
+
+  /**
+   * Read-only legal status of the cases linked to a lead — the defined hand-off that lets
+   * 2Bigha / PM agents see where a lead's legal work stands without entering Legal's case
+   * workspace. Only for leads in the caller's own workspace.
+   */
+  async statusByLead(leadId: string, user?: any) {
+    const leadOid = this.toObjectIdSafe(leadId);
+    if (!leadOid) throw new BadRequestException('Valid leadId is required');
+    const lead: any = await this.leadModel.findById(leadOid).select('_id module leadVertical').lean().exec();
+    if (!lead) throw new NotFoundException('Lead not found');
+    const legalUser = roleBelongsToWorkspace(user?.crmDbUser, 'LEGAL');
+    if (!legalUser && !roleAllowsLead(user?.crmDbUser, lead)) {
+      throw new ForbiddenException('This lead belongs to a different workspace.');
+    }
+    return this.legalCaseModel
+      .find({ associatedLeads: leadOid, isDeleted: { $ne: true } })
+      .select(LEGAL_STATUS_FIELDS)
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .lean()
+      .exec();
+  }
 
   private toObjectIdSafe(v: any): Types.ObjectId | null {
     if (!v) return null;
@@ -140,7 +204,7 @@ export class LegalCaseService {
     return created;
   }
 
-  async findAll(listOpts?: LegalCaseListOpts): Promise<ScalableListResult<LegalCase>> {
+  async findAll(listOpts?: LegalCaseListOpts, user?: any): Promise<ScalableListResult<LegalCase>> {
     let filter: Record<string, unknown> = {};
 
     if (listOpts?.pipeline && isMongoObjectIdString(listOpts.pipeline)) {
@@ -180,6 +244,8 @@ export class LegalCaseService {
     if (listOpts?.user && !roleAllowsModule(listOpts.user?.crmDbUser, 'LEGAL')) {
       return buildScalableListResult([], { page: 1, pageSize: 25, total: 0, totalIsApproximate: false });
     }
+    // Record scope: Legal Executive → own cases, Legal Team Lead → team, Super Admin → all.
+    filter = await this.withScope(filter, user ?? listOpts?.user);
 
     const page = Math.max(1, listOpts?.page ?? CRM_DEFAULT_PAGE);
     const pageSize = clampPageSize(
@@ -208,7 +274,7 @@ export class LegalCaseService {
     });
   }
 
-  async findOne(id: string): Promise<LegalCase | null> {
+  async findOne(id: string, user?: any): Promise<LegalCase | null> {
     const assocPopulate = [
       { path: 'associatedContacts', select: 'firstName lastName email stage' },
       { path: 'associatedLeads', select: 'firstName lastName email status stage' },
@@ -223,19 +289,41 @@ export class LegalCaseService {
         .populate(assocPopulate)
         .exec();
     }
+    if (doc && !(await this.inScope(String(doc._id), user))) return null;
     return doc;
   }
 
-  private async requireOid(id: string): Promise<string> {
+  private async inScope(oidStr: string, user?: any): Promise<boolean> {
+    const scope = await this.scopeFilter(user);
+    if (!scope) return true;
+    const hit = await this.legalCaseModel
+      .exists({ $and: [{ _id: new Types.ObjectId(oidStr) }, scope] })
+      .exec();
+    return !!hit;
+  }
+
+  /** Resolves the id and enforces the caller's record scope (404 when outside it). */
+  private async requireOid(id: string, user?: any): Promise<string> {
     const oidStr = await this.resolveDocumentId(id);
-    if (!oidStr) throw new NotFoundException('Legal case not found');
+    if (!oidStr || !(await this.inScope(oidStr, user))) {
+      throw new NotFoundException('Legal case not found');
+    }
     return oidStr;
   }
 
-  async update(id: string, dto: any, _user?: any): Promise<LegalCase | null> {
-    const oidStr = await this.requireOid(id);
+  async update(id: string, dto: any, user?: any): Promise<LegalCase | null> {
+    const oidStr = await this.requireOid(id, user);
     const payload: Record<string, unknown> = { ...dto };
     delete payload.recordId;
+    // Changing the owner is a reassignment — needs `legal:assign` (Legal Team Lead / Super Admin).
+    if (payload.caseOwner !== undefined && user) {
+      const current: any = await this.legalCaseModel.findById(oidStr).select('caseOwner').lean().exec();
+      if (String(payload.caseOwner || '').trim() !== String(current?.caseOwner || '').trim()) {
+        const tier = this.assignmentPolicy.requireTier('legal', user);
+        const assignee = await this.assignmentPolicy.assertAssignee(tier, user, String(payload.caseOwner || ''));
+        payload.caseOwner = assignee.label || payload.caseOwner;
+      }
+    }
 
     if (payload.pipeline !== undefined) {
       const oid = this.toObjectIdSafe(payload.pipeline);
@@ -259,11 +347,11 @@ export class LegalCaseService {
       .exec();
   }
 
-  async updateStage(id: string, stage: string): Promise<LegalCase | null> {
+  async updateStage(id: string, stage: string, user?: any): Promise<LegalCase | null> {
     if (!stage || typeof stage !== 'string') {
       throw new BadRequestException('stage is required');
     }
-    const oidStr = await this.requireOid(id);
+    const oidStr = await this.requireOid(id, user);
     const oldCase = await this.legalCaseModel.findById(oidStr).select('stage').lean().exec();
     const previousStage = (oldCase as any)?.stage || null;
 
@@ -284,21 +372,21 @@ export class LegalCaseService {
   }
 
   // --- Soft delete (move to Trash) ---
-  async remove(id: string, deletedBy?: string): Promise<LegalCase | null> {
+  async remove(id: string, deletedBy?: string, user?: any): Promise<LegalCase | null> {
     const oidStr = await this.resolveDocumentId(id);
-    if (!oidStr) return null;
+    if (!oidStr || !(await this.inScope(oidStr, user))) return null;
     return this.legalCaseModel
       .findByIdAndUpdate(oidStr, softDeleteUpdate(deletedBy), { new: true })
       .exec();
   }
 
-  async bulkDelete(ids: string[], deletedBy?: string) {
+  async bulkDelete(ids: string[], deletedBy?: string, user?: any) {
     const oids = (ids || [])
       .map((i) => this.toObjectIdSafe(i))
       .filter((o): o is Types.ObjectId => !!o);
     if (!oids.length) return { modifiedCount: 0, deletedCount: 0 };
     const result = await this.legalCaseModel
-      .updateMany({ _id: { $in: oids } }, softDeleteUpdate(deletedBy))
+      .updateMany(await this.withScope({ _id: { $in: oids } }, user), softDeleteUpdate(deletedBy))
       .exec();
     return {
       modifiedCount: result.modifiedCount,
@@ -306,8 +394,8 @@ export class LegalCaseService {
     };
   }
 
-  async bulkAssign(body: { caseOwner?: string; ids?: string[] }) {
-    const caseOwner = String(body?.caseOwner || '').trim();
+  async bulkAssign(body: { caseOwner?: string; ids?: string[] }, user?: any) {
+    let caseOwner = String(body?.caseOwner || '').trim();
     if (!caseOwner) throw new BadRequestException('Owner is required');
     if (caseOwner.length > 200) {
       throw new BadRequestException('Owner name is too long');
@@ -326,8 +414,12 @@ export class LegalCaseService {
       );
     }
 
+    const tier = this.assignmentPolicy.requireTier('legal', user);
+    const assignee = await this.assignmentPolicy.assertAssignee(tier, user, caseOwner);
+    caseOwner = assignee.label || caseOwner;
+
     const result = await this.legalCaseModel
-      .updateMany({ _id: { $in: oids } }, { $set: { caseOwner } })
+      .updateMany(await this.withScope({ _id: { $in: oids } }, user), { $set: { caseOwner } })
       .exec();
 
     return {
@@ -339,8 +431,8 @@ export class LegalCaseService {
   }
 
   // --- Bidirectional lead linking ---
-  async linkLead(id: string, leadId: string): Promise<LegalCase | null> {
-    const oidStr = await this.requireOid(id);
+  async linkLead(id: string, leadId: string, user?: any): Promise<LegalCase | null> {
+    const oidStr = await this.requireOid(id, user);
     const leadOid = this.toObjectIdSafe(leadId);
     if (!leadOid) throw new BadRequestException('Valid leadId is required');
 
@@ -360,8 +452,8 @@ export class LegalCaseService {
     return this.legalCaseModel.findById(oidStr).exec();
   }
 
-  async unlinkLead(id: string, leadId: string): Promise<LegalCase | null> {
-    const oidStr = await this.requireOid(id);
+  async unlinkLead(id: string, leadId: string, user?: any): Promise<LegalCase | null> {
+    const oidStr = await this.requireOid(id, user);
     const leadOid = this.toObjectIdSafe(leadId);
     if (!leadOid) throw new BadRequestException('Valid leadId is required');
 
@@ -379,8 +471,8 @@ export class LegalCaseService {
   }
 
   // --- Contact linking (single-sided; Contact has no associatedLegalCases field) ---
-  async linkContact(id: string, contactId: string): Promise<LegalCase | null> {
-    const oidStr = await this.requireOid(id);
+  async linkContact(id: string, contactId: string, user?: any): Promise<LegalCase | null> {
+    const oidStr = await this.requireOid(id, user);
     const contactOid = this.toObjectIdSafe(contactId);
     if (!contactOid) throw new BadRequestException('Valid contactId is required');
 
@@ -397,8 +489,8 @@ export class LegalCaseService {
     return this.legalCaseModel.findById(oidStr).exec();
   }
 
-  async unlinkContact(id: string, contactId: string): Promise<LegalCase | null> {
-    const oidStr = await this.requireOid(id);
+  async unlinkContact(id: string, contactId: string, user?: any): Promise<LegalCase | null> {
+    const oidStr = await this.requireOid(id, user);
     const contactOid = this.toObjectIdSafe(contactId);
     if (!contactOid) throw new BadRequestException('Valid contactId is required');
 

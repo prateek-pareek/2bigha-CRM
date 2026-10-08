@@ -5,6 +5,8 @@ import * as bcrypt from 'bcrypt';
 import { User } from '../users/schemas/user.schema';
 import { CRMUsersService } from '../crm-users/crm-users.service';
 import { applyPlatformSuperAdminPrivileges } from './platform-super-admin.util';
+import { rolePermissionNames } from '../crm/shared/crm-admin-access.util';
+import { resolveRoleModule } from '../crm/shared/crm-workspace-module.util';
 
 @Injectable()
 export class AuthService {
@@ -28,24 +30,35 @@ export class AuthService {
       ]),
     );
 
+    let crmRole: { id: string; name: string; workspaceModule: string } | null = null;
+    let permittedTools: string[] = Array.isArray(plain.permittedTools) ? plain.permittedTools : [];
+
     try {
       const crmUser = await this.crmUsersService.findOne(plain.email);
       if (crmUser) {
         const role = crmUser.roleId as any;
-        const fromRole =
-          role?.permissions
-            ?.map((p: any) => (typeof p === 'string' ? p : p?.name || p?.key))
-            .filter(Boolean) || [];
+        const fromRole = rolePermissionNames(role);
         const direct = Array.isArray(crmUser.permissions)
           ? crmUser.permissions
           : [];
         merged = Array.from(new Set([...merged, ...fromRole, ...direct]));
+        if (role && typeof role === 'object' && role.name && role.isActive !== false) {
+          crmRole = {
+            id: String(role._id),
+            name: role.name,
+            workspaceModule: resolveRoleModule(crmUser),
+          };
+          // An active CRM role is the CRM grant — the portal's CRM tool switch must follow it.
+          if (!permittedTools.map((t) => String(t).toUpperCase()).includes('CRM')) {
+            permittedTools = [...permittedTools, 'CRM'];
+          }
+        }
       }
     } catch (e) {
       this.logger.warn(`CRM role merge failed for ${plain.email}: ${e}`);
     }
 
-    return { ...plain, crmPermissions: merged };
+    return { ...plain, crmPermissions: merged, crmRole, permittedTools };
   }
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -149,6 +162,7 @@ export class AuthService {
         permissions: u.permissions || [],
         permittedTools: u.permittedTools || [],
         crmPermissions: u.crmPermissions || [],
+        crmRole: u.crmRole || null,
         pmProjects: u.pmProjects || [],
         pmSpaces: u.pmSpaces || [],
         pmPermissions: u.pmPermissions || [],

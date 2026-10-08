@@ -49,6 +49,7 @@ type ModuleJiraAppHeaderProps = {
   user: {
     firstName?: string;
     lastName?: string;
+    email?: string;
     role?: string;
   } | null;
   unreadCount: number;
@@ -208,6 +209,7 @@ export function ModuleJiraAppHeader({
     permittedTools,
     permissions,
     getToolLandingPage,
+    user: sessionUser,
   } = usePermissions();
 
   const visibleTools = useMemo(() => {
@@ -244,6 +246,20 @@ export function ModuleJiraAppHeader({
     `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase() || "U";
   const displayName =
     [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Member";
+  // CRM role from /auth/me (e.g. "Team Lead / Manager (2Bigha)"); else Admin / the account role.
+  const roleLabel = useMemo(() => {
+    const u = (sessionUser || user) as
+      | { crmRole?: { name?: string } | null; role?: unknown }
+      | null
+      | undefined;
+    const crmRoleName = String(u?.crmRole?.name || "").trim();
+    if (crmRoleName) return crmRoleName;
+    if (isAdmin) return "Admin";
+    const raw = typeof u?.role === "object" && u?.role ? (u.role as { name?: string }).name : u?.role;
+    const role = String(raw || "").trim();
+    return role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
+  }, [sessionUser, user, isAdmin]);
+  const userEmail = String((sessionUser as { email?: string } | null)?.email || user?.email || "");
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -434,18 +450,35 @@ export function ModuleJiraAppHeader({
             </div>
 
             <div className="group/profile relative" data-tour="profile-menu">
-              <div className={app.profileBtn} title={displayName}>
+              <div className={app.profileBtn} title={`${displayName} · ${roleLabel}`}>
                 <div className={cn(app.avatar, productLogoClass)}>
                   {initials}
                   <span className={suite.avatarOnline} aria-hidden />
                 </div>
-                <span className={app.profileName}>{displayName}</span>
+                <span className="hidden min-w-0 flex-col items-start pr-1 leading-tight sm:flex">
+                  <span className="max-w-[180px] truncate text-[13px] font-semibold text-[var(--text-main)]">
+                    {displayName}
+                  </span>
+                  <span className="max-w-[180px] truncate text-[11px] text-[var(--text-muted)]">
+                    {roleLabel}
+                  </span>
+                </span>
               </div>
-              <div className={suite.profileMenu}>
+              {/* Sized to its content (min/max clamp) so short names don't leave a blank right side. */}
+              <div className={cn(suite.profileMenu, "w-max min-w-[11rem] max-w-[17rem] py-0")}>
+                <div className="flex flex-col gap-1 border-b border-[var(--border-color)] px-3 py-2.5">
+                  <p className="truncate text-sm font-semibold leading-5 text-[var(--text-main)]">{displayName}</p>
+                  {userEmail ? (
+                    <p className="-mt-1 truncate text-xs leading-4 text-[var(--text-muted)]">{userEmail}</p>
+                  ) : null}
+                  <span className="mt-0.5 max-w-full self-start truncate rounded-full border border-[var(--border-color)] px-2 py-0.5 text-[11px] font-medium leading-4 text-[var(--text-main)]">
+                    {roleLabel}
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--primary)] hover:bg-[var(--primary-light)]"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--primary)] hover:bg-[var(--primary-light)]"
                 >
                   <CrmIcon.Logout size={16} />
                   Log out

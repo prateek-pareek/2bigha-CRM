@@ -178,13 +178,14 @@ describe('§13.2 Team Lead role — real RbacGuard matrix', () => {
   });
 });
 
-describe('§13.1/13.3 management roles bypass (broad tier)', () => {
+describe('admin bypass is Admin / Super Admin only', () => {
   it('Admin is allowed everything via management bypass', async () => {
     expect(await can('Admin', [], ['leads:delete'])).toBe(true);
     expect(await can('Admin', [], ['settings:admin'])).toBe(true);
   });
-  it('Manager is allowed everything via management bypass', async () => {
-    expect(await can('Manager', [], ['leads:export'])).toBe(true);
+  it('a role NAMED Manager gets no bypass — it works through its own grants', async () => {
+    expect(await can('Manager', [], ['leads:export'])).toBe(false);
+    expect(await can('Manager', ['leads:read'], ['leads:read'])).toBe(true);
   });
 });
 

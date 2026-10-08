@@ -10,6 +10,7 @@ import {
   roleDashboardRedirectHref,
 } from "@/lib/crm/shared/dashboard-access";
 import { WORKSPACE_ROUTES } from "@/lib/crm/shared/dashboard-routes";
+import { crmLandingRoute } from "@/lib/crm/shared/crm-landing";
 
 function matchWorkspacePermission(pathname: string): {
   permission: string;
@@ -51,7 +52,8 @@ export default function CrmWorkspaceLayout({
     const opts = { canViewCrmRevenue };
     if (pathname === "/crm/workspace" || pathname === "/crm/workspace/") {
       const href = firstAccessibleWorkspaceHref(hasAccess, opts);
-      router.replace(href || "/unauthorized?module=workspace");
+      // No dashboard for this role (e.g. Legal / Approval Team) — open its own home screen.
+      router.replace(href || crmLandingRoute(hasAccess, opts));
       return;
     }
     const match = matchWorkspacePermission(pathname);

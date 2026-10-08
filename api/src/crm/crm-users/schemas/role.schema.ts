@@ -18,6 +18,21 @@ export class Role {
   @Prop({ default: false })
   isSystem: boolean; // System roles cannot be deleted
 
+  /** Plain `module:action` grants (legacy/import path) — merged with `permissions` by crmPermissionNamesFromRole. */
+  @Prop({ type: [String], default: [] })
+  crmPermissions: string[];
+
+  @Prop({ default: true })
+  isActive: boolean;
+
+  /** `CRM_ROLE_SEEDS[].key` for the seeded functional roles (crm-role-catalog.ts). */
+  @Prop({ index: true, sparse: true })
+  seedKey?: string;
+
+  /** `CRM_ROLE_SEED_VERSION` the stored permissions were last written from. */
+  @Prop({ default: 0 })
+  seedVersion: number;
+
   /**
    * Workspace boundary (RBAC/workspace-isolation layer) — this is the field `RbacGuard`
    * actually reads (via `dbUser.roleId.workspaceModule`, `dbUser` being the live `CRMUser`

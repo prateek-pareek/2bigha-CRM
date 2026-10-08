@@ -136,8 +136,8 @@ export type LeadReportVariant = (typeof LEAD_REPORT_SECTIONS)[number]["variant"]
  * Team & Organizations: team-level roll-ups, lead source/intent conversion, WhatsApp/IVR engagement.
  */
 export const REPORT_ROUTES = [
-  { slug: "agents", label: "Agent Performance", href: "/crm/reports/agents", permission: "dashboard:read" },
-  { slug: "teams", label: "Team & Organizations", href: "/crm/reports/team-organizations", permission: "dashboard:read" },
+  { slug: "agents", label: "Agent Performance", href: "/crm/reports/agents", permission: "reports:read" },
+  { slug: "teams", label: "Team & Organizations", href: "/crm/reports/team-organizations", permission: "reports:read" },
   { slug: "schedules", label: "Scheduled Reports", href: "/crm/reports/schedules", permission: "dashboard:read" },
 ] as const;
 

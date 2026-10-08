@@ -37,6 +37,7 @@ import {
   hasCrmAdminFromDbUser,
   hasCrmAdminJwtBypass,
 } from '../shared/crm-admin-access.util';
+import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
 
 @Controller('crm')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -48,6 +49,7 @@ export class CRMController {
     private readonly crmEmailEngagementBatchService: CrmEmailEngagementBatchService,
     private readonly reportingService: ReportingService,
     private readonly roleDashboardService: RoleDashboardService,
+    private readonly assignmentPolicy: CrmAssignmentPolicyService,
   ) {}
 
   @Get('distinct-values')
@@ -157,6 +159,18 @@ export class CRMController {
   @Permissions('leads:read', 'pm-leads:read')
   batchLeadEmailEngagement(@Body() body: { ids?: unknown }) {
     return this.crmEmailEngagementBatchService.getBatchForModule(body?.ids, 'leads');
+  }
+
+  /** Reassign picker: only the people this user may hand leads to (Team Lead → own team), searchable + paged. */
+  @Get('leads/assignable-users')
+  @Permissions('leads:read', 'pm-leads:read')
+  leadAssignableUsers(
+    @Request() req: any,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.assignmentPolicy.assignableUsers('leads', req.user, { search, page, limit });
   }
 
   @Get('leads/:id')
@@ -775,7 +789,7 @@ export class CRMController {
   }
 
   @Post('leads/bulk-assign')
-  @Permissions('leads:write', 'pm-leads:write')
+  @Permissions('leads:assign', 'pm-leads:assign')
   bulkAssignLeads(
     @Body()
     body: {

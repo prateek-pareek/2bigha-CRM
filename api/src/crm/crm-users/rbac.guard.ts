@@ -13,6 +13,7 @@ import {
   hasCrmAdminJwtBypass,
 } from '../shared/crm-admin-access.util';
 import { roleBelongsToWorkspace } from '../shared/crm-workspace-module.util';
+import { crmPermissionNamesFromRole } from '../shared/crm-role-permissions.util';
 
 /** Permission prefixes that belong to a single fixed workspace (see requirement doc's RBAC section). */
 const PERMISSION_PREFIX_WORKSPACE: Record<string, 'LEGAL'> = {
@@ -113,12 +114,15 @@ export class RbacGuard implements CanActivate {
       throw new ForbiddenException('User is inactive');
     }
 
-    // Get permissions from both Token and DB (support name or key on populated Permission docs)
+    // CRM role grants (Permission refs + plain crmPermissions; inactive role = none),
+    // the CRM user's direct grants, and the JWT grants.
     const userRole = dbUser.roleId as any;
+    // Populated role doc (an unpopulated ObjectId has neither field).
+    const hasCrmRole = !!(
+      userRole && typeof userRole === 'object' && ('permissions' in userRole || 'name' in userRole)
+    );
     const dbRolePermissions =
-      userRole?.permissions
-        ?.map((p: any) => (typeof p === 'string' ? p : p?.name || p?.key))
-        .filter(Boolean) || [];
+      hasCrmRole && userRole.isActive !== false ? crmPermissionNamesFromRole(userRole) : [];
     const dbDirectPermissions = dbUser.permissions || [];
 
     const jwtCrm = Array.isArray(user.crmPermissions)
@@ -127,13 +131,17 @@ export class RbacGuard implements CanActivate {
     const jwtHrms = Array.isArray(user.permissions) ? user.permissions : [];
     const tokenPermissions = [...jwtHrms, ...jwtCrm];
 
-    const isAgent =
+    // Legacy fallback for CRM users WITHOUT a CRM role only. A user holding a functional
+    // role (Team Lead, Legal Executive, …) gets exactly that role's grants — the old
+    // "everyone with the CRM tool is an agent" default also handed out leads/contacts
+    // export and lead access to Legal.
+    const isAgent = !hasCrmRole && (
       String(user.role || '').toUpperCase() === 'AGENT' ||
       String(user.role || '').toLowerCase().includes('agent') ||
       String(dbUser?.role || '').toLowerCase().includes('agent') ||
       String(userRole?.name || '').toLowerCase().includes('agent') ||
       (Array.isArray(user.permittedTools) &&
-        user.permittedTools.map((t: string) => String(t || '').toUpperCase()).includes('CRM'));
+        user.permittedTools.map((t: string) => String(t || '').toUpperCase()).includes('CRM')));
 
     const defaultAgentPerms = isAgent
       ? [
@@ -162,6 +170,13 @@ export class RbacGuard implements CanActivate {
         ...defaultAgentPerms,
       ]),
     );
+    // Publish the effective CRM grants so services' tier checks (`leads:read:team`,
+    // `leads:assign`, …) see the role template, not only the HRMS user's own list.
+    if (request.user) {
+      request.user.crmPermissions = Array.from(
+        new Set([...jwtCrm, ...dbRolePermissions, ...dbDirectPermissions, ...defaultAgentPerms]),
+      );
+    }
 
     // Action-implication model (see permission-actions.util.ts): `write` implies
     // create/edit/approve/assign; delete/export/import require an explicit grant.
@@ -177,9 +192,19 @@ export class RbacGuard implements CanActivate {
 
     // Workspace boundary: a permission fixed to one workspace (e.g. legal:*) requires
     // the caller's role to actually belong to that workspace (or 'ALL' / Super Admin).
-    const fixedWorkspacePermission = requiredPermissions.find(
-      (p) => PERMISSION_PREFIX_WORKSPACE[p.split(':')[0]],
+    // `legal:status` is the read-only 2Bigha / PM hand-off — never pinned to LEGAL, and a
+    // route that also accepts it is open to the other workspaces through that key.
+    const satisfiedByUnpinned = requiredPermissions.some(
+      (p) => !PERMISSION_PREFIX_WORKSPACE[p.split(':')[0]] || p === 'legal:status',
+    ) && permissionsSatisfyAny(
+      userPermissions,
+      requiredPermissions.filter(
+        (p) => !PERMISSION_PREFIX_WORKSPACE[p.split(':')[0]] || p === 'legal:status',
+      ),
     );
+    const fixedWorkspacePermission = satisfiedByUnpinned
+      ? undefined
+      : requiredPermissions.find((p) => PERMISSION_PREFIX_WORKSPACE[p.split(':')[0]]);
     if (fixedWorkspacePermission) {
       const workspace = PERMISSION_PREFIX_WORKSPACE[fixedWorkspacePermission.split(':')[0]];
       if (!roleBelongsToWorkspace(dbUser, workspace)) {
