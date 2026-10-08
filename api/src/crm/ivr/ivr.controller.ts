@@ -32,13 +32,14 @@ export class IvrController {
    * Whose call logs the caller may list: everyone (Super Admin), self + direct reports
    * (Team Lead / Manager — `:read:team`), or only their own calls.
    */
-  private async callLogScope(user: any): Promise<string[] | undefined> {
-    if (hasCrmFullDataAccess(user)) return undefined;
+  /** Call logs scoped like the lead lists: agent → assigned leads, Team Lead → workspace. */
+  private async callLogScope(user: any): Promise<Record<string, unknown> | null> {
+    if (hasCrmFullDataAccess(user)) return null;
     const perms = jwtCrmPermissionSet(user);
-    if (perms.has('leads:read:team') || perms.has('legal:read:team')) {
-      return (await this.assignmentPolicy.teamOf(user)).ids;
-    }
-    return [String(user?.userId ?? user?._id ?? '')];
+    const isLead =
+      perms.has('leads:read:team') || perms.has('pm-leads:read:team') || perms.has('legal:read:team');
+    const team = isLead ? (await this.assignmentPolicy.teamOf(user)).ids : [];
+    return this.ivrService.callLogVisibilityFilter(user, team);
   }
 
   @Post('calls')
@@ -50,7 +51,7 @@ export class IvrController {
   @Get('call-logs')
   @Permissions('leads:read', 'ivr:call')
   async listAll(@Query() query: Record<string, string>, @Request() req: any) {
-    return this.ivrService.listCallLogs(query, await this.callLogScope(req.user));
+    return this.ivrService.listCallLogs(query, undefined, await this.callLogScope(req.user));
   }
 
   /** Call Activity Form ("Set Activity") — logs a disposition without placing a live call. */
@@ -65,8 +66,9 @@ export class IvrController {
 
   @Get('call-logs/mine')
   @Permissions('leads:read', 'ivr:call')
-  listMine(@Query() query: Record<string, string>, @Request() req: any) {
-    return this.ivrService.listCallLogs(query, req.user?.userId);
+  async listMine(@Query() query: Record<string, string>, @Request() req: any) {
+    // Own calls, still limited to leads the caller may see (a reassigned lead drops out).
+    return this.ivrService.listCallLogs(query, req.user?.userId, await this.callLogScope(req.user));
   }
 
   @Get('stats')

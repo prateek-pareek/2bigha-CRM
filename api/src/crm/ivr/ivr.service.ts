@@ -7,6 +7,12 @@ import { Lead, LeadDocument } from '../records/schemas/lead.schema';
 import { LeadIntentService } from '../records/lead-intent.service';
 import { ExportQuotaService } from '../admin/export-quota.service';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
+import {
+  leadViewerIds,
+  leadVisibilityFilter,
+  leadVisibilityTier,
+} from '../shared/crm-lead-visibility.util';
+import { resolveRoleModule } from '../shared/crm-workspace-module.util';
 
 const CALL_LOG_EXPORT_HEADERS = [
   '_id',
@@ -389,10 +395,47 @@ export class IvrService {
   }
 
   /** `onlyUserId` — one agent's id, or the list of agent ids the caller may see (team scope). */
-  async listCallLogs(query: CallLogListQuery, onlyUserId?: string | string[]) {
+  /**
+   * Which call logs a viewer may see — follows the lead visibility rule
+   * (crm-lead-visibility.util): Super Admin → all (`null`); Team Lead → calls on any lead of
+   * their workspace + calls placed by their team; agent → calls on the leads ASSIGNED to them
+   * + their own calls that aren't tied to a lead. Legal users (no lead list) see their own calls.
+   */
+  async callLogVisibilityFilter(
+    user: any,
+    teamUserIds: string[] = [],
+  ): Promise<Record<string, unknown> | null> {
+    const tier = leadVisibilityTier(user);
+    if (tier === 'all') return null;
+    const leadScope = leadVisibilityFilter(user) ?? {};
+    const leads = await this.leadModel.find(leadScope).select('_id').lean().exec();
+    const leadIds = leads.map((l) => l._id as Types.ObjectId);
+    const me = leadViewerIds(user);
+    const placers =
+      tier === 'workspace'
+        ? [...new Set([...me.map(String), ...teamUserIds])]
+            .filter((id) => Types.ObjectId.isValid(id))
+            .map((id) => new Types.ObjectId(id))
+        : me;
+    const unlinked = { $or: [{ relatedTo: { $exists: false } }, { relatedTo: null }] };
+    const or: Record<string, unknown>[] = [{ relatedTo: { $in: leadIds } }];
+    if (resolveRoleModule(user?.crmDbUser) === 'LEGAL') {
+      or.push({ initiatedByUserId: { $in: placers } });
+    } else {
+      or.push({ $and: [{ initiatedByUserId: { $in: placers } }, unlinked] });
+    }
+    return { $or: or };
+  }
+
+  async listCallLogs(
+    query: CallLogListQuery,
+    onlyUserId?: string | string[],
+    scope?: Record<string, unknown> | null,
+  ) {
     const page = Math.max(1, parseInt(String(query.page || 1), 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(String(query.pageSize ?? 25), 10) || 25), 200);
     const filter: Record<string, unknown> = {};
+    if (scope) filter.$and = [scope];
 
     if (Array.isArray(onlyUserId)) {
       const ids = onlyUserId.filter((id) => Types.ObjectId.isValid(id)).map((id) => new Types.ObjectId(id));

@@ -33,6 +33,8 @@ type Props = {
 };
 
 const SEARCH_DEBOUNCE_MS = 250;
+/** Teammates per page — the pager only appears once there are more than this many. */
+const TEAMMATES_PER_PAGE = 10;
 
 /**
  * Searchable, paged teammate list for lead reassignment. The server scopes it to the
@@ -43,7 +45,7 @@ export default function CrmTeammatePicker({
   value,
   onChange,
   currentOwnerLabel,
-  pageSize = 8,
+  pageSize = TEAMMATES_PER_PAGE,
   className,
 }: Props) {
   const [search, setSearch] = useState("");
@@ -95,6 +97,8 @@ export default function CrmTeammatePicker({
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
   const owner = String(currentOwnerLabel || "").trim().toLowerCase();
+  // A short team is just a list — paging controls only when it doesn't fit on one page.
+  const showPager = total > pageSize;
 
   const emptyMessage = query
     ? `No teammates match "${query}".`
@@ -122,7 +126,7 @@ export default function CrmTeammatePicker({
       <div
         role="listbox"
         aria-label="Teammates"
-        className="max-h-64 overflow-y-auto rounded-md border border-[var(--border-color)] bg-[var(--card-bg)]"
+        className="max-h-[28rem] overflow-y-auto rounded-md border border-[var(--border-color)] bg-[var(--card-bg)]"
       >
         {loading && !data ? (
           <div className="flex items-center gap-2 px-3 py-3 text-xs text-[var(--text-muted)]">
@@ -183,7 +187,7 @@ export default function CrmTeammatePicker({
         )}
       </div>
 
-      {total > 0 ? (
+      {showPager ? (
         <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--text-muted)]">
           <span>
             {from}–{to} of {total}

@@ -2365,7 +2365,11 @@ export class CRMService {
     return perms.has(`${moduleKey}:read:all`);
   }
 
-  /** Middle tier between "own" and "all" — Team Lead/Manager scoped to their own team only. */
+  /**
+   * Team Lead / Manager tier (`:read:team`). For LEADS this now means every lead in the
+   * Team Lead's own workspace (2Bigha or PM — the workspace filter still applies); agents
+   * stay on their assigned leads only. Contacts keep the self + direct-reports meaning.
+   */
   private canReadTeamModuleData(moduleKey: 'leads' | 'contacts', user?: any): boolean {
     if (hasCrmFullDataAccess(user)) return true;
     const perms = this.crmPermissionSet(user);
@@ -2442,17 +2446,35 @@ export class CRMService {
     return candidates.includes(owner);
   }
 
+  /**
+   * Own-tier users who hand leads to others (Social Media Executive — `leads:assign`
+   * without a team scope) keep sight of the leads they created so they can track progress.
+   * Plain agents do NOT: once a lead is reassigned away it leaves their list.
+   */
+  private keepsCreatedLeads(user?: any): boolean {
+    const perms = this.crmPermissionSet(user);
+    return perms.has('leads:assign') || perms.has('pm-leads:assign');
+  }
+
+  /**
+   * "Assigned to me": `leadOwner` holds my name / email / (legacy) id, or the lead was
+   * explicitly shared with me (`sharedWith`, e.g. WhatsApp temporary access).
+   */
   private leadOwnershipFilter(user?: any): Record<string, unknown> {
     const ownerName = this.ownerLabel(user);
     const userId = this.userObjectId(user);
-    const mineOr: Record<string, unknown>[] = [{ leadOwner: ownerName }];
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const mineOr: Record<string, unknown>[] = [];
+    if (ownerName) mineOr.push({ leadOwner: new RegExp(`^\\s*${esc(ownerName)}\\s*$`, 'i') });
+    const email = String(user?.email || '').trim();
+    if (email) mineOr.push({ leadOwner: new RegExp(`^\\s*${esc(email)}\\s*$`, 'i') });
     if (userId) {
-      mineOr.push({ createdBy: userId } as any);
       mineOr.push({ sharedWith: userId } as any);
       // Legacy rows may store the user ObjectId hex in leadOwner.
       mineOr.push({ leadOwner: String(userId) });
+      if (this.keepsCreatedLeads(user)) mineOr.push({ createdBy: userId } as any);
     }
-    return { $or: mineOr };
+    return mineOr.length ? { $or: mineOr } : { _id: null };
   }
 
   private contactOwnershipFilter(user?: any): Record<string, unknown> {
@@ -2871,13 +2893,12 @@ export class CRMService {
       filter = listOpts?.includeConverted ? {} : { ...nonConverted };
     }
 
-    const canReadAll = this.canReadAllModuleData('leads', user);
+    // Visibility: Super Admin → everything; Team Lead → every lead in their workspace
+    // (workspace filter below); agents → only leads assigned to them.
+    const canReadAll =
+      this.canReadAllModuleData('leads', user) || this.canReadTeamModuleData('leads', user);
     if (!canReadAll) {
-      if (this.canReadTeamModuleData('leads', user)) {
-        filter = { $and: [filter, await this.teamOwnershipFilter('leadOwner', user)] };
-      } else {
-        filter = { $and: [filter, this.leadOwnershipFilter(user)] };
-      }
+      filter = { $and: [filter, this.leadOwnershipFilter(user)] };
     } else if (listOpts?.mine && user) {
       filter = { $and: [filter, this.leadOwnershipFilter(user)] };
     }
@@ -3093,18 +3114,14 @@ export class CRMService {
       const userId = this.userObjectId(user);
       const byOwner = this.leadOwnerMatchesUser((lead as any).leadOwner, user);
       const byCreator =
+        this.keepsCreatedLeads(user) &&
         !!userId && String((lead as any).createdBy || '') === String(userId);
       const byShared =
         !!userId &&
         Array.isArray((lead as any).sharedWith) &&
         (lead as any).sharedWith.some((u: any) => String(u) === String(userId));
-      let byTeam = false;
-      if (!byOwner && !byCreator && !byShared && this.canReadTeamModuleData('leads', user)) {
-        const { ids: teamIds, names: teamNames } = await this.teamMemberIdsAndNames(user);
-        byTeam =
-          teamNames.includes(String((lead as any).leadOwner || '').trim()) ||
-          teamIds.some((id) => String(id) === String((lead as any).createdBy || ''));
-      }
+      // Team Lead sees every lead of their workspace (checked by roleAllowsLead above).
+      const byTeam = this.canReadTeamModuleData('leads', user);
       if (!byOwner && !byCreator && !byShared && !byTeam) return null;
     }
     if (!lead) return null;
@@ -3231,27 +3248,17 @@ export class CRMService {
       throw new ForbiddenException('This lead belongs to a different workspace.');
     }
     if (oldLead && user && !this.canReadAllModuleData('leads', user)) {
-      const ownerName = this.ownerLabel(user);
       const userId = this.userObjectId(user);
-      const isMineByOwner = String((oldLead as any).leadOwner || '').trim() === ownerName;
+      const isMineByOwner = this.leadOwnerMatchesUser((oldLead as any).leadOwner, user);
       const isMineByCreator =
+        this.keepsCreatedLeads(user) &&
         !!userId && String((oldLead as any).createdBy || '') === String(userId);
       const isSharedWithMe =
         !!userId &&
         Array.isArray((oldLead as any).sharedWith) &&
         (oldLead as any).sharedWith.some((u: any) => String(u) === String(userId));
-      let isMineByTeam = false;
-      if (
-        !isMineByOwner &&
-        !isMineByCreator &&
-        !isSharedWithMe &&
-        this.canReadTeamModuleData('leads', user)
-      ) {
-        const { ids: teamIds, names: teamNames } = await this.teamMemberIdsAndNames(user);
-        isMineByTeam =
-          teamNames.includes(String((oldLead as any).leadOwner || '').trim()) ||
-          teamIds.some((id) => String(id) === String((oldLead as any).createdBy || ''));
-      }
+      // Team Lead may work any lead of their workspace (checked by roleAllowsLead above).
+      const isMineByTeam = this.canReadTeamModuleData('leads', user);
       if (!isMineByOwner && !isMineByCreator && !isSharedWithMe && !isMineByTeam) {
         throw new ForbiddenException('You can only edit your assigned leads.');
       }
@@ -5707,9 +5714,7 @@ export class CRMService {
     const ownerLabel = assignee.label || ownerName;
 
     const clauses: Record<string, unknown>[] = [{ _id: { $in: oids } }];
-    if (tier === 'team') {
-      clauses.push(await this.teamOwnershipFilter('leadOwner', user));
-    } else if (tier === 'own') {
+    if (tier === 'own') {
       clauses.push(this.leadOwnershipFilter(user));
     }
     const moduleScope = leadModuleFilter(user?.crmDbUser);
