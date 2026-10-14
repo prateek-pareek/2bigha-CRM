@@ -134,6 +134,11 @@ export class ReportingService {
     return raw || 'Asia/Kolkata';
   }
 
+  /** Calendar timezone used for report windows and daily buckets. */
+  reportingTimezone(): string {
+    return this.reportingCalendarTz();
+  }
+
   private formatYmdInTz(date: Date, tz: string): string {
     return new Intl.DateTimeFormat('en-CA', {
       timeZone: tz,

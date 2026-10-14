@@ -52,10 +52,12 @@ export async function twoBighaGraphqlRequest<T = any>(
   config: TwoBighaConfig,
   query: string,
   variables: Record<string, unknown>,
+  options?: { timeoutMs?: number },
 ): Promise<T> {
   const url = `${config.apiHost.replace(/\/$/, "")}/graphql`;
   const res = await fetch(url, {
     method: "POST",
+    signal: options?.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": config.apiKey,

@@ -223,6 +223,9 @@ export function roleDashboardRedirectHref(
 ): string | null {
   if (!isRoleDashboardPermission(requiredPermission)) return null;
   if (canAccessRoleDashboard(hasAccess, requiredPermission)) return null;
+  // Admins land on (and only see in nav) the Admin dashboard, but may drill into any
+  // team / agent dashboard from it — the API scopes those to the requested person.
+  if (primaryRoleDashboardPermission(hasAccess) === "workspace-admin:read") return null;
   const primary = primaryRoleDashboardPermission(hasAccess);
   if (!primary) return null;
   return (

@@ -21,9 +21,17 @@ export function contactWhatsappUrl(contact: { mobileNo?: string; phone?: string 
 }
 
 /** Digits-only WhatsApp id for a contact, for routing within the CRM (e.g. `/crm/whatsapp?wa=...`)
- *  rather than opening an external wa.me link. */
-export function contactWhatsappWaId(contact: { mobileNo?: string; phone?: string }): string | null {
-  return digitsForMessaging(contact.mobileNo) || digitsForMessaging(contact.phone);
+ *  rather than opening an external wa.me link. A dedicated `whatsappNumber` wins over mobile/phone. */
+export function contactWhatsappWaId(contact: {
+  whatsappNumber?: string;
+  mobileNo?: string;
+  phone?: string;
+}): string | null {
+  return (
+    digitsForMessaging(contact.whatsappNumber) ||
+    digitsForMessaging(contact.mobileNo) ||
+    digitsForMessaging(contact.phone)
+  );
 }
 
 /** Ensure a CRM-stored URL opens in the browser. */

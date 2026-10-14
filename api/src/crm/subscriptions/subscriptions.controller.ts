@@ -200,6 +200,7 @@ export class SubscriptionsController {
         userPropertyId: dto.userPropertyId,
         targetVariantId: dto.targetVariantId,
         orderId: order.orderId,
+        razorpayOrderId: order.razorpayOrderId || order.orderId,
         amount: order.amount,
       },
     });

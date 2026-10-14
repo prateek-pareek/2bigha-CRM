@@ -134,6 +134,11 @@ export function StatTile({
               {delta}%
             </span>
           )}
+          {delta === null && (
+            <span className="rounded-full bg-sky-50 px-1.5 py-0.5 font-semibold text-sky-600 dark:bg-sky-500/10">
+              new
+            </span>
+          )}
           {sub && <span className="text-muted-foreground">{sub}</span>}
         </div>
       </div>
@@ -256,8 +261,13 @@ export function TargetProgress({
   );
 }
 
-/** Month-wise progress — grouped bars, Leads vs Calls. */
-export function MonthlyProgressChart({ data }: { data: { month: string; leads: number; calls: number }[] }) {
+/** Month-wise progress — grouped bars: Leads, Calls and (when present) Listings. */
+export function MonthlyProgressChart({
+  data,
+}: {
+  data: { month: string; leads: number; calls: number; listings?: number }[];
+}) {
+  const hasListings = (data || []).some((d) => Number(d.listings) > 0);
   if (!data || data.length === 0) {
     return <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">No data for this period</div>;
   }
@@ -271,6 +281,9 @@ export function MonthlyProgressChart({ data }: { data: { month: string; leads: n
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="leads" name="Leads" fill="#2563eb" radius={[3, 3, 0, 0]} maxBarSize={26} />
         <Bar dataKey="calls" name="Calls" fill="#22c55e" radius={[3, 3, 0, 0]} maxBarSize={26} />
+        {hasListings && (
+          <Bar dataKey="listings" name="Listings" fill="#f59e0b" radius={[3, 3, 0, 0]} maxBarSize={26} />
+        )}
       </BarChart>
     </ResponsiveContainer>
   );

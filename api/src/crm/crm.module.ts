@@ -304,6 +304,9 @@ import {
   PropertyListingSchema,
 } from './property-listings/schemas/property-listing.schema';
 import { RoleDashboardService } from './reporting/role-dashboard.service';
+import { TwoBighaDashboardSourceService } from './reporting/twobigha-dashboard-source.service';
+import { PerformanceReportsService } from './reporting/performance-reports.service';
+import { TwoBighaPropertyService } from './property-listings/twobigha-property.service';
 import { SubscriptionsController } from './subscriptions/subscriptions.controller';
 import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscriptions.service';
 import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
@@ -490,6 +493,9 @@ import {
     PipelinesService,
     ReportingService,
     RoleDashboardService,
+    TwoBighaDashboardSourceService,
+    PerformanceReportsService,
+    TwoBighaPropertyService,
     ReportSchedulerService,
     TeamsIntegrationService,
     SlackIntegrationService,

@@ -1,10 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Loader2, Eye, EyeOff, Search, CalendarClock } from "lucide-react";
-import { toast } from "sonner";
-import { CRM_API_URL } from "@/lib/crm/config";
-import { getCrmAuthToken } from "@/lib/crm/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Eye, EyeOff, CalendarClock, Store } from "lucide-react";
 import { CrmPageHeader } from "@/components/crm/ui";
 import TeamPerformanceKPIs from "./TeamPerformanceKPIs";
 import TeamComparisonChart from "./TeamComparisonChart";
@@ -19,269 +16,250 @@ import AdvancedTeamFilters, { AdvancedTeamFilter } from "./AdvancedTeamFilters";
 import TeamExportButtons from "./TeamExportButtons";
 import DetailedTeamView from "./DetailedTeamView";
 import ScheduleReportModal from "../_components/ScheduleReportModal";
-import { TeamReportData } from "../lib/export-reports";
+import { ReportScopeBar } from "../_components/ReportScopeBar";
+import {
+  fetchPerformanceReport,
+  fetchTwoBighaInventory,
+  formatINR,
+  summarize,
+  windowParam,
+  type PerformanceReport,
+  type TeamReportRow,
+  type TwoBighaInventory,
+} from "../lib/performance-report";
 
-type TeamData = {
-  teamId?: string;
-  teamName: string;
-  teamSize: number;
-  totalCalls: number;
-  totalLeads: number;
-  leadsConverted: number;
-  totalActivities: number;
-  messagesOutbound: number;
-  messagesRead: number;
-  messagesFailed: number;
-  incomingCalls: number;
-  missedCalls: number;
-  completedCalls: number;
-  avgCallDuration: number;
-};
+const AUTO_REFRESH_MS = 2 * 60 * 1000;
+const DEFAULT_FILTER: AdvancedTeamFilter = { dateRange: "this_month", selectedTeams: [] };
 
-type SourceData = {
-  source: string;
-  totalLeads: number;
-  converted: number;
-};
+function TwoBighaInventoryCard({ data }: { data: TwoBighaInventory | null }) {
+  if (!data || data.restricted) return null;
+  const block = (label: string, stats: TwoBighaInventory["properties"]) => (
+    <div className="min-w-0 flex-1">
+      <p className="text-xs text-[var(--text-muted)]">{label}</p>
+      <p className="text-xl font-bold text-[var(--text-main)]">{stats ? stats.total.toLocaleString() : "—"}</p>
+      {stats ? (
+        <p className="truncate text-[11px] text-[var(--text-muted)]">
+          {Object.entries(stats.byStatus)
+            .filter(([, n]) => n > 0)
+            .map(([k, n]) => `${n.toLocaleString()} ${k.toLowerCase()}`)
+            .join(" · ") || "—"}
+        </p>
+      ) : null}
+    </div>
+  );
+  return (
+    <div className="mb-6 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Store size={16} className="text-[var(--primary)]" />
+        <h3 className="text-sm font-bold text-[var(--text-main)]">2bigha Marketplace (live)</h3>
+        <span className="text-xs text-[var(--text-muted)]">
+          {data.connected ? "All listings on 2bigha right now — not limited to the period" : "2bigha API not reachable"}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-6">
+        {block("Properties", data.properties)}
+        {block("Farms", data.farms)}
+      </div>
+    </div>
+  );
+}
 
-type IntentData = {
-  intentLabel: string;
-  totalWithIntent: number;
-  converted: number;
-};
-
-const WINDOWS = [
-  { key: "today", label: "Today" },
-  { key: "this_week", label: "This week" },
-  { key: "this_month", label: "This month" },
-];
-
+/**
+ * Team & Organization reports (FRD §14.2) — team roll-ups, lead source/intent conversion,
+ * WhatsApp and IVR engagement. Live and role-scoped: Admin sees every team, a Team Lead
+ * their own team, an Agent only themself.
+ */
 export default function TeamOrganizationsReportsPage() {
-  const [teamData, setTeamData] = useState<TeamData[]>([]);
-  const [sourceData, setSourceData] = useState<SourceData[]>([]);
-  const [intentData, setIntentData] = useState<IntentData[]>([]);
-  const [trendData, setTrendData] = useState<{ teams: string[]; data: any[] } | null>(null);
+  const [report, setReport] = useState<PerformanceReport | null>(null);
+  const [inventory, setInventory] = useState<TwoBighaInventory | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  /** Every team seen in unfiltered loads, so the Team picker keeps its options when filtered. */
+  const [teamRoster, setTeamRoster] = useState<Map<string, TeamReportRow>>(new Map());
   const [showDetailedView, setShowDetailedView] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [filter, setFilter] = useState<AdvancedTeamFilter>({
-    dateRange: "this_month",
-    selectedTeams: [],
-  });
+  const [filter, setFilter] = useState<AdvancedTeamFilter>(DEFAULT_FILTER);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const authHeaders = useCallback((): Record<string, string> => {
-    const t = getCrmAuthToken();
-    const h: Record<string, string> = {};
-    if (t) h.Authorization = `Bearer ${t}`;
-    return h;
-  }, []);
+  const win = windowParam(filter);
+  const teamsKey = filter.selectedTeams.join(",");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const headers = authHeaders();
-      const windowParam = filter.dateRange === "custom" && filter.customDateStart && filter.customDateEnd
-        ? `${filter.customDateStart},${filter.customDateEnd}`
-        : filter.dateRange;
-
-      // Fetch team performance metrics
-      const teamRes = await fetch(`${CRM_API_URL}/crm/reports/teams?window=${windowParam}`, {
-        headers,
-        cache: "no-store",
-      });
-      const teamApiData = teamRes.ok ? await teamRes.json() : { teams: [] };
-      const allTeams = (teamApiData.teams || []) as TeamData[];
-
-      // Fetch lead source conversion data
-      const sourceRes = await fetch(`${CRM_API_URL}/crm/reports/lead-sources?window=${windowParam}`, {
-        headers,
-        cache: "no-store",
-      });
-      const sourceApiData = sourceRes.ok ? await sourceRes.json() : { sources: [] };
-      const allSources = (sourceApiData.sources || []) as SourceData[];
-
-      // Fetch lead intent data
-      const intentRes = await fetch(`${CRM_API_URL}/crm/reports/lead-intents?window=${windowParam}`, {
-        headers,
-        cache: "no-store",
-      });
-      const intentApiData = intentRes.ok ? await intentRes.json() : { intents: [] };
-      const allIntents = (intentApiData.intents || []) as IntentData[];
-
-      // Fetch team trend data
-      const trendRes = await fetch(`${CRM_API_URL}/crm/reports/teams/trend?window=${windowParam}`, {
-        headers,
-        cache: "no-store",
-      });
-      const trendApiData = trendRes.ok ? await trendRes.json() : null;
-
-      // Mock Communication Data (since these endpoints might not exist yet)
-      setTeamData(allTeams);
-      setSourceData(allSources);
-      setIntentData(allIntents);
-      setTrendData(trendApiData);
-    } catch (error) {
-      console.error("Error loading team data:", error);
-      toast.error("Failed to load team reports");
-      setTeamData([]);
-      setSourceData([]);
-      setIntentData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filter, authHeaders]);
+  const load = useCallback(
+    async (fresh = false) => {
+      abortRef.current?.abort();
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      setLoading(true);
+      try {
+        const data = await fetchPerformanceReport({
+          window: win,
+          teams: teamsKey ? teamsKey.split(",") : [],
+          fresh,
+          signal: ctrl.signal,
+        });
+        setReport(data);
+        setError(null);
+        setTeamRoster((prev) => {
+          const next = new Map(prev);
+          for (const t of data.teams) next.set(t.teamId, t);
+          return next;
+        });
+        if (data.scope.tier === "org") {
+          void fetchTwoBighaInventory(ctrl.signal).then((inv) => {
+            if (!ctrl.signal.aborted) setInventory(inv);
+          });
+        }
+      } catch (e) {
+        if ((e as Error)?.name === "AbortError") return;
+        setError("Could not load the team report. Check your connection and permissions, then refresh.");
+      } finally {
+        if (abortRef.current === ctrl) setLoading(false);
+      }
+    },
+    [win, teamsKey],
+  );
 
   useEffect(() => {
     void load();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, AUTO_REFRESH_MS);
+    return () => window.clearInterval(id);
   }, [load]);
 
-  const filteredTeams = teamData.filter((team) => {
-    // Team selection filter
-    if (filter.selectedTeams.length > 0 && !filter.selectedTeams.includes(team.teamId || "")) {
-      return false;
-    }
+  const teams = report?.teams ?? [];
+  const clientFiltered = !!(
+    filter.searchTerm ||
+    filter.teamSizeRange ||
+    filter.conversionRateRange ||
+    filter.whatsappReadRateMin ||
+    filter.callCompletionRateMin ||
+    (filter.performanceLevel && filter.performanceLevel !== "all") ||
+    (filter.engagementLevel && filter.engagementLevel !== "all")
+  );
 
-    // Name search filter
-    if (filter.searchTerm && !team.teamName.toLowerCase().includes(filter.searchTerm.toLowerCase())) {
-      return false;
-    }
+  const filteredTeams = useMemo(
+    () =>
+      teams.filter((team) => {
+        if (filter.searchTerm && !team.teamName.toLowerCase().includes(filter.searchTerm.toLowerCase())) return false;
+        if (filter.teamSizeRange && (team.teamSize < filter.teamSizeRange[0] || team.teamSize > filter.teamSizeRange[1])) return false;
+        if (
+          filter.conversionRateRange &&
+          (team.conversionRate < filter.conversionRateRange[0] || team.conversionRate > filter.conversionRateRange[1])
+        )
+          return false;
+        if (filter.whatsappReadRateMin && team.whatsappReadRate < filter.whatsappReadRateMin) return false;
+        if (filter.callCompletionRateMin && team.connectRate < filter.callCompletionRateMin) return false;
+        if (filter.performanceLevel && filter.performanceLevel !== "all") {
+          // Composite of conversion, WhatsApp read rate and call connect rate (0–100).
+          const score = Math.round(team.conversionRate * 0.3 + team.whatsappReadRate * 0.3 + team.connectRate * 0.4);
+          if (filter.performanceLevel === "excellent" && score < 80) return false;
+          if (filter.performanceLevel === "good" && (score < 60 || score >= 80)) return false;
+          if (filter.performanceLevel === "needs_improvement" && score >= 60) return false;
+        }
+        if (filter.engagementLevel && filter.engagementLevel !== "all") {
+          const perMember = team.calls / Math.max(1, team.teamSize);
+          if (filter.engagementLevel === "high" && perMember <= 5) return false;
+          if (filter.engagementLevel === "medium" && (perMember < 2 || perMember > 5)) return false;
+          if (filter.engagementLevel === "low" && perMember >= 2) return false;
+        }
+        return true;
+      }),
+    [teams, filter],
+  );
 
-    // Team size range filter
-    if (filter.teamSizeRange) {
-      if (team.teamSize < filter.teamSizeRange[0] || team.teamSize > filter.teamSizeRange[1]) {
-        return false;
-      }
-    }
+  const kpiTotals = report ? (clientFiltered ? summarize(filteredTeams) : report.totals) : null;
+  const targets = useMemo(() => {
+    if (!report) return null;
+    if (!clientFiltered) return report.targets;
+    const t = summarize(filteredTeams);
+    const sum = (k: "leads" | "calls" | "listings") => filteredTeams.reduce((s, x) => s + (x.targets?.[k] || 0), 0);
+    return {
+      leads: { actual: t.leadsCreated, target: sum("leads") },
+      calls: { actual: t.calls, target: sum("calls") },
+      listings: { actual: t.listingsTotal, target: sum("listings") },
+    };
+  }, [report, clientFiltered, filteredTeams]);
 
-    // Conversion rate range filter
-    const conversionRate = team.totalLeads > 0 ? (team.leadsConverted / team.totalLeads) * 100 : 0;
-    if (filter.conversionRateRange) {
-      if (conversionRate < filter.conversionRateRange[0] || conversionRate > filter.conversionRateRange[1]) {
-        return false;
-      }
-    }
-
-    // WhatsApp read rate minimum filter
-    const readRate = team.messagesOutbound > 0 ? (team.messagesRead / team.messagesOutbound) * 100 : 0;
-    if (filter.whatsappReadRateMin && readRate < filter.whatsappReadRateMin) {
-      return false;
-    }
-
-    // Call completion rate minimum filter
-    const completionRate = team.incomingCalls > 0 ? (team.completedCalls / team.incomingCalls) * 100 : 0;
-    if (filter.callCompletionRateMin && completionRate < filter.callCompletionRateMin) {
-      return false;
-    }
-
-    // Performance level filter (based on composite score)
-    if (filter.performanceLevel && filter.performanceLevel !== "all") {
-      const teamScore = Math.round(
-        (conversionRate * 0.3 + readRate * 0.3 + completionRate * 0.4) / 10
-      ) * 10;
-      if (filter.performanceLevel === "excellent" && teamScore < 80) return false;
-      if (filter.performanceLevel === "good" && (teamScore < 60 || teamScore >= 80)) return false;
-      if (filter.performanceLevel === "needs_improvement" && teamScore >= 60) return false;
-    }
-
-    // Engagement level filter (based on calls per member)
-    if (filter.engagementLevel && filter.engagementLevel !== "all") {
-      const callsPerMember = team.totalCalls / Math.max(1, team.teamSize);
-      if (filter.engagementLevel === "high" && callsPerMember <= 5) return false;
-      if (filter.engagementLevel === "medium" && (callsPerMember < 2 || callsPerMember > 5)) return false;
-      if (filter.engagementLevel === "low" && callsPerMember >= 2) return false;
-    }
-
-    return true;
-  });
-
-  // Build export data with calculated metrics
-  const exportData: TeamReportData[] = filteredTeams.map((team) => ({
-    teamId: team.teamId || "",
-    teamName: team.teamName,
-    teamSize: team.teamSize,
-    totalCalls: team.totalCalls,
-    totalLeads: team.totalLeads,
-    leadsConverted: team.leadsConverted,
-    conversionRate: team.totalLeads > 0 ? Math.round((team.leadsConverted / team.totalLeads) * 100) : 0,
-    messagesOutbound: team.messagesOutbound,
-    messagesRead: team.messagesRead,
-    readRate: team.messagesOutbound > 0 ? Math.round((team.messagesRead / team.messagesOutbound) * 100) : 0,
-    incomingCalls: team.incomingCalls,
-    missedCalls: team.missedCalls,
-    missedRate: team.incomingCalls > 0 ? Math.round((team.missedCalls / team.incomingCalls) * 100) : 0,
-  }));
+  const teamOptions = useMemo(() => [...teamRoster.values()].sort((a, b) => a.teamName.localeCompare(b.teamName)), [teamRoster]);
+  const initial = loading && !report;
 
   return (
     <div className="p-4 sm:p-6">
       <CrmPageHeader
         title="Team & Organizations"
         bordered={false}
-        breadcrumbs={[
-          { label: "Home", href: "/crm" },
-          { label: "Reports & Analytics" },
-          { label: "Team & Organizations" },
-        ]}
+        breadcrumbs={[{ label: "Home", href: "/crm" }, { label: "Reports & Analytics" }, { label: "Team & Organizations" }]}
       />
 
-      {/* Advanced Report Filters */}
-      <div className="mb-6">
+      <div className="mb-2">
         <AdvancedTeamFilters
-          teams={teamData.map((t) => ({
+          teams={teamOptions.map((t) => ({
             teamId: t.teamId,
             teamName: t.teamName,
             teamSize: t.teamSize,
-            totalCalls: t.totalCalls,
-            totalLeads: t.totalLeads,
+            totalCalls: t.calls,
+            totalLeads: t.leadsCreated,
             leadsConverted: t.leadsConverted,
-            messagesRead: t.messagesRead,
-            messagesOutbound: t.messagesOutbound,
+            messagesRead: t.whatsappRead,
+            messagesOutbound: t.whatsappSent,
           }))}
           filter={filter}
           onFilterChange={setFilter}
-          onClearFilters={() =>
-            setFilter({
-              dateRange: "this_month",
-              selectedTeams: [],
-            })
-          }
+          onClearFilters={() => setFilter(DEFAULT_FILTER)}
         />
       </div>
 
-      {/* KPI Summary */}
-      <TeamPerformanceKPIs teamData={filteredTeams} loading={loading} />
+      <ReportScopeBar report={report} loading={loading} onRefresh={() => void load(true)} error={error} />
 
-      {/* Target & Trend Analytics */}
+      <TeamPerformanceKPIs
+        totals={kpiTotals}
+        previous={report?.previousTotals ?? null}
+        showTrends={!clientFiltered}
+        teamCount={filteredTeams.length}
+        memberCount={filteredTeams.reduce((s, t) => s + t.teamSize, 0)}
+        compareLabel={report?.range.compareLabel}
+        loading={initial}
+      />
+
+      {report?.scope.tier === "org" ? <TwoBighaInventoryCard data={inventory} /> : null}
+
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
-        <OrganizationTargetGauge teams={filteredTeams} loading={loading} />
-        <TeamPerformanceTrendChart trendData={trendData} loading={loading} />
+        <OrganizationTargetGauge
+          targets={targets}
+          title={report?.scope.tier === "org" ? "Organization Target" : "Team Target"}
+          loading={initial}
+        />
+        <TeamPerformanceTrendChart trendData={report?.teamTrend ?? null} loading={initial} />
       </div>
 
-      {/* Team Comparison & Lead Source */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <TeamComparisonChart teamData={filteredTeams} loading={loading} />
-        <LeadSourceConversionChart sourceData={sourceData} loading={loading} />
+        <TeamComparisonChart teamData={filteredTeams} loading={initial} />
+        <LeadSourceConversionChart sourceData={report?.sources ?? []} loading={initial} />
       </div>
 
-      {/* Activity & Intent Analytics */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr]">
-        <LeadIntentAnalytics intentData={intentData} loading={loading} />
-        <TeamActivityAreaChart trendData={trendData} loading={loading} />
+        <LeadIntentAnalytics intentData={report?.intents ?? []} loading={initial} />
+        <TeamActivityAreaChart trendData={report?.teamTrend ?? null} loading={initial} />
       </div>
 
-      {/* WhatsApp & IVR Analytics */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <WhatsAppEngagementChart teamData={filteredTeams} loading={loading} />
-        <IVRAnalyticsChart teamData={filteredTeams} loading={loading} />
+        <WhatsAppEngagementChart
+          engagement={report?.engagement.whatsapp ?? null}
+          trend={report?.trend ?? []}
+          teams={filteredTeams}
+          loading={initial}
+        />
+        <IVRAnalyticsChart ivr={report?.engagement.ivr ?? null} trend={report?.trend ?? []} teams={filteredTeams} loading={initial} />
       </div>
 
-      {/* Detailed Team Controls */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-bold text-[var(--text-main)]">Detailed Team Metrics</h3>
           <button
             type="button"
             onClick={() => setShowDetailedView(!showDetailedView)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
           >
             {showDetailedView ? <EyeOff size={14} /> : <Eye size={14} />}
             {showDetailedView ? "Hide Details" : "Show Details"}
@@ -290,87 +268,78 @@ export default function TeamOrganizationsReportsPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setScheduleModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
           >
             <CalendarClock size={14} />
             Schedule
           </button>
-          <TeamExportButtons data={exportData} fileName={`Team_Report_${filter.dateRange}`} disabled={loading} />
+          <TeamExportButtons
+            data={filteredTeams}
+            fileName={`Team_Report_${report?.range.from || win}_${report?.range.to || ""}`}
+            subtitle={report ? `${report.range.from} to ${report.range.to}` : undefined}
+            disabled={loading}
+          />
         </div>
       </div>
 
-      {/* Detailed View or Table */}
       {showDetailedView ? (
-        <DetailedTeamView teams={filteredTeams} loading={loading} />
+        <DetailedTeamView teams={filteredTeams} agents={report?.agents ?? []} loading={initial} />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
-          <table className="w-full min-w-[1000px] text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border-color)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                <th className="px-4 py-2.5">Team Name</th>
+                <th className="px-4 py-2.5">Team</th>
                 <th className="px-4 py-2.5">Size</th>
                 <th className="px-4 py-2.5">Calls</th>
                 <th className="px-4 py-2.5">Leads</th>
                 <th className="px-4 py-2.5">Converted</th>
-                <th className="px-4 py-2.5">Conv Rate</th>
+                <th className="px-4 py-2.5">Follow-up</th>
+                <th className="px-4 py-2.5">Listings</th>
                 <th className="px-4 py-2.5">WhatsApp</th>
-                <th className="px-4 py-2.5">Read Rate</th>
-                <th className="px-4 py-2.5">Missed Calls</th>
+                <th className="px-4 py-2.5">Read rate</th>
+                <th className="px-4 py-2.5">Missed calls</th>
+                <th className="px-4 py-2.5">Revenue</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {initial ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={11} className="px-4 py-8 text-center text-[var(--text-muted)]">
                     <Loader2 size={16} className="mx-auto animate-spin" />
                   </td>
                 </tr>
               ) : filteredTeams.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-[var(--text-muted)]">
-                    No team data available for this period
+                  <td colSpan={11} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                    No teams match these filters.
                   </td>
                 </tr>
               ) : (
-                filteredTeams.map((team) => {
-                  const convRate =
-                    team.totalLeads > 0
-                      ? Math.round((team.leadsConverted / team.totalLeads) * 100)
-                      : 0;
-                  const readRate =
-                    team.messagesOutbound > 0
-                      ? Math.round((team.messagesRead / team.messagesOutbound) * 100)
-                      : 0;
-                  const missedRate =
-                    team.incomingCalls > 0
-                      ? Math.round((team.missedCalls / team.incomingCalls) * 100)
-                      : 0;
-
-                  return (
-                    <tr
-                      key={team.teamId}
-                      className="border-b border-[var(--border-color)] last:border-0 hover:bg-[var(--surface-dim)]"
-                    >
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-main)]">
-                        {team.teamName}
-                      </td>
-                      <td className="px-4 py-2.5">{team.teamSize}</td>
-                      <td className="px-4 py-2.5">{team.totalCalls}</td>
-                      <td className="px-4 py-2.5">{team.totalLeads}</td>
-                      <td className="px-4 py-2.5 font-semibold text-[#10b981]">
-                        {team.leadsConverted}
-                      </td>
-                      <td className="px-4 py-2.5">{convRate}%</td>
-                      <td className="px-4 py-2.5">{team.messagesOutbound}</td>
-                      <td className="px-4 py-2.5 font-semibold text-[#10b981]">
-                        {readRate}%
-                      </td>
-                      <td className="px-4 py-2.5 text-[#ef4444]">
-                        {team.missedCalls} ({missedRate}%)
-                      </td>
-                    </tr>
-                  );
-                })
+                filteredTeams.map((team) => (
+                  <tr key={team.teamId} className="border-b border-[var(--border-color)] last:border-0 hover:bg-[var(--surface-dim)]">
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-main)]">{team.teamName}</td>
+                    <td className="px-4 py-2.5">{team.teamSize}</td>
+                    <td className="px-4 py-2.5">
+                      {team.calls}
+                      <span className="ml-1 text-xs text-[var(--text-muted)]">({team.connectRate}% conn.)</span>
+                    </td>
+                    <td className="px-4 py-2.5">{team.leadsCreated}</td>
+                    <td className="px-4 py-2.5 font-semibold text-[#10b981]">
+                      {team.leadsConverted}
+                      <span className="ml-1 text-xs font-normal text-[var(--text-muted)]">({team.conversionRate}%)</span>
+                    </td>
+                    <td className="px-4 py-2.5">{team.followUpAdherence == null ? "—" : `${team.followUpAdherence}%`}</td>
+                    <td className="px-4 py-2.5">{team.listingsTotal}</td>
+                    <td className="px-4 py-2.5">{team.whatsappSent}</td>
+                    <td className="px-4 py-2.5 font-semibold text-[#10b981]">{team.whatsappReadRate}%</td>
+                    <td className="px-4 py-2.5 text-[#ef4444]">
+                      {team.missedCalls}
+                      <span className="ml-1 text-xs text-[var(--text-muted)]">({team.missedRate}%)</span>
+                    </td>
+                    <td className="px-4 py-2.5">{formatINR(team.revenue)}</td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   canAccessCrmDashboardPage,
+  canPickAnyDashboardEmployee,
   CRM_WORKSPACE_ACCESS_ITEMS,
   firstAccessibleWorkspaceHref,
   roleDashboardRedirectHref,
@@ -63,6 +64,9 @@ export default function CrmWorkspaceLayout({
       router.replace(tierRedirect);
       return;
     }
+    // Admin drill-down into Team Lead / Agent dashboards (see roleDashboardRedirectHref).
+    const isRoleDashboard = ["workspace-team:read", "workspace-agent:read"].includes(match.permission);
+    if (isRoleDashboard && canPickAnyDashboardEmployee(hasAccess)) return;
     if (
       !canAccessCrmDashboardPage(hasAccess, match.permission, {
         ...opts,

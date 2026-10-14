@@ -25,6 +25,7 @@ import { parseCrmEmailEngagementQuery } from '../email/crm-email-engagement-filt
 import { CRMService } from './crm.service';
 import { ReportingService } from '../reporting/reporting.service';
 import { RoleDashboardService } from '../reporting/role-dashboard.service';
+import { PerformanceReportsService } from '../reporting/performance-reports.service';
 import { CrmEmailEngagementBatchService } from '../email/crm-email-engagement-batch.service';
 import { CrmCalendarSyncService } from '../calendar/crm-calendar-sync.service';
 import { InboxOAuthService } from '../inbox/inbox-oauth.service';
@@ -49,6 +50,7 @@ export class CRMController {
     private readonly crmEmailEngagementBatchService: CrmEmailEngagementBatchService,
     private readonly reportingService: ReportingService,
     private readonly roleDashboardService: RoleDashboardService,
+    private readonly performanceReports: PerformanceReportsService,
     private readonly assignmentPolicy: CrmAssignmentPolicyService,
   ) {}
 
@@ -511,23 +513,72 @@ export class CRMController {
     return this.crmService.getAgentPerformanceSummary(agentId);
   }
 
-  /** Agent Performance baseline report — calls/activities/leads per human agent, target-vs-actual. */
+  /**
+   * Reports & Analytics (FRD §14) — one live, role-scoped payload for the Agent Performance
+   * and Team & Organization reports: per-agent + per-team rows, totals, previous-period
+   * totals, daily trend, lead source/intent conversion, WhatsApp + IVR engagement, targets.
+   * Admin → whole org, Team Lead → own team, Agent → self. `agents` / `teams` narrow it.
+   */
+  @Get('reports/performance')
+  @Permissions('dashboard:read', 'leads:read')
+  async getPerformanceReport(
+    @Request() req: any,
+    @Query('window') window?: string,
+    @Query('agents') agents?: string,
+    @Query('teams') teams?: string,
+    @Query('fresh') fresh?: string,
+  ) {
+    const scope = this.performanceReports.resolveScope(req);
+    return this.performanceReports.getPerformance(
+      window || 'this_month',
+      scope,
+      {
+        agents: this.performanceReports.parseIdList(agents),
+        teams: this.performanceReports.parseIdList(teams),
+      },
+      fresh === '1' || fresh === 'true',
+    );
+  }
+
+  /** Live 2bigha marketplace inventory (properties / farms) — org-scope callers only. */
+  @Get('reports/twobigha-inventory')
+  @Permissions('dashboard:read', 'leads:read')
+  async getTwoBighaInventory(@Request() req: any) {
+    if (this.performanceReports.resolveScope(req).tier !== 'org') {
+      return { connected: false, properties: null, farms: null, restricted: true };
+    }
+    return this.performanceReports.getTwoBighaInventory();
+  }
+
+  /** Agent Performance report — per-agent rows (role-scoped). */
   @Get('reports/agents')
   @Permissions('dashboard:read', 'leads:read')
   async getAgentPerformanceLeaderboard(
+    @Request() req: any,
     @Query('window') window?: string,
     @Query('agents') agents?: string,
   ) {
-    return this.crmService.getAgentPerformanceLeaderboard(window || 'this_month', agents);
+    const data = await this.performanceReports.getPerformance(
+      window || 'this_month',
+      this.performanceReports.resolveScope(req),
+      { agents: this.performanceReports.parseIdList(agents) },
+    );
+    return { window: data.window, windowLabel: data.windowLabel, agents: data.agents, totals: data.totals };
   }
 
   @Get('reports/agents/trend')
   @Permissions('dashboard:read', 'leads:read')
   async getAgentPerformanceTrend(
+    @Request() req: any,
     @Query('window') window?: string,
     @Query('agents') agents?: string,
   ) {
-    return this.crmService.getAgentPerformanceTrend(window || 'this_month', agents);
+    const data = await this.performanceReports.getPerformance(
+      window || 'this_month',
+      this.performanceReports.resolveScope(req),
+      { agents: this.performanceReports.parseIdList(agents) },
+    );
+    return data.trend;
   }
 
   @Get('agent-targets')
@@ -545,45 +596,94 @@ export class CRMController {
     return this.crmService.upsertAgentTarget(agentId, body || {});
   }
 
-  /** Team & Organizations Reports - Team-level metrics aggregation. */
+  /** Team & Organizations report — team roll-ups (role-scoped). */
   @Get('reports/teams')
   @Permissions('dashboard:read', 'leads:read')
-  async getTeamPerformanceMetrics(@Query('window') window?: string) {
-    return this.crmService.getTeamPerformanceMetrics(window || 'this_month');
+  async getTeamPerformanceMetrics(@Request() req: any, @Query('window') window?: string) {
+    const data = await this.performanceReports.getPerformance(
+      window || 'this_month',
+      this.performanceReports.resolveScope(req),
+    );
+    return { window: data.window, windowLabel: data.windowLabel, teams: data.teams, totals: data.totals };
   }
 
   @Get('reports/teams/trend')
   @Permissions('dashboard:read', 'leads:read')
-  async getTeamPerformanceTrend(@Query('window') window?: string) {
-    return this.crmService.getTeamPerformanceTrend(window || 'this_month');
+  async getTeamPerformanceTrend(@Request() req: any, @Query('window') window?: string) {
+    const data = await this.performanceReports.getPerformance(
+      window || 'this_month',
+      this.performanceReports.resolveScope(req),
+    );
+    return data.teamTrend;
   }
 
-  /** Lead source conversion tracking by channel. */
+  /** Lead source conversion (role-scoped). */
   @Get('reports/lead-sources')
   @Permissions('dashboard:read', 'leads:read')
-  async getLeadSourceConversion(@Query('window') window?: string) {
-    return this.crmService.getLeadSourceConversion(window || 'this_month');
+  async getLeadSourceConversion(@Request() req: any, @Query('window') window?: string) {
+    const data = await this.performanceReports.getPerformance(
+      window || 'this_month',
+      this.performanceReports.resolveScope(req),
+    );
+    return { window: data.window, windowLabel: data.windowLabel, sources: data.sources };
   }
 
-  /** Lead intent conversion analytics. */
+  /** Lead intent conversion (role-scoped). */
   @Get('reports/lead-intents')
   @Permissions('dashboard:read', 'leads:read')
-  async getLeadIntentConversion(@Query('window') window?: string) {
-    return this.crmService.getLeadIntentConversion(window || 'this_month');
+  async getLeadIntentConversion(@Request() req: any, @Query('window') window?: string) {
+    const data = await this.performanceReports.getPerformance(
+      window || 'this_month',
+      this.performanceReports.resolveScope(req),
+    );
+    return { window: data.window, windowLabel: data.windowLabel, intents: data.intents };
   }
 
-  /** WhatsApp engagement metrics by team. */
+  /** WhatsApp engagement (role-scoped): totals + per team. */
   @Get('reports/whatsapp-engagement')
   @Permissions('dashboard:read', 'leads:read')
-  async getWhatsAppEngagement(@Query('window') window?: string) {
-    return this.crmService.getWhatsAppEngagement(window || 'this_month');
+  async getWhatsAppEngagement(@Request() req: any, @Query('window') window?: string) {
+    const data = await this.performanceReports.getPerformance(
+      window || 'this_month',
+      this.performanceReports.resolveScope(req),
+    );
+    return {
+      window: data.window,
+      windowLabel: data.windowLabel,
+      totals: data.engagement.whatsapp,
+      teams: data.teams.map((t) => ({
+        teamId: t.teamId,
+        teamName: t.teamName,
+        messagesOutbound: t.messagesOutbound,
+        messagesDelivered: t.messagesDelivered,
+        messagesRead: t.messagesRead,
+        messagesFailed: t.messagesFailed,
+      })),
+    };
   }
 
-  /** IVR call analytics metrics by team. */
+  /** IVR call analytics (role-scoped): totals + per team. */
   @Get('reports/ivr-analytics')
   @Permissions('dashboard:read', 'leads:read')
-  async getIVRAnalytics(@Query('window') window?: string) {
-    return this.crmService.getIVRAnalytics(window || 'this_month');
+  async getIVRAnalytics(@Request() req: any, @Query('window') window?: string) {
+    const data = await this.performanceReports.getPerformance(
+      window || 'this_month',
+      this.performanceReports.resolveScope(req),
+    );
+    return {
+      window: data.window,
+      windowLabel: data.windowLabel,
+      totals: data.engagement.ivr,
+      teams: data.teams.map((t) => ({
+        teamId: t.teamId,
+        teamName: t.teamName,
+        incomingCalls: t.incomingCalls,
+        outgoingCalls: t.outgoingCalls,
+        missedCalls: t.missedCalls,
+        completedCalls: t.completedCalls,
+        avgCallDuration: t.avgCallDuration,
+      })),
+    };
   }
 
   /** Sales department health: work done, activity trends, rep leaderboard, pipeline snapshot. */
@@ -642,7 +742,17 @@ export class CRMController {
     if (!dto.reportType || !dto.frequency || !dto.emailRecipients) {
       throw new BadRequestException('reportType, frequency, and emailRecipients are required');
     }
-    return this.crmService.createReportSchedule(req.user.userId, dto);
+    const recipients = (Array.isArray(dto.emailRecipients) ? dto.emailRecipients : String(dto.emailRecipients).split(','))
+      .map((e: unknown) => String(e || '').trim())
+      .filter((e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    if (!recipients.length) throw new BadRequestException('At least one valid email recipient is required');
+    // The emailed report keeps the creator's data scope (admin → org, team lead → team, agent → self).
+    const scope = this.performanceReports.resolveScope(req);
+    return this.crmService.createReportSchedule(req.user.userId, {
+      ...dto,
+      emailRecipients: recipients,
+      filters: { ...(dto.filters || {}), _scopeTier: scope.tier, _scopeSelfId: scope.selfId },
+    });
   }
 
   @Get('reports/schedules')
@@ -986,10 +1096,31 @@ export class CRMController {
   @Get('dashboard/admin')
   @Permissions('workspace-admin:read', 'dashboard:read')
   async getAdminDashboardMetrics(
-    @Query('window') window: string = 'this_week',
+    @Query('window') window: string = 'this_month',
     @Query('team') team?: string,
   ) {
     return this.roleDashboardService.getAdminDashboard(window, team);
+  }
+
+  /** Team-lead picker for the Admin (anyone with direct reports). */
+  @Get('dashboard/teams')
+  @Permissions('workspace-admin:read', 'dashboard:read')
+  async getDashboardTeams() {
+    return this.roleDashboardService.listTeams();
+  }
+
+  /**
+   * Agent picker: an admin gets every CRM user; anyone else gets their own team
+   * (self + direct reports) — never another team's people.
+   */
+  @Get('dashboard/people')
+  @Permissions('workspace-admin:read', 'workspace-team:read', 'dashboard:read')
+  async getDashboardPeople(@Request() req: any, @Query('teamLead') teamLead?: string) {
+    const self = String(req.user?.userId || req.user?._id || '');
+    if (this.isCallerAdmin(req)) {
+      return this.roleDashboardService.listPeople(teamLead || null);
+    }
+    return this.roleDashboardService.listPeople(self);
   }
 
   /**
@@ -1000,7 +1131,7 @@ export class CRMController {
   @Permissions('workspace-team:read', 'dashboard:read')
   async getTeamDashboardMetrics(
     @Request() req: any,
-    @Query('window') window: string = 'today',
+    @Query('window') window: string = 'this_month',
     @Query('teamLead') teamLead?: string,
   ) {
     const self = String(req.user?.userId || req.user?._id || '');
@@ -1016,7 +1147,7 @@ export class CRMController {
   @Permissions('workspace-agent:read', 'workspace-team:read', 'dashboard:read')
   async getAgentDashboardMetrics(
     @Request() req: any,
-    @Query('window') window: string = 'today',
+    @Query('window') window: string = 'this_month',
     @Query('agent') agent?: string,
   ) {
     const self = String(req.user?.userId || req.user?._id || '');

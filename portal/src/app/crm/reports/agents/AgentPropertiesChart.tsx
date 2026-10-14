@@ -16,16 +16,15 @@ import {
   CRM_CHART_TOOLTIP
 } from "@/portals/crm/lib/shared/chart-theme";
 import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
+import type { AgentReportRow } from "../lib/performance-report";
 
 interface AgentPropertiesChartProps {
-  agents: any[];
-  propertyCounts: Record<string, { propertyCount: number; farmCount: number }>;
+  agents: AgentReportRow[];
   loading: boolean;
 }
 
 export default function AgentPropertiesChart({
   agents,
-  propertyCounts,
   loading,
 }: AgentPropertiesChartProps) {
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -33,24 +32,18 @@ export default function AgentPropertiesChart({
   const chartData = useMemo(() => {
     if (loading || agents.length === 0) return null;
 
-    let totalProperties = 0;
-    let totalFarms = 0;
+    const totalProperties = agents.reduce((t, a) => t + (a.properties || 0), 0);
+    const totalFarms = agents.reduce((t, a) => t + (a.farms || 0), 0);
+    const totalPm = agents.reduce((t, a) => t + (a.pmListings || 0), 0);
 
-    agents.forEach(agent => {
-      const counts = propertyCounts[agent.agentId];
-      if (counts) {
-        totalProperties += counts.propertyCount || 0;
-        totalFarms += counts.farmCount || 0;
-      }
-    });
-
-    if (totalProperties === 0 && totalFarms === 0) return null;
+    if (totalProperties === 0 && totalFarms === 0 && totalPm === 0) return null;
 
     return [
       { name: "Properties Listed", value: totalProperties, color: CRM_CHART_PRIMARY },
       { name: "Farms Listed", value: totalFarms, color: CRM_CHART_SECONDARY },
-    ];
-  }, [agents, propertyCounts, loading]);
+      { name: "PM Properties", value: totalPm, color: "#8b5cf6" },
+    ].filter((d) => d.value > 0);
+  }, [agents, loading]);
 
   if (loading) {
     return <ReportChartSkeleton type="pie" height="300px" />;
@@ -61,7 +54,7 @@ export default function AgentPropertiesChart({
       <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 h-full flex flex-col text-[var(--text-muted)] min-h-[300px]">
         <h3 className="text-sm font-bold text-[var(--text-main)]">Portfolio Distribution</h3>
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-xs">No active listings assigned to these agents.</p>
+          <p className="text-xs">No properties or farms were listed by these agents in this period.</p>
         </div>
       </div>
     );

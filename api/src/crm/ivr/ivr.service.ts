@@ -329,7 +329,14 @@ export class IvrService {
         : 'Outgoing';
 
     const rawStatus = String(callDetails.overall_call_status || callDetails.status || body?.status || '').trim();
-    const status = rawStatus.toLowerCase() === 'patched' ? 'Connected' : rawStatus ? 'Completed' : 'Missed';
+    // Kommuno reports "patched" only when agent and customer were actually connected.
+    // Anything else is an unanswered call: missed when inbound, not answered when outbound.
+    const status =
+      rawStatus.toLowerCase() === 'patched'
+        ? 'Connected'
+        : direction === 'Incoming' || !rawStatus
+          ? 'Missed'
+          : 'Not Answered';
 
     const agentNumber =
       agentDetailsRaw?.agentNumber || agentDetailsRaw?.agent_number || agentDetailsRaw?.number || undefined;

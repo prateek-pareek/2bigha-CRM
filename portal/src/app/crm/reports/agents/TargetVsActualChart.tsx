@@ -37,16 +37,12 @@ export default function TargetVsActualChart({
     if (loading || agents.length === 0) return [];
 
     return agents
-      .filter((agent) => agent.target) // Only agents with targets
+      .filter((agent) => agent.target && (agent.target.callsTarget > 0 || agent.target.leadsTarget > 0))
       .map((agent) => {
-        const callsProgress = Math.min(
-          100,
-          Math.round((agent.calls / agent.target.callsTarget) * 100)
-        );
-        const leadsProgress = Math.min(
-          100,
-          Math.round((agent.leadsCreated / agent.target.leadsTarget) * 100)
-        );
+        const progress = (actual: number, target: number) =>
+          target > 0 ? Math.min(100, Math.round(((actual || 0) / target) * 100)) : 0;
+        const callsProgress = progress(agent.calls, agent.target.callsTarget);
+        const leadsProgress = progress(agent.leadsCreated, agent.target.leadsTarget);
 
         const callsStatus =
           callsProgress >= 100 ? "completed" : callsProgress >= 80 ? "on-track" : "behind";

@@ -1,34 +1,32 @@
 "use client";
 
-import { Download, Loader2, FileText } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { exportReport, AgentReportData } from "../lib/export-reports";
 import { CrmDropdown } from "@/components/crm/ui";
+import { exportReport } from "../lib/export-reports";
+import type { AgentReportRow, TeamReportRow } from "../lib/performance-report";
 
 type Props = {
-  data: AgentReportData[];
+  data: AgentReportRow[] | TeamReportRow[];
   fileName: string;
+  /** Team & Organization columns instead of per-agent columns. */
+  team?: boolean;
+  /** Period / scope line printed on the PDF. */
+  subtitle?: string;
   disabled?: boolean;
 };
 
-export default function ExportButtons({ data, fileName, disabled }: Props) {
+export default function ExportButtons({ data, fileName, team = false, subtitle, disabled }: Props) {
   const [exporting, setExporting] = useState<"csv" | "excel" | "pdf" | null>(null);
 
   const handleExport = async (format: "csv" | "excel" | "pdf") => {
-    if (format === "pdf") {
-      window.print();
-      return;
-    }
-
     if (!data || data.length === 0) {
       toast.error("No data to export");
       return;
     }
-
     setExporting(format);
     try {
-      await exportReport(data, format, fileName, false);
+      await exportReport(data, format, fileName, team, subtitle);
       toast.success(`Exported to ${format.toUpperCase()}`);
     } catch (error) {
       console.error(`Export error (${format}):`, error);
@@ -46,7 +44,7 @@ export default function ExportButtons({ data, fileName, disabled }: Props) {
         options={[
           { value: "csv", label: "Download CSV" },
           { value: "excel", label: "Download Excel" },
-          { value: "pdf", label: "Print PDF" }
+          { value: "pdf", label: "Download PDF" },
         ]}
         placeholder={exporting ? "Exporting..." : "Export Reports"}
         disabled={disabled || exporting !== null}

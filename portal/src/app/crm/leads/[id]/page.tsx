@@ -407,16 +407,18 @@ export default function LeadDetailPage() {
       title: hasEmail ? 'Send email' : 'Add an email to send from CRM',
       onClick: () => setIsSendEmailModalOpen(true),
     },
-    {
+  ];
+
+  // Call / WhatsApp only render once the lead has a number to reach.
+  if (hasPhone) {
+    quickActions.push({
       id: 'call',
       label: 'Call',
       icon: <Phone size={14} />,
-      title: hasPhone
-        ? 'Call lead via configured voice provider'
-        : 'Call lead (enter phone in the dialog)',
+      title: 'Call lead via configured voice provider',
       onClick: () => setIsCallModalOpen(true),
-    },
-  ];
+    });
+  }
 
   if (whatsappWaId) {
     quickActions.push({

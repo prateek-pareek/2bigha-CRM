@@ -2,329 +2,129 @@ import { toast } from "sonner";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import type { AgentReportRow, TeamReportRow } from "./performance-report";
 
 type ExportFormat = "csv" | "excel" | "pdf";
 
-export interface AgentReportData {
-  agentId: string;
-  name: string;
-  calls: number;
-  activities: number;
-  leadsCreated: number;
-  leadsConverted: number;
-  conversionRate: number;
-  followUpAdherence: number;
-  responseTime: string;
-  revenue: number;
-  properties: number;
-  farms: number;
-  leadsTarget: number;
-  callsTarget: number;
-  targetProgress: number;
+type Column<T> = { header: string; short?: string; value: (row: T) => string | number };
+
+const dash = (v: number | null | undefined) => (v == null ? "—" : v);
+
+export const AGENT_EXPORT_COLUMNS: Column<AgentReportRow>[] = [
+  { header: "Agent", value: (r) => r.name },
+  { header: "Team", value: (r) => r.teamName },
+  { header: "Calls", value: (r) => r.calls },
+  { header: "Connected Calls", short: "Conn.", value: (r) => r.connectedCalls },
+  { header: "Connect Rate (%)", short: "Conn %", value: (r) => r.connectRate },
+  { header: "Missed Calls", short: "Missed", value: (r) => r.missedCalls },
+  { header: "Leads Created", short: "Leads", value: (r) => r.leadsCreated },
+  { header: "Leads Converted", short: "Conv", value: (r) => r.leadsConverted },
+  { header: "Conversion Rate (%)", short: "Conv %", value: (r) => r.conversionRate },
+  { header: "Follow-ups Due", short: "FU due", value: (r) => r.followUpsDue },
+  { header: "Follow-ups Done", short: "FU done", value: (r) => r.followUpsDone },
+  { header: "Follow-up Adherence (%)", short: "FU %", value: (r) => dash(r.followUpAdherence) },
+  { header: "Avg First Response (min)", short: "Resp (min)", value: (r) => dash(r.avgResponseMins) },
+  { header: "Activities", short: "Acts", value: (r) => r.activities },
+  { header: "Properties Listed", short: "Props", value: (r) => r.properties },
+  { header: "Farms Listed", short: "Farms", value: (r) => r.farms },
+  { header: "WhatsApp Sent", short: "WA sent", value: (r) => r.whatsappSent },
+  { header: "WhatsApp Read", short: "WA read", value: (r) => r.whatsappRead },
+  { header: "Subscription Sales", short: "Subs", value: (r) => r.subscriptionSales },
+  { header: "Revenue (INR)", short: "Revenue", value: (r) => r.revenue },
+  { header: "Leads Target", short: "Lead tgt", value: (r) => r.target?.leadsTarget ?? "—" },
+  { header: "Calls Target", short: "Call tgt", value: (r) => r.target?.callsTarget ?? "—" },
+];
+
+export const TEAM_EXPORT_COLUMNS: Column<TeamReportRow>[] = [
+  { header: "Team", value: (r) => r.teamName },
+  { header: "Members", short: "Size", value: (r) => r.teamSize },
+  { header: "Calls", value: (r) => r.calls },
+  { header: "Connected Calls", short: "Conn.", value: (r) => r.connectedCalls },
+  { header: "Incoming Calls", short: "In", value: (r) => r.incomingCalls },
+  { header: "Missed Calls", short: "Missed", value: (r) => r.missedCalls },
+  { header: "Leads Created", short: "Leads", value: (r) => r.leadsCreated },
+  { header: "Leads Converted", short: "Conv", value: (r) => r.leadsConverted },
+  { header: "Conversion Rate (%)", short: "Conv %", value: (r) => r.conversionRate },
+  { header: "Follow-up Adherence (%)", short: "FU %", value: (r) => dash(r.followUpAdherence) },
+  { header: "Listings", value: (r) => r.listingsTotal },
+  { header: "WhatsApp Sent", short: "WA sent", value: (r) => r.whatsappSent },
+  { header: "WhatsApp Read", short: "WA read", value: (r) => r.whatsappRead },
+  { header: "WhatsApp Read Rate (%)", short: "Read %", value: (r) => r.whatsappReadRate },
+  { header: "Subscription Sales", short: "Subs", value: (r) => r.subscriptionSales },
+  { header: "Revenue (INR)", short: "Revenue", value: (r) => r.revenue },
+];
+
+function table(data: Array<AgentReportRow | TeamReportRow>, isTeam: boolean, short = false) {
+  const cols = (isTeam ? TEAM_EXPORT_COLUMNS : AGENT_EXPORT_COLUMNS) as Column<any>[];
+  return {
+    headers: cols.map((c) => (short && c.short) || c.header),
+    rows: data.map((row) => cols.map((c) => c.value(row))),
+  };
 }
 
-export interface TeamReportData {
-  teamId: string;
-  teamName: string;
-  teamSize: number;
-  totalCalls: number;
-  totalLeads: number;
-  leadsConverted: number;
-  conversionRate: number;
-  messagesOutbound: number;
-  messagesRead: number;
-  readRate: number;
-  incomingCalls: number;
-  missedCalls: number;
-  missedRate: number;
-}
-
-/**
- * Export to CSV format
- */
-export function exportToCSV(
-  data: AgentReportData[] | TeamReportData[],
-  fileName: string,
-  isTeamReport: boolean
-) {
-  const headers = isTeamReport
-    ? [
-        "Team Name",
-        "Team Size",
-        "Total Calls",
-        "Total Leads",
-        "Leads Converted",
-        "Conversion Rate (%)",
-        "Messages Sent",
-        "Messages Read",
-        "Read Rate (%)",
-        "Incoming Calls",
-        "Missed Calls",
-        "Missed Rate (%)",
-      ]
-    : [
-        "Agent Name",
-        "Calls",
-        "Activities",
-        "Leads Created",
-        "Leads Converted",
-        "Conversion Rate (%)",
-        "Follow-up Adherence (%)",
-        "Avg Response Time",
-        "Revenue (₹)",
-        "Properties",
-        "Farms",
-        "Leads Target",
-        "Target Progress (%)",
-      ];
-
-  const rows = data.map((row: any) =>
-    isTeamReport
-      ? [
-          row.teamName,
-          row.teamSize,
-          row.totalCalls,
-          row.totalLeads,
-          row.leadsConverted,
-          row.conversionRate,
-          row.messagesOutbound,
-          row.messagesRead,
-          row.readRate,
-          row.incomingCalls,
-          row.missedCalls,
-          row.missedRate,
-        ]
-      : [
-          row.name,
-          row.calls,
-          row.activities,
-          row.leadsCreated,
-          row.leadsConverted,
-          row.conversionRate,
-          row.followUpAdherence,
-          row.responseTime,
-          row.revenue,
-          row.properties,
-          row.farms,
-          row.leadsTarget,
-          row.targetProgress,
-        ]
-  );
-
-  const csv = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+function download(blob: Blob, name: string) {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `${fileName}.csv`;
+  link.download = name;
   link.click();
   URL.revokeObjectURL(link.href);
 }
 
-/**
- * Export to Excel format (CSV-based, simpler approach)
- */
-export async function exportToExcel(
-  data: AgentReportData[] | TeamReportData[],
-  fileName: string,
-  isTeamReport: boolean
-) {
+export function exportToCSV(data: Array<AgentReportRow | TeamReportRow>, fileName: string, isTeam: boolean) {
+  const { headers, rows } = table(data, isTeam);
+  const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [headers, ...rows].map((r) => r.map(cell).join(",")).join("\n");
+  // BOM so Excel opens UTF-8 (₹, names) correctly.
+  download(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" }), `${fileName}.csv`);
+}
+
+export async function exportToExcel(data: Array<AgentReportRow | TeamReportRow>, fileName: string, isTeam: boolean) {
   try {
-    // Try to use xlsx if available
-    try {
-      const XLSX = await import("xlsx");
-
-      const headers = isTeamReport
-        ? [
-            "Team Name",
-            "Team Size",
-            "Total Calls",
-            "Total Leads",
-            "Leads Converted",
-            "Conversion Rate (%)",
-            "Messages Sent",
-            "Messages Read",
-            "Read Rate (%)",
-            "Incoming Calls",
-            "Missed Calls",
-            "Missed Rate (%)",
-          ]
-        : [
-            "Agent Name",
-            "Calls",
-            "Activities",
-            "Leads Created",
-            "Leads Converted",
-            "Conversion Rate (%)",
-            "Follow-up Adherence (%)",
-            "Avg Response Time",
-            "Revenue (₹)",
-            "Properties",
-            "Farms",
-            "Leads Target",
-            "Target Progress (%)",
-          ];
-
-      const rows = data.map((row: any) =>
-        isTeamReport
-          ? [
-              row.teamName,
-              row.teamSize,
-              row.totalCalls,
-              row.totalLeads,
-              row.leadsConverted,
-              row.conversionRate,
-              row.messagesOutbound,
-              row.messagesRead,
-              row.readRate,
-              row.incomingCalls,
-              row.missedCalls,
-              row.missedRate,
-            ]
-          : [
-              row.name,
-              row.calls,
-              row.activities,
-              row.leadsCreated,
-              row.leadsConverted,
-              row.conversionRate,
-              row.followUpAdherence,
-              row.responseTime,
-              row.revenue,
-              row.properties,
-              row.farms,
-              row.leadsTarget,
-              row.targetProgress,
-            ]
-      );
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-
-      ws["!cols"] = [{ wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
-
-      XLSX.utils.book_append_sheet(wb, ws, "Report");
-      XLSX.writeFile(wb, `${fileName}.xlsx`);
-    } catch {
-      // Fallback to CSV if xlsx is not available
-      console.log("xlsx not available, using CSV format instead");
-      exportToCSV(data, fileName, isTeamReport);
-      toast.info("Exported as CSV (xlsx library not available)");
-    }
+    const XLSX = await import("xlsx");
+    const { headers, rows } = table(data, isTeam);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = headers.map((h, i) => ({ wch: i < 2 ? 24 : Math.max(10, h.length + 2) }));
+    XLSX.utils.book_append_sheet(wb, ws, isTeam ? "Teams" : "Agents");
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
   } catch (error) {
     console.error("Excel export error:", error);
-    throw new Error("Failed to export to Excel");
+    exportToCSV(data, fileName, isTeam);
+    toast.info("Exported as CSV (Excel export unavailable)");
   }
 }
 
-/**
- * Export to PDF format
- */
 export function exportToPDF(
-  data: AgentReportData[] | TeamReportData[],
+  data: Array<AgentReportRow | TeamReportRow>,
   fileName: string,
-  isTeamReport: boolean
+  isTeam: boolean,
+  subtitle?: string,
 ) {
-  try {
-    const doc = new jsPDF("landscape");
-
-    const headers = isTeamReport
-      ? [
-          "Team Name",
-          "Size",
-          "Calls",
-          "Leads",
-          "Conv",
-          "Conv %",
-          "Msg Sent",
-          "Msg Read",
-          "Read %",
-          "In Calls",
-          "Missed",
-          "Missed %",
-        ]
-      : [
-          "Agent Name",
-          "Calls",
-          "Activities",
-          "Leads",
-          "Conv",
-          "Conv %",
-          "Follow-up %",
-          "Resp Time",
-          "Revenue (₹)",
-          "Props",
-          "Farms",
-          "Target %",
-        ];
-
-    const rows = data.map((row: any) =>
-      isTeamReport
-        ? [
-            row.teamName,
-            row.teamSize,
-            row.totalCalls,
-            row.totalLeads,
-            row.leadsConverted,
-            row.conversionRate,
-            row.messagesOutbound,
-            row.messagesRead,
-            row.readRate,
-            row.incomingCalls,
-            row.missedCalls,
-            row.missedRate,
-          ]
-        : [
-            row.name,
-            row.calls,
-            row.activities,
-            row.leadsCreated,
-            row.leadsConverted,
-            row.conversionRate,
-            row.followUpAdherence,
-            row.responseTime,
-            row.revenue,
-            row.properties,
-            row.farms,
-            row.targetProgress,
-          ]
-    );
-
-    doc.setFontSize(14);
-    doc.text(`2Bigha CRM - ${isTeamReport ? 'Team' : 'Agent'} Report`, 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
-
-    autoTable(doc, {
-      head: [headers],
-      body: rows,
-      startY: 30,
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [37, 99, 235] }, // --primary color
-      alternateRowStyles: { fillColor: [248, 250, 252] }, // --surface-dim roughly
-    });
-
-    doc.save(`${fileName}.pdf`);
-  } catch (error) {
-    console.error("PDF export error:", error);
-    toast.error("Failed to export to PDF");
-  }
+  const doc = new jsPDF("landscape");
+  const { headers, rows } = table(data, isTeam, true);
+  doc.setFontSize(14);
+  doc.text(`2Bigha CRM - ${isTeam ? "Team & Organization" : "Agent Performance"} Report`, 14, 15);
+  doc.setFontSize(9);
+  doc.text(`${subtitle ? `${subtitle} · ` : ""}Generated ${new Date().toLocaleString()}`, 14, 21);
+  autoTable(doc, {
+    head: [headers],
+    body: rows as any,
+    startY: 26,
+    styles: { fontSize: 6.5, cellPadding: 1.5 },
+    headStyles: { fillColor: [37, 99, 235] },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+  });
+  doc.save(`${fileName}.pdf`);
 }
 
-/**
- * Main export function that routes to the appropriate format
- */
 export async function exportReport(
-  data: AgentReportData[] | TeamReportData[],
+  data: Array<AgentReportRow | TeamReportRow>,
   format: ExportFormat,
   fileName: string,
-  isTeamReport: boolean
+  isTeam: boolean,
+  subtitle?: string,
 ) {
-  if (format === "csv") {
-    exportToCSV(data, fileName, isTeamReport);
-  } else if (format === "excel") {
-    await exportToExcel(data, fileName, isTeamReport);
-  } else if (format === "pdf") {
-    exportToPDF(data, fileName, isTeamReport);
-  }
+  if (format === "csv") exportToCSV(data, fileName, isTeam);
+  else if (format === "excel") await exportToExcel(data, fileName, isTeam);
+  else exportToPDF(data, fileName, isTeam, subtitle);
 }
