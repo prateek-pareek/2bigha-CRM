@@ -9,6 +9,8 @@ export type AdvancedAgentFilter = {
   customDateStart?: string;
   customDateEnd?: string;
   selectedAgents: string[];
+  /** Team ids (team = the members' manager); applied server-side. */
+  selectedTeams?: string[];
   selectedDepartments?: string[];
   performanceLevel?: "all" | "high" | "medium" | "low";
   targetStatus?: "all" | "achieved" | "on_track" | "behind";
@@ -29,6 +31,7 @@ type AgentData = {
 
 type Props = {
   agents: AgentData[];
+  teams?: Array<{ teamId: string; teamName: string }>;
   filter: AdvancedAgentFilter;
   onFilterChange: (filter: AdvancedAgentFilter) => void;
   onClearFilters: () => void;
@@ -36,6 +39,7 @@ type Props = {
 
 export default function AdvancedReportFilters({
   agents,
+  teams = [],
   filter,
   onFilterChange,
   onClearFilters,
@@ -53,6 +57,7 @@ export default function AdvancedReportFilters({
 
   const activeFilterCount = [
     filter.selectedAgents.length > 0,
+    (filter.selectedTeams?.length || 0) > 0,
     filter.selectedDepartments?.length,
     filter.performanceLevel && filter.performanceLevel !== "all",
     filter.targetStatus && filter.targetStatus !== "all",
@@ -134,6 +139,30 @@ export default function AdvancedReportFilters({
         </div>
       </div>
 
+      {/* Teams Dropdown */}
+      {teams.length > 1 || (filter.selectedTeams?.length || 0) > 0 ? (
+        <div className="relative group">
+          <select
+            value=""
+            onChange={(e) => {
+              const val = e.target.value;
+              if (!val) return;
+              const cur = filter.selectedTeams || [];
+              const updated = cur.includes(val) ? cur.filter((id) => id !== val) : [...cur, val];
+              onFilterChange({ ...filter, selectedTeams: updated });
+            }}
+            className="h-10 appearance-none rounded-[3px] border border-[var(--border-color)] bg-[var(--surface-dim)] px-4 pr-8 text-sm font-bold text-[var(--text-main)] outline-none hover:border-[var(--text-muted)]/30 transition-colors cursor-pointer"
+          >
+            <option value="">+ Add Team Filter</option>
+            {teams.map((t) => (
+              <option key={t.teamId} value={t.teamId}>
+                {t.teamName} {filter.selectedTeams?.includes(t.teamId) ? "✓" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
       {/* Performance Dropdown */}
       <div className="relative group">
         <select
@@ -193,9 +222,17 @@ export default function AdvancedReportFilters({
         </button>
       )}
 
-      {/* Active Badges for Agents/Departments */}
-      {filter.selectedAgents.length > 0 && (
+      {/* Active Badges for Agents/Teams */}
+      {(filter.selectedAgents.length > 0 || (filter.selectedTeams?.length || 0) > 0) && (
         <div className="w-full flex flex-wrap gap-2 pt-2 border-t border-[var(--border-color)]">
+          {(filter.selectedTeams || []).map((id) => (
+            <span key={`team-${id}`} className="flex items-center gap-1 bg-[var(--primary-light)] text-[var(--primary)] px-2 py-1 rounded-[4px] text-xs font-bold">
+              Team: {teams.find((t) => t.teamId === id)?.teamName || "Unknown"}
+              <button onClick={() => onFilterChange({ ...filter, selectedTeams: (filter.selectedTeams || []).filter((t) => t !== id) })} className="hover:text-red-500">
+                <X size={12} />
+              </button>
+            </span>
+          ))}
           {filter.selectedAgents.map(id => {
             const agent = agents.find(a => a.agentId === id);
             return (

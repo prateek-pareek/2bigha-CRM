@@ -5,7 +5,7 @@ import { CrmPageHeader } from "@/components/crm/ui";
 import { Dropdown } from "@/app/crm/workspace/_components/workspace-ui";
 import { CrmIcon } from "@/lib/crm/shared/icons";
 
-export type DateRangeFilter = "today" | "yesterday" | "this_week" | "this_month" | "last_30_days" | "this_quarter" | "this_year";
+export type DateRangeFilter = "today" | "yesterday" | "this_week" | "this_month" | "last_30_days" | "this_quarter" | "this_year" | "all_time" | (string & {});
 
 interface DashboardShellProps {
   title: string;
@@ -54,6 +54,7 @@ export function DashboardShell({
                     { value: "last_30_days", label: "Last 30 days" },
                     { value: "this_quarter", label: "This quarter" },
                     { value: "this_year", label: "This year" },
+                    { value: "all_time", label: "All time" },
                   ]}
                 />
               </div>

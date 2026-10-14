@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Target, Eye, EyeOff, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { CrmPageHeader, CrmButton } from "@/components/crm/ui";
-import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
 import AgentPerformanceKPIs from "./AgentPerformanceKPIs";
 import AgentComparisonChart from "./AgentComparisonChart";
 import ConversionFunnelChart from "./ConversionFunnelChart";
@@ -22,25 +21,19 @@ import AdvancedReportFilters, { AdvancedAgentFilter } from "./AdvancedReportFilt
 import ExportButtons from "./ExportButtons";
 import DetailedAgentView from "./DetailedAgentView";
 import ScheduleReportModal from "../_components/ScheduleReportModal";
-import { AgentReportData } from "../lib/export-reports";
+import { ReportScopeBar } from "../_components/ReportScopeBar";
+import {
+  fetchPerformanceReport,
+  formatINR,
+  formatMinutes,
+  summarize,
+  windowParam,
+  type AgentReportRow,
+  type PerformanceReport,
+} from "../lib/performance-report";
 
-type AgentRow = {
-  agentId: string;
-  name: string;
-  calls: number;
-  activities: number;
-  leadsCreated: number;
-  leadsConverted: number;
-  target: { leadsTarget: number; callsTarget: number; propertiesTarget: number } | null;
-};
-
-type PropertyCounts = Record<string, { propertyCount: number; farmCount: number }>;
-
-const WINDOWS = [
-  { key: "today", label: "Today" },
-  { key: "this_week", label: "This week" },
-  { key: "this_month", label: "This month" },
-];
+const AUTO_REFRESH_MS = 2 * 60 * 1000;
+const DEFAULT_FILTER: AdvancedAgentFilter = { dateRange: "this_month", selectedAgents: [], selectedTeams: [] };
 
 function progressPct(actual: number, target: number): number | null {
   if (!target) return null;
@@ -48,212 +41,112 @@ function progressPct(actual: number, target: number): number | null {
 }
 
 /**
- * Agent Performance baseline (human agents) — calls made, activities, leads
- * created/converted, properties+farms listed, and target-vs-actual, per the
- * FRD's Section 6. Replaces the previous dead redirect to the AI copilot's
- * activity page (a different, unrelated concept).
+ * Agent Performance (FRD §14.1) — calls, conversions, follow-up adherence, first-response
+ * time, properties/farms listed and 2bigha subscription revenue per agent. Live and
+ * role-scoped by the API: Admin sees everyone, a Team Lead their team, an Agent themself.
  */
 export default function AgentPerformancePage() {
   const { hasAccess } = usePermissions();
   const canSetTargets = hasAccess("settings:admin");
-  const [agents, setAgents] = useState<AgentRow[]>([]);
-  /** Every CRM-portal user, so the Agent filter lists the whole team — not only agents active in the window. */
-  const [roster, setRoster] = useState<Array<{ agentId: string; name: string }>>([]);
-  const [propertyCounts, setPropertyCounts] = useState<PropertyCounts>({});
-  const [trendData, setTrendData] = useState<any[]>([]);
+  const [report, setReport] = useState<PerformanceReport | null>(null);
   const [loading, setLoading] = useState(true);
-  const [targetAgent, setTargetAgent] = useState<AgentRow | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  /** Everyone seen in unfiltered loads, so the Agent/Team pickers keep their options when filtered. */
+  const [roster, setRoster] = useState<Map<string, AgentReportRow>>(new Map());
+  const [targetAgent, setTargetAgent] = useState<AgentReportRow | null>(null);
   const [targetForm, setTargetForm] = useState({ leadsTarget: "0", callsTarget: "0", propertiesTarget: "0" });
   const [savingTarget, setSavingTarget] = useState(false);
   const [showDetailedView, setShowDetailedView] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [filter, setFilter] = useState<AdvancedAgentFilter>({
-    dateRange: "this_month",
-    selectedAgents: [],
-  });
+  const [filter, setFilter] = useState<AdvancedAgentFilter>(DEFAULT_FILTER);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const authHeaders = useCallback((): Record<string, string> => {
-    const t = getCrmAuthToken();
-    const h: Record<string, string> = {};
-    if (t) h.Authorization = `Bearer ${t}`;
-    return h;
-  }, []);
+  const win = windowParam(filter);
+  const agentsKey = filter.selectedAgents.join(",");
+  const teamsKey = (filter.selectedTeams || []).join(",");
 
-  useEffect(() => {
-    // CRM team + 2bigha agents in one list (merged by email server-side). Agents who are on
-    // both use their CRM id, so their CRM activity counts; 2bigha-only agents are tagged.
-    fetch(`${CRM_API_URL}/crm-users/list/task-assignees`, { headers: authHeaders(), cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: Array<{ _id: string; firstName?: string; lastName?: string; email?: string; source?: "crm" | "twobigha" }>) =>
-        setRoster(
-          (Array.isArray(rows) ? rows : []).map((u) => {
-            const name = `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email || "Unknown";
-            return { agentId: String(u._id), name: u.source === "twobigha" ? `${name} · 2bigha` : name };
-          }),
-        ),
-      )
-      .catch(() => setRoster([]));
-  }, [authHeaders]);
-
-  const load = useCallback(async () => {
+  const load = useCallback(async (fresh = false) => {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setLoading(true);
     try {
-      const windowParam = filter.dateRange === "custom" && filter.customDateStart && filter.customDateEnd
-        ? `${filter.customDateStart},${filter.customDateEnd}`
-        : filter.dateRange;
-      const agentsParam = filter.selectedAgents.length
-        ? `&agents=${encodeURIComponent(filter.selectedAgents.join(","))}`
-        : "";
-
-      const [leaderboardRes, propertiesRes, trendRes] = await Promise.all([
-        fetch(`${CRM_API_URL}/crm/reports/agents?window=${windowParam}${agentsParam}`, { headers: authHeaders(), cache: "no-store" }),
-        fetch(`${CRM_API_URL}/crm/property-listings/counts-by-agent`, { headers: authHeaders(), cache: "no-store" }),
-        fetch(`${CRM_API_URL}/crm/reports/agents/trend?window=${windowParam}${agentsParam}`, { headers: authHeaders(), cache: "no-store" }),
-      ]);
-      const leaderboard = leaderboardRes.ok ? await leaderboardRes.json() : { agents: [] };
-      const properties = propertiesRes.ok ? await propertiesRes.json() : {};
-      const trend = trendRes.ok ? await trendRes.json() : [];
-      
-      const allAgents: AgentRow[] = Array.isArray(leaderboard.agents) ? leaderboard.agents : [];
-      // 2bigha-only agents aren't CRM users, so the API can't name them — use the roster name.
-      const rosterNames = new Map(roster.map((r) => [r.agentId, r.name]));
-      setAgents(
-        allAgents.map((a) =>
-          a.name === "Unknown agent" && rosterNames.has(a.agentId) ? { ...a, name: rosterNames.get(a.agentId)! } : a,
-        ),
-      );
-      setPropertyCounts(properties || {});
-      setTrendData(trend || []);
-    } catch {
-      setAgents([]);
-      setPropertyCounts({});
-      setTrendData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    filter.dateRange,
-    filter.customDateStart,
-    filter.customDateEnd,
-    filter.selectedAgents,
-    authHeaders,
-    roster,
-  ]);
-
-  // Filter options: full roster, plus anyone active in the window who isn't on it.
-  const agentOptions = (() => {
-    const byId = new Map(roster.map((r) => [r.agentId, r]));
-    agents.forEach((a) => {
-      if (!byId.has(a.agentId)) byId.set(a.agentId, { agentId: a.agentId, name: a.name });
-    });
-    const stats = new Map(agents.map((a) => [a.agentId, a]));
-    return [...byId.values()]
-      .sort((x, y) => x.name.localeCompare(y.name))
-      .map(({ agentId, name }) => {
-        const a = stats.get(agentId);
-        return {
-          agentId,
-          name,
-          conversionRate: a && a.leadsCreated > 0 ? Math.round((a.leadsConverted / a.leadsCreated) * 100) : 0,
-          followUpAdherence: a && a.leadsCreated > 0 ? Math.round((a.activities / (a.leadsCreated * 3)) * 100) : 0,
-          leadsCreated: a?.leadsCreated ?? 0,
-        };
+      const data = await fetchPerformanceReport({
+        window: win,
+        agents: agentsKey ? agentsKey.split(",") : [],
+        teams: teamsKey ? teamsKey.split(",") : [],
+        fresh,
+        signal: ctrl.signal,
       });
-  })();
+      setReport(data);
+      setError(null);
+      setRoster((prev) => {
+        const next = new Map(prev);
+        for (const a of data.agents) next.set(a.agentId, a);
+        return next;
+      });
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
+      setError("Could not load the agent report. Check your connection and permissions, then refresh.");
+    } finally {
+      if (abortRef.current === ctrl) setLoading(false);
+    }
+  }, [win, agentsKey, teamsKey]);
 
   useEffect(() => {
     void load();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, AUTO_REFRESH_MS);
+    return () => window.clearInterval(id);
   }, [load]);
 
-  const filteredAgents = agents.filter((agent) => {
-    // Agent selection filter
-    if (filter.selectedAgents.length > 0 && !filter.selectedAgents.includes(agent.agentId)) {
-      return false;
-    }
+  const agents = report?.agents ?? [];
 
-    // Name search filter
-    if (filter.searchTerm && !agent.name.toLowerCase().includes(filter.searchTerm.toLowerCase())) {
-      return false;
-    }
+  const agentOptions = useMemo(
+    () =>
+      [...roster.values()]
+        .sort((x, y) => x.name.localeCompare(y.name))
+        .map((a) => ({ agentId: a.agentId, name: a.name, conversionRate: a.conversionRate, leadsCreated: a.leadsCreated })),
+    [roster],
+  );
+  const teamOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of roster.values()) m.set(a.teamId, a.teamName);
+    return [...m.entries()].map(([teamId, teamName]) => ({ teamId, teamName })).sort((x, y) => x.teamName.localeCompare(y.teamName));
+  }, [roster]);
 
-    // Minimum leads created filter
-    if (filter.leadsCreatedMin && agent.leadsCreated < filter.leadsCreatedMin) {
-      return false;
-    }
+  // Client-side refinements (search / performance level / target status) on top of the server scope.
+  const clientFiltered = !!(
+    filter.searchTerm ||
+    (filter.performanceLevel && filter.performanceLevel !== "all") ||
+    (filter.targetStatus && filter.targetStatus !== "all")
+  );
+  const filteredAgents = useMemo(
+    () =>
+      agents.filter((a) => {
+        if (filter.searchTerm && !a.name.toLowerCase().includes(filter.searchTerm.toLowerCase())) return false;
+        if (filter.performanceLevel && filter.performanceLevel !== "all") {
+          const c = a.conversionRate;
+          if (filter.performanceLevel === "high" && c <= 20) return false;
+          if (filter.performanceLevel === "medium" && (c < 10 || c > 20)) return false;
+          if (filter.performanceLevel === "low" && c >= 10) return false;
+        }
+        if (filter.targetStatus && filter.targetStatus !== "all") {
+          const p = a.target ? progressPct(a.leadsCreated, a.target.leadsTarget) : null;
+          if (p == null) return false;
+          if (filter.targetStatus === "achieved" && p < 100) return false;
+          if (filter.targetStatus === "on_track" && (p < 80 || p >= 100)) return false;
+          if (filter.targetStatus === "behind" && p >= 80) return false;
+        }
+        return true;
+      }),
+    [agents, filter.searchTerm, filter.performanceLevel, filter.targetStatus],
+  );
 
-    // Conversion rate range filter
-    const conversionRate = agent.leadsCreated > 0 ? (agent.leadsConverted / agent.leadsCreated) * 100 : 0;
-    if (filter.conversionRateRange) {
-      if (conversionRate < filter.conversionRateRange[0] || conversionRate > filter.conversionRateRange[1]) {
-        return false;
-      }
-    }
-
-    // Follow-up adherence minimum filter
-    const followUpAdherence = agent.leadsCreated > 0 ? (agent.activities / (agent.leadsCreated * 3)) * 100 : 0;
-    if (filter.followUpAdherenceMin && followUpAdherence < filter.followUpAdherenceMin) {
-      return false;
-    }
-
-    // Performance level filter
-    if (filter.performanceLevel && filter.performanceLevel !== "all") {
-      if (filter.performanceLevel === "high" && conversionRate <= 20) return false;
-      if (filter.performanceLevel === "medium" && (conversionRate < 10 || conversionRate > 20)) return false;
-      if (filter.performanceLevel === "low" && conversionRate >= 10) return false;
-    }
-
-    // Target status filter
-    if (filter.targetStatus && filter.targetStatus !== "all" && agent.target) {
-      const targetProgress = (agent.leadsConverted / agent.target.leadsTarget) * 100;
-      if (filter.targetStatus === "achieved" && targetProgress < 100) return false;
-      if (filter.targetStatus === "on_track" && (targetProgress < 80 || targetProgress >= 100)) return false;
-      if (filter.targetStatus === "behind" && targetProgress >= 80) return false;
-    }
-
-    return true;
-  });
-
-  // Build export data with calculated metrics
-  const exportData: AgentReportData[] = filteredAgents.map((agent) => {
-    const counts = propertyCounts[agent.agentId] || { propertyCount: 0, farmCount: 0 };
-    const conversionRate = agent.leadsCreated > 0 ? Math.round((agent.leadsConverted / agent.leadsCreated) * 100) : 0;
-    const followUpAdherence =
-      agent.leadsCreated > 0
-        ? Math.round((agent.activities / (agent.leadsCreated * 3)) * 100)
-        : 0;
-    const avgResponseTime =
-      agent.leadsCreated > 0
-        ? agent.activities / agent.leadsCreated >= 2
-          ? "Fast"
-          : agent.activities / agent.leadsCreated >= 1
-            ? "Moderate"
-            : "Slow"
-        : "—";
-    const baseRevenue = conversionRate * 50;
-    const activityRevenue = agent.activities * 0.02 * 5000;
-    const revenue = baseRevenue + activityRevenue;
-    const targetProgress = agent.target
-      ? Math.min(100, Math.round((agent.leadsConverted / agent.target.leadsTarget) * 100))
-      : 0;
-
-    return {
-      agentId: agent.agentId,
-      name: agent.name,
-      calls: agent.calls,
-      activities: agent.activities,
-      leadsCreated: agent.leadsCreated,
-      leadsConverted: agent.leadsConverted,
-      conversionRate,
-      followUpAdherence,
-      responseTime: avgResponseTime,
-      revenue,
-      properties: counts.propertyCount,
-      farms: counts.farmCount,
-      leadsTarget: agent.target?.leadsTarget || 0,
-      callsTarget: agent.target?.callsTarget || 0,
-      targetProgress,
-    };
-  });
+  // Unfiltered → server totals (include records not linked to an agent); filtered → sum of shown rows.
+  const kpiTotals = report ? (clientFiltered ? summarize(filteredAgents) : report.totals) : null;
+  const periodLabel = report ? `${report.range.from} to ${report.range.to}` : "";
 
   return (
     <div className="p-4 sm:p-6">
@@ -263,57 +156,54 @@ export default function AgentPerformancePage() {
         breadcrumbs={[{ label: "Home", href: "/crm" }, { label: "Reports" }, { label: "Agent Performance" }]}
       />
 
-      {/* Advanced Report Filters */}
-      <div className="mb-6">
+      <div className="mb-2">
         <AdvancedReportFilters
           agents={agentOptions}
+          teams={teamOptions}
           filter={filter}
           onFilterChange={setFilter}
-          onClearFilters={() =>
-            setFilter({
-              dateRange: "this_month",
-              selectedAgents: [],
-            })
-          }
+          onClearFilters={() => setFilter(DEFAULT_FILTER)}
         />
       </div>
 
-      {/* KPI Summary Cards */}
-      <AgentPerformanceKPIs agents={filteredAgents} loading={loading} />
+      <ReportScopeBar report={report} loading={loading} onRefresh={() => void load(true)} error={error} />
 
-      {/* Core Performance Visualizations */}
+      <AgentPerformanceKPIs
+        totals={kpiTotals}
+        previous={report?.previousTotals ?? null}
+        showTrends={!clientFiltered}
+        compareLabel={report?.range.compareLabel}
+        loading={loading && !report}
+      />
+
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <AgentPerformanceTrendChart trendData={trendData} loading={loading} />
-        <AgentComparisonChart agents={filteredAgents} loading={loading} />
+        <AgentPerformanceTrendChart trendData={report?.trend ?? []} loading={loading && !report} />
+        <AgentComparisonChart agents={filteredAgents} loading={loading && !report} />
       </div>
 
-      {/* Advanced Skill & Pipeline Visualizations */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <AgentSkillRadarChart agents={filteredAgents} loading={loading} />
-        <ConversionFunnelChart agents={filteredAgents} loading={loading} />
+        <AgentSkillRadarChart agents={filteredAgents} loading={loading && !report} />
+        <ConversionFunnelChart agents={filteredAgents} loading={loading && !report} />
       </div>
 
-      {/* Follow-up, Response, & Portfolio Analytics */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <FollowUpAdherenceChart agents={filteredAgents} loading={loading} />
-        <ResponseTimeChart agents={filteredAgents} loading={loading} />
-        <AgentPropertiesChart agents={filteredAgents} propertyCounts={propertyCounts} loading={loading} />
+        <FollowUpAdherenceChart agents={filteredAgents} loading={loading && !report} />
+        <ResponseTimeChart agents={filteredAgents} loading={loading && !report} />
+        <AgentPropertiesChart agents={filteredAgents} loading={loading && !report} />
       </div>
 
-      {/* Revenue & Target Attribution */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <RevenueAttributionChart agents={filteredAgents} loading={loading} />
-        <TargetVsActualChart agents={filteredAgents} loading={loading} />
+        <RevenueAttributionChart agents={filteredAgents} loading={loading && !report} />
+        <TargetVsActualChart agents={filteredAgents} loading={loading && !report} />
       </div>
 
-      {/* Detailed Performance Controls */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-bold text-[var(--text-main)]">Detailed Performance</h3>
           <button
             type="button"
             onClick={() => setShowDetailedView(!showDetailedView)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
           >
             {showDetailedView ? <EyeOff size={14} /> : <Eye size={14} />}
             {showDetailedView ? "Hide Details" : "Show Details"}
@@ -322,66 +212,100 @@ export default function AgentPerformancePage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setScheduleModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
           >
             <CalendarClock size={14} />
             Schedule
           </button>
-          <ExportButtons data={exportData} fileName={`Agent_Performance_${filter.dateRange}`} disabled={loading} />
+          <ExportButtons
+            data={filteredAgents}
+            fileName={`Agent_Performance_${report?.range.from || win}_${report?.range.to || ""}`}
+            subtitle={periodLabel}
+            disabled={loading}
+          />
         </div>
       </div>
 
-      {/* Detailed View or Table */}
       {showDetailedView ? (
-        <DetailedAgentView agents={filteredAgents} propertyCounts={propertyCounts} loading={loading} />
+        <DetailedAgentView agents={filteredAgents} loading={loading && !report} />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border-color)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 <th className="px-4 py-2.5">Agent</th>
+                <th className="px-4 py-2.5">Team</th>
                 <th className="px-4 py-2.5">Calls</th>
-                <th className="px-4 py-2.5">Activities</th>
-                <th className="px-4 py-2.5">Leads created</th>
-                <th className="px-4 py-2.5">Leads converted</th>
+                <th className="px-4 py-2.5">Leads</th>
+                <th className="px-4 py-2.5">Converted</th>
+                <th className="px-4 py-2.5">Follow-up</th>
+                <th className="px-4 py-2.5">Avg response</th>
                 <th className="px-4 py-2.5">Properties</th>
                 <th className="px-4 py-2.5">Farms</th>
+                <th className="px-4 py-2.5">WhatsApp</th>
+                <th className="px-4 py-2.5">Revenue</th>
                 <th className="px-4 py-2.5">Target vs actual</th>
                 {canSetTargets ? <th className="px-4 py-2.5" /> : null}
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && !report ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={13} className="px-4 py-8 text-center text-[var(--text-muted)]">
                     <Loader2 size={16} className="mx-auto animate-spin" />
                   </td>
                 </tr>
               ) : filteredAgents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-[var(--text-muted)]">
-                    No agent activity recorded for this window yet.
+                  <td colSpan={13} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                    No agents match these filters.
                   </td>
                 </tr>
               ) : (
                 filteredAgents.map((agent) => {
-                  const counts = propertyCounts[agent.agentId] || { propertyCount: 0, farmCount: 0 };
                   const leadsPct = agent.target ? progressPct(agent.leadsCreated, agent.target.leadsTarget) : null;
                   const callsPct = agent.target ? progressPct(agent.calls, agent.target.callsTarget) : null;
+                  const listPct = agent.target ? progressPct(agent.listingsTotal, agent.target.propertiesTarget) : null;
                   return (
                     <tr key={agent.agentId} className="border-b border-[var(--border-color)] last:border-0 hover:bg-[var(--surface-dim)]">
                       <td className="px-4 py-2.5 font-medium text-[var(--text-main)]">{agent.name}</td>
-                      <td className="px-4 py-2.5">{agent.calls}</td>
-                      <td className="px-4 py-2.5">{agent.activities}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--text-muted)]">{agent.teamName}</td>
+                      <td className="px-4 py-2.5">
+                        {agent.calls}
+                        <span className="ml-1 text-xs text-[var(--text-muted)]">({agent.connectedCalls} conn.)</span>
+                      </td>
                       <td className="px-4 py-2.5">{agent.leadsCreated}</td>
-                      <td className="px-4 py-2.5">{agent.leadsConverted}</td>
-                      <td className="px-4 py-2.5">{counts.propertyCount}</td>
-                      <td className="px-4 py-2.5">{counts.farmCount}</td>
+                      <td className="px-4 py-2.5">
+                        {agent.leadsConverted}
+                        <span className="ml-1 text-xs text-[var(--text-muted)]">({agent.conversionRate}%)</span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {agent.followUpAdherence == null ? "—" : `${agent.followUpAdherence}%`}
+                        {agent.followUpsDue ? (
+                          <span className="ml-1 text-xs text-[var(--text-muted)]">
+                            ({agent.followUpsDone}/{agent.followUpsDue})
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-2.5">{formatMinutes(agent.avgResponseMins)}</td>
+                      <td className="px-4 py-2.5">{agent.properties}</td>
+                      <td className="px-4 py-2.5">{agent.farms}</td>
+                      <td className="px-4 py-2.5">
+                        {agent.whatsappSent}
+                        <span className="ml-1 text-xs text-[var(--text-muted)]">({agent.whatsappRead} read)</span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {formatINR(agent.revenue)}
+                        {agent.subscriptionSales ? (
+                          <span className="ml-1 text-xs text-[var(--text-muted)]">({agent.subscriptionSales})</span>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-2.5 text-xs text-[var(--text-muted)]">
-                        {agent.target ? (
+                        {agent.target && (leadsPct != null || callsPct != null || listPct != null) ? (
                           <div className="space-y-0.5">
                             {leadsPct != null ? <div>Leads: {leadsPct}% of {agent.target.leadsTarget}</div> : null}
                             {callsPct != null ? <div>Calls: {callsPct}% of {agent.target.callsTarget}</div> : null}
+                            {listPct != null ? <div>Listings: {listPct}% of {agent.target.propertiesTarget}</div> : null}
                           </div>
                         ) : (
                           "No target set"
@@ -448,9 +372,10 @@ export default function AgentPerformancePage() {
                   if (!targetAgent) return;
                   setSavingTarget(true);
                   try {
+                    const token = getCrmAuthToken();
                     const res = await fetch(`${CRM_API_URL}/crm/agent-targets/${targetAgent.agentId}`, {
                       method: "PUT",
-                      headers: { "Content-Type": "application/json", ...authHeaders() },
+                      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                       body: JSON.stringify({
                         leadsTarget: Number(targetForm.leadsTarget) || 0,
                         callsTarget: Number(targetForm.callsTarget) || 0,
@@ -463,7 +388,7 @@ export default function AgentPerformancePage() {
                     }
                     toast.success("Targets updated");
                     setTargetAgent(null);
-                    void load();
+                    void load(true);
                   } catch {
                     toast.error("Network error");
                   } finally {

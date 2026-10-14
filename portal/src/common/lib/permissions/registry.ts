@@ -442,3 +442,16 @@ export function hrmsApiSegmentToModuleId(segment: string): string | null {
 export function defaultReadPermission(moduleId: string): string {
   return `${moduleId}:read`;
 }
+
+/**
+ * Screens with no read grant of their own: opening them only needs one of these.
+ * Must match the API's `@Permissions(...)` on the backing controller (RbacGuard = any-of).
+ */
+const MODULE_READ_ALTERNATIVES: Record<string, readonly string[]> = {
+  // api/src/crm/visits/visits.controller.ts
+  visits: ['leads:read', 'pm-leads:read', 'property-listings:read', 'clients:read'],
+};
+
+export function moduleReadAlternatives(moduleId: string): readonly string[] {
+  return MODULE_READ_ALTERNATIVES[moduleId] ?? [];
+}

@@ -8,9 +8,10 @@ import {
   CRM_CHART_SECONDARY,
 } from "@/portals/crm/lib/shared/chart-theme";
 import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
+import type { AgentReportRow } from "../lib/performance-report";
 
 interface ConversionFunnelChartProps {
-  agents: any[];
+  agents: AgentReportRow[];
   loading: boolean;
 }
 
@@ -30,38 +31,26 @@ export default function ConversionFunnelChart({
   const funnelData = useMemo(() => {
     if (loading || agents.length === 0) return null;
 
-    // Aggregate metrics across all agents
-    const totalCalls = agents.reduce((sum, a) => sum + (a.calls || 0), 0);
-    const totalLeadsCreated = agents.reduce((sum, a) => sum + (a.leadsCreated || 0), 0);
-    const totalLeadsConverted = agents.reduce((sum, a) => sum + (a.leadsConverted || 0), 0);
+    const sum = (k: keyof AgentReportRow) => agents.reduce((t, a) => t + (Number(a[k]) || 0), 0);
+    const created = sum("leadsCreated");
+    if (created === 0) return null;
+    const contacted = sum("leadsContacted");
+    const converted = sum("leadsConverted");
+    // "Qualified" = reached qualified or beyond (converted leads were qualified first).
+    const qualified = Math.min(contacted, sum("leadsQualified") + converted);
 
-    if (totalCalls === 0 && totalLeadsCreated === 0 && totalLeadsConverted === 0) return null;
-
-    // The funnel's 100% width is the maximum volume among the stages (usually Calls)
-    const maxVolume = Math.max(totalCalls, totalLeadsCreated, totalLeadsConverted, 1);
-
-    const stages: FunnelStage[] = [
-      {
-        name: "Calls Made",
-        value: totalCalls,
-        percentage: Math.round((totalCalls / maxVolume) * 100),
-        color: CRM_CHART_PRIMARY,
-      },
-      {
-        name: "Leads Created",
-        value: totalLeadsCreated,
-        percentage: Math.round((totalLeadsCreated / maxVolume) * 100),
-        color: CRM_CHART_SUCCESS,
-      },
-      {
-        name: "Leads Converted",
-        value: totalLeadsConverted,
-        percentage: Math.round((totalLeadsConverted / maxVolume) * 100),
-        color: CRM_CHART_SECONDARY,
-      },
+    const stage = (name: string, value: number, color: string): FunnelStage => ({
+      name,
+      value,
+      percentage: Math.round((value / created) * 100),
+      color,
+    });
+    return [
+      stage("Leads Created", created, CRM_CHART_PRIMARY),
+      stage("Contacted", contacted, CRM_CHART_SECONDARY),
+      stage("Qualified", qualified, "#8b5cf6"),
+      stage("Converted", converted, CRM_CHART_SUCCESS),
     ];
-
-    return stages;
   }, [agents, loading]);
 
   if (loading) {
@@ -85,7 +74,7 @@ export default function ConversionFunnelChart({
         <div>
           <h3 className="text-sm font-bold text-[var(--text-main)]">Lead Conversion Funnel</h3>
           <p className="text-xs text-[var(--text-muted)]">
-            Call → Lead Created → Conversion flow across all agents
+            Leads created in this period → contacted → qualified → converted
           </p>
         </div>
         <button 
@@ -170,10 +159,10 @@ export default function ConversionFunnelChart({
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-lg bg-[var(--surface-dim)] p-3 border border-[var(--border-color)]">
             <p className="text-xs font-semibold text-[var(--text-muted)]">
-              Leads from Calls
+              Contact Rate
             </p>
             <p className="mt-1 text-lg font-bold text-[var(--text-main)]">
-              {funnelData[0].value > 0 ? Math.round((funnelData[1].value / funnelData[0].value) * 100) : 0}%
+              {funnelData[1].percentage}%
             </p>
           </div>
           <div className="rounded-lg bg-[var(--surface-dim)] p-3 border border-[var(--border-color)]">
@@ -181,7 +170,7 @@ export default function ConversionFunnelChart({
               Overall Conversion
             </p>
             <p className="mt-1 text-lg font-bold text-[var(--text-main)]">
-              {funnelData[1].value > 0 ? Math.round((funnelData[2].value / funnelData[1].value) * 100) : 0}%
+              {funnelData[3].percentage}%
             </p>
           </div>
         </div>

@@ -16,53 +16,192 @@ import {
 } from '../property-listings/schemas/property-listing.schema';
 import { AgentTarget, AgentTargetDocument } from './schemas/agent-target.schema';
 import { ReportingService } from './reporting.service';
-import { TwoBighaSubscriptionsService } from '../subscriptions/twobigha-subscriptions.service';
-import { AppCacheService } from '../../redis/app-cache.service';
+import {
+  TwoBighaDashboardSourceService,
+  TwoBighaListingIndex,
+  TwoBighaSubscriberRow,
+} from './twobigha-dashboard-source.service';
+import { crmPortalAccessUserFilter } from '../shared/crm-admin-access.util';
+import { Client, ClientDocument } from '../schemas/client.schema';
 
 /**
- * Role-based dashboards (Admin / Team Lead / Agent) — the screens defined by the
- * "CRM Role Dashboard Wireframe". Every number is a live query; scoping is:
- *   - org   → all users (Admin only)
- *   - team  → the caller's direct reports (reportsTo === caller)
- *   - agent → the caller only
+ * Role-based dashboards (Admin / Team Lead / Agent) — "CRM Role Dashboard Wireframe".
  *
- * Identity spaces differ per collection, so a scope carries ids in BOTH spaces:
- *   - platform User ids → Lead.createdBy, Activity.author, CallLog.initiatedByUserId
- *   - CRMUser ids       → WhatsAppMessage.sentBy, PropertyListing.createdBy
- * They are joined by email (platform User ↔ CRMUser).
+ * Every number is live. Each data source is aggregated ONCE per window and every
+ * record is attributed to exactly one person, so Org = Σ everyone (+ unattributed),
+ * Team = Σ members, Agent = the person — the three dashboards always reconcile.
+ *
+ * Attribution (records are stamped in different id spaces):
+ *   Lead         → leadOwner (name / email / id string); unowned → createdBy
+ *   CallLog      → initiatedByUserId; Kommuno webhook rows → agentNumber ↔ CRMUser.agentMobile,
+ *                  then agentName
+ *   WhatsApp     → sentBy (platform User id; CRMUser id on older rows)
+ *   Task         → assignee; unassigned → author
+ *   Listing      → CRM copy's createdBy; else 2bigha createdByAdminId ↔ CRMUser.twobighaAdminId
+ *   Subscription → 2bigha soldByAdminId ↔ twobighaAdminId, or soldByAdminEmail
+ * Platform User ↔ CRMUser are joined by email; both ids resolve to the same person.
  */
 
 export type DashboardTier = 'admin' | 'team' | 'agent';
-type ScopeKind = 'org' | 'team' | 'agent';
 
-interface Member {
-  platformId: string;
+const NONE = '__none__';
+const SNAPSHOT_TTL_MS = 30_000;
+
+const NEW_STATUS_RE = /^(new|open|lead|uncontacted|fresh|not contacted)$/i;
+const LOST_RE = /lost|disqualified|junk|rejected|dead|unqualified|not interested|spam|invalid/i;
+const CONVERTED_RE = /convert|won|customer|client|closed|deal done|subscribed|sold/i;
+const QUALIFIED_RE = /qualified|proposal|negotiation|hot|warm|interested|demo|meeting|site visit|visit/i;
+
+type LeadBucket = 'New' | 'Contacted' | 'Qualified' | 'Converted' | 'Lost';
+
+interface Person {
+  id: string; // platform User id when present, else CRMUser id
   crmId?: string;
+  crmAccess: boolean;
   name: string;
   email?: string;
+  mobile10?: string;
+  twobighaAdminId?: string;
+  reportsTo?: string | null;
+  /** Every display name the person is known by (platform User + CRMUser) — leadOwner may hold either. */
+  aliases: string[];
+  availability?: { status?: string; attendance?: string; date?: string };
 }
 
-interface DashboardScope {
-  kind: ScopeKind;
-  /** null = unrestricted (all users). Empty array = match nothing. */
-  platformUserIds: Types.ObjectId[] | null;
-  crmUserIds: Types.ObjectId[] | null;
-  ownerNames: string[] | null;
-  members: Member[];
+interface Directory {
+  people: Person[];
+  byId: Map<string, Person>;
+  byEmail: Map<string, Person>;
+  byName: Map<string, Person>;
+  byMobile: Map<string, Person>;
+  byTb: Map<string, Person>;
 }
 
-const NEW_STATUS_RE = /^(new|open|lead|uncontacted)$/i;
-const LOST_RE = /lost|disqualified|junk|rejected|dead|unqualified|closed\s*lost/i;
-const CONVERTED_RE = /convert|won|closed\s*won|customer|client/i;
-const QUALIFIED_RE = /qualified|proposal|negotiation|hot|warm|interested|demo|meeting/i;
-const CONTACTED_RE = /contact|follow|attempt|reached|called/i;
+/** Lead → owning person key, by lead id / phone (last 10) / email / client id. */
+interface LeadIndex {
+  byId: Map<string, string>;
+  byPhone: Map<string, string>;
+  byEmail: Map<string, string>;
+  byClient: Map<string, string>;
+}
 
-const CONNECTED_STATUSES = ['Connected', 'Completed'];
-const MISSED_STATUSES = ['Missed'];
+interface Win {
+  start: Date;
+  end: Date;
+}
+
+interface Windows {
+  key: string;
+  period: Win;
+  prev: Win;
+  today: Win;
+  week: Win;
+  month: Win;
+  now: Date;
+  months: Array<Win & { label: string }>;
+}
+
+interface Acc {
+  leads: {
+    total: number;
+    period: number;
+    prev: number;
+    today: number;
+    week: number;
+    month: number;
+    assignedByOthers: number;
+    owned: number;
+    buckets: Record<LeadBucket, number>;
+    followTotal: number;
+    followToday: number;
+    followUpcoming: number;
+    followOverdue: number;
+  };
+  calls: {
+    total: number;
+    period: number;
+    prev: number;
+    today: number;
+    week: number;
+    month: number;
+    connected: number;
+    missed: number;
+    todayConnected: number;
+    incoming: number;
+    outgoing: number;
+    talkSecs: number;
+  };
+  wa: {
+    total: number;
+    period: number;
+    today: number;
+    week: number;
+    month: number;
+    failed: number;
+    delivered: number;
+    contacts: number;
+    newMessages: number;
+    respSumMins: number;
+    respN: number;
+  };
+  props: {
+    total: number;
+    approved: number;
+    pending: number;
+    rejected: number;
+    farms: number;
+    properties: number;
+    period: number;
+    periodApproved: number;
+    periodRejected: number;
+    today: number;
+    todayApproved: number;
+    todayRejected: number;
+    week: number;
+    month: number;
+  };
+  subs: {
+    total: number;
+    active: number;
+    paid: number;
+    period: number;
+    periodPaid: number;
+    today: number;
+    week: number;
+    month: number;
+    pmTotal: number;
+    pmPeriod: number;
+    pmToday: number;
+    pmMonth: number;
+    pmRevenuePeriod: number;
+  };
+  tasks: {
+    open: number;
+    inProgress: number;
+    completed: number;
+    overdue: number;
+    periodCompleted: number;
+  };
+  monthly: { leads: number[]; calls: number[]; listings: number[] };
+}
+
+interface Snapshot {
+  windows: Windows;
+  dir: Directory;
+  acc: Map<string, Acc>;
+  /** waId → person key that owns the conversation (latest outbound sender). */
+  convOwner: Map<string, string>;
+  orgUniqueContacts: number;
+  sources: { twobighaListings: boolean; twobighaSubscriptions: boolean };
+  planCounts: Array<{ plan: string; count: number }>;
+  computedAt: string;
+}
 
 @Injectable()
 export class RoleDashboardService {
   private readonly logger = new Logger(RoleDashboardService.name);
+  private snapshots = new Map<string, { at: number; ttl: number; promise: Promise<Snapshot> }>();
+  private directoryCache?: { at: number; promise: Promise<Directory> };
 
   constructor(
     @InjectModel(Lead.name, 'crmConnection')
@@ -77,27 +216,24 @@ export class RoleDashboardService {
     private propertyModel: Model<PropertyListingDocument>,
     @InjectModel(AgentTarget.name, 'crmConnection')
     private agentTargetModel: Model<AgentTargetDocument>,
+    @InjectModel(Client.name, 'crmConnection')
+    private clientModel: Model<ClientDocument>,
     @InjectModel(CRMUser.name, 'crmConnection')
     private crmUserModel: Model<CRMUserDocument>,
     @InjectModel(User.name)
     private hrmsUserModel: Model<UserDocument>,
     private readonly reportingService: ReportingService,
-    private readonly subscriptionsService: TwoBighaSubscriptionsService,
-    private readonly appCache: AppCacheService,
+    private readonly twoBigha: TwoBighaDashboardSourceService,
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Tier resolution (permission-key based, per product decision)
+  // Tier resolution (permission-key based)
   // ---------------------------------------------------------------------------
 
   /**
-   * Which dashboard the caller lands on / may open. Permission keys drive it:
-   *   workspace-admin:read → admin
-   *   workspace-team:read  → team
-   *   workspace-agent:read → agent
-   *   dashboard:read master (no tier key) / true admin → admin
-   * Specific tier keys win over the master so Agents are not treated as Admin.
-   * Fallback when no explicit key: team if the user has direct reports, else agent.
+   * Which dashboard the caller lands on. Specific tier keys win over the master
+   * `dashboard:read` so Agents are never treated as Admin. With no key, infer from
+   * hierarchy: team if the user has direct reports, else agent.
    */
   async resolveTier(
     dbUser: any,
@@ -119,7 +255,6 @@ export class RoleDashboardService {
     if (has('dashboard:read')) {
       return { tier: 'admin', teamLeadId: null, canSeeAll: true };
     }
-    // No explicit dashboard key — infer from hierarchy.
     const selfId = this.selfId(jwtUser, dbUser);
     if (selfId && (await this.hasDirectReports(selfId))) {
       return { tier: 'team', teamLeadId: selfId, canSeeAll: false };
@@ -135,20 +270,19 @@ export class RoleDashboardService {
   private mergePermissions(dbUser: any, jwtUser: any): string[] {
     const role = dbUser?.roleId;
     const rolePerms =
-      (typeof role === 'object' && Array.isArray(role?.permissions)
-        ? role.permissions.map((p: any) =>
-            typeof p === 'string' ? p : p?.name || p?.key,
-          )
-        : []) || [];
-    const out = new Set<string>(
-      [
-        ...rolePerms,
-        ...(Array.isArray(dbUser?.permissions) ? dbUser.permissions : []),
-        ...(Array.isArray(jwtUser?.permissions) ? jwtUser.permissions : []),
-        ...(Array.isArray(jwtUser?.crmPermissions) ? jwtUser.crmPermissions : []),
-      ].filter(Boolean),
-    );
-    return [...out];
+      typeof role === 'object' && Array.isArray(role?.permissions)
+        ? role.permissions.map((p: any) => (typeof p === 'string' ? p : p?.name || p?.key))
+        : [];
+    return [
+      ...new Set<string>(
+        [
+          ...rolePerms,
+          ...(Array.isArray(dbUser?.permissions) ? dbUser.permissions : []),
+          ...(Array.isArray(jwtUser?.permissions) ? jwtUser.permissions : []),
+          ...(Array.isArray(jwtUser?.crmPermissions) ? jwtUser.crmPermissions : []),
+        ].filter(Boolean),
+      ),
+    ];
   }
 
   private async hasDirectReports(userId: string): Promise<boolean> {
@@ -159,7 +293,7 @@ export class RoleDashboardService {
     return n > 0;
   }
 
-  /** True when `memberId` reports to `leadId` (used to gate a Team Lead's member drill-down). */
+  /** True when `memberId` reports to `leadId` (gates a Team Lead's member drill-down). */
   async isDirectReport(leadId: string, memberId: string): Promise<boolean> {
     if (!Types.ObjectId.isValid(leadId) || !Types.ObjectId.isValid(memberId)) return false;
     const n = await this.hrmsUserModel
@@ -172,829 +306,644 @@ export class RoleDashboardService {
   }
 
   // ---------------------------------------------------------------------------
-  // Scope resolution
+  // Pickers
   // ---------------------------------------------------------------------------
 
-  private async resolvePeople(platformUsers: any[]): Promise<Member[]> {
-    const emails = platformUsers
-      .map((u) => String(u.email || '').trim().toLowerCase())
-      .filter(Boolean);
-    const crmUsers = emails.length
-      ? await this.crmUserModel
-          .find({ email: { $in: emails.map((e) => new RegExp(`^${escapeRe(e)}$`, 'i')) } })
-          .select('_id email')
-          .lean()
-          .exec()
-      : [];
-    const crmByEmail = new Map<string, string>();
-    for (const c of crmUsers) {
-      const e = String((c as any).email || '').trim().toLowerCase();
-      if (e) crmByEmail.set(e, String((c as any)._id));
+  /** Team leads (anyone with direct reports) for the Admin's team picker. */
+  async listTeams(): Promise<Array<{ id: string; name: string; members: number }>> {
+    const dir = await this.loadDirectory();
+    const counts = new Map<string, number>();
+    for (const p of dir.people) {
+      if (p.reportsTo) counts.set(p.reportsTo, (counts.get(p.reportsTo) || 0) + 1);
     }
-    return platformUsers.map((u) => {
-      const email = String(u.email || '').trim();
-      const name =
-        `${u.firstName || ''} ${u.lastName || ''}`.trim() || email || 'Unknown';
-      return {
-        platformId: String(u._id),
-        crmId: crmByEmail.get(email.toLowerCase()),
-        name,
-        email,
-      };
-    });
+    return [...counts.entries()]
+      .map(([id, n]) => ({ id, name: dir.byId.get(id)?.name || 'Unknown', members: n + 1 }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  private membersToScope(kind: ScopeKind, members: Member[]): DashboardScope {
-    const platformUserIds = members
-      .map((m) => (Types.ObjectId.isValid(m.platformId) ? new Types.ObjectId(m.platformId) : null))
-      .filter((x): x is Types.ObjectId => !!x);
-    const crmUserIds = members
-      .map((m) => (m.crmId && Types.ObjectId.isValid(m.crmId) ? new Types.ObjectId(m.crmId) : null))
-      .filter((x): x is Types.ObjectId => !!x);
-    const ownerNames = new Set<string>();
-    for (const m of members) {
-      if (m.name) ownerNames.add(m.name);
-      if (m.email) ownerNames.add(m.email);
-    }
-    return {
-      kind,
-      platformUserIds,
-      crmUserIds,
-      ownerNames: [...ownerNames],
-      members,
-    };
-  }
-
-  private orgScope(): DashboardScope {
-    return {
-      kind: 'org',
-      platformUserIds: null,
-      crmUserIds: null,
-      ownerNames: null,
-      members: [],
-    };
-  }
-
-  private async teamScope(teamLeadId: string): Promise<DashboardScope> {
-    if (!Types.ObjectId.isValid(teamLeadId)) return this.membersToScope('team', []);
-    const reports = await this.hrmsUserModel
-      .find({ reportsTo: new Types.ObjectId(teamLeadId) })
-      .select('_id firstName lastName email')
-      .limit(500)
-      .lean()
-      .exec();
-    const members = await this.resolvePeople(reports);
-    return this.membersToScope('team', members);
-  }
-
-  private async agentScope(agentId: string): Promise<DashboardScope> {
-    if (!Types.ObjectId.isValid(agentId)) return this.membersToScope('agent', []);
-    const u = await this.hrmsUserModel
-      .findById(agentId)
-      .select('_id firstName lastName email')
-      .lean()
-      .exec();
-    if (!u) return this.membersToScope('agent', []);
-    const members = await this.resolvePeople([u]);
-    return this.membersToScope('agent', members);
+  /** People a caller may open on the Agent dashboard: CRM users (admin) or own team. */
+  async listPeople(
+    teamLeadId: string | null,
+  ): Promise<Array<{ id: string; name: string; email?: string; team?: string }>> {
+    const dir = await this.loadDirectory();
+    const list = teamLeadId
+      ? this.teamMembers(dir, teamLeadId)
+      : dir.people.filter((p) => p.crmAccess || p.crmId);
+    return list
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        team: p.reportsTo ? dir.byId.get(p.reportsTo)?.name : undefined,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   // ---------------------------------------------------------------------------
-  // Per-collection scope filters
-  // ---------------------------------------------------------------------------
-
-  /** Lead match: scoped by createdBy (platform id) OR leadOwner (display string). */
-  private leadScopeMatch(scope: DashboardScope): any {
-    if (scope.platformUserIds === null) return {};
-    const or: any[] = [];
-    if (scope.platformUserIds.length) or.push({ createdBy: { $in: scope.platformUserIds } });
-    if (scope.ownerNames && scope.ownerNames.length)
-      or.push({ leadOwner: { $in: scope.ownerNames } });
-    if (!or.length) return MATCH_NOTHING;
-    return { $or: or };
-  }
-
-  /** Activity author stores platform/HRMS ids; match both ObjectId + string forms. */
-  private activityScopeMatch(scope: DashboardScope): any {
-    if (scope.platformUserIds === null) return {};
-    if (!scope.platformUserIds.length) return MATCH_NOTHING;
-    const idList: any[] = [];
-    for (const id of scope.platformUserIds) {
-      idList.push(id);
-      idList.push(String(id));
-    }
-    return { author: { $in: idList } };
-  }
-
-  private callScopeMatch(scope: DashboardScope): any {
-    if (scope.platformUserIds === null) return {};
-    if (!scope.platformUserIds.length) return MATCH_NOTHING;
-    return { initiatedByUserId: { $in: scope.platformUserIds } };
-  }
-
-  private propertyScopeMatch(scope: DashboardScope): any {
-    if (scope.crmUserIds === null) return {};
-    if (!scope.crmUserIds.length) return MATCH_NOTHING;
-    return { createdBy: { $in: scope.crmUserIds } };
-  }
-
-  private whatsappOutboundScopeMatch(scope: DashboardScope): any {
-    if (scope.crmUserIds === null) return { direction: 'outbound' };
-    if (!scope.crmUserIds.length) return MATCH_NOTHING;
-    return { direction: 'outbound', sentBy: { $in: scope.crmUserIds } };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Windows
-  // ---------------------------------------------------------------------------
-
-  private ranges(window: string) {
-    const { currentStart, currentEnd, previousStart, previousEnd } =
-      this.reportingService.parseDateRange(window || 'this_week', 'previous');
-    const now = new Date();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    return {
-      start: currentStart,
-      end: currentEnd,
-      prevStart: previousStart,
-      prevEnd: previousEnd,
-      todayStart,
-      now,
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Metric groups (shared by all three dashboards)
-  // ---------------------------------------------------------------------------
-
-  private async leadGroup(scope: DashboardScope, r: any) {
-    const base = this.leadScopeMatch(scope);
-    const inWin = { ...base, createdAt: { $gte: r.start, $lte: r.end } };
-    const inToday = { ...base, createdAt: { $gte: r.todayStart, $lte: r.now } };
-
-    const [total, today, assigned, statusRows] = await Promise.all([
-      this.leadModel.countDocuments(inWin),
-      this.leadModel.countDocuments(inToday),
-      this.leadModel.countDocuments({
-        ...inWin,
-        $and: [{ $or: [{ leadOwner: { $nin: ['', null] } }, { createdBy: { $ne: null } }] }],
-      }),
-      this.leadModel.aggregate([
-        { $match: inWin },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-      ]),
-    ]);
-
-    const buckets = { New: 0, Contacted: 0, Qualified: 0, Converted: 0, Lost: 0 };
-    for (const row of statusRows) {
-      const bucket = classifyStatus(row._id);
-      buckets[bucket] += row.count;
-    }
-    const notContacted = buckets.New;
-    const contacted = Math.max(0, total - notContacted);
-
-    return {
-      total,
-      today,
-      assigned,
-      contacted,
-      notContacted,
-      contactedPct: total > 0 ? Math.round((contacted / total) * 100) : 0,
-      notContactedPct: total > 0 ? Math.round((notContacted / total) * 100) : 0,
-      statusBreakdown: [
-        { status: 'New', count: buckets.New },
-        { status: 'Contacted', count: buckets.Contacted },
-        { status: 'Qualified', count: buckets.Qualified },
-        { status: 'Converted', count: buckets.Converted },
-        { status: 'Lost', count: buckets.Lost },
-      ],
-    };
-  }
-
-  private async propertyGroup(scope: DashboardScope, r: any) {
-    const base = {
-      ...this.propertyScopeMatch(scope),
-      listingBucket: { $in: ['properties', 'farm'] },
-    };
-    const inWin = { ...base, createdAt: { $gte: r.start, $lte: r.end } };
-    const inToday = { ...base, createdAt: { $gte: r.todayStart, $lte: r.now } };
-
-    const [total, approved, pending, rejected, todayListed, todayApproved, todayRejected] =
-      await Promise.all([
-        this.propertyModel.countDocuments(inWin),
-        this.propertyModel.countDocuments({ ...inWin, approvalStatus: 'Approved' }),
-        this.propertyModel.countDocuments({ ...inWin, approvalStatus: 'Pending' }),
-        this.propertyModel.countDocuments({ ...inWin, approvalStatus: 'Rejected' }),
-        this.propertyModel.countDocuments(inToday),
-        this.propertyModel.countDocuments({ ...inToday, approvalStatus: 'Approved' }),
-        this.propertyModel.countDocuments({ ...inToday, approvalStatus: 'Rejected' }),
-      ]);
-
-    const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
-    return {
-      total,
-      approved,
-      pending,
-      rejected,
-      todayListed,
-      todayApproved,
-      todayRejected,
-      breakdown: [
-        { status: 'Approved', count: approved, pct: pct(approved) },
-        { status: 'Pending', count: pending, pct: pct(pending) },
-        { status: 'Rejected', count: rejected, pct: pct(rejected) },
-      ],
-    };
-  }
-
-  private async callGroup(scope: DashboardScope, r: any) {
-    const base = this.callScopeMatch(scope);
-    const inWin = { ...base, createdAt: { $gte: r.start, $lte: r.end } };
-    const inToday = { ...base, createdAt: { $gte: r.todayStart, $lte: r.now } };
-    const leadBase = this.leadScopeMatch(scope);
-
-    const [total, today, connected, missed, todayConnected, followTotal, followUpcoming, followToday] =
-      await Promise.all([
-        this.callLogModel.countDocuments(inWin),
-        this.callLogModel.countDocuments(inToday),
-        this.callLogModel.countDocuments({ ...inWin, status: { $in: CONNECTED_STATUSES } }),
-        this.callLogModel.countDocuments({ ...inWin, status: { $in: MISSED_STATUSES } }),
-        this.callLogModel.countDocuments({ ...inToday, status: { $in: CONNECTED_STATUSES } }),
-        this.leadModel.countDocuments({ ...leadBase, nextFollowUpAt: { $ne: null } }),
-        this.leadModel.countDocuments({ ...leadBase, nextFollowUpAt: { $gte: r.now } }),
-        this.leadModel.countDocuments({
-          ...leadBase,
-          nextFollowUpAt: { $gte: r.todayStart, $lte: endOfToday(r.todayStart) },
-        }),
-      ]);
-
-    const notConnected = Math.max(0, total - connected - missed);
-    const todayNotAnswered = Math.max(0, today - todayConnected);
-    return {
-      total,
-      today,
-      connected,
-      missed,
-      notConnected,
-      todayConnected,
-      todayNotAnswered,
-      connectRate: total > 0 ? Math.round((connected / total) * 100) : 0,
-      todayConnectRate: today > 0 ? Math.round((todayConnected / today) * 100) : 0,
-      followUpsTotal: followTotal,
-      followUpsUpcoming: followUpcoming,
-      followUpsToday: followToday,
-      outcomeBreakdown: [
-        { name: 'Connected', count: connected },
-        { name: 'Not Connected', count: notConnected },
-        { name: 'Missed', count: missed },
-      ],
-    };
-  }
-
-  private async whatsappGroup(scope: DashboardScope, r: any) {
-    const outBase = this.whatsappOutboundScopeMatch(scope);
-    const inWin = { ...outBase, createdAt: { $gte: r.start, $lte: r.end } };
-    const inToday = { ...outBase, createdAt: { $gte: r.todayStart, $lte: r.now } };
-
-    const [totalReachout, todayReachout] = await Promise.all([
-      this.whatsappModel.countDocuments(inWin),
-      this.whatsappModel.countDocuments(inToday),
-    ]);
-
-    // waIds this scope is conversing with (bounds the inbound/new-message counts).
-    let waIds: string[] | null = null;
-    if (scope.crmUserIds !== null) {
-      const rows = await this.whatsappModel
-        .find(outBase)
-        .select('waId')
-        .limit(2000)
-        .lean()
-        .exec();
-      waIds = [...new Set(rows.map((m: any) => m.waId).filter(Boolean))];
-    }
-
-    const inboundMatch: Record<string, any> = { direction: 'inbound', isRead: false };
-    if (waIds !== null) inboundMatch.waId = waIds.length ? { $in: waIds } : '__none__';
-    const newMessages = await this.whatsappModel.countDocuments(inboundMatch);
-
-    // Avg response time: pair each recent outbound with the latest prior inbound on the same waId.
-    const avgResponseMins = await this.computeAvgResponseMins(outBase, r);
-
-    // Recent activity (latest 6 messages for this scope).
-    const recentMatch: Record<string, any> = {};
-    if (scope.crmUserIds === null) {
-      // org: latest across all
-    } else if (waIds && waIds.length) {
-      recentMatch.waId = { $in: waIds };
-    } else {
-      recentMatch._id = { $exists: false };
-    }
-    const recentRows = await this.whatsappModel
-      .find(recentMatch)
-      .sort({ createdAt: -1 })
-      .limit(6)
-      .select('waId customerName body direction status isRead createdAt sentBy')
-      .lean()
-      .exec();
-    const recent = recentRows.map((m: any) => ({
-      contact: m.customerName || m.waId || 'Unknown',
-      preview: (m.body || '').slice(0, 80),
-      direction: m.direction,
-      status:
-        m.direction === 'inbound'
-          ? m.isRead
-            ? 'Replied'
-            : 'New'
-          : capitalize(m.status || 'Sent'),
-      at: m.createdAt,
-    }));
-
-    return {
-      totalReachout,
-      todayReachout,
-      newMessages,
-      avgResponseMins,
-      recent,
-    };
-  }
-
-  private async computeAvgResponseMins(outBase: Record<string, any>, r: any): Promise<number> {
-    const outbound = await this.whatsappModel
-      .find({ ...outBase, createdAt: { $gte: r.start, $lte: r.end } })
-      .sort({ createdAt: -1 })
-      .limit(300)
-      .select('waId createdAt')
-      .lean()
-      .exec();
-    if (!outbound.length) return 0;
-    const waIds = [...new Set(outbound.map((m: any) => m.waId).filter(Boolean))];
-    if (!waIds.length) return 0;
-    const inbound = await this.whatsappModel
-      .find({ direction: 'inbound', waId: { $in: waIds } })
-      .select('waId createdAt')
-      .sort({ createdAt: 1 })
-      .limit(3000)
-      .lean()
-      .exec();
-    const inboundByWa = new Map<string, number[]>();
-    for (const m of inbound as any[]) {
-      const arr = inboundByWa.get(m.waId) || [];
-      arr.push(new Date(m.createdAt).getTime());
-      inboundByWa.set(m.waId, arr);
-    }
-    let sum = 0;
-    let n = 0;
-    for (const o of outbound as any[]) {
-      const times = inboundByWa.get(o.waId);
-      if (!times || !times.length) continue;
-      const outT = new Date(o.createdAt).getTime();
-      // latest inbound strictly before this outbound
-      let prev = -1;
-      for (const t of times) {
-        if (t < outT && t > prev) prev = t;
-      }
-      if (prev > 0) {
-        sum += (outT - prev) / 60000;
-        n += 1;
-      }
-    }
-    return n > 0 ? Math.round(sum / n) : 0;
-  }
-
-  private async monthlyProgress(scope: DashboardScope) {
-    const months: { key: string; label: string; start: Date; end: Date }[] = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      months.push({
-        key: `${d.getFullYear()}-${d.getMonth()}`,
-        label: start.toLocaleString('en-US', { month: 'short' }),
-        start,
-        end,
-      });
-    }
-    const overallStart = months[0].start;
-    const overallEnd = months[months.length - 1].end;
-    const leadBase = this.leadScopeMatch(scope);
-    const callBase = this.callScopeMatch(scope);
-
-    const [leadRows, callRows] = await Promise.all([
-      this.leadModel.aggregate([
-        { $match: { ...leadBase, createdAt: { $gte: overallStart, $lt: overallEnd } } },
-        {
-          $group: {
-            _id: { y: { $year: '$createdAt' }, m: { $month: '$createdAt' } },
-            count: { $sum: 1 },
-          },
-        },
-      ]),
-      this.callLogModel.aggregate([
-        { $match: { ...callBase, createdAt: { $gte: overallStart, $lt: overallEnd } } },
-        {
-          $group: {
-            _id: { y: { $year: '$createdAt' }, m: { $month: '$createdAt' } },
-            count: { $sum: 1 },
-          },
-        },
-      ]),
-    ]);
-    const leadMap = new Map<string, number>();
-    for (const row of leadRows) leadMap.set(`${row._id.y}-${row._id.m - 1}`, row.count);
-    const callMap = new Map<string, number>();
-    for (const row of callRows) callMap.set(`${row._id.y}-${row._id.m - 1}`, row.count);
-
-    return months.map((mo) => ({
-      month: mo.label,
-      leads: leadMap.get(mo.key) || 0,
-      calls: callMap.get(mo.key) || 0,
-    }));
-  }
-
-  private async coreGroups(scope: DashboardScope, r: any) {
-    const [leads, properties, calls, whatsapp, monthly] = await Promise.all([
-      this.leadGroup(scope, r),
-      this.propertyGroup(scope, r),
-      this.callGroup(scope, r),
-      this.whatsappGroup(scope, r),
-      this.monthlyProgress(scope),
-    ]);
-    return { leads, properties, calls, whatsapp, monthly };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Targets
-  // ---------------------------------------------------------------------------
-
-  private async targetsForScope(scope: DashboardScope, r: any, actuals: {
-    leads: number;
-    calls: number;
-    listings: number;
-  }) {
-    const ids =
-      scope.platformUserIds === null
-        ? null
-        : scope.platformUserIds;
-    const targetFilter: any = {};
-    if (ids !== null) targetFilter.agentId = { $in: ids };
-    const rows = await this.agentTargetModel.find(targetFilter).lean().exec();
-    const sum = (k: string) => rows.reduce((a, t: any) => a + (Number(t[k]) || 0), 0);
-    return {
-      leads: { actual: actuals.leads, target: sum('leadsTarget') },
-      calls: { actual: actuals.calls, target: sum('callsTarget') },
-      listings: { actual: actuals.listings, target: sum('propertiesTarget') },
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // ADMIN dashboard
+  // ADMIN
   // ---------------------------------------------------------------------------
 
   async getAdminDashboard(window: string, teamFilter?: string): Promise<any> {
-    return this.appCache.getOrSet(
-      `crm:roledash:admin:v1:${window}:${teamFilter || 'all'}`,
-      this.appCache.crmReportingTtl(),
-      () => this.computeAdminDashboard(window, teamFilter),
-    );
-  }
-
-  private async computeAdminDashboard(window: string, teamFilter?: string): Promise<any> {
-    const r = this.ranges(window);
-    const scope = this.orgScope();
-
-    const [groups, prevLeads, teamMetrics, leaderboard, subscriptions] = await Promise.all([
-      this.coreGroups(scope, r),
-      this.leadModel.countDocuments({ createdAt: { $gte: r.prevStart, $lte: r.prevEnd } }),
-      this.getTeamPerformance(window, teamFilter),
-      this.getLeaderboard(window, null),
-      this.getOrgSubscriptions().catch(() => ({ actual: null, target: null })),
+    const snap = await this.getSnapshot(window);
+    const { dir } = snap;
+    let keys: string[] | null = null;
+    if (teamFilter && teamFilter !== 'all' && dir.byId.has(teamFilter)) {
+      keys = this.teamMembers(dir, teamFilter).map((p) => p.id);
+    }
+    const acc = this.sumAcc(snap, keys);
+    const teams = this.teamRows(snap);
+    const leaderboard = this.personRows(snap, dir.people, true).slice(0, 50);
+    const [targets, recent] = await Promise.all([
+      this.targets(snap, keys),
+      this.recentWhatsApp(snap, keys),
     ]);
-
-    const orgScore =
-      teamMetrics.length > 0
-        ? Math.round(teamMetrics.reduce((a, t: any) => a + (t.score || 0), 0) / teamMetrics.length)
-        : 0;
-
-    const targets = await this.targetsForScope(scope, r, {
-      leads: groups.leads.total,
-      calls: groups.calls.total,
-      listings: groups.properties.total,
-    });
+    const allTargets = keys === null ? targets : await this.targets(snap, null);
+    this.applyTargetPct(snap, leaderboard, allTargets.perPerson);
+    for (const t of teams) {
+      const pcts = this.teamMembers(dir, t.teamId)
+        .map((m) => allTargets.perPerson.get(m.id))
+        .filter((x): x is number => x !== undefined);
+      t.targetPct = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
+    }
+    const teamScores = teams.map((t) => t.targetPct).filter((x): x is number => x !== null);
+    const groups = this.groups(snap, acc, keys);
 
     return {
       tier: 'admin',
-      window,
+      window: snap.windows.key,
+      range: this.rangeMeta(snap.windows),
+      computedAt: snap.computedAt,
+      sources: snap.sources,
       glance: {
-        totalLeads: groups.leads.total,
-        totalLeadsDeltaPct: pctDelta(groups.leads.total, prevLeads),
-        totalCalls: groups.calls.total,
-        totalCallsToday: groups.calls.today,
-        whatsappReachout: groups.whatsapp.totalReachout,
-        whatsappReachoutToday: groups.whatsapp.todayReachout,
-        orgScore,
-        teamCount: teamMetrics.length,
+        newLeads: acc.leads.period,
+        newLeadsDeltaPct: pctDelta(acc.leads.period, acc.leads.prev),
+        totalLeads: acc.leads.total,
+        callsPeriod: acc.calls.period,
+        callsDeltaPct: pctDelta(acc.calls.period, acc.calls.prev),
+        callsToday: acc.calls.today,
+        whatsappReachout: acc.wa.period,
+        whatsappReachoutToday: acc.wa.today,
+        listingsPeriod: acc.props.period,
+        listingsTotal: acc.props.total,
+        subscriptionsPeriod: acc.subs.period + acc.subs.pmPeriod,
+        subscriptionsTotal: acc.subs.total + acc.subs.pmTotal,
+        orgScore: teamScores.length
+          ? Math.round(teamScores.reduce((a, b) => a + b, 0) / teamScores.length)
+          : null,
+        teamCount: teams.length,
+        activeMembers: dir.people.filter((p) => p.crmAccess || p.crmId).length,
       },
       ...groups,
-      teamPerformance: teamMetrics,
+      whatsapp: { ...groups.whatsapp, recent },
+      subscriptions: { ...groups.subscriptions, byPlan: snap.planCounts },
+      teamPerformance: teams,
       leaderboard,
-      targets: { ...targets, subscriptions },
+      targets: { monthly: targets.monthly, weekly: targets.weekly, subscriptions: targets.subscriptions },
     };
   }
 
   // ---------------------------------------------------------------------------
-  // TEAM dashboard
+  // TEAM
   // ---------------------------------------------------------------------------
 
   async getTeamDashboard(window: string, teamLeadId: string): Promise<any> {
-    return this.appCache.getOrSet(
-      `crm:roledash:team:v1:${window}:${teamLeadId || 'none'}`,
-      this.appCache.crmReportingTtl(),
-      () => this.computeTeamDashboard(window, teamLeadId),
-    );
-  }
-
-  private async computeTeamDashboard(window: string, teamLeadId: string): Promise<any> {
-    const r = this.ranges(window);
-    const scope = await this.teamScope(teamLeadId);
-
-    const [groups, memberPerf, availability] = await Promise.all([
-      this.coreGroups(scope, r),
-      this.getMemberPerformance(window, scope),
-      this.getTeamAvailability(scope),
+    const snap = await this.getSnapshot(window);
+    const { dir } = snap;
+    const members = this.teamMembers(dir, teamLeadId);
+    const keys = members.map((p) => p.id);
+    const acc = this.sumAcc(snap, keys);
+    const memberRows = this.personRows(snap, members, false);
+    const [targets, recent] = await Promise.all([
+      this.targets(snap, keys),
+      this.recentWhatsApp(snap, keys),
     ]);
-
-    const teamScore =
-      memberPerf.length > 0
-        ? Math.round(memberPerf.reduce((a, m: any) => a + (m.score || 0), 0) / memberPerf.length)
-        : 0;
-
-    const targets = await this.targetsForScope(scope, r, {
-      leads: groups.leads.total,
-      calls: groups.calls.total,
-      listings: groups.properties.total,
-    });
+    this.applyTargetPct(snap, memberRows, targets.perPerson);
+    const scored = memberRows.map((m) => m.targetPct).filter((x): x is number => x !== null);
+    const taskTotal = acc.tasks.open + acc.tasks.inProgress + acc.tasks.completed;
+    const groups = this.groups(snap, acc, keys);
 
     return {
       tier: 'team',
-      window,
+      window: snap.windows.key,
+      range: this.rangeMeta(snap.windows),
+      computedAt: snap.computedAt,
+      sources: snap.sources,
       teamLeadId,
-      teamSize: scope.members.length,
+      teamLead: dir.byId.get(teamLeadId)?.name || null,
+      teamSize: members.length,
       glance: {
-        teamTotalLeads: groups.leads.total,
-        teamTodayLeads: groups.leads.today,
-        teamCallsToday: groups.calls.today,
-        teamCallsWindow: groups.calls.total,
-        connectedToday: groups.calls.todayConnected,
-        connectRate: groups.calls.todayConnectRate,
-        notAnsweredToday: groups.calls.todayNotAnswered,
-        propertiesListed: groups.properties.total,
-        approvedProperties: groups.properties.approved,
-        approvedPct:
-          groups.properties.total > 0
-            ? Math.round((groups.properties.approved / groups.properties.total) * 100)
-            : 0,
-        taskCompletion: avgMemberTaskCompletion(memberPerf),
-        teamScore,
+        newLeads: acc.leads.period,
+        newLeadsDeltaPct: pctDelta(acc.leads.period, acc.leads.prev),
+        todayLeads: acc.leads.today,
+        totalLeads: acc.leads.total,
+        callsPeriod: acc.calls.period,
+        callsToday: acc.calls.today,
+        connectedToday: acc.calls.todayConnected,
+        todayConnectRate: pct(acc.calls.todayConnected, acc.calls.today),
+        notConnectedToday: Math.max(0, acc.calls.today - acc.calls.todayConnected),
+        listingsPeriod: acc.props.period,
+        approvedPeriod: acc.props.periodApproved,
+        listingsTotal: acc.props.total,
+        approvedTotal: acc.props.approved,
+        approvedPct: pct(acc.props.approved, acc.props.total),
+        whatsappReachout: acc.wa.period,
+        subscriptionsPeriod: acc.subs.period + acc.subs.pmPeriod,
+        taskCompletion: pct(acc.tasks.completed, taskTotal),
+        teamScore: scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null,
       },
       ...groups,
-      memberPerformance: memberPerf,
-      availability,
-      targets,
+      whatsapp: { ...groups.whatsapp, recent },
+      // The team lead's own work (as an individual contributor), next to the team totals.
+      self: this.personSummary(snap, dir.byId.get(teamLeadId) || null),
+      memberPerformance: memberRows,
+      availability: this.availability(snap, members),
+      targets: { monthly: targets.monthly, weekly: targets.weekly, subscriptions: targets.subscriptions },
     };
   }
 
   // ---------------------------------------------------------------------------
-  // AGENT dashboard
+  // AGENT
   // ---------------------------------------------------------------------------
 
   async getAgentDashboard(window: string, agentId: string): Promise<any> {
-    return this.appCache.getOrSet(
-      `crm:roledash:agent:v1:${window}:${agentId || 'none'}`,
-      this.appCache.crmReportingTtl(),
-      () => this.computeAgentDashboard(window, agentId),
-    );
-  }
-
-  private async computeAgentDashboard(window: string, agentId: string): Promise<any> {
-    const r = this.ranges(window);
-    const scope = await this.agentScope(agentId);
-
-    const [groups, activityLog, myLeads, taskStatus] = await Promise.all([
-      this.coreGroups(scope, r),
-      this.getActivityLog(scope),
-      this.getMyLeads(scope),
-      this.getTaskStatus(scope, r),
+    const snap = await this.getSnapshot(window);
+    const { dir } = snap;
+    const person = dir.byId.get(agentId);
+    const keys = person ? [person.id] : [];
+    const acc = this.sumAcc(snap, keys);
+    const [activityLog, myLeads, targets, recent] = await Promise.all([
+      person ? this.activityLog(person) : Promise.resolve([]),
+      person ? this.myLeads(person, snap.windows) : Promise.resolve([]),
+      this.targets(snap, keys),
+      this.recentWhatsApp(snap, keys),
     ]);
-
-    const targets = await this.targetsForScope(scope, r, {
-      leads: groups.leads.total,
-      calls: groups.calls.total,
-      listings: groups.properties.total,
-    });
+    const taskTotal = acc.tasks.open + acc.tasks.inProgress + acc.tasks.completed;
+    const notConnected = Math.max(0, acc.calls.period - acc.calls.connected - acc.calls.missed);
+    const groups = this.groups(snap, acc, keys);
 
     return {
       tier: 'agent',
-      window,
-      agentId,
-      agent: scope.members[0] || null,
+      window: snap.windows.key,
+      range: this.rangeMeta(snap.windows),
+      computedAt: snap.computedAt,
+      sources: snap.sources,
+      agentId: person?.id || agentId,
+      agent: person
+        ? {
+            id: person.id,
+            name: person.name,
+            email: person.email,
+            team: person.reportsTo ? dir.byId.get(person.reportsTo)?.name || null : null,
+            linkedTo2bigha: !!person.twobighaAdminId,
+            ivrNumber: person.mobile10 || null,
+          }
+        : null,
       glance: {
-        totalLeads: groups.leads.total,
-        todayLeads: groups.leads.today,
-        assignedLeads: groups.leads.assigned,
-        propertyListed: groups.properties.total,
-        approvedProperties: groups.properties.approved,
-        totalCalls: groups.calls.total,
-        todayCalls: groups.calls.today,
-        connectedCalls: groups.calls.connected,
-        connectRate: groups.calls.connectRate,
-        notAnswered: groups.calls.notConnected,
-        notAnsweredPct:
-          groups.calls.total > 0
-            ? Math.round((groups.calls.notConnected / groups.calls.total) * 100)
-            : 0,
+        newLeads: acc.leads.period,
+        todayLeads: acc.leads.today,
+        totalLeads: acc.leads.total,
+        assignedLeads: acc.leads.assignedByOthers,
+        listingsPeriod: acc.props.period,
+        listingsTotal: acc.props.total,
+        approvedTotal: acc.props.approved,
+        callsPeriod: acc.calls.period,
+        callsToday: acc.calls.today,
+        connectedCalls: acc.calls.connected,
+        connectRate: pct(acc.calls.connected, acc.calls.period),
+        notConnected,
+        notConnectedPct: pct(notConnected, acc.calls.period),
+        whatsappReachout: acc.wa.period,
+        subscriptionsPeriod: acc.subs.period + acc.subs.pmPeriod,
+        taskCompletion: pct(acc.tasks.completed, taskTotal),
       },
       ...groups,
+      whatsapp: { ...groups.whatsapp, recent },
       activityLog,
       myLeads,
-      taskStatus,
-      targets: {
-        callsToday: { actual: groups.calls.today, target: targets.calls.target },
-        leadsToday: { actual: groups.leads.today, target: targets.leads.target },
-        listingsMonth: { actual: groups.properties.total, target: targets.listings.target },
-      },
+      availability: person ? this.availability(snap, [person])[0] : null,
+      targets: { monthly: targets.monthly, weekly: targets.weekly, subscriptions: targets.subscriptions },
     };
   }
 
   // ---------------------------------------------------------------------------
-  // Tables / lists
+  // Output shaping
   // ---------------------------------------------------------------------------
 
-  /** Team comparison table — one row per team lead (their direct reports). */
-  private async getTeamPerformance(window: string, teamFilter?: string) {
-    const r = this.ranges(window);
-    const leadFilter: any = { reportsTo: { $ne: null } };
-    if (teamFilter && teamFilter !== 'all' && Types.ObjectId.isValid(teamFilter)) {
-      leadFilter._id = new Types.ObjectId(teamFilter);
+  private groups(snap: Snapshot, acc: Acc, keys: string[] | null) {
+    const l = acc.leads;
+    const c = acc.calls;
+    const w = acc.wa;
+    const p = acc.props;
+    const s = acc.subs;
+    const t = acc.tasks;
+    const notConnected = Math.max(0, c.period - c.connected - c.missed);
+    const contacted = l.total - l.buckets.New;
+    const taskTotal = t.open + t.inProgress + t.completed;
+    return {
+      leads: {
+        total: l.total,
+        period: l.period,
+        prev: l.prev,
+        deltaPct: pctDelta(l.period, l.prev),
+        today: l.today,
+        // Org: leads that have an owner. Person/team: leads handed to them by someone else.
+        assigned: keys === null ? l.owned : l.assignedByOthers,
+        unassigned: keys === null ? Math.max(0, l.total - l.owned) : 0,
+        contacted,
+        notContacted: l.buckets.New,
+        contactedPct: pct(contacted, l.total),
+        notContactedPct: pct(l.buckets.New, l.total),
+        converted: l.buckets.Converted,
+        conversionPct: pct(l.buckets.Converted, l.total),
+        statusBreakdown: (['New', 'Contacted', 'Qualified', 'Converted', 'Lost'] as LeadBucket[]).map(
+          (b) => ({ status: b, count: l.buckets[b] }),
+        ),
+        followUps: {
+          total: l.followTotal,
+          today: l.followToday,
+          upcoming: l.followUpcoming,
+          overdue: l.followOverdue,
+        },
+      },
+      calls: {
+        total: c.total,
+        period: c.period,
+        prev: c.prev,
+        deltaPct: pctDelta(c.period, c.prev),
+        today: c.today,
+        connected: c.connected,
+        missed: c.missed,
+        notConnected,
+        connectRate: pct(c.connected, c.period),
+        todayConnected: c.todayConnected,
+        todayNotConnected: Math.max(0, c.today - c.todayConnected),
+        todayConnectRate: pct(c.todayConnected, c.today),
+        incoming: c.incoming,
+        outgoing: c.outgoing,
+        avgTalkSecs: c.connected > 0 ? Math.round(c.talkSecs / c.connected) : 0,
+        outcomeBreakdown: [
+          { name: 'Connected', count: c.connected },
+          { name: 'Not Connected', count: notConnected },
+          { name: 'Missed', count: c.missed },
+        ],
+      },
+      whatsapp: {
+        total: w.total,
+        period: w.period,
+        today: w.today,
+        contactsReached: keys === null ? snap.orgUniqueContacts : w.contacts,
+        newMessages: w.newMessages,
+        failed: w.failed,
+        deliveredPct: pct(w.delivered, w.period),
+        avgResponseMins: w.respN > 0 ? Math.round(w.respSumMins / w.respN) : null,
+        recent: [] as any[],
+      },
+      properties: {
+        source: snap.sources.twobighaListings ? '2bigha' : 'crm',
+        total: p.total,
+        approved: p.approved,
+        pending: p.pending,
+        rejected: p.rejected,
+        farms: p.farms,
+        properties: p.properties,
+        period: p.period,
+        periodApproved: p.periodApproved,
+        periodRejected: p.periodRejected,
+        today: p.today,
+        todayApproved: p.todayApproved,
+        todayRejected: p.todayRejected,
+        breakdown: [
+          { status: 'Approved', count: p.approved },
+          { status: 'Pending', count: p.pending },
+          { status: 'Rejected', count: p.rejected },
+        ],
+      },
+      subscriptions: {
+        available: snap.sources.twobighaSubscriptions,
+        total: s.total,
+        active: s.active,
+        paid: s.paid,
+        period: s.period,
+        periodPaid: s.periodPaid,
+        // PM (property-management) plans sold through the CRM checkout.
+        pmSold: s.pmTotal,
+        pmPeriod: s.pmPeriod,
+        pmToday: s.pmToday,
+        pmRevenuePeriod: Math.round(s.pmRevenuePeriod),
+        today: s.today,
+        byPlan: [] as Array<{ plan: string; count: number }>,
+      },
+      tasks: {
+        open: t.open,
+        inProgress: t.inProgress,
+        completed: t.completed,
+        overdue: t.overdue,
+        total: taskTotal,
+        completionPct: pct(t.completed, taskTotal),
+      },
+      monthly: snap.windows.months.map((m, i) => ({
+        month: m.label,
+        leads: acc.monthly.leads[i] || 0,
+        calls: acc.monthly.calls[i] || 0,
+        listings: acc.monthly.listings[i] || 0,
+      })),
+    };
+  }
+
+  /** One person's headline numbers (used for the team lead's own block). */
+  private personSummary(snap: Snapshot, p: Person | null) {
+    if (!p) return null;
+    const a = snap.acc.get(p.id) || emptyAcc(snap.windows.months.length);
+    const taskTotal = a.tasks.open + a.tasks.inProgress + a.tasks.completed;
+    return {
+      id: p.id,
+      name: p.name,
+      newLeads: a.leads.period,
+      todayLeads: a.leads.today,
+      totalLeads: a.leads.total,
+      contacted: a.leads.total - a.leads.buckets.New,
+      converted: a.leads.buckets.Converted,
+      followUpsToday: a.leads.followToday,
+      followUpsOverdue: a.leads.followOverdue,
+      calls: a.calls.period,
+      callsToday: a.calls.today,
+      connected: a.calls.connected,
+      connectRate: pct(a.calls.connected, a.calls.period),
+      whatsapp: a.wa.period,
+      whatsappUnread: a.wa.newMessages,
+      listings: a.props.period,
+      listingsTotal: a.props.total,
+      subscriptions: a.subs.period + a.subs.pmPeriod,
+      tasksOpen: a.tasks.open + a.tasks.inProgress,
+      tasksOverdue: a.tasks.overdue,
+      taskCompletion: pct(a.tasks.completed, taskTotal),
+      score: scoreOf(a),
+    };
+  }
+
+  private rangeMeta(w: Windows) {
+    return { start: w.period.start, end: w.period.end, prevStart: w.prev.start, prevEnd: w.prev.end };
+  }
+
+  /** Team = the lead + everyone whose `reportsTo` is the lead. */
+  private teamMembers(dir: Directory, teamLeadId: string): Person[] {
+    const lead = dir.byId.get(teamLeadId);
+    const leadKey = lead?.id || teamLeadId;
+    const reports = dir.people.filter((p) => p.reportsTo === leadKey && p.id !== leadKey);
+    return lead ? [lead, ...reports] : reports;
+  }
+
+  private personRows(snap: Snapshot, people: Person[], activeOnly: boolean) {
+    const { dir } = snap;
+    const rows = people.map((p) => {
+      const a = snap.acc.get(p.id) || emptyAcc(snap.windows.months.length);
+      const taskTotal = a.tasks.open + a.tasks.inProgress + a.tasks.completed;
+      const active =
+        p.crmAccess ||
+        !!p.crmId ||
+        a.leads.total + a.calls.total + a.wa.total + a.props.total + a.subs.total + taskTotal > 0;
+      return {
+        active,
+        row: {
+          id: p.id,
+          name: p.name,
+          email: p.email,
+          team: p.reportsTo ? dir.byId.get(p.reportsTo)?.name || '—' : '—',
+          leads: a.leads.period,
+          totalLeads: a.leads.total,
+          assigned: a.leads.assignedByOthers,
+          calls: a.calls.period,
+          connected: a.calls.connected,
+          connectRate: pct(a.calls.connected, a.calls.period),
+          whatsapp: a.wa.period,
+          properties: a.props.period,
+          propertiesTotal: a.props.total,
+          approved: a.props.approved,
+          subscriptions: a.subs.period + a.subs.pmPeriod,
+          tasksOpen: a.tasks.open + a.tasks.inProgress,
+          tasksOverdue: a.tasks.overdue,
+          taskCompletion: pct(a.tasks.completed, taskTotal),
+          score: scoreOf(a),
+          targetPct: null as number | null,
+        },
+      };
+    });
+    return rows
+      .filter((r) => !activeOnly || r.active)
+      .map((r) => r.row)
+      .sort((a, b) => b.score - a.score || b.leads - a.leads || a.name.localeCompare(b.name));
+  }
+
+  private teamRows(snap: Snapshot) {
+    const { dir } = snap;
+    const leadIds = [...new Set(dir.people.map((p) => p.reportsTo).filter((x): x is string => !!x))];
+    return leadIds
+      .map((leadId) => {
+        const members = this.teamMembers(dir, leadId);
+        const a = this.sumAcc(snap, members.map((m) => m.id));
+        const taskTotal = a.tasks.open + a.tasks.inProgress + a.tasks.completed;
+        const leadName = dir.byId.get(leadId)?.name || 'Unknown';
+        return {
+          teamId: leadId,
+          team: `${leadName}'s team`,
+          teamLead: leadName,
+          members: members.length,
+          leads: a.leads.period,
+          calls: a.calls.period,
+          connected: pct(a.calls.connected, a.calls.period),
+          whatsapp: a.wa.period,
+          properties: a.props.period,
+          subscriptions: a.subs.period + a.subs.pmPeriod,
+          taskCompletion: pct(a.tasks.completed, taskTotal),
+          score: scoreOf(a),
+          targetPct: null as number | null,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+  }
+
+  private applyTargetPct(
+    snap: Snapshot,
+    rows: Array<{ id: string; targetPct: number | null }>,
+    perPerson: Map<string, number>,
+  ) {
+    for (const r of rows) {
+      const p = snap.dir.byId.get(r.id);
+      if (p && perPerson.has(p.id)) r.targetPct = perPerson.get(p.id)!;
     }
-    // Distinct team leads = users who are referenced by someone's reportsTo.
-    const leadIds = await this.hrmsUserModel.distinct('reportsTo');
-    const validLeadIds = leadIds
-      .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
-      .map((id: any) => new Types.ObjectId(String(id)))
-      .filter((id) => !leadFilter._id || String(id) === String(leadFilter._id));
-    if (!validLeadIds.length) return [];
-    const leads = await this.hrmsUserModel
-      .find({ _id: { $in: validLeadIds } })
-      .select('_id firstName lastName email')
-      .lean()
-      .exec();
-
-    const rows = await Promise.all(
-      leads.map(async (tl: any) => {
-        const scope = await this.teamScope(String(tl._id));
-        const [leadG, propG, callG, memberPerf] = await Promise.all([
-          this.leadGroup(scope, r),
-          this.propertyGroup(scope, r),
-          this.callGroup(scope, r),
-          this.getMemberPerformance(window, scope),
-        ]);
-        const taskCompletion = avgMemberTaskCompletion(memberPerf);
-        const score = teamScoreFormula(leadG.total, propG.total, callG.connected, taskCompletion);
-        return {
-          teamId: String(tl._id),
-          team: `${tl.firstName || ''} ${tl.lastName || ''}`.trim() || tl.email || 'Team',
-          teamLead: `${tl.firstName || ''} ${tl.lastName || ''}`.trim() || tl.email || '—',
-          members: scope.members.length,
-          leads: leadG.total,
-          calls: callG.total,
-          connected: callG.total > 0 ? Math.round((callG.connected / callG.total) * 100) : 0,
-          properties: propG.total,
-          taskCompletion,
-          score,
-        };
-      }),
-    );
-    return rows.sort((a, b) => b.score - a.score);
   }
 
-  /** Org / team leaderboard — one row per agent. */
-  private async getLeaderboard(window: string, teamLeadId: string | null) {
-    const r = this.ranges(window);
-    const userFilter: any = { is_archived: { $ne: true } };
-    if (teamLeadId && Types.ObjectId.isValid(teamLeadId)) {
-      userFilter.reportsTo = new Types.ObjectId(teamLeadId);
-    }
-    const agents = await this.hrmsUserModel
-      .find(userFilter)
-      .select('_id firstName lastName email reportsTo')
-      .limit(500)
-      .lean()
-      .exec();
-    if (!agents.length) return [];
-    const managerIds = [...new Set(agents.map((a: any) => a.reportsTo?.toString()).filter(Boolean))];
-    const managers = managerIds.length
-      ? await this.hrmsUserModel
-          .find({ _id: { $in: managerIds } })
-          .select('_id firstName lastName email')
-          .lean()
-          .exec()
-      : [];
-    const managerMap = new Map(
-      managers.map((m: any) => [
-        String(m._id),
-        `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email || 'Team',
-      ]),
-    );
-
-    const rows = await Promise.all(
-      agents.map(async (a: any) => {
-        const scope = await this.agentScope(String(a._id));
-        const [leadG, propG, callG, task] = await Promise.all([
-          this.leadGroup(scope, r),
-          this.propertyGroup(scope, r),
-          this.callGroup(scope, r),
-          this.getTaskStatus(scope, r),
-        ]);
-        const taskCompletion = task.total > 0 ? Math.round((task.completed / task.total) * 100) : 0;
-        const score = agentScoreFormula(leadG.total, propG.total, callG.connected, taskCompletion);
-        return {
-          id: String(a._id),
-          name: `${a.firstName || ''} ${a.lastName || ''}`.trim() || a.email || 'Agent',
-          team: managerMap.get(String(a.reportsTo)) || '—',
-          leads: leadG.total,
-          calls: callG.total,
-          connected: callG.connected,
-          properties: propG.total,
-          taskCompletion,
-          score,
-        };
-      }),
-    );
-    return rows.sort((a, b) => b.score - a.score);
-  }
-
-  /** Per-member rows for the Team Lead's member-performance table. */
-  private async getMemberPerformance(window: string, teamScope: DashboardScope) {
-    const r = this.ranges(window);
-    const rows = await Promise.all(
-      teamScope.members.map(async (m) => {
-        const scope = this.membersToScope('agent', [m]);
-        const [leadG, propG, callG, task] = await Promise.all([
-          this.leadGroup(scope, r),
-          this.propertyGroup(scope, r),
-          this.callGroup(scope, r),
-          this.getTaskStatus(scope, r),
-        ]);
-        const taskCompletion = task.total > 0 ? Math.round((task.completed / task.total) * 100) : 0;
-        const score = agentScoreFormula(leadG.total, propG.total, callG.connected, taskCompletion);
-        return {
-          id: m.platformId,
-          name: m.name,
-          leads: leadG.total,
-          assigned: leadG.assigned,
-          calls: callG.total,
-          connected: callG.total > 0 ? Math.round((callG.connected / callG.total) * 100) : 0,
-          properties: propG.total,
-          taskStatus: task.open > 0 ? `${task.open} open` : task.overdue > 0 ? `${task.overdue} overdue` : 'All done',
-          taskCompletion,
-          score,
-        };
-      }),
-    );
-    return rows.sort((a, b) => b.score - a.score);
-  }
-
-  /** Today's availability (HRMS attendance) for a team's members. */
-  private async getTeamAvailability(scope: DashboardScope) {
-    const emails = scope.members.map((m) => m.email).filter(Boolean) as string[];
-    if (!emails.length) return [];
-    const ymd = toYmd(new Date());
-    const crmUsers = await this.crmUserModel
-      .find({ email: { $in: emails.map((e) => new RegExp(`^${escapeRe(e)}$`, 'i')) } })
-      .select('email firstName lastName availabilityStatus availabilityAttendanceStatus availabilityDate')
-      .lean()
-      .exec();
-    const byEmail = new Map(crmUsers.map((c: any) => [String(c.email || '').toLowerCase(), c]));
-    return scope.members.map((m) => {
-      const c: any = byEmail.get(String(m.email || '').toLowerCase());
-      let status = 'Present';
-      if (c && c.availabilityDate === ymd) {
-        status = c.availabilityAttendanceStatus || (c.availabilityStatus === 'unavailable_today' ? 'On Leave' : 'Present');
-      } else if (c && c.availabilityStatus === 'unavailable_today') {
-        status = c.availabilityAttendanceStatus || 'Unavailable';
+  private availability(snap: Snapshot, people: Person[]) {
+    const todayYmd = this.ymd(snap.windows.now);
+    return people.map((p) => {
+      const av = p.availability;
+      const marked = av?.date === todayYmd;
+      let status = 'Not marked';
+      if (!p.crmId) status = 'No CRM account';
+      else if (marked) {
+        status =
+          av?.attendance ||
+          (av?.status === 'unavailable_today' ? 'Unavailable' : av?.status === 'available' ? 'Present' : 'Not marked');
       }
-      return { id: m.platformId, name: m.name, status };
+      return { id: p.id, name: p.name, status, source: marked ? 'HRMS' : null };
     });
   }
 
-  /** Recent activity timeline for the agent view. */
-  private async getActivityLog(scope: DashboardScope) {
-    const match = this.activityScopeMatch(scope);
-    if (match === MATCH_NOTHING) return [];
+  /**
+   * Targets are per agent and per window (monthly / weekly). Actuals are always the
+   * matching calendar window (this month / this week) — never the dashboard filter.
+   */
+  private async targets(snap: Snapshot, keys: string[] | null) {
+    const filter: any = {};
+    if (keys !== null) {
+      const ids = new Set<string>();
+      for (const k of keys) {
+        const p = snap.dir.byId.get(k);
+        for (const id of [k, p?.crmId]) if (id && Types.ObjectId.isValid(id)) ids.add(id);
+      }
+      filter.agentId = { $in: [...ids].map((id) => new Types.ObjectId(id)) };
+    }
+    const rows = await this.agentTargetModel.find(filter).lean().exec();
+    type Bucket = {
+      label: string;
+      agents: number;
+      leads: { actual: number; target: number | null };
+      calls: { actual: number; target: number | null };
+      listings: { actual: number; target: number | null };
+    };
+    const out: { monthly?: Bucket; weekly?: Bucket } = {};
+    const perPerson = new Map<string, number>();
+    for (const t of rows as any[]) {
+      const win: 'monthly' | 'weekly' = t.window === 'weekly' ? 'weekly' : 'monthly';
+      const person = snap.dir.byId.get(String(t.agentId));
+      const a = person ? snap.acc.get(person.id) : undefined;
+      const b = (out[win] ||= {
+        label: win === 'weekly' ? 'This week' : 'This month',
+        agents: 0,
+        leads: { actual: 0, target: 0 },
+        calls: { actual: 0, target: 0 },
+        listings: { actual: 0, target: 0 },
+      });
+      const actual = {
+        leads: a ? (win === 'weekly' ? a.leads.week : a.leads.month) : 0,
+        calls: a ? (win === 'weekly' ? a.calls.week : a.calls.month) : 0,
+        listings: a ? (win === 'weekly' ? a.props.week : a.props.month) : 0,
+      };
+      const target = {
+        leads: Number(t.leadsTarget) || 0,
+        calls: Number(t.callsTarget) || 0,
+        listings: Number(t.propertiesTarget) || 0,
+      };
+      b.agents += 1;
+      for (const k of ['leads', 'calls', 'listings'] as const) {
+        b[k].actual += actual[k];
+        b[k].target = (b[k].target || 0) + target[k];
+      }
+      // Person achievement = average of each set target, capped at 100%.
+      const parts = (['leads', 'calls', 'listings'] as const)
+        .filter((k) => target[k] > 0)
+        .map((k) => Math.min(100, (actual[k] / target[k]) * 100));
+      if (person && parts.length) {
+        perPerson.set(person.id, Math.round(parts.reduce((x, y) => x + y, 0) / parts.length));
+      }
+    }
+    // No targets set → still show this month's actuals (target "—").
+    if (!out.monthly && !out.weekly) {
+      const a = this.sumAcc(snap, keys);
+      out.monthly = {
+        label: 'This month',
+        agents: 0,
+        leads: { actual: a.leads.month, target: null },
+        calls: { actual: a.calls.month, target: null },
+        listings: { actual: a.props.month, target: null },
+      };
+    }
+    const sub = this.sumAcc(snap, keys).subs;
+    return {
+      ...out,
+      subscriptions: { actual: sub.month + sub.pmMonth, target: null, available: true },
+      perPerson,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lists (scoped queries, not part of the snapshot)
+  // ---------------------------------------------------------------------------
+
+  private personIds(p: Person): Types.ObjectId[] {
+    return [p.id, p.crmId]
+      .filter((x): x is string => !!x && Types.ObjectId.isValid(x))
+      .map((x) => new Types.ObjectId(x));
+  }
+
+  /** Same ownership rule as the snapshot: leadOwner = me, or unowned and created by me. */
+  private leadOwnerFilter(p: Person): Record<string, unknown> {
+    const ids = this.personIds(p);
+    const or: any[] = [];
+    for (const alias of new Set([p.name, ...p.aliases].map(normName).filter(Boolean))) {
+      const name = escapeRe(alias).replace(/ /g, '\\s+');
+      or.push({ leadOwner: new RegExp(`^\\s*${name}\\s*$`, 'i') });
+    }
+    if (p.email) or.push({ leadOwner: new RegExp(`^\\s*${escapeRe(p.email)}\\s*$`, 'i') });
+    if (ids.length) {
+      or.push({ leadOwner: { $in: ids.map(String) } });
+      or.push({
+        createdBy: { $in: ids },
+        $or: [{ leadOwner: { $exists: false } }, { leadOwner: null }, { leadOwner: '' }],
+      });
+    }
+    return { isDeleted: { $ne: true }, $or: or.length ? or : [{ _id: null }] };
+  }
+
+  private async myLeads(p: Person, w: Windows) {
+    const filter = this.leadOwnerFilter(p);
+    const select = 'firstName lastName status stage nextFollowUpAt updatedAt lastCallAt callStatus mobileNo';
+    const [upcoming, overdue, recent] = await Promise.all([
+      this.leadModel
+        .find({ ...filter, nextFollowUpAt: { $gte: w.today.start } })
+        .sort({ nextFollowUpAt: 1 })
+        .limit(10)
+        .select(select)
+        .lean()
+        .exec(),
+      this.leadModel
+        .find({ ...filter, nextFollowUpAt: { $lt: w.today.start } })
+        .sort({ nextFollowUpAt: -1 })
+        .limit(5)
+        .select(select)
+        .lean()
+        .exec(),
+      this.leadModel.find(filter).sort({ updatedAt: -1 }).limit(10).select(select).lean().exec(),
+    ]);
+    const seen = new Set<string>();
+    const rows: any[] = [];
+    for (const l of [...overdue, ...upcoming, ...recent] as any[]) {
+      const id = String(l._id);
+      if (seen.has(id) || rows.length >= 12) continue;
+      seen.add(id);
+      rows.push({
+        id,
+        name: `${l.firstName || ''} ${l.lastName || ''}`.trim() || l.mobileNo || 'Lead',
+        status: (l.stage && String(l.stage).trim()) || l.status || 'New',
+        callStatus: l.callStatus || null,
+        lastContact: l.lastCallAt || null,
+        updatedAt: l.updatedAt || null,
+        nextFollowUp: l.nextFollowUpAt || null,
+        overdue: !!(l.nextFollowUpAt && new Date(l.nextFollowUpAt) < w.today.start),
+      });
+    }
+    return rows;
+  }
+
+  private async activityLog(p: Person) {
+    const ids = this.personIds(p);
+    if (!ids.length) return [];
     const rows = await this.activityModel
-      .find({ ...match, type: { $nin: ['System'] } })
+      .find({
+        isDeleted: { $ne: true },
+        type: { $nin: ['System'] },
+        $or: [{ author: { $in: ids } }, { assignee: { $in: ids } }],
+      })
       .sort({ createdAt: -1 })
       .limit(12)
       .select('type status content title createdAt relatedTo relatedType')
@@ -1002,81 +951,874 @@ export class RoleDashboardService {
       .exec();
     return rows.map((a: any) => ({
       type: a.type,
-      text: a.content || a.title || `${a.type}${a.status ? ` — ${a.status}` : ''}`,
+      text: plain(a.title || a.content) || `${a.type}${a.status ? ` — ${a.status}` : ''}`,
+      detail: a.title && a.content ? plain(a.content).slice(0, 140) : '',
+      status: a.status || null,
+      relatedTo: a.relatedTo ? String(a.relatedTo) : null,
+      relatedType: a.relatedType || null,
       at: a.createdAt,
     }));
   }
 
-  /** My Leads & Follow-ups list for the agent view. */
-  private async getMyLeads(scope: DashboardScope) {
-    const base = this.leadScopeMatch(scope);
-    if (base === MATCH_NOTHING) return [];
-    const rows = await this.leadModel
-      .find(base)
-      .sort({ updatedAt: -1 })
-      .limit(10)
-      .select('firstName lastName status stage nextFollowUpAt updatedAt callStatus')
+  private async recentWhatsApp(snap: Snapshot, keys: string[] | null) {
+    const match: Record<string, unknown> = {};
+    if (keys !== null) {
+      const set = new Set(keys);
+      const waIds = [...snap.convOwner.entries()].filter(([, k]) => set.has(k)).map(([wa]) => wa);
+      if (!waIds.length) return [];
+      match.waId = { $in: waIds.slice(0, 5000) };
+    }
+    const rows = await this.whatsappModel
+      .find(match)
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .select('waId customerName body direction status isRead createdAt')
       .lean()
       .exec();
-    return rows.map((l: any) => ({
-      name: `${l.firstName || ''} ${l.lastName || ''}`.trim() || 'Lead',
-      status: l.stage || l.status || 'New',
-      lastContact: l.updatedAt,
-      nextFollowUp: l.nextFollowUpAt || null,
+    return rows.map((m: any) => ({
+      contact: m.customerName || (m.waId ? `+${m.waId}` : 'Unknown'),
+      preview:
+        plain(m.body || '').slice(0, 80) ||
+        (m.direction === 'inbound' ? 'Received a message' : 'Sent a message'),
+      direction: m.direction,
+      status: m.direction === 'inbound' ? (m.isRead ? 'Read' : 'New') : capitalize(m.status || 'Sent'),
+      at: m.createdAt,
     }));
   }
 
-  /** Task-status buckets (Activity type='Task') for the agent view. */
-  private async getTaskStatus(scope: DashboardScope, r: any) {
-    const match = this.activityScopeMatch(scope);
-    if (match === MATCH_NOTHING) {
-      return { open: 0, inProgress: 0, completed: 0, overdue: 0, total: 0 };
+  // ---------------------------------------------------------------------------
+  // Snapshot (all per-person metrics for one window)
+  // ---------------------------------------------------------------------------
+
+  private getSnapshot(window: string): Promise<Snapshot> {
+    const key = normalizeWindow(window);
+    const hit = this.snapshots.get(key);
+    if (hit && Date.now() - hit.at < hit.ttl) return hit.promise;
+    const promise = this.computeSnapshot(key).catch((e) => {
+      this.snapshots.delete(key);
+      throw e;
+    });
+    const entry = { at: Date.now(), ttl: SNAPSHOT_TTL_MS, promise };
+    this.snapshots.set(key, entry);
+    // Built before 2bigha finished warming → expire sooner so live data shows up quickly.
+    void promise
+      .then((s) => {
+        const enabled = this.twoBigha.isEnabled();
+        if (enabled && (!s.sources.twobighaListings || !s.sources.twobighaSubscriptions)) entry.ttl = 15_000;
+      })
+      .catch(() => undefined);
+    if (this.snapshots.size > 20) {
+      const oldest = [...this.snapshots.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (oldest) this.snapshots.delete(oldest[0]);
     }
-    const rows = await this.activityModel
-      .find({ ...match, type: 'Task' })
-      .select('status dueDate metadata createdAt')
-      .limit(2000)
-      .lean()
-      .exec();
-    let open = 0;
-    let inProgress = 0;
-    let completed = 0;
-    let overdue = 0;
-    const now = new Date();
-    for (const t of rows as any[]) {
-      const s = String(t.status || '').toLowerCase();
-      const due = t.dueDate || t.metadata?.dueDate;
-      if (s.includes('complete') || s.includes('done')) {
-        completed += 1;
-      } else if (s.includes('progress')) {
-        inProgress += 1;
-        if (due && new Date(due) < now) overdue += 1;
-      } else {
-        open += 1;
-        if (due && new Date(due) < now) overdue += 1;
+    return promise;
+  }
+
+  private async computeSnapshot(windowKey: string): Promise<Snapshot> {
+    const started = Date.now();
+    const windows = this.windows(windowKey);
+    const [dir, listings, subscribers] = await Promise.all([
+      this.loadDirectory(),
+      this.twoBigha.getListings().catch(() => null),
+      this.twoBigha.getSubscribers().catch(() => null),
+    ]);
+    const acc = new Map<string, Acc>();
+    const get = (k: string) => {
+      let a = acc.get(k);
+      if (!a) {
+        a = emptyAcc(windows.months.length);
+        acc.set(k, a);
+      }
+      return a;
+    };
+
+    const leadIndex = await this.loadLeadIndex(dir);
+    const [convOwner, orgUniqueContacts, planCounts] = await Promise.all([
+      this.collectWhatsApp(dir, windows, get, leadIndex),
+      this.countUniqueContacts(windows),
+      this.collectSubscriptions(dir, windows, get, leadIndex, subscribers),
+      this.collectLeads(dir, windows, get),
+      this.collectCalls(dir, windows, get),
+      this.collectTasks(dir, windows, get),
+      this.collectListings(dir, windows, get, listings),
+      this.collectPmSales(dir, windows, get),
+    ]);
+
+    this.logger.log(`Role dashboard snapshot "${windowKey}" computed in ${Date.now() - started}ms`);
+    return {
+      windows,
+      dir,
+      acc,
+      convOwner,
+      orgUniqueContacts,
+      sources: { twobighaListings: !!listings, twobighaSubscriptions: !!subscribers },
+      planCounts: [...planCounts.entries()]
+        .map(([plan, count]) => ({ plan, count }))
+        .sort((a, b) => b.count - a.count),
+      computedAt: new Date().toISOString(),
+    };
+  }
+
+  private sumAcc(snap: Snapshot, keys: string[] | null): Acc {
+    const out = emptyAcc(snap.windows.months.length);
+    const list = keys === null ? [...snap.acc.values()] : keys.map((k) => snap.acc.get(k));
+    for (const a of list) if (a) addAcc(out, a);
+    return out;
+  }
+
+  // --- Directory --------------------------------------------------------------
+
+  private loadDirectory(): Promise<Directory> {
+    if (this.directoryCache && Date.now() - this.directoryCache.at < SNAPSHOT_TTL_MS) {
+      return this.directoryCache.promise;
+    }
+    const promise = this.buildDirectory().catch((e) => {
+      this.directoryCache = undefined;
+      throw e;
+    });
+    this.directoryCache = { at: Date.now(), promise };
+    return promise;
+  }
+
+  private async buildDirectory(): Promise<Directory> {
+    const [platformUsers, crmAccessIds, crmUsers] = await Promise.all([
+      this.hrmsUserModel
+        .find({ is_archived: { $ne: true } } as any)
+        .select('_id firstName lastName email reportsTo')
+        .limit(5000)
+        .lean()
+        .exec(),
+      this.hrmsUserModel.find(crmPortalAccessUserFilter() as any).select('_id').limit(5000).lean().exec(),
+      this.crmUserModel
+        .find({})
+        .select(
+          '_id email firstName lastName isActive twobighaAdminId agentMobile availabilityStatus availabilityAttendanceStatus availabilityDate',
+        )
+        .limit(5000)
+        .lean()
+        .exec(),
+    ]);
+    const crmAccess = new Set((crmAccessIds as any[]).map((u) => String(u._id)));
+    const crmByEmail = new Map<string, any>();
+    for (const c of crmUsers as any[]) {
+      const e = lc(c.email);
+      if (e) crmByEmail.set(e, c);
+    }
+    const people: Person[] = [];
+    const usedCrm = new Set<string>();
+    const attachCrm = (p: Person, c: any) => {
+      p.crmId = String(c._id);
+      p.twobighaAdminId = c.twobighaAdminId ? String(c.twobighaAdminId).trim() : undefined;
+      p.mobile10 = last10(c.agentMobile) || undefined;
+      p.availability = {
+        status: c.availabilityStatus,
+        attendance: c.availabilityAttendanceStatus,
+        date: c.availabilityDate,
+      };
+      if (c.isActive === false) p.crmAccess = false;
+      const crmName = fullName(c);
+      if (crmName && !p.aliases.includes(crmName)) p.aliases.push(crmName);
+      usedCrm.add(p.crmId);
+    };
+    for (const u of platformUsers as any[]) {
+      const email = String(u.email || '').trim();
+      const p: Person = {
+        id: String(u._id),
+        crmAccess: crmAccess.has(String(u._id)),
+        name: fullName(u) || email || 'Unknown',
+        email: email || undefined,
+        reportsTo: u.reportsTo ? String(u.reportsTo) : null,
+        aliases: fullName(u) ? [fullName(u)] : [],
+      };
+      const c = crmByEmail.get(lc(email));
+      if (c) attachCrm(p, c);
+      people.push(p);
+    }
+    // CRM-only users (no platform account) still own records.
+    for (const c of crmUsers as any[]) {
+      if (usedCrm.has(String(c._id))) continue;
+      const email = String(c.email || '').trim();
+      const p: Person = {
+        id: String(c._id),
+        crmAccess: c.isActive !== false,
+        name: fullName(c) || email || 'Unknown',
+        email: email || undefined,
+        reportsTo: null,
+        aliases: [],
+      };
+      attachCrm(p, c);
+      people.push(p);
+    }
+
+    const byId = new Map<string, Person>();
+    const byEmail = new Map<string, Person>();
+    const byMobile = new Map<string, Person>();
+    const byTb = new Map<string, Person>();
+    const nameCount = new Map<string, number>();
+    for (const p of people) {
+      byId.set(p.id, p);
+      if (p.crmId) byId.set(p.crmId, p);
+      if (p.email) byEmail.set(lc(p.email), p);
+      if (p.mobile10) byMobile.set(p.mobile10, p);
+      if (p.twobighaAdminId) byTb.set(p.twobighaAdminId, p);
+      for (const n of new Set(p.aliases.map(normName).filter(Boolean))) {
+        nameCount.set(n, (nameCount.get(n) || 0) + 1);
       }
     }
-    return { open, inProgress, completed, overdue, total: rows.length };
+    const byName = new Map<string, Person>();
+    for (const p of people) {
+      // Ambiguous display names are never used for attribution.
+      for (const n of new Set(p.aliases.map(normName).filter(Boolean))) {
+        if (nameCount.get(n) === 1) byName.set(n, p);
+      }
+    }
+    return { people, byId, byEmail, byName, byMobile, byTb };
+  }
+
+  // --- Collectors -------------------------------------------------------------
+
+  private async collectLeads(dir: Directory, w: Windows, get: (k: string) => Acc) {
+    const tz = this.tz();
+    const t = '$createdAt';
+    const owner = { $toLower: { $trim: { input: { $toString: { $ifNull: ['$leadOwner', ''] } } } } };
+    const [rows, monthRows] = await Promise.all([
+      this.leadModel
+        .aggregate([
+          { $match: { isDeleted: { $ne: true } } },
+          {
+            $group: {
+              _id: {
+                o: owner,
+                c: '$createdBy',
+                // Pipeline stage wins over the legacy status when set.
+                s: {
+                  $cond: [
+                    { $gt: [{ $strLenCP: { $trim: { input: { $toString: { $ifNull: ['$stage', ''] } } } } }, 0] },
+                    '$stage',
+                    '$status',
+                  ],
+                },
+                cv: { $eq: ['$converted', true] },
+                called: {
+                  $or: [
+                    { $not: [{ $in: [{ $ifNull: ['$callStatus', 'Not Called'] }, ['Not Called', '']] }] },
+                    { $gt: ['$lastCallAt', null] },
+                  ],
+                },
+              },
+              total: { $sum: 1 },
+              period: cnt(between(t, w.period)),
+              prev: cnt(between(t, w.prev)),
+              today: cnt(between(t, w.today)),
+              week: cnt(between(t, w.week)),
+              month: cnt(between(t, w.month)),
+              fTotal: cnt({ $gt: ['$nextFollowUpAt', null] }),
+              fToday: cnt(between('$nextFollowUpAt', w.today)),
+              fUpcoming: cnt({ $gt: ['$nextFollowUpAt', w.today.end] }),
+              fOverdue: cnt({
+                $and: [{ $gt: ['$nextFollowUpAt', null] }, { $lt: ['$nextFollowUpAt', w.today.start] }],
+              }),
+            },
+          },
+        ])
+        .allowDiskUse(true)
+        .exec(),
+      this.leadModel
+        .aggregate([
+          { $match: { isDeleted: { $ne: true }, createdAt: { $gte: w.months[0].start } } },
+          {
+            $group: {
+              _id: {
+                o: owner,
+                c: '$createdBy',
+                y: { $year: { date: '$createdAt', timezone: tz } },
+                m: { $month: { date: '$createdAt', timezone: tz } },
+              },
+              n: { $sum: 1 },
+            },
+          },
+        ])
+        .allowDiskUse(true)
+        .exec(),
+    ]);
+
+    const resolve = (o: string, c: unknown) => {
+      const creator = c ? dir.byId.get(String(c)) : undefined;
+      if (o) {
+        const p = dir.byEmail.get(o) || dir.byName.get(normName(o)) || dir.byId.get(o);
+        return { key: p ? p.id : NONE, viaOwner: true, createdBySelf: !!p && creator?.id === p.id };
+      }
+      return { key: creator ? creator.id : NONE, viaOwner: false, createdBySelf: true };
+    };
+
+    for (const r of rows as any[]) {
+      const { key, viaOwner, createdBySelf } = resolve(r._id.o, r._id.c);
+      const a = get(key).leads;
+      a.total += r.total;
+      a.period += r.period;
+      a.prev += r.prev;
+      a.today += r.today;
+      a.week += r.week;
+      a.month += r.month;
+      if (viaOwner) a.owned += r.total;
+      if (viaOwner && !createdBySelf) a.assignedByOthers += r.total;
+      a.buckets[classifyLead(r._id.s, r._id.cv, r._id.called)] += r.total;
+      a.followTotal += r.fTotal;
+      a.followToday += r.fToday;
+      a.followUpcoming += r.fUpcoming;
+      a.followOverdue += r.fOverdue;
+    }
+    const monthIdx = this.monthIndexer(w);
+    for (const r of monthRows as any[]) {
+      const i = monthIdx(r._id.y, r._id.m);
+      if (i >= 0) get(resolve(r._id.o, r._id.c).key).monthly.leads[i] += r.n;
+    }
+  }
+
+  private async collectCalls(dir: Directory, w: Windows, get: (k: string) => Acc) {
+    const tz = this.tz();
+    const t = '$_t';
+    const connected = {
+      $or: [
+        { $eq: ['$status', 'Connected'] },
+        { $gt: [{ $ifNull: ['$connectedDuration', 0] }, 0] },
+        // Manually logged / imported "Completed" calls. Kommuno rows carry a rawStatus,
+        // and a Kommuno "Completed" (pre-fix rows) means the call was NOT patched through.
+        { $and: [{ $eq: ['$status', 'Completed'] }, { $eq: [{ $ifNull: ['$rawStatus', ''] }, ''] }] },
+      ],
+    };
+    const missed = {
+      $and: [
+        { $not: [connected] },
+        { $or: [{ $eq: ['$status', 'Missed'] }, { $eq: ['$direction', 'Incoming'] }] },
+      ],
+    };
+    const talk = {
+      $cond: [
+        { $gt: [{ $ifNull: ['$connectedDuration', 0] }, 0] },
+        '$connectedDuration',
+        { $ifNull: ['$duration', 0] },
+      ],
+    };
+    const callTime = { $addFields: { _t: { $ifNull: ['$callDate', '$createdAt'] } } };
+    const who = {
+      u: '$initiatedByUserId',
+      n: '$agentNumber',
+      a: { $toLower: { $ifNull: ['$agentName', ''] } },
+    };
+    const [rows, monthRows] = await Promise.all([
+      this.callLogModel
+        .aggregate([
+          callTime,
+          {
+            $group: {
+              _id: who,
+              total: { $sum: 1 },
+              period: cnt(between(t, w.period)),
+              prev: cnt(between(t, w.prev)),
+              today: cnt(between(t, w.today)),
+              week: cnt(between(t, w.week)),
+              month: cnt(between(t, w.month)),
+              connected: cnt({ $and: [between(t, w.period), connected] }),
+              missed: cnt({ $and: [between(t, w.period), missed] }),
+              todayConnected: cnt({ $and: [between(t, w.today), connected] }),
+              incoming: cnt({ $and: [between(t, w.period), { $eq: ['$direction', 'Incoming'] }] }),
+              outgoing: cnt({ $and: [between(t, w.period), { $ne: ['$direction', 'Incoming'] }] }),
+              talkSecs: { $sum: { $cond: [{ $and: [between(t, w.period), connected] }, talk, 0] } },
+            },
+          },
+        ])
+        .allowDiskUse(true)
+        .exec(),
+      this.callLogModel
+        .aggregate([
+          callTime,
+          { $match: { _t: { $gte: w.months[0].start } } },
+          {
+            $group: {
+              _id: {
+                ...who,
+                y: { $year: { date: '$_t', timezone: tz } },
+                m: { $month: { date: '$_t', timezone: tz } },
+              },
+              n: { $sum: 1 },
+            },
+          },
+        ])
+        .allowDiskUse(true)
+        .exec(),
+    ]);
+    const resolve = (id: any): string => {
+      const p =
+        (id.u && dir.byId.get(String(id.u))) ||
+        (id.n && dir.byMobile.get(last10(id.n))) ||
+        (id.a && dir.byName.get(normName(id.a))) ||
+        null;
+      return p ? p.id : NONE;
+    };
+    for (const r of rows as any[]) {
+      const a = get(resolve(r._id)).calls;
+      a.total += r.total;
+      a.period += r.period;
+      a.prev += r.prev;
+      a.today += r.today;
+      a.week += r.week;
+      a.month += r.month;
+      a.connected += r.connected;
+      a.missed += r.missed;
+      a.todayConnected += r.todayConnected;
+      a.incoming += r.incoming;
+      a.outgoing += r.outgoing;
+      a.talkSecs += r.talkSecs;
+    }
+    const monthIdx = this.monthIndexer(w);
+    for (const r of monthRows as any[]) {
+      const i = monthIdx(r._id.y, r._id.m);
+      if (i >= 0) get(resolve(r._id)).monthly.calls[i] += r.n;
+    }
+  }
+
+  /**
+   * Lead → owner lookups (same ownership rule as the lead metrics). WhatsApp and
+   * 2bigha subscriptions use these to land on the agent who owns the customer.
+   */
+  private async loadLeadIndex(dir: Directory): Promise<LeadIndex> {
+    const rows = await this.leadModel
+      .find({ isDeleted: { $ne: true } })
+      .select('_id leadOwner createdBy mobileNo phone whatsappNumber email clientId updatedAt')
+      .sort({ updatedAt: 1 }) // later (more recent) leads win on shared phone numbers
+      .limit(500_000)
+      .lean()
+      .exec();
+    const index: LeadIndex = { byId: new Map(), byPhone: new Map(), byEmail: new Map(), byClient: new Map() };
+    for (const l of rows as any[]) {
+      const key = leadOwnerKey(dir, lc(l.leadOwner), l.createdBy);
+      if (key === NONE) continue;
+      index.byId.set(String(l._id), key);
+      for (const ph of [l.mobileNo, l.phone, l.whatsappNumber]) {
+        const d = last10(ph);
+        if (d) index.byPhone.set(d, key);
+      }
+      if (l.email) index.byEmail.set(lc(l.email), key);
+      if (l.clientId) index.byClient.set(String(l.clientId), key);
+    }
+    return index;
+  }
+
+  /**
+   * WhatsApp attribution, mirroring the CRM inbox: a conversation (waId) belongs to the
+   * owner of its lead (linked `entityId`, else the lead with that phone number). A message
+   * is credited to its CRM sender (`sentBy`) when known; messages without one — AiSensy
+   * webhook echoes, replies sent from the phone, inbound messages — go to the conversation
+   * owner. Returns waId → owning person key.
+   */
+  private async collectWhatsApp(
+    dir: Directory,
+    w: Windows,
+    get: (k: string) => Acc,
+    leads: LeadIndex,
+  ): Promise<Map<string, string>> {
+    const t = '$createdAt';
+    const out = { $eq: ['$direction', 'outbound'] };
+    const sent = { $and: [out, { $ne: ['$status', 'failed'] }] };
+    const [groups, periodMsgs] = await Promise.all([
+      this.whatsappModel
+        .aggregate([
+          {
+            $group: {
+              _id: { w: '$waId', d: '$direction', s: '$sentBy', e: '$entityId' },
+              total: cnt(sent),
+              period: cnt({ $and: [between(t, w.period), sent] }),
+              today: cnt({ $and: [between(t, w.today), sent] }),
+              week: cnt({ $and: [between(t, w.week), sent] }),
+              month: cnt({ $and: [between(t, w.month), sent] }),
+              failed: cnt({ $and: [between(t, w.period), out, { $eq: ['$status', 'failed'] }] }),
+              delivered: cnt({ $and: [between(t, w.period), out, { $in: ['$status', ['delivered', 'read']] }] }),
+              unread: cnt({ $and: [{ $eq: ['$direction', 'inbound'] }, { $ne: ['$isRead', true] }] }),
+              lastAt: { $max: t },
+            },
+          },
+        ])
+        .allowDiskUse(true)
+        .exec(),
+      this.whatsappModel
+        .find({ createdAt: { $gte: w.period.start, $lte: w.period.end } })
+        .sort({ waId: 1, createdAt: 1 })
+        .limit(50_000)
+        .select('waId direction sentBy createdAt')
+        .lean()
+        .exec(),
+    ]);
+
+    const senderKey = (sentBy: unknown): string | null => {
+      const p = sentBy ? dir.byId.get(String(sentBy)) : undefined;
+      return p ? p.id : null;
+    };
+
+    // 1. Conversation owner: linked lead → lead with that phone → latest CRM sender.
+    const convOwner = new Map<string, string>();
+    const latestSender = new Map<string, { key: string; at: number }>();
+    for (const g of groups as any[]) {
+      const wa = String(g._id.w || '');
+      if (!wa) continue;
+      const viaLead = g._id.e ? leads.byId.get(String(g._id.e)) : undefined;
+      if (viaLead && !convOwner.has(wa)) convOwner.set(wa, viaLead);
+      const sk = g._id.d === 'outbound' ? senderKey(g._id.s) : null;
+      const at = g.lastAt ? new Date(g.lastAt).getTime() : 0;
+      if (sk && (latestSender.get(wa)?.at ?? -1) < at) latestSender.set(wa, { key: sk, at });
+    }
+    const allWa = new Set((groups as any[]).map((g) => String(g._id.w || '')).filter(Boolean));
+    for (const wa of allWa) {
+      if (convOwner.has(wa)) continue;
+      const owner = leads.byPhone.get(last10(wa)) || latestSender.get(wa)?.key;
+      if (owner) convOwner.set(wa, owner);
+    }
+    const ownerOf = (wa: unknown) => convOwner.get(String(wa || '')) || NONE;
+
+    // 2. Message counts → sender, else conversation owner.
+    const contacts = new Map<string, Set<string>>();
+    for (const g of groups as any[]) {
+      if (g._id.d === 'outbound') {
+        const key = senderKey(g._id.s) || ownerOf(g._id.w);
+        const a = get(key).wa;
+        a.total += g.total;
+        a.period += g.period;
+        a.today += g.today;
+        a.week += g.week;
+        a.month += g.month;
+        a.failed += g.failed;
+        a.delivered += g.delivered;
+        if (g.period > 0 && g._id.w) {
+          let set = contacts.get(key);
+          if (!set) contacts.set(key, (set = new Set()));
+          set.add(String(g._id.w));
+        }
+      } else if (g.unread > 0) {
+        get(ownerOf(g._id.w)).wa.newMessages += g.unread;
+      }
+    }
+    for (const [key, set] of contacts) get(key).wa.contacts += set.size;
+
+    // 3. Response time: first inbound since our last reply → our next outbound.
+    let curWa = '';
+    let pendingSince: number | null = null;
+    for (const m of periodMsgs as any[]) {
+      if (m.waId !== curWa) {
+        curWa = m.waId;
+        pendingSince = null;
+      }
+      const at = new Date(m.createdAt).getTime();
+      if (m.direction === 'inbound') {
+        if (pendingSince === null) pendingSince = at;
+      } else if (pendingSince !== null) {
+        const a = get(senderKey(m.sentBy) || ownerOf(m.waId)).wa;
+        a.respSumMins += (at - pendingSince) / 60000;
+        a.respN += 1;
+        pendingSince = null;
+      }
+    }
+    return convOwner;
+  }
+
+  /**
+   * 2bigha subscriptions → CRM agent: the admin who sold it (soldByAdminId / email), else
+   * the owner of the customer's lead (2bigha user → CRM Client.twobighaUserId → lead, or a
+   * lead with the subscriber's email / phone).
+   */
+  private async collectSubscriptions(
+    dir: Directory,
+    w: Windows,
+    get: (k: string) => Acc,
+    leads: LeadIndex,
+    subscribers: TwoBighaSubscriberRow[] | null,
+  ): Promise<Map<string, number>> {
+    const planCounts = new Map<string, number>();
+    if (!subscribers?.length) return planCounts;
+    const userIds = [...new Set(subscribers.map((s) => s.userId).filter((x): x is string => !!x))];
+    const clients = userIds.length
+      ? await this.clientModel
+          .find({ twobighaUserId: { $in: userIds }, isDeleted: { $ne: true } } as any)
+          .select('_id twobighaUserId sourceLead associatedLeads')
+          .lean()
+          .exec()
+      : [];
+    const ownerByTbUser = new Map<string, string>();
+    for (const c of clients as any[]) {
+      const key =
+        leads.byClient.get(String(c._id)) ||
+        (c.sourceLead && leads.byId.get(String(c.sourceLead))) ||
+        (c.associatedLeads || []).map((id: any) => leads.byId.get(String(id))).find(Boolean);
+      if (key) ownerByTbUser.set(String(c.twobighaUserId), key);
+    }
+    for (const s of subscribers) {
+      const seller =
+        (s.soldByAdminId && dir.byTb.get(s.soldByAdminId)) ||
+        (s.soldByAdminEmail && dir.byEmail.get(s.soldByAdminEmail)) ||
+        null;
+      const key =
+        seller?.id ||
+        (s.userId && ownerByTbUser.get(s.userId)) ||
+        (s.userEmail && leads.byEmail.get(s.userEmail)) ||
+        (s.userPhone && leads.byPhone.get(last10(s.userPhone))) ||
+        NONE;
+      const a = get(key).subs;
+      const active = s.status === 'active';
+      a.total += 1;
+      if (active) a.active += 1;
+      if (!s.isBase) a.paid += 1;
+      if (inWin(s.startsAt, w.period)) {
+        a.period += 1;
+        if (!s.isBase) a.periodPaid += 1;
+      }
+      if (inWin(s.startsAt, w.today)) a.today += 1;
+      if (inWin(s.startsAt, w.week)) a.week += 1;
+      if (inWin(s.startsAt, w.month)) a.month += 1;
+      if (active) planCounts.set(s.planName, (planCounts.get(s.planName) || 0) + 1);
+    }
+    return planCounts;
+  }
+
+  /**
+   * PM plans sold inside the CRM: the checkout flow logs `pm_payment_order_created` /
+   * `pm_upgrade_order_created` (amount in paise) and `pm_payment_verified` (author = agent).
+   */
+  private async collectPmSales(dir: Directory, w: Windows, get: (k: string) => Acc) {
+    const rows = await this.activityModel
+      .find({
+        type: 'System',
+        isDeleted: { $ne: true },
+        'metadata.eventType': { $in: ['pm_payment_verified', 'pm_payment_order_created', 'pm_upgrade_order_created'] },
+      } as any)
+      .select('author metadata createdAt relatedTo')
+      .limit(200_000)
+      .lean()
+      .exec();
+    const amountByOrder = new Map<string, number>();
+    for (const r of rows as any[]) {
+      if (r.metadata?.eventType === 'pm_payment_verified') continue;
+      const order = String(r.metadata?.razorpayOrderId || r.metadata?.orderId || '');
+      const amt = Number(r.metadata?.amount);
+      if (order && Number.isFinite(amt)) amountByOrder.set(order, amt / 100);
+    }
+    for (const r of rows as any[]) {
+      if (r.metadata?.eventType !== 'pm_payment_verified' || r.metadata?.success === false) continue;
+      const p = r.author ? dir.byId.get(String(r.author)) : undefined;
+      const a = get(p ? p.id : NONE).subs;
+      const at = r.createdAt ? new Date(r.createdAt).getTime() : null;
+      const amount = amountByOrder.get(String(r.metadata?.razorpayOrderId || '')) || 0;
+      a.pmTotal += 1;
+      if (inWin(at, w.period)) {
+        a.pmPeriod += 1;
+        a.pmRevenuePeriod += amount;
+      }
+      if (inWin(at, w.today)) a.pmToday += 1;
+      if (inWin(at, w.month)) a.pmMonth += 1;
+    }
+  }
+
+  private async countUniqueContacts(w: Windows): Promise<number> {
+    const rows = await this.whatsappModel
+      .aggregate([
+        {
+          $match: {
+            direction: 'outbound',
+            status: { $ne: 'failed' },
+            createdAt: { $gte: w.period.start, $lte: w.period.end },
+          },
+        },
+        { $group: { _id: '$waId' } },
+        { $count: 'n' },
+      ])
+      .exec();
+    return rows[0]?.n || 0;
+  }
+
+  private async collectTasks(dir: Directory, w: Windows, get: (k: string) => Acc) {
+    const rows = await this.activityModel
+      .find({ type: 'Task', isDeleted: { $ne: true } })
+      .select('assignee author status metadata.dueDate updatedAt')
+      .limit(100_000)
+      .lean()
+      .exec();
+    const now = w.now.getTime();
+    for (const r of rows as any[]) {
+      const s = String(r.status || '').toLowerCase();
+      if (/cancel|deleted/.test(s)) continue;
+      const p =
+        (r.assignee && dir.byId.get(String(r.assignee))) ||
+        (r.author && dir.byId.get(String(r.author))) ||
+        null;
+      const a = get(p ? p.id : NONE).tasks;
+      const due = r.metadata?.dueDate ? new Date(r.metadata.dueDate).getTime() : NaN;
+      if (/complete|done|closed|resolved/.test(s)) {
+        a.completed += 1;
+        if (inWin(r.updatedAt ? new Date(r.updatedAt).getTime() : null, w.period)) a.periodCompleted += 1;
+      } else {
+        if (/progress|doing|started/.test(s)) a.inProgress += 1;
+        else a.open += 1;
+        if (Number.isFinite(due) && due < now) a.overdue += 1;
+      }
+    }
+  }
+
+  private async collectListings(
+    dir: Directory,
+    w: Windows,
+    get: (k: string) => Acc,
+    index: TwoBighaListingIndex | null,
+  ) {
+    const local = await this.propertyModel
+      .find({ isDeleted: { $ne: true }, listingBucket: { $ne: 'pm' } } as any)
+      .select('createdBy approvalStatus propertyType listingBucket twobighaPropertyId createdAt updatedAt')
+      .limit(100_000)
+      .lean()
+      .exec();
+    const localByTb = new Map<string, any>();
+    for (const l of local as any[]) if (l.twobighaPropertyId) localByTb.set(String(l.twobighaPropertyId), l);
+
+    type Row = {
+      key: string;
+      farm: boolean;
+      status: 'Approved' | 'Pending' | 'Rejected';
+      createdAt: number | null;
+      approvedAt: number | null;
+      rejectedAt: number | null;
+    };
+    const rows: Row[] = [];
+    const keyOfLocal = (l: any) => {
+      const p = l?.createdBy ? dir.byId.get(String(l.createdBy)) : undefined;
+      return p ? p.id : null;
+    };
+
+    const remote = index?.rows ?? null;
+    if (remote) {
+      for (const r of remote) {
+        const tbPerson = r.createdByAdminId ? dir.byTb.get(r.createdByAdminId) : undefined;
+        rows.push({
+          key: keyOfLocal(localByTb.get(r.id)) || tbPerson?.id || NONE,
+          farm: r.kind === 'farm',
+          status: r.status,
+          createdAt: r.createdAt,
+          approvedAt: r.approvedAt,
+          rejectedAt: r.rejectedAt,
+        });
+      }
+    }
+    for (const l of local as any[]) {
+      // Synced to 2bigha → counted from the live row (or deleted there; 2bigha is truth).
+      if (remote && l.twobighaPropertyId) continue;
+      const status = normalizeLocalApproval(l.approvalStatus);
+      const created = l.createdAt ? new Date(l.createdAt).getTime() : null;
+      const updated = l.updatedAt ? new Date(l.updatedAt).getTime() : created;
+      rows.push({
+        key: keyOfLocal(l) || NONE,
+        farm: l.listingBucket === 'farm' || l.propertyType === 'Farm',
+        status,
+        createdAt: created,
+        approvedAt: status === 'Approved' ? updated : null,
+        rejectedAt: status === 'Rejected' ? updated : null,
+      });
+    }
+
+    // Rows 2bigha's paging skipped: status known (queue), owner/dates unknown.
+    for (const gap of index?.shortfall || []) {
+      for (let i = 0; i < gap.missing; i++) {
+        rows.push({ key: NONE, farm: gap.kind === 'farm', status: gap.status, createdAt: null, approvedAt: null, rejectedAt: null });
+      }
+    }
+
+    const monthStarts = w.months.map((m) => m.start.getTime());
+    const monthEnds = w.months.map((m) => m.end.getTime());
+    for (const r of rows) {
+      const a = get(r.key);
+      const p = a.props;
+      p.total += 1;
+      if (r.farm) p.farms += 1;
+      else p.properties += 1;
+      if (r.status === 'Approved') p.approved += 1;
+      else if (r.status === 'Rejected') p.rejected += 1;
+      else p.pending += 1;
+      if (inWin(r.createdAt, w.period)) p.period += 1;
+      if (inWin(r.approvedAt, w.period)) p.periodApproved += 1;
+      if (inWin(r.rejectedAt, w.period)) p.periodRejected += 1;
+      if (inWin(r.createdAt, w.today)) p.today += 1;
+      if (inWin(r.approvedAt, w.today)) p.todayApproved += 1;
+      if (inWin(r.rejectedAt, w.today)) p.todayRejected += 1;
+      if (inWin(r.createdAt, w.week)) p.week += 1;
+      if (inWin(r.createdAt, w.month)) p.month += 1;
+      if (r.createdAt !== null) {
+        for (let i = 0; i < monthStarts.length; i++) {
+          if (r.createdAt >= monthStarts[i] && r.createdAt <= monthEnds[i]) {
+            a.monthly.listings[i] += 1;
+            break;
+          }
+        }
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
-  // Subscriptions (live from 2bigha) — best effort, safe fallback.
+  // Windows (reporting calendar timezone, default Asia/Kolkata)
   // ---------------------------------------------------------------------------
 
-  private async getOrgSubscriptions(): Promise<{ actual: number | null; target: number | null }> {
-    try {
-      const plans: any = await this.subscriptionsService.getSubscriptionPlans();
-      // No org-wide "subscriptions sold" aggregate is exposed by 2bigha today; we
-      // surface the count of active plan catalogue entries so the tile is live, not
-      // fabricated. Target has no backing field → null (UI renders "—").
-      const active = Array.isArray(plans)
-        ? plans.filter((p: any) => p?.isActive !== false).length
-        : null;
-      return { actual: active, target: null };
-    } catch (e) {
-      this.logger.warn(`Subscriptions fetch failed: ${e instanceof Error ? e.message : e}`);
-      return { actual: null, target: null };
+  private tz(): string {
+    return process.env.CRM_REPORTING_TIMEZONE?.trim() || 'Asia/Kolkata';
+  }
+
+  private ymd(d: Date): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: this.tz(),
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  }
+
+  private range(spec: string): { cur: Win; prev: Win } {
+    const r = this.reportingService.parseDateRange(spec, 'previous');
+    return {
+      cur: { start: r.currentStart, end: r.currentEnd },
+      prev: { start: r.previousStart, end: r.previousEnd },
+    };
+  }
+
+  private windows(key: string): Windows {
+    const now = new Date();
+    const todayYmd = this.ymd(now);
+    const [y, m] = todayYmd.split('-').map(Number);
+    let spec = key;
+    if (key === 'this_quarter') {
+      spec = `${y}-${pad(Math.floor((m - 1) / 3) * 3 + 1)}-01,${todayYmd}`;
+    } else if (key === 'this_year') {
+      spec = `${y}-01-01,${todayYmd}`;
+    } else if (key === 'all_time') {
+      spec = `2000-01-01,${todayYmd}`;
     }
+    const period = this.range(spec);
+    const months: Windows['months'] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(Date.UTC(y, m - 1 - i, 1));
+      const yy = d.getUTCFullYear();
+      const mm = d.getUTCMonth() + 1;
+      const lastDay = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+      const r = this.range(`${yy}-${pad(mm)}-01,${yy}-${pad(mm)}-${pad(lastDay)}`).cur;
+      months.push({ ...r, label: d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }) });
+    }
+    return {
+      key,
+      period: period.cur,
+      prev: key === 'all_time' ? { start: new Date(0), end: new Date(0) } : period.prev,
+      today: this.range('today').cur,
+      week: this.range('this_week').cur,
+      month: this.range('this_month').cur,
+      now,
+      months,
+    };
+  }
+
+  private monthIndexer(w: Windows) {
+    const keys = w.months.map((m) => this.ymd(new Date(m.start.getTime() + 12 * 3600_000)).slice(0, 7));
+    return (y: number, m: number) => keys.indexOf(`${y}-${pad(m)}`);
   }
 }
 
@@ -1084,55 +1826,215 @@ export class RoleDashboardService {
 // Helpers
 // -----------------------------------------------------------------------------
 
-const MATCH_NOTHING = { _id: { $exists: false } } as const;
+/** Lead owner (name / email / id string) → person; unowned leads → creator. */
+function leadOwnerKey(dir: Directory, owner: string, createdBy: unknown): string {
+  if (owner) {
+    const p = dir.byEmail.get(owner) || dir.byName.get(normName(owner)) || dir.byId.get(owner);
+    return p ? p.id : NONE;
+  }
+  const c = createdBy ? dir.byId.get(String(createdBy)) : undefined;
+  return c ? c.id : NONE;
+}
+
+function emptyAcc(months: number): Acc {
+  return {
+    leads: {
+      total: 0,
+      period: 0,
+      prev: 0,
+      today: 0,
+      week: 0,
+      month: 0,
+      assignedByOthers: 0,
+      owned: 0,
+      buckets: { New: 0, Contacted: 0, Qualified: 0, Converted: 0, Lost: 0 },
+      followTotal: 0,
+      followToday: 0,
+      followUpcoming: 0,
+      followOverdue: 0,
+    },
+    calls: {
+      total: 0,
+      period: 0,
+      prev: 0,
+      today: 0,
+      week: 0,
+      month: 0,
+      connected: 0,
+      missed: 0,
+      todayConnected: 0,
+      incoming: 0,
+      outgoing: 0,
+      talkSecs: 0,
+    },
+    wa: {
+      total: 0,
+      period: 0,
+      today: 0,
+      week: 0,
+      month: 0,
+      failed: 0,
+      delivered: 0,
+      contacts: 0,
+      newMessages: 0,
+      respSumMins: 0,
+      respN: 0,
+    },
+    props: {
+      total: 0,
+      approved: 0,
+      pending: 0,
+      rejected: 0,
+      farms: 0,
+      properties: 0,
+      period: 0,
+      periodApproved: 0,
+      periodRejected: 0,
+      today: 0,
+      todayApproved: 0,
+      todayRejected: 0,
+      week: 0,
+      month: 0,
+    },
+    subs: {
+      total: 0,
+      active: 0,
+      paid: 0,
+      period: 0,
+      periodPaid: 0,
+      today: 0,
+      week: 0,
+      month: 0,
+      pmTotal: 0,
+      pmPeriod: 0,
+      pmToday: 0,
+      pmMonth: 0,
+      pmRevenuePeriod: 0,
+    },
+    tasks: { open: 0, inProgress: 0, completed: 0, overdue: 0, periodCompleted: 0 },
+    monthly: {
+      leads: new Array(months).fill(0),
+      calls: new Array(months).fill(0),
+      listings: new Array(months).fill(0),
+    },
+  };
+}
+
+/** Recursively add numeric fields of `src` into `dst` (same shape). */
+function addAcc(dst: any, src: any) {
+  for (const k of Object.keys(src)) {
+    const v = src[k];
+    if (typeof v === 'number') dst[k] = (dst[k] || 0) + v;
+    else if (Array.isArray(v)) v.forEach((n: number, i: number) => (dst[k][i] = (dst[k][i] || 0) + n));
+    else if (v && typeof v === 'object') addAcc(dst[k], v);
+  }
+}
+
+/**
+ * Ranking points for the period:
+ *   new leads ×10 · connected calls ×5 · listings ×20 · subscriptions ×25 ·
+ *   completed tasks ×5 · WhatsApp contacts reached ×2
+ */
+function scoreOf(a: Acc): number {
+  return (
+    a.leads.period * 10 +
+    a.calls.connected * 5 +
+    a.props.period * 20 +
+    (a.subs.period + a.subs.pmPeriod) * 25 +
+    a.tasks.periodCompleted * 5 +
+    a.wa.contacts * 2
+  );
+}
+
+function classifyLead(status: unknown, converted: boolean, called: boolean): LeadBucket {
+  if (converted) return 'Converted';
+  const s = String(status ?? '').trim();
+  if (s && LOST_RE.test(s)) return 'Lost';
+  if (s && CONVERTED_RE.test(s)) return 'Converted';
+  if (s && QUALIFIED_RE.test(s)) return 'Qualified';
+  if (!s || NEW_STATUS_RE.test(s)) return called ? 'Contacted' : 'New';
+  return 'Contacted';
+}
+
+/** Status-only lead bucket (shared with the Reports & Analytics service). */
+export function classifyStatus(status?: string): LeadBucket {
+  return classifyLead(status || 'New', false, false);
+}
+
+function normalizeLocalApproval(v: unknown): 'Approved' | 'Pending' | 'Rejected' {
+  const s = String(v || '').toLowerCase();
+  if (s.startsWith('approv')) return 'Approved';
+  if (s.startsWith('reject')) return 'Rejected';
+  return 'Pending';
+}
+
+function between(field: string, w: Win) {
+  return { $and: [{ $gte: [field, w.start] }, { $lte: [field, w.end] }] };
+}
+
+function cnt(cond: any) {
+  return { $sum: { $cond: [cond, 1, 0] } };
+}
+
+function inWin(ms: number | null | undefined, w: Win): boolean {
+  return ms !== null && ms !== undefined && ms >= w.start.getTime() && ms <= w.end.getTime();
+}
+
+function normalizeWindow(window: string): string {
+  const w = String(window || 'this_month').trim().toLowerCase();
+  if (
+    ['today', 'yesterday', 'this_week', 'this_month', 'last_30_days', 'this_quarter', 'this_year', 'all_time'].includes(w)
+  ) {
+    return w;
+  }
+  if (/^\d{4}-\d{2}-\d{2},\d{4}-\d{2}-\d{2}$/.test(w)) return w;
+  return 'this_month';
+}
+
+function pct(n: number, d: number): number {
+  return d > 0 ? Math.round((n / d) * 100) : 0;
+}
+
+/** null = no baseline (previous period was 0 but current isn't) — UI shows "new". */
+function pctDelta(current: number, previous: number): number | null {
+  if (!previous) return current > 0 ? null : 0;
+  return Math.round(((current - previous) / previous) * 100);
+}
 
 function escapeRe(s: string): string {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function classifyStatus(status?: string): 'New' | 'Contacted' | 'Qualified' | 'Converted' | 'Lost' {
-  const s = String(status || 'New').trim();
-  if (!s || NEW_STATUS_RE.test(s)) return 'New';
-  if (LOST_RE.test(s)) return 'Lost';
-  if (CONVERTED_RE.test(s)) return 'Converted';
-  if (QUALIFIED_RE.test(s)) return 'Qualified';
-  if (CONTACTED_RE.test(s)) return 'Contacted';
-  return 'Contacted';
+function lc(s: unknown): string {
+  return String(s ?? '').trim().toLowerCase();
 }
 
-function pctDelta(current: number, previous: number): number {
-  if (!previous || previous === 0) return current > 0 ? 100 : 0;
-  return Math.round(((current - previous) / previous) * 100);
+function normName(s: unknown): string {
+  return lc(s).replace(/\s+/g, ' ');
 }
 
-function endOfToday(todayStart: Date): Date {
-  const d = new Date(todayStart);
-  d.setHours(23, 59, 59, 999);
-  return d;
+function last10(s: unknown): string {
+  const d = String(s ?? '').replace(/\D/g, '');
+  return d.length >= 10 ? d.slice(-10) : '';
 }
 
-function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+function fullName(u: any): string {
+  return `${u?.firstName || ''} ${u?.lastName || ''}`.replace(/\s+/g, ' ').trim();
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
 }
 
 function capitalize(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-function agentScoreFormula(leads: number, properties: number, connected: number, taskCompletion: number): number {
-  return leads * 10 + properties * 20 + connected * 5 + taskCompletion * 2;
-}
-
-function teamScoreFormula(leads: number, properties: number, connected: number, taskCompletion: number): number {
-  // Normalised 0-100 so the team table reads as a percentage-style score.
-  const raw = agentScoreFormula(leads, properties, connected, taskCompletion);
-  return Math.min(100, Math.round(raw / 100));
-}
-
-function avgMemberTaskCompletion(members: Array<{ taskCompletion?: number }>): number {
-  if (!members.length) return 0;
-  return Math.round(members.reduce((a, m) => a + (m.taskCompletion || 0), 0) / members.length);
+/** Strip markdown links / html so activity text reads cleanly. */
+function plain(s: unknown): string {
+  return String(s ?? '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

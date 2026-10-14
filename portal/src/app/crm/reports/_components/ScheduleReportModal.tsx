@@ -51,7 +51,9 @@ export default function ScheduleReportModal({ open, onOpenChange, reportType, cu
       <div className="w-full max-w-md rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-5 shadow-[var(--crm-shadow-raised)]">
         <h3 className="text-lg font-bold text-[var(--text-main)]">Schedule Automated Report</h3>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          This report will be generated matching your current screen filters and emailed to the specified recipients automatically.
+          An Excel report is emailed at 8 AM covering the last completed period — daily: yesterday, weekly (Mondays): the
+          previous 7 days, monthly (1st): last month. It uses your current agent/team filters and your data access (org,
+          team or own).
         </p>
 
         <div className="mt-5 space-y-4">

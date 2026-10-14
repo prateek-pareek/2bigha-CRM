@@ -18,9 +18,10 @@ import {
   CRM_CHART_TICK,
 } from "@/portals/crm/lib/shared/chart-theme";
 import { ReportChartSkeleton } from "@/components/crm/ui/ReportChartSkeleton";
+import type { AgentReportRow } from "../lib/performance-report";
 
 interface AgentSkillRadarChartProps {
-  agents: any[];
+  agents: AgentReportRow[];
   loading: boolean;
 }
 
@@ -34,87 +35,41 @@ export default function AgentSkillRadarChart({
   const radarData = useMemo(() => {
     if (loading || agents.length === 0) return null;
 
-    // Calculate max possible values to normalize 0-100
-    let maxCalls = 1;
-    let maxConversions = 1;
-    let maxFollowUps = 1;
-    let maxSpeedScore = 1; // 100 max
+    // Five real dimensions, each normalised 0-100 against the best agent in scope.
+    const stats = agents.map((a) => ({
+      id: a.agentId,
+      name: a.name || "Unknown Agent",
+      calls: a.calls || 0,
+      connectRate: a.connectRate || 0,
+      conversionRate: a.conversionRate || 0,
+      followUp: a.followUpAdherence ?? 0,
+      // Faster first response = higher score; agents with no contacted leads score 0.
+      speed: a.avgResponseMins == null ? 0 : 1 / (1 + a.avgResponseMins / 60),
+    }));
+    const max = (k: keyof (typeof stats)[number]) => Math.max(1e-9, ...stats.map((s) => Number(s[k]) || 0));
+    const avg = (k: keyof (typeof stats)[number]) => stats.reduce((s, x) => s + (Number(x[k]) || 0), 0) / stats.length;
+    const dims: Array<[string, keyof (typeof stats)[number]]> = [
+      ["Call Volume", "calls"],
+      ["Connect Rate", "connectRate"],
+      ["Conversion Rate", "conversionRate"],
+      ["Follow-up Adherence", "followUp"],
+      ["Response Speed", "speed"],
+    ];
 
-    const agentStats = agents.map(agent => {
-      const calls = agent.calls || 0;
-      const leads = agent.leadsCreated || 0;
-      const conversions = agent.leadsConverted || 0;
-      const activities = agent.activities || 0;
-      
-      const conversionRate = leads > 0 ? (conversions / leads) * 100 : 0;
-      const followUpRate = leads > 0 ? Math.min((activities / (leads * 3)) * 100, 100) : 0;
-      
-      // Speed score approximation
-      const activitiesPerLead = leads > 0 ? activities / leads : (activities > 0 ? 5 : 0);
-      const speedScore = Math.min(activitiesPerLead * 20, 100);
-
-      maxCalls = Math.max(maxCalls, calls);
-      maxConversions = Math.max(maxConversions, conversionRate);
-      maxFollowUps = Math.max(maxFollowUps, followUpRate);
-      maxSpeedScore = Math.max(maxSpeedScore, speedScore);
-
-      return {
-        id: agent.agentId,
-        name: agent.name || "Unknown Agent",
-        calls,
-        conversionRate,
-        followUpRate,
-        speedScore,
-      };
-    });
-
-    // Calculate Team Average (Normalized 0-100)
-    const avgCalls = agentStats.reduce((sum, a) => sum + a.calls, 0) / agentStats.length;
-    const avgConversion = agentStats.reduce((sum, a) => sum + a.conversionRate, 0) / agentStats.length;
-    const avgFollowUp = agentStats.reduce((sum, a) => sum + a.followUpRate, 0) / agentStats.length;
-    const avgSpeed = agentStats.reduce((sum, a) => sum + a.speedScore, 0) / agentStats.length;
-
-    // Select the target agent (Top performer by default)
-    let target = agentStats[0];
-    if (selectedAgentId) {
-      const found = agentStats.find(a => a.id === selectedAgentId);
-      if (found) target = found;
-    } else {
-      // Find top performer by combined score
-      target = agentStats.reduce((max, a) => 
-        (a.conversionRate + a.followUpRate + a.speedScore) > 
-        (max.conversionRate + max.followUpRate + max.speedScore) ? a : max
-      , agentStats[0]);
-    }
-
+    const target =
+      (selectedAgentId && stats.find((s) => s.id === selectedAgentId)) ||
+      stats.reduce((best, s) => {
+        const score = (x: typeof s) => dims.reduce((t, [, k]) => t + (Number(x[k]) || 0) / max(k), 0);
+        return score(s) > score(best) ? s : best;
+      }, stats[0]);
     if (!target) return null;
 
-    return [
-      {
-        subject: "Call Volume",
-        "Team Average": Math.round((avgCalls / maxCalls) * 100),
-        [target.name]: Math.round((target.calls / maxCalls) * 100),
-        fullMark: 100,
-      },
-      {
-        subject: "Conversion Rate",
-        "Team Average": Math.round((avgConversion / maxConversions) * 100),
-        [target.name]: Math.round((target.conversionRate / maxConversions) * 100),
-        fullMark: 100,
-      },
-      {
-        subject: "Follow-up Adherence",
-        "Team Average": Math.round((avgFollowUp / maxFollowUps) * 100),
-        [target.name]: Math.round((target.followUpRate / maxFollowUps) * 100),
-        fullMark: 100,
-      },
-      {
-        subject: "Response Speed",
-        "Team Average": Math.round((avgSpeed / maxSpeedScore) * 100),
-        [target.name]: Math.round((target.speedScore / maxSpeedScore) * 100),
-        fullMark: 100,
-      },
-    ];
+    return dims.map(([subject, k]) => ({
+      subject,
+      "Team Average": Math.round((avg(k) / max(k)) * 100),
+      [target.name]: Math.round(((Number(target[k]) || 0) / max(k)) * 100),
+      fullMark: 100,
+    }));
   }, [agents, loading, selectedAgentId]);
 
   if (loading) {

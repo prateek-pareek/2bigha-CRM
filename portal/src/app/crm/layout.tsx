@@ -16,6 +16,7 @@ import { crmSuiteShellClassName } from "@/lib/crm/shell";
 import {
   crmModuleForPathname,
   defaultReadPermission,
+  moduleReadAlternatives,
 } from "@/lib/permissions/registry";
 import { applyCrmAccent, readCrmThemePrefs } from "@/lib/crm/settings/theme-prefs";
 import { dashboardMasterKeyApplies } from "@/lib/crm/shared/dashboard-access";
@@ -78,6 +79,7 @@ export default function CRMLayout({
     if (
       !hasAccess(required) &&
       !hasAccess(module.id) &&
+      !moduleReadAlternatives(module.id).some((perm) => hasAccess(perm)) &&
       !(masterKey && hasAccess(masterKey))
     ) {
       router.replace(`/unauthorized?module=${encodeURIComponent(module.id)}`);

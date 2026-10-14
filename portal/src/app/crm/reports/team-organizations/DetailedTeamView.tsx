@@ -2,247 +2,150 @@
 
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
-
-type TeamData = {
-  teamId?: string;
-  teamName: string;
-  teamSize: number;
-  totalCalls: number;
-  totalLeads: number;
-  leadsConverted: number;
-  totalActivities: number;
-  messagesOutbound: number;
-  messagesRead: number;
-  messagesFailed: number;
-  incomingCalls: number;
-  missedCalls: number;
-  completedCalls: number;
-  avgCallDuration: number;
-};
+import {
+  formatDuration,
+  formatINR,
+  formatMinutes,
+  type AgentReportRow,
+  type TeamReportRow,
+} from "../lib/performance-report";
 
 type Props = {
-  teams: TeamData[];
+  teams: TeamReportRow[];
+  agents: AgentReportRow[];
   loading: boolean;
 };
 
-export default function DetailedTeamView({ teams, loading }: Props) {
-  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+function Line({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-sm text-[var(--text-muted)]">{label}</span>
+      <span className={`font-semibold ${tone || "text-[var(--text-main)]"}`}>{value}</span>
+    </div>
+  );
+}
+
+/** Team drill-down: roll-up metrics + every member's numbers (FRD §14.2 / §14.3 drill-down). */
+export default function DetailedTeamView({ teams, agents, loading }: Props) {
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   if (loading) {
-    return (
-      <div className="flex h-40 items-center justify-center text-[var(--text-muted)]">
-        Loading detailed team data...
-      </div>
-    );
+    return <div className="flex h-40 items-center justify-center text-[var(--text-muted)]">Loading detailed team data...</div>;
   }
-
   if (teams.length === 0) {
-    return (
-      <div className="flex h-40 items-center justify-center text-[var(--text-muted)]">
-        No team data available
-      </div>
-    );
+    return <div className="flex h-40 items-center justify-center text-[var(--text-muted)]">No team data available</div>;
   }
 
   return (
     <div className="space-y-3">
-      {teams.map((team) => {
-        const teamId = team.teamId || "";
-        const isExpanded = expandedTeam === teamId;
-
-        const conversionRate = team.totalLeads > 0 ? ((team.leadsConverted / team.totalLeads) * 100).toFixed(1) : "0";
-        const readRate = team.messagesOutbound > 0 ? ((team.messagesRead / team.messagesOutbound) * 100).toFixed(1) : "0";
-        const failureRate = team.messagesOutbound > 0 ? ((team.messagesFailed / team.messagesOutbound) * 100).toFixed(1) : "0";
-        const missedCallRate = team.incomingCalls > 0 ? ((team.missedCalls / team.incomingCalls) * 100).toFixed(1) : "0";
-        const completionRate = team.incomingCalls > 0 ? ((team.completedCalls / team.incomingCalls) * 100).toFixed(1) : "0";
-
+      {teams.map((t) => {
+        const open = expanded === t.teamId;
+        const members = agents.filter((a) => a.teamId === t.teamId);
         return (
-          <div key={teamId} className="overflow-hidden rounded-lg border border-[var(--border-color)]">
-            {/* Summary Row */}
+          <div key={t.teamId} className="overflow-hidden rounded-lg border border-[var(--border-color)]">
             <button
               type="button"
-              onClick={() => setExpandedTeam(isExpanded ? null : teamId)}
-              className="w-full bg-[var(--card-bg)] px-4 py-3 text-left hover:bg-[var(--surface-dim)] transition-colors"
+              onClick={() => setExpanded(open ? null : t.teamId)}
+              className="w-full bg-[var(--card-bg)] px-4 py-3 text-left transition-colors hover:bg-[var(--surface-dim)]"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex flex-1 items-center gap-4">
-                  <ChevronDown
-                    size={16}
-                    className={`text-[var(--text-muted)] transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                  />
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-[var(--text-main)]">{team.teamName}</h4>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-4">
+                  <ChevronDown size={16} className={`shrink-0 text-[var(--text-muted)] transition-transform ${open ? "rotate-180" : ""}`} />
+                  <div className="min-w-0">
+                    <h4 className="truncate font-semibold text-[var(--text-main)]">{t.teamName}</h4>
                     <p className="text-xs text-[var(--text-muted)]">
-                      {team.teamSize} members • {team.totalCalls} calls • {conversionRate}% conversion
+                      {t.teamSize} members · {t.calls} calls · {t.leadsCreated} leads · {t.conversionRate}% conversion
                     </p>
                   </div>
                 </div>
-
-                {/* Key Metrics Summary */}
                 <div className="flex gap-4 text-right text-sm">
                   <div>
-                    <p className="text-xs text-[var(--text-muted)]">Messages</p>
-                    <p className="font-semibold text-[var(--text-main)]">{team.messagesOutbound}</p>
+                    <p className="text-xs text-[var(--text-muted)]">WhatsApp read</p>
+                    <p className="font-semibold text-[var(--text-main)]">{t.whatsappReadRate}%</p>
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--text-muted)]">Read Rate</p>
-                    <p className={`font-semibold ${Number(readRate) >= 80 ? "text-[#10b981]" : Number(readRate) >= 60 ? "text-[#f59e0b]" : "text-[#ef4444]"}`}>
-                      {readRate}%
-                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">Revenue</p>
+                    <p className="font-semibold text-[var(--text-main)]">{formatINR(t.revenue)}</p>
                   </div>
                 </div>
               </div>
             </button>
 
-            {/* Expanded Details */}
-            {isExpanded && (
+            {open && (
               <div className="border-t border-[var(--border-color)] bg-[var(--surface-dim)] p-4">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-                  {/* Call Metrics */}
-                  <div>
-                    <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">CALL METRICS</p>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Incoming Calls</span>
-                        <span className="font-semibold text-[var(--text-main)]">{team.incomingCalls}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Completed</span>
-                        <span className="font-semibold text-[#10b981]">{team.completedCalls}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Missed</span>
-                        <span className="font-semibold text-[#ef4444]">{team.missedCalls}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Completion Rate</span>
-                        <span className={`font-semibold ${Number(completionRate) >= 90 ? "text-[#10b981]" : Number(completionRate) >= 70 ? "text-[#f59e0b]" : "text-[#ef4444]"}`}>
-                          {completionRate}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Avg Duration</span>
-                        <span className="font-semibold text-[var(--text-main)]">{team.avgCallDuration}s</span>
-                      </div>
-                      <div className="mt-2 h-1.5 rounded-full bg-[var(--border-color)]">
-                        <div
-                          className={`h-full rounded-full transition-all ${Number(missedCallRate) <= 20 ? "bg-[#10b981]" : Number(missedCallRate) <= 40 ? "bg-[#f59e0b]" : "bg-[#ef4444]"}`}
-                          style={{ width: `${100 - Number(missedCallRate)}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-[var(--text-muted)] text-right">Missed: {missedCallRate}%</p>
-                    </div>
+                <div className="mb-5 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="space-y-1">
+                    <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">CALLS (IVR)</p>
+                    <Line label="Total" value={t.calls} />
+                    <Line label="Outgoing / incoming" value={`${t.outgoingCalls} / ${t.incomingCalls}`} />
+                    <Line label="Connected" value={`${t.connectedCalls} (${t.connectRate}%)`} tone="text-[#10b981]" />
+                    <Line label="Missed" value={t.missedCalls} tone="text-[#ef4444]" />
+                    <Line label="Avg talk time" value={formatDuration(t.avgCallDurationSec)} />
                   </div>
-
-                  {/* Lead Metrics */}
-                  <div>
-                    <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">LEAD METRICS</p>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Total Leads</span>
-                        <span className="font-semibold text-[var(--text-main)]">{team.totalLeads}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Converted</span>
-                        <span className="font-semibold text-[#10b981]">{team.leadsConverted}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Conversion Rate</span>
-                        <span className={`font-semibold ${Number(conversionRate) >= 20 ? "text-[#10b981]" : Number(conversionRate) >= 10 ? "text-[#f59e0b]" : "text-[#ef4444]"}`}>
-                          {conversionRate}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Leads per member</span>
-                        <span className="font-semibold text-[var(--text-main)]">
-                          {(team.totalLeads / Math.max(1, team.teamSize)).toFixed(1)}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-1.5 rounded-full bg-[var(--border-color)]">
-                        <div
-                          className={`h-full rounded-full transition-all ${Number(conversionRate) >= 20 ? "bg-[#10b981]" : Number(conversionRate) >= 10 ? "bg-[#f59e0b]" : "bg-[#ef4444]"}`}
-                          style={{ width: `${Math.min(100, (Number(conversionRate) / 50) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
+                  <div className="space-y-1">
+                    <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">LEADS</p>
+                    <Line label="Created" value={t.leadsCreated} />
+                    <Line label="Contacted" value={`${t.leadsContacted} (${t.contactRate}%)`} />
+                    <Line label="Converted" value={`${t.leadsConverted} (${t.conversionRate}%)`} tone="text-[#10b981]" />
+                    <Line label="Follow-up adherence" value={t.followUpAdherence == null ? "—" : `${t.followUpAdherence}%`} />
+                    <Line label="Avg first response" value={formatMinutes(t.avgResponseMins)} />
                   </div>
-
-                  {/* WhatsApp Engagement */}
-                  <div>
-                    <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">WHATSAPP ENGAGEMENT</p>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Messages Sent</span>
-                        <span className="font-semibold text-[var(--text-main)]">{team.messagesOutbound}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Read</span>
-                        <span className="font-semibold text-[#10b981]">{team.messagesRead}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Failed</span>
-                        <span className="font-semibold text-[#ef4444]">{team.messagesFailed}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Read Rate</span>
-                        <span className={`font-semibold ${Number(readRate) >= 80 ? "text-[#10b981]" : Number(readRate) >= 60 ? "text-[#f59e0b]" : "text-[#ef4444]"}`}>
-                          {readRate}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Failure Rate</span>
-                        <span className={`font-semibold ${Number(failureRate) <= 5 ? "text-[#10b981]" : Number(failureRate) <= 15 ? "text-[#f59e0b]" : "text-[#ef4444]"}`}>
-                          {failureRate}%
-                        </span>
-                      </div>
-                      <div className="mt-2 h-1.5 rounded-full bg-[var(--border-color)]">
-                        <div
-                          className={`h-full rounded-full transition-all ${Number(readRate) >= 80 ? "bg-[#10b981]" : Number(readRate) >= 60 ? "bg-[#f59e0b]" : "bg-[#ef4444]"}`}
-                          style={{ width: `${Number(readRate)}%` }}
-                        />
-                      </div>
-                    </div>
+                  <div className="space-y-1">
+                    <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">WHATSAPP</p>
+                    <Line label="Sent" value={t.whatsappSent} />
+                    <Line label="Delivered" value={t.whatsappDelivered} />
+                    <Line label="Read" value={`${t.whatsappRead} (${t.whatsappReadRate}%)`} tone="text-[#10b981]" />
+                    <Line label="Failed" value={t.whatsappFailed} tone="text-[#ef4444]" />
+                    <Line label="Avg reply" value={formatMinutes(t.whatsappAvgReplyMins)} />
                   </div>
-
-                  {/* Team Info */}
-                  <div>
-                    <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">TEAM INFO</p>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Team Size</span>
-                        <span className="font-semibold text-[var(--text-main)]">{team.teamSize}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Total Activities</span>
-                        <span className="font-semibold text-[var(--text-main)]">{team.totalActivities}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Avg Activity/member</span>
-                        <span className="font-semibold text-[var(--text-main)]">
-                          {(team.totalActivities / Math.max(1, team.teamSize)).toFixed(0)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-[var(--text-muted)]">Calls per member</span>
-                        <span className="font-semibold text-[var(--text-main)]">
-                          {(team.totalCalls / Math.max(1, team.teamSize)).toFixed(1)}
-                        </span>
-                      </div>
-                      <div className="mt-3 rounded-md bg-[var(--card-bg)] p-2">
-                        <p className="text-xs font-semibold text-[var(--text-main)]">Team Score</p>
-                        <p className="text-lg font-bold text-[#10b981]">
-                          {Math.round(
-                            (Number(conversionRate) * 0.3 +
-                              Number(readRate) * 0.3 +
-                              Number(completionRate) * 0.4) /
-                              10
-                          ) * 10}
-                          /100
-                        </p>
-                      </div>
-                    </div>
+                  <div className="space-y-1">
+                    <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">LISTINGS, TASKS & SALES</p>
+                    <Line label="Properties / farms" value={`${t.properties} / ${t.farms}`} />
+                    <Line label="Approved" value={t.listingsApproved} />
+                    <Line label="Tasks done" value={`${t.tasksCompleted} / ${t.tasksCreated}`} />
+                    <Line label="Subscription sales" value={t.subscriptionSales} />
+                    <Line label="Revenue" value={formatINR(t.revenue)} tone="text-[#10b981]" />
                   </div>
                 </div>
+
+                {members.length ? (
+                  <div className="overflow-x-auto rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)]">
+                    <table className="w-full min-w-[760px] text-xs">
+                      <thead>
+                        <tr className="border-b border-[var(--border-color)] text-left font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                          <th className="px-3 py-2">Member</th>
+                          <th className="px-3 py-2">Calls</th>
+                          <th className="px-3 py-2">Connected</th>
+                          <th className="px-3 py-2">Leads</th>
+                          <th className="px-3 py-2">Converted</th>
+                          <th className="px-3 py-2">Follow-up</th>
+                          <th className="px-3 py-2">Listings</th>
+                          <th className="px-3 py-2">WhatsApp</th>
+                          <th className="px-3 py-2">Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {members.map((m) => (
+                          <tr key={m.agentId} className="border-b border-[var(--border-color)] last:border-0">
+                            <td className="px-3 py-2 font-medium text-[var(--text-main)]">{m.name}</td>
+                            <td className="px-3 py-2">{m.calls}</td>
+                            <td className="px-3 py-2">{m.connectedCalls}</td>
+                            <td className="px-3 py-2">{m.leadsCreated}</td>
+                            <td className="px-3 py-2">
+                              {m.leadsConverted} ({m.conversionRate}%)
+                            </td>
+                            <td className="px-3 py-2">{m.followUpAdherence == null ? "—" : `${m.followUpAdherence}%`}</td>
+                            <td className="px-3 py-2">{m.listingsTotal}</td>
+                            <td className="px-3 py-2">
+                              {m.whatsappSent} / {m.whatsappRead} read
+                            </td>
+                            <td className="px-3 py-2">{formatINR(m.revenue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
