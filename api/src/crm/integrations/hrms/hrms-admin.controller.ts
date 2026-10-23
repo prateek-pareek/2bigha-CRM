@@ -11,11 +11,24 @@ import { AuthGuard } from '@nestjs/passport';
 import { RbacGuard } from '../../crm-users/rbac.guard';
 import { Permissions } from '../../crm-users/permissions.decorator';
 import { HrmsIntegrationService } from './hrms-integration.service';
+import { HrmsOutboundService } from './hrms-outbound.service';
 
 @Controller('integrations/hrms')
 @UseGuards(AuthGuard('jwt'), RbacGuard)
 export class HrmsAdminController {
-  constructor(private readonly hrmsIntegration: HrmsIntegrationService) {}
+  constructor(
+    private readonly hrmsIntegration: HrmsIntegrationService,
+    private readonly hrmsOutbound: HrmsOutboundService,
+  ) {}
+
+  /** Portal uses this to hide CRM-side add/remove when HRMS owns the employee list. */
+  @Get('status')
+  status() {
+    return {
+      employeesManagedInHrms: this.hrmsOutbound.employeesManagedInHrms(),
+      hrmsPortalUrl: this.hrmsOutbound.hrmsPortalUrl(),
+    };
+  }
 
   @Get('pending-users')
   @Permissions('settings:admin')

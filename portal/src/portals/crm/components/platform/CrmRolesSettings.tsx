@@ -42,6 +42,8 @@ type RoleDoc = {
   /** Seeded hierarchy role (Admin, Manager, Team Lead, …) — cannot be renamed, re-scoped, or deleted. */
   isSystem?: boolean;
   seedKey?: string;
+  /** Linked HRMS role template — edits here sync to HRMS and vice versa. */
+  hrmsRoleId?: string;
   workspaceModule?: WorkspaceModule;
   permissions: string[];
   crmPermissions: string[];
@@ -301,7 +303,7 @@ export function CrmRolesSettings() {
           Each role is scoped to one workspace (2Bigha, PM or Legal) and sees only its own
           records — or its team's with a Team scope grant. Only Super Admin spans every
           workspace. System roles come from the requirement doc and can be tuned but not
-          renamed or deleted.
+          renamed or deleted. Role changes here are mirrored to the HRMS Role Manager.
         </p>
       </div>
 
@@ -336,6 +338,14 @@ export function CrmRolesSettings() {
                     {r.isSystem ? (
                       <span className="rounded border border-primary/40 px-1.5 text-[10px] font-bold uppercase tracking-wide text-primary">
                         System
+                      </span>
+                    ) : null}
+                    {r.hrmsRoleId ? (
+                      <span
+                        className="rounded border border-emerald-300 px-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700"
+                        title="Synced with the HRMS Role Manager"
+                      >
+                        HRMS
                       </span>
                     ) : null}
                     {r.isActive === false ? (

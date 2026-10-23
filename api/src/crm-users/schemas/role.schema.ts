@@ -38,6 +38,13 @@ export class Role {
   @Prop({ default: 0 })
   seedVersion: number;
 
+  /** Linked HRMS UserRole _id (two-way role mirror, integrations/hrms). */
+  @Prop({ trim: true, index: true, sparse: true })
+  hrmsRoleId?: string;
+
+  @Prop()
+  hrmsSyncedAt?: Date;
+
   @Prop({ type: String, enum: [...CRM_ROLE_MODULES], default: 'ALL', index: true })
   workspaceModule: CrmRoleModule;
 }

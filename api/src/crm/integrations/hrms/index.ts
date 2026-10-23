@@ -7,3 +7,5 @@ export {
   HrmsSyncEventLog,
   HrmsSyncEventLogSchema,
 } from './schemas/hrms-sync-event-log.schema';
+export { HrmsOutboundService } from './hrms-outbound.service';
+export { HrmsOutboundModule } from './hrms-outbound.module';

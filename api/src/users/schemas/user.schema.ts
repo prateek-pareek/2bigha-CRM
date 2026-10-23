@@ -70,6 +70,13 @@ export class User {
    */
   @Prop({ type: Types.ObjectId, ref: 'User', index: true })
   reportsTo?: Types.ObjectId;
+
+  /**
+   * Set when the password was last verified by HRMS (shared login). The stored hash is then
+   * only a cached copy for when HRMS is unreachable — the password is changed in HRMS.
+   */
+  @Prop()
+  hrmsPasswordSyncedAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

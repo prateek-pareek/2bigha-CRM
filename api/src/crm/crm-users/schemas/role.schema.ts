@@ -33,6 +33,13 @@ export class Role {
   @Prop({ default: 0 })
   seedVersion: number;
 
+  /** Linked HRMS UserRole _id (two-way role mirror, integrations/hrms). */
+  @Prop({ trim: true, index: true, sparse: true })
+  hrmsRoleId?: string;
+
+  @Prop()
+  hrmsSyncedAt?: Date;
+
   /**
    * Workspace boundary (RBAC/workspace-isolation layer) — this is the field `RbacGuard`
    * actually reads (via `dbUser.roleId.workspaceModule`, `dbUser` being the live `CRMUser`

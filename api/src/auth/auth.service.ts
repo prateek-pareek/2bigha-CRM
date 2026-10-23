@@ -7,6 +7,7 @@ import { CRMUsersService } from '../crm-users/crm-users.service';
 import { applyPlatformSuperAdminPrivileges } from './platform-super-admin.util';
 import { rolePermissionNames } from '../crm/shared/crm-admin-access.util';
 import { resolveRoleModule } from '../crm/shared/crm-workspace-module.util';
+import { HrmsOutboundService } from '../crm/integrations/hrms/hrms-outbound.service';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +16,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private crmUsersService: CRMUsersService,
+    private readonly hrmsOutbound: HrmsOutboundService,
   ) {}
 
   /**
@@ -61,9 +63,35 @@ export class AuthService {
     return { ...plain, crmPermissions: merged, crmRole, permittedTools };
   }
 
+  /**
+   * Shared HRMS ↔ CRM login. HRMS owns the password of every employee that has an HRMS login;
+   * CRM's own hash is only used for CRM-only accounts, or as the cached copy of the last
+   * HRMS-verified password while HRMS is unreachable.
+   */
+  private async passwordMatches(user: any, email: string, pass: string): Promise<boolean> {
+    if (!this.hrmsOutbound.isConfigured()) {
+      return bcrypt.compare(pass, user.password || '');
+    }
+    // The HRMS sync placeholder is a shared, known value — never accept it as a login.
+    const placeholder = process.env.HRMS_SYNC_PLACEHOLDER_PASSWORD || 'ChangeMe@HrmsSync1!';
+    if (pass === placeholder) return false;
+
+    const hrms = await this.hrmsOutbound.verifyCredentials(email, pass);
+    if (hrms === 'ok') {
+      await this.usersService.cacheHrmsVerifiedPassword(String(user._id), pass);
+      return true;
+    }
+    if (hrms === 'invalid' || hrms === 'inactive') return false;
+    // HRMS owned this login and it no longer exists there (employee removed) — the cached
+    // hash must not keep the account usable.
+    if (hrms === 'no_user' && user.hrmsPasswordSyncedAt) return false;
+    // 'no_user' (CRM-only account) or 'unreachable' (fall back to the cached hash).
+    return bcrypt.compare(pass, user.password || '');
+  }
+
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findByEmail(email);
-    if (user && (await bcrypt.compare(pass, user.password || ''))) {
+    if (user && (await this.passwordMatches(user, email, pass))) {
       this.logger.log(`User validated: ${email}`);
 
       const ensured = await this.usersService.ensurePlatformSuperAdminRecord(user);

@@ -20,6 +20,7 @@ import {
 } from '../crm/shared/crm-role-permissions.util';
 import { TwoBighaAgentService } from './twobigha-agent.service';
 import { KommunoAgentService } from './kommuno-agent.service';
+import { HrmsOutboundService } from '../crm/integrations/hrms/hrms-outbound.service';
 
 const CRM_PORTAL_MANAGEMENT_ROLES = new Set(
   [
@@ -113,6 +114,7 @@ export class CRMUsersService implements OnModuleInit {
     private trashService: TrashService,
     private readonly twoBighaAgentService: TwoBighaAgentService,
     private readonly kommunoAgentService: KommunoAgentService,
+    private readonly hrmsOutbound: HrmsOutboundService,
   ) {}
 
   async onModuleInit() {
@@ -428,6 +430,14 @@ export class CRMUsersService implements OnModuleInit {
       .findByIdAndUpdate(id, updateUserDto, { new: true })
       .exec();
 
+    // Role / activation changed in CRM → mirror to the HRMS employee record.
+    if (
+      updatedUser &&
+      ['roleId', 'isActive', 'provisioningStatus'].some((k) => updateUserDto[k] !== undefined)
+    ) {
+      this.hrmsOutbound.notifyUserAccess(updatedUser._id);
+    }
+
     if (updatedUser) {
       if (bypassSync) {
         if (updatedUser.kommunoAgentId) {
@@ -544,11 +554,14 @@ export class CRMUsersService implements OnModuleInit {
       .findByIdAndUpdate(id, patch, { new: true })
       .populate('permissions')
       .exec();
+    if (updated) this.hrmsOutbound.notifyRoleUpserted(updated._id);
     return updated ? serializeCrmRole(updated) : null;
   }
 
   async deleteRole(id: string): Promise<any> {
-    return this.roleModel.findByIdAndDelete(id).exec();
+    const deleted = await this.roleModel.findByIdAndDelete(id).exec();
+    if (deleted) this.hrmsOutbound.notifyRoleDeleted(deleted);
+    return deleted;
   }
 
   async createRole(roleDto: any): Promise<any> {
@@ -559,6 +572,7 @@ export class CRMUsersService implements OnModuleInit {
       isSystem: !!roleDto?.isSystem,
       permissions: await this.resolvePermissionIds(names),
     }).save();
+    this.hrmsOutbound.notifyRoleUpserted(created._id);
     return serializeCrmRole(await created.populate('permissions'));
   }
 

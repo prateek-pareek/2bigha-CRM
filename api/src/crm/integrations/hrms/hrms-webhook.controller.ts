@@ -11,7 +11,10 @@ import {
 import type { Response } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { HrmsIntegrationService } from './hrms-integration.service';
-import { HrmsSyncEnvelope } from './hrms-sync.types';
+import {
+  HRMS_SYNC_RESPONSE_EVENT_TYPES,
+  HrmsSyncEnvelope,
+} from './hrms-sync.types';
 
 @Controller('webhooks/hrms')
 export class HrmsWebhookController {
@@ -22,6 +25,20 @@ export class HrmsWebhookController {
   @Get('health')
   health() {
     return { ok: true, service: 'hrms-webhook' };
+  }
+
+  /** Roles + HRMS-linked users for the HRMS "Pull from CRM" reconcile. Same secret as POST. */
+  @Get('snapshot')
+  async snapshot(
+    @Res() res: Response,
+    @Headers('x-hrms-secret') headerSecret?: string,
+  ) {
+    const expected = process.env.HRMS_WEBHOOK_SECRET;
+    // Exposes users — never serve it without a configured shared secret.
+    if (!expected || headerSecret !== expected) {
+      return res.status(401).send('Unauthorized');
+    }
+    return res.status(200).json(await this.hrmsIntegration.snapshot());
   }
 
   /**
@@ -47,19 +64,30 @@ export class HrmsWebhookController {
       }
     }
 
-    // Ack quickly; process synchronously for reliability in this deploy
-    res.status(200).json({ accepted: true });
-
     const events: HrmsSyncEnvelope[] = Array.isArray((body as any)?.events)
       ? (body as any).events
       : [body as HrmsSyncEnvelope];
 
+    // Role / assignment events answer with the resulting CRM state (role id, user status),
+    // so process them before responding. Everything else is acked first, as before.
+    const respondWithResults = events.some((e) =>
+      HRMS_SYNC_RESPONSE_EVENT_TYPES.has(String(e?.eventType)),
+    );
+    if (!respondWithResults) {
+      res.status(200).json({ accepted: true });
+    }
+
+    const results: unknown[] = [];
     for (const event of events) {
       try {
-        await this.hrmsIntegration.handleEnvelope(event);
-      } catch (err) {
+        results.push(await this.hrmsIntegration.handleEnvelope(event));
+      } catch (err: any) {
         this.logger.error('Failed processing HRMS webhook event', err as Error);
+        results.push({ ok: false, detail: err?.message || 'processing_failed' });
       }
+    }
+    if (respondWithResults) {
+      res.status(200).json({ accepted: true, results });
     }
   }
 
