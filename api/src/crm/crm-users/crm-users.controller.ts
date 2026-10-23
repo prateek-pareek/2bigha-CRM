@@ -17,6 +17,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { RbacGuard } from './rbac.guard';
 import { Permissions } from './permissions.decorator';
 import { UserConfig, UserConfigDocument } from './schemas/user-config.schema';
+import { HrmsOutboundService } from '../integrations/hrms/hrms-outbound.service';
 
 @Controller('crm-users')
 @UseGuards(AuthGuard('jwt'), RbacGuard)
@@ -25,6 +26,7 @@ export class CRMUsersController {
     private readonly usersService: CRMUsersService,
     @InjectModel(UserConfig.name, 'crmConnection')
     private userConfigModel: Model<UserConfigDocument>,
+    private readonly hrmsOutbound: HrmsOutboundService,
   ) {}
 
   @Get('list')
@@ -53,6 +55,7 @@ export class CRMUsersController {
   @Post()
   @Permissions('settings:admin')
   create(@Body() dto: any) {
+    this.hrmsOutbound.assertCrmUserManagementAllowed('add');
     return this.usersService.create(dto);
   }
 
@@ -143,6 +146,7 @@ export class CRMUsersController {
   @Delete(':id')
   @Permissions('settings:admin')
   remove(@Param('id') id: string) {
+    this.hrmsOutbound.assertCrmUserManagementAllowed('remove');
     return this.usersService.delete(id);
   }
 
@@ -167,6 +171,7 @@ export class CRMUsersController {
   @Post('invite')
   @Permissions('settings:admin')
   inviteMember(@Body() body: { email: string; roleId: string }) {
+    this.hrmsOutbound.assertCrmUserManagementAllowed('add');
     return this.usersService.inviteUser(body.email, body.roleId);
   }
 

@@ -4,6 +4,12 @@ import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { CRMUser, CRMUserDocument } from '../../crm-users/schemas/user.schema';
 import { Role, RoleDocument } from '../../crm-users/schemas/role.schema';
+import {
+  Permission,
+  PermissionDocument,
+} from '../../crm-users/schemas/permission.schema';
+import { CRM_ROLE_MODULES, CrmRoleModule } from '../../shared/crm-workspace-module.util';
+import { HrmsOutboundService } from './hrms-outbound.service';
 import { User, UserDocument } from '../../../users/schemas/user.schema';
 import { Lead, LeadDocument } from '../../records/schemas/lead.schema';
 import { Activity, ActivityDocument } from '../../records/schemas/activity.schema';
@@ -14,13 +20,21 @@ import {
   HrmsSyncEventLogDocument,
 } from './schemas/hrms-sync-event-log.schema';
 import {
+  CrmSyncResult,
   HrmsAttendancePayload,
+  HrmsCrmAssignmentPayload,
   HrmsEmployeePayload,
   HrmsEmploymentStatusPayload,
+  HrmsRoleDeletedPayload,
+  HrmsRolePayload,
   HrmsSyncEnvelope,
   HrmsSyncEventType,
   UNAVAILABLE_ATTENDANCE_STATUSES,
 } from './hrms-sync.types';
+
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 @Injectable()
 export class HrmsIntegrationService {
@@ -39,7 +53,10 @@ export class HrmsIntegrationService {
     private readonly activityModel: Model<ActivityDocument>,
     @InjectModel(HrmsSyncEventLog.name, 'crmConnection')
     private readonly eventLogModel: Model<HrmsSyncEventLogDocument>,
+    @InjectModel(Permission.name, 'crmConnection')
+    private readonly permissionModel: Model<PermissionDocument>,
     private readonly crmNotify: CrmNotifyService,
+    private readonly hrmsOutbound: HrmsOutboundService,
   ) {}
 
   async isDuplicateEvent(eventId: string): Promise<boolean> {
@@ -77,7 +94,7 @@ export class HrmsIntegrationService {
       .exec();
   }
 
-  async handleEnvelope(envelope: HrmsSyncEnvelope): Promise<{ ok: boolean; detail?: string }> {
+  async handleEnvelope(envelope: HrmsSyncEnvelope): Promise<CrmSyncResult> {
     const { eventId, eventType, payload } = envelope || ({} as HrmsSyncEnvelope);
     if (!eventId || !eventType) {
       return { ok: false, detail: 'eventId and eventType are required' };
@@ -87,11 +104,14 @@ export class HrmsIntegrationService {
     }
 
     try {
+      let result: CrmSyncResult = { ok: true };
       switch (eventType as HrmsSyncEventType) {
         case 'employee.eligible':
-        case 'employee.updated':
-          await this.upsertEligibleEmployee(payload as HrmsEmployeePayload);
+        case 'employee.updated': {
+          const doc = await this.upsertEligibleEmployee(payload as HrmsEmployeePayload);
+          this.hrmsOutbound.notifyUserAccess(doc?._id);
           break;
+        }
         case 'employee.ineligible':
           await this.markIneligible(payload as HrmsEmployeePayload);
           break;
@@ -101,12 +121,27 @@ export class HrmsIntegrationService {
         case 'employment.status':
           await this.applyEmploymentStatus(payload as HrmsEmploymentStatusPayload);
           break;
+        case 'role.upserted':
+          result = await this.applyHrmsRole(payload as HrmsRolePayload);
+          break;
+        case 'role.deleted':
+          result = await this.applyHrmsRoleDeleted(payload as HrmsRoleDeletedPayload);
+          break;
+        case 'employee.crm_assignment':
+          result = await this.applyHrmsAssignment(payload as HrmsCrmAssignmentPayload);
+          break;
         default:
           await this.markEvent(eventId, eventType, payload, 'ignored', 'unknown_event');
           return { ok: true, detail: 'unknown_event_ignored' };
       }
-      await this.markEvent(eventId, eventType, payload, 'processed');
-      return { ok: true };
+      await this.markEvent(
+        eventId,
+        eventType,
+        payload,
+        result.ok ? 'processed' : 'failed',
+        result.ok ? undefined : result.detail,
+      );
+      return result;
     } catch (err: any) {
       this.logger.error(`HRMS event ${eventId} failed`, err);
       await this.markEvent(
@@ -171,6 +206,9 @@ export class HrmsIntegrationService {
       (existing &&
         (existing.provisioningStatus === 'active' ||
           existing.provisioningStatus === 'manual' ||
+          // Users created before provisioningStatus existed are manual CRM users — linking
+          // them to an HRMS employee must not push them back to pending.
+          (!existing.provisioningStatus && existing.isActive) ||
           (existing.isActive && existing.roleId)));
 
     if (protectAdmin) {
@@ -286,6 +324,7 @@ export class HrmsIntegrationService {
       )
       .exec()
       .catch(() => undefined);
+    this.hrmsOutbound.notifyUserAccess(doc._id);
 
     await this.notifyAdmins({
       event: 'hrms_user_revoked',
@@ -377,7 +416,18 @@ export class HrmsIntegrationService {
     await doc.save();
   }
 
+  /** CRM Admin grant (Users & access → Pending). Mirrors the result to HRMS. */
   async grantAccess(
+    crmUserId: string,
+    opts: { roleId: string; reportsToUserId?: string; activate?: boolean },
+  ): Promise<CRMUserDocument> {
+    const doc = await this.grantAccessInternal(crmUserId, opts);
+    this.hrmsOutbound.notifyUserAccess(doc._id);
+    if (opts.reportsToUserId) this.hrmsOutbound.notifyReportsTo(doc.email);
+    return doc;
+  }
+
+  private async grantAccessInternal(
     crmUserId: string,
     opts: { roleId: string; reportsToUserId?: string; activate?: boolean },
   ): Promise<CRMUserDocument> {
@@ -440,6 +490,221 @@ export class HrmsIntegrationService {
       .populate('roleId')
       .exec();
     return (populated || doc) as CRMUserDocument;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Two-way RBAC: roles + employee role/team decided in HRMS
+  // ---------------------------------------------------------------------------
+
+  private async resolvePermissionIds(names: string[]): Promise<Types.ObjectId[]> {
+    const ids: Types.ObjectId[] = [];
+    for (const raw of names) {
+      const name = String(raw || '').trim();
+      if (!name) continue;
+      const [moduleName] = name.split(':');
+      const doc = await this.permissionModel
+        .findOneAndUpdate(
+          { name },
+          { $setOnInsert: { name, module: moduleName || 'crm', description: name } },
+          { upsert: true, new: true },
+        )
+        .exec();
+      if (doc?._id) ids.push(doc._id as Types.ObjectId);
+    }
+    return ids;
+  }
+
+  /**
+   * HRMS role template → CRM Role. Matches by crmRoleId, hrmsRoleId, then name.
+   * System roles keep their name / permissions / workspace (same rule as Settings → Roles);
+   * the returned snapshot tells HRMS what CRM actually holds.
+   */
+  async applyHrmsRole(payload: HrmsRolePayload): Promise<CrmSyncResult> {
+    const name = String(payload?.name || '').trim();
+    if (!payload?.hrmsRoleId || !name) {
+      return { ok: false, detail: 'hrmsRoleId and name are required' };
+    }
+    let role =
+      (payload.crmRoleId && Types.ObjectId.isValid(payload.crmRoleId)
+        ? await this.roleModel.findById(payload.crmRoleId).exec()
+        : null) ||
+      (await this.roleModel.findOne({ hrmsRoleId: payload.hrmsRoleId }).exec()) ||
+      (await this.roleModel
+        .findOne({ name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } })
+        .exec());
+
+    const workspaceModule: CrmRoleModule = (CRM_ROLE_MODULES as readonly string[]).includes(
+      String(payload.workspaceModule),
+    )
+      ? (payload.workspaceModule as CrmRoleModule)
+      : 'ALL';
+    const link = { hrmsRoleId: payload.hrmsRoleId, hrmsSyncedAt: new Date() };
+
+    if (!role) {
+      role = await this.roleModel.create({
+        name,
+        description: payload.description || '',
+        isSystem: false,
+        isActive: payload.isActive !== false,
+        permissions: await this.resolvePermissionIds(payload.crmPermissions || []),
+        crmPermissions: [],
+        workspaceModule,
+        ...link,
+      });
+    } else if (role.isSystem) {
+      await this.roleModel
+        .updateOne(
+          { _id: role._id },
+          { $set: { ...link, description: payload.description ?? role.description } },
+        )
+        .exec();
+    } else {
+      const patch: Record<string, unknown> = {
+        ...link,
+        description: payload.description ?? role.description,
+        isActive: payload.isActive !== false,
+        // Exact set from HRMS — drop legacy string grants so removals stick.
+        permissions: await this.resolvePermissionIds(payload.crmPermissions || []),
+        crmPermissions: [],
+        workspaceModule,
+      };
+      if (role.name !== name) {
+        const clash = await this.roleModel
+          .findOne({
+            _id: { $ne: role._id },
+            name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+          })
+          .select('_id')
+          .lean()
+          .exec();
+        if (!clash) {
+          patch.name = name;
+          // Team table shows the role name string — keep it aligned.
+          await this.crmUserModel.updateMany({ roleId: role._id }, { $set: { role: name } }).exec();
+        }
+      }
+      await this.roleModel.updateOne({ _id: role._id }, { $set: patch }).exec();
+    }
+
+    const snapshot = await this.hrmsOutbound.roleSnapshotById(role._id);
+    return snapshot ? { ok: true, role: snapshot } : { ok: false, detail: 'role_not_saved' };
+  }
+
+  async applyHrmsRoleDeleted(payload: HrmsRoleDeletedPayload): Promise<CrmSyncResult> {
+    const role =
+      (payload?.crmRoleId && Types.ObjectId.isValid(payload.crmRoleId)
+        ? await this.roleModel.findById(payload.crmRoleId).exec()
+        : null) ||
+      (payload?.hrmsRoleId
+        ? await this.roleModel.findOne({ hrmsRoleId: payload.hrmsRoleId }).exec()
+        : null);
+    if (!role) return { ok: true, detail: 'not_found' };
+    if (role.isSystem) {
+      await this.roleModel.updateOne({ _id: role._id }, { $unset: { hrmsRoleId: 1 } }).exec();
+      return { ok: false, detail: 'System roles cannot be deleted.' };
+    }
+    const inUse = await this.crmUserModel.countDocuments({ roleId: role._id }).exec();
+    if (inUse > 0) {
+      await this.roleModel.updateOne({ _id: role._id }, { $unset: { hrmsRoleId: 1 } }).exec();
+      return { ok: true, detail: `role_kept_in_use_by_${inUse}_users` };
+    }
+    await this.roleModel.deleteOne({ _id: role._id }).exec();
+    return { ok: true, detail: 'deleted' };
+  }
+
+  /** Set (or clear) the CRM team lead: platform User.reportsTo, resolved by email. */
+  private async setPlatformReportsTo(email: string, leadEmail: string | null): Promise<string | undefined> {
+    if (!leadEmail) {
+      await this.platformUserModel
+        .updateOne({ email }, { $unset: { reportsTo: 1 } })
+        .exec();
+      return undefined;
+    }
+    const lead = await this.platformUserModel
+      .findOne({ email: String(leadEmail).toLowerCase() })
+      .select('_id')
+      .lean()
+      .exec();
+    if (!lead?._id) return 'team_lead_not_in_crm';
+    await this.platformUserModel
+      .updateOne({ email }, { $set: { reportsTo: lead._id } })
+      .exec();
+    return undefined;
+  }
+
+  /** HRMS admin decided an employee's CRM role / access / team lead. */
+  async applyHrmsAssignment(payload: HrmsCrmAssignmentPayload): Promise<CrmSyncResult> {
+    const email = String(payload?.email || '').trim().toLowerCase();
+    const hrmsEmployeeId = String(payload?.hrmsEmployeeId || '').trim();
+    if (!email || !hrmsEmployeeId) {
+      return { ok: false, detail: 'email and hrmsEmployeeId are required' };
+    }
+    let doc: CRMUserDocument | null =
+      (await this.crmUserModel.findOne({ hrmsEmployeeId }).exec()) ||
+      (await this.crmUserModel.findOne({ email }).exec());
+
+    if (payload.access === 'revoke') {
+      if (!doc) return { ok: true, detail: 'not_in_crm' };
+      if (isProtectedCrmAdminEmail(doc.email)) {
+        return { ok: false, detail: 'Protected CRM admin access cannot be revoked from HRMS.' };
+      }
+      doc.isActive = false;
+      if (doc.provisioningStatus === 'active') doc.provisioningStatus = 'pending_access';
+      await doc.save();
+      await this.upsertPlatformUser(doc, payload, false);
+    } else {
+      if (!doc || doc.provisioningStatus === 'revoked' || doc.provisioningStatus === 'hidden') {
+        // HRMS already checked eligibility — (re)create the pending record first.
+        doc = await this.upsertEligibleEmployee(payload);
+      }
+      if (!doc) return { ok: false, detail: 'crm_user_not_created' };
+      if (payload.crmRoleId) {
+        if (!Types.ObjectId.isValid(payload.crmRoleId)) {
+          return { ok: false, detail: 'Invalid crmRoleId' };
+        }
+        if (payload.access === 'grant') {
+          doc = await this.grantAccessInternal(String(doc._id), { roleId: payload.crmRoleId });
+        } else {
+          const role = await this.roleModel.findById(payload.crmRoleId).select('name').lean().exec();
+          if (!role?.name) return { ok: false, detail: 'CRM role not found' };
+          doc.roleId = new Types.ObjectId(payload.crmRoleId);
+          doc.role = role.name;
+          await doc.save();
+        }
+      } else if (payload.access === 'grant') {
+        return { ok: false, detail: 'crmRoleId is required to grant access' };
+      }
+    }
+
+    let detail: string | undefined;
+    if (payload.crmReportsToEmail !== undefined) {
+      detail = await this.setPlatformReportsTo(doc.email, payload.crmReportsToEmail);
+    }
+    const fresh = await this.crmUserModel.findById(doc._id).populate('roleId').lean().exec();
+    return { ok: true, detail, user: await this.hrmsOutbound.userSnapshot(fresh) };
+  }
+
+  /** Server-to-server snapshot for HRMS "Pull from CRM" (roles + HRMS-linked users). */
+  async snapshot() {
+    const roles = await this.roleModel.find().populate('permissions').exec();
+    // Every CRM user except dismissed ones — HRMS imports any it has no employee record for.
+    const users = await this.crmUserModel
+      .find({ provisioningStatus: { $ne: 'hidden' } })
+      .populate('roleId')
+      .lean()
+      .exec();
+    const userSnaps: unknown[] = [];
+    for (const u of users) userSnaps.push(await this.hrmsOutbound.userSnapshot(u));
+    const permissionNames = (await this.permissionModel.find().select('name').lean().exec())
+      .map((p: any) => p.name)
+      .filter(Boolean)
+      .sort();
+    return {
+      roles: roles.map((r) => this.hrmsOutbound.roleSnapshot(r)),
+      users: userSnaps,
+      workspaceModules: [...CRM_ROLE_MODULES],
+      permissionNames,
+    };
   }
 
   /**

@@ -83,6 +83,8 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
     /** Fallback when no CRM roles are seeded yet, so the picker is never empty. */
     const FALLBACK_SYSTEM_ROLES = ['Admin', 'Manager', 'Executive', 'Sales Rep', 'Viewer'];
     const [showAddMember, setShowAddMember] = useState(false);
+    // With HRMS connected, people are added/removed in HRMS only (api: integrations/hrms/status).
+    const [hrmsManaged, setHrmsManaged] = useState<{ on: boolean; url: string }>({ on: false, url: "" });
     const [creating, setCreating] = useState(false);
     const [twobighaSyncingId, setTwobighaSyncingId] = useState<string | null>(null);
     const [newMember, setNewMember] = useState({
@@ -240,6 +242,10 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
         fetchEmailAccounts();
         fetchCrmPortalUsers();
         fetchCustomRoles();
+        api
+            .get("/integrations/hrms/status")
+            .then(({ data }) => setHrmsManaged({ on: !!data?.employeesManagedInHrms, url: data?.hrmsPortalUrl || "" }))
+            .catch(() => undefined);
         const onChanged = () => {
             fetchUsers();
         };
@@ -501,11 +507,28 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                         Add CRM users, assign roles, and configure module-level CRM permissions.
                     </p>
                 </div>
-                <Button onClick={() => setShowAddMember(true)} className="gap-2 shrink-0">
-                    <UserPlus className="h-4 w-4" />
-                    Add team member
-                </Button>
+                {!hrmsManaged.on && (
+                    <Button onClick={() => setShowAddMember(true)} className="gap-2 shrink-0">
+                        <UserPlus className="h-4 w-4" />
+                        Add team member
+                    </Button>
+                )}
             </div>
+
+            {hrmsManaged.on && (
+                <div className="rounded-[3px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    Employees are managed in HRMS. To add or remove someone, use{" "}
+                    {hrmsManaged.url ? (
+                        <a href={`${hrmsManaged.url}/hrms/employees`} target="_blank" rel="noreferrer" className="font-semibold underline">
+                            HRMS → Employees
+                        </a>
+                    ) : (
+                        <b>HRMS → Employees</b>
+                    )}
+                    . New employees in CRM-enabled departments appear under <b>Pending</b> for role grant; roles, teams and
+                    activation can still be changed here and sync back to HRMS.
+                </div>
+            )}
 
             {showAddMember && (
                 <div className="rounded-[3px] border border-border bg-card p-4 space-y-3">
@@ -679,7 +702,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                                 >
                                                     <Shield className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Button
+                                                {!hrmsManaged.on && <Button
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={(e) => {
@@ -690,7 +713,7 @@ export function CrmTeamManagement({ variant = "settings" }: CrmTeamManagementPro
                                                     title="Delete User"
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
+                                                </Button>}
                                             </div>
                                         </td>
                                     </tr>

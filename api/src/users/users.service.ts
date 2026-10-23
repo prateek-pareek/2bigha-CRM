@@ -14,6 +14,7 @@ import {
   PLATFORM_SUPER_ADMIN_DEFAULTS,
 } from '../auth/platform-super-admin.util';
 import { RoleAuditLogService } from './role-audit-log.service';
+import { HrmsOutboundService } from '../crm/integrations/hrms/hrms-outbound.service';
 
 const ADMIN_ROLES = ['ADMIN', 'CEO', 'CTO', 'MANAGER', 'EXECUTIVE', 'SENIOR MEMBER', 'ADMINISTRATOR', 'SUPERADMIN', 'SUPER_ADMIN', 'OWNER'];
 
@@ -41,6 +42,7 @@ export class UsersService {
     private readonly notificationsService: NotificationsService,
     private readonly trashService: TrashService,
     private readonly auditLog: RoleAuditLogService,
+    private readonly hrmsOutbound: HrmsOutboundService,
   ) {}
 
   private async applyRoleTemplateToUserData(updateData: any): Promise<void> {
@@ -147,6 +149,23 @@ export class UsersService {
     return this.userModel.findById(id).populate('roleId').exec();
   }
 
+  /** Cache the HRMS-verified password locally (no logout / access bump — it is the same login). */
+  async cacheHrmsVerifiedPassword(id: string, password: string): Promise<void> {
+    const current: any = await this.userModel.findById(id).select('password').lean().exec();
+    const same = current?.password ? await bcrypt.compare(password, current.password) : false;
+    await this.userModel
+      .updateOne(
+        { _id: id },
+        {
+          $set: {
+            hrmsPasswordSyncedAt: new Date(),
+            ...(same ? {} : { password: await bcrypt.hash(password, 10) }),
+          },
+        },
+      )
+      .exec();
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     return this.userModel.findOne({ email }).populate('roleId').exec();
   }
@@ -185,6 +204,27 @@ export class UsersService {
     return updated || user;
   }
 
+  /**
+   * Role label + activation to copy onto the CRMUser on a profile save. When the CRM record is
+   * owned by a CRM role grant (roleId) or by HRMS provisioning, CRM keeps both — otherwise a
+   * Team-screen save relabels the user "Employee" and reactivates deactivated/pending users.
+   */
+  private async crmRoleFieldsForProfileSync(
+    email: string,
+    platformRole?: string,
+  ): Promise<{ role?: string; isActive?: boolean }> {
+    const existing: any = await this.crmUserModel
+      .findOne({ email })
+      .select('roleId provisioningStatus')
+      .lean()
+      .exec();
+    const crmManaged =
+      !!existing &&
+      (!!existing.roleId ||
+        (!!existing.provisioningStatus && existing.provisioningStatus !== 'manual'));
+    return crmManaged ? {} : { role: platformRole || 'user', isActive: true };
+  }
+
   async update(id: string, updateUserDto: UpdateUserDto, actor?: any): Promise<User | null> {
     const currentUser = await this.userModel.findById(id).exec();
     if (!currentUser) return null;
@@ -193,6 +233,16 @@ export class UsersService {
       (updateUserDto as any)?.roleId !== undefined &&
       String((updateUserDto as any).roleId || '') !== String(currentUser.roleId || '');
     const previousRoleId = currentUser.roleId;
+    const reportsToChanged =
+      (updateUserDto as any)?.reportsTo !== undefined &&
+      String((updateUserDto as any).reportsTo || '') !== String(currentUser.reportsTo || '');
+
+    // Shared login: an HRMS-owned password set here would be ignored at the next login.
+    if (updateUserDto.password && (currentUser as any).hrmsPasswordSyncedAt) {
+      throw new ForbiddenException(
+        'This login is managed by HRMS. Change the password in HRMS (Employees → edit, or the HRMS profile).',
+      );
+    }
 
     const updateData: any = { ...updateUserDto };
     if (isPlatformSuperAdminEmail(currentUser.email)) {
@@ -252,6 +302,11 @@ export class UsersService {
       )
       .exec();
 
+    // CRM team (reportsTo) changed → mirror the team lead to the HRMS employee record.
+    if (reportsToChanged && updatedUser) {
+      this.hrmsOutbound.notifyReportsTo(updatedUser.email);
+    }
+
     if (roleChanged && updatedUser) {
       await this.auditLog.log({
         actor,
@@ -305,8 +360,7 @@ export class UsersService {
               $set: {
                 firstName: updatedUser.firstName,
                 lastName: updatedUser.lastName,
-                role: updatedUser.role || 'user',
-                isActive: true,
+                ...(await this.crmRoleFieldsForProfileSync(updatedUser.email, updatedUser.role)),
                 permissions: updatedUser.crmPermissions || [],
                 accessibleEmailAccounts: updatedUser.accessibleEmailAccounts || [],
               },
@@ -339,8 +393,7 @@ export class UsersService {
             $set: {
               firstName: updatedUser.firstName,
               lastName: updatedUser.lastName,
-              role: updatedUser.role || 'user',
-              isActive: true,
+              ...(await this.crmRoleFieldsForProfileSync(updatedUser.email, updatedUser.role)),
               permissions: updatedUser.crmPermissions || [],
               accessibleEmailAccounts: updatedUser.accessibleEmailAccounts || [],
             },
