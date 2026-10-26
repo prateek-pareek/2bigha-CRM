@@ -922,8 +922,18 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
 
       let initialPipelineId = '';
 
-      if (pipelinesData?.length) {
-        const { pipelineId } = resolveActivePipelineId('leads', pipelinesData, storedUser);
+      // Resolve within the active vertical — the saved/assigned pipeline is shared across
+      // Property Listing and Property Management, so it may belong to the other board.
+      const verticalPipelines = (pipelinesData || []).filter((p: any) =>
+        !activeLeadVertical
+          ? true
+          : activeLeadVertical === 'property_management'
+            ? p.leadVertical === 'property_management'
+            : p.leadVertical === 'property_listing' || !p.leadVertical,
+      );
+      const candidatePipelines = verticalPipelines.length ? verticalPipelines : pipelinesData || [];
+      if (candidatePipelines.length) {
+        const { pipelineId } = resolveActivePipelineId('leads', candidatePipelines, storedUser);
         initialPipelineId = pipelineId;
         setSelectedPipelineId(pipelineId);
       }
@@ -970,7 +980,10 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       ) {
         return;
       }
-      const lRes = await fetch(leadsUrl, { headers, cache: 'no-store' });
+      leadsFetchAbortRef.current?.abort();
+      const controller = new AbortController();
+      leadsFetchAbortRef.current = controller;
+      const lRes = await fetch(leadsUrl, { headers, cache: 'no-store', signal: controller.signal });
       if (lRes.ok) {
         const payload = await lRes.json();
         crmCacheSet(leadListKey, payload);
@@ -992,11 +1005,11 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
         );
       }
     } catch (err) {
-      console.error(err);
+      if ((err as any)?.name !== 'AbortError') console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [pipelineCacheKey, page, pageSize, debouncedSearch, needsClientFullList, showMyLeadsOnly, apiFilters, emailEngagement, followUpFilter, readSharedLeadsCache]);
+  }, [pipelineCacheKey, page, pageSize, debouncedSearch, needsClientFullList, showMyLeadsOnly, apiFilters, emailEngagement, followUpFilter, readSharedLeadsCache, activeLeadVertical]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -1756,11 +1769,15 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       ownerFiltered.filter((l) => {
         if ((l as any).converted === true)
           return false;
+        // List/grid are server-paged: the API already scoped the page by pipeline (or by the
+        // user's assigned pipeline, which can differ from the picker). Re-filtering here would
+        // hide rows while the header/pagination still count them ("1–16 of 16", empty table).
+        if (!needsClientFullList) return true;
         const leadPipeline = l.pipeline?.toString();
         const targetPipeline = selectedPipelineId?.toString();
         return leadPipeline === targetPipeline || !leadPipeline;
       }),
-    [ownerFiltered, selectedPipelineId],
+    [ownerFiltered, selectedPipelineId, needsClientFullList],
   );
 
   const filteredLeads = useMemo(() => {

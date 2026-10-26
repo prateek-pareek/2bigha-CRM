@@ -117,6 +117,16 @@ export default function WhatsAppSideChatDrawer() {
 
   const waId = target?.waId || (target?.phone ? target.phone.replace(/\D/g, "") : "");
 
+  // While the minimized dock is on screen, flag <html> so crm-hubspot.css reserves matching
+  // space at the bottom of the page — pagination / last rows scroll clear instead of hiding under it.
+  const showDock = pathname !== "/crm/whatsapp" && isOpen && !!target && !!waId && isMinimized;
+  useEffect(() => {
+    if (!showDock) return;
+    const root = document.documentElement;
+    root.setAttribute("data-crm-floating-dock", "");
+    return () => root.removeAttribute("data-crm-floating-dock");
+  }, [showDock]);
+
   useEffect(() => {
     if (!waId) {
       setLinkedLead(null);
@@ -341,7 +351,9 @@ export default function WhatsAppSideChatDrawer() {
     return (
       <div
         onClick={toggleMinimize}
-        className="fixed bottom-0 right-6 z-[500] flex h-12 w-80 cursor-pointer items-center justify-between rounded-t-xl bg-[#008069] px-4 text-white shadow-2xl transition-all hover:bg-[#00705c]"
+        // z-30: above page content (sticky headers are z-10/20) but below every modal/drawer
+        // overlay (z-40+), so it never sits on top of a dialog's footer buttons.
+        className="crm-floating-dock fixed bottom-3 right-4 z-30 flex h-11 w-72 max-w-[calc(100vw-2rem)] cursor-pointer items-center justify-between rounded-full bg-[#008069] pl-4 pr-2 text-white shadow-lg transition-all hover:bg-[#00705c]"
       >
         <div className="flex items-center gap-2.5 truncate">
           <MessageCircle size={18} className="shrink-0 text-emerald-200" />

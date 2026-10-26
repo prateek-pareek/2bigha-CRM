@@ -409,6 +409,16 @@
   padding-top: 8px !important;
 }
 
+/* Minimized WhatsApp chat dock (fixed, bottom-right): reserve its height at the bottom of the
+   scroll area so pagination and last rows can always sit above it rather than underneath. */
+:root {
+  --crm-floating-dock-space: 72px;
+}
+html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
+  padding-bottom: var(--crm-floating-dock-space) !important;
+  scroll-padding-bottom: var(--crm-floating-dock-space);
+}
+
 .crm-list-page {
   padding-top: 0 !important;
   margin-top: 0 !important;
