@@ -116,6 +116,17 @@ export default function WhatsAppSideChatDrawer() {
   }, []);
 
   const waId = target?.waId || (target?.phone ? target.phone.replace(/\D/g, "") : "");
+  const isDockedPillVisible =
+    pathname !== "/crm/whatsapp" && isOpen && !!target && !!waId && isMinimized;
+
+  // Reserve space at the bottom of the page while the minimized pill is docked so it
+  // doesn't cover pagination / footer actions (see `data-wa-chat-docked` in crm-hubspot.css).
+  useEffect(() => {
+    if (!isDockedPillVisible) return;
+    const root = document.documentElement;
+    root.setAttribute("data-wa-chat-docked", "");
+    return () => root.removeAttribute("data-wa-chat-docked");
+  }, [isDockedPillVisible]);
 
   useEffect(() => {
     if (!waId) {

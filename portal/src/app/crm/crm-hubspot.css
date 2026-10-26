@@ -409,6 +409,12 @@
   padding-top: 8px !important;
 }
 
+/* Minimized WhatsApp chat pill (fixed, 48px tall, bottom-right) — keep pagination and
+   footer actions clear of it on every page. */
+html[data-wa-chat-docked] [data-crm-app] .crm-app-main {
+  padding-bottom: 64px !important;
+}
+
 .crm-list-page {
   padding-top: 0 !important;
   margin-top: 0 !important;
@@ -2544,6 +2550,42 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 [data-crm-app] .crm-table tbody tr.crm-table-row-selected td,
 [data-crm-app] .crm-list-page table tbody tr.crm-table-row-selected td {
   background: color-mix(in srgb, var(--primary, #e41f07) 4%, white);
+}
+
+/* Possible-duplicate record (e.g. Clients list) — amber tint + left marker */
+.crm-table tbody tr.crm-table-row-duplicate td,
+.crm-list-page table tbody tr.crm-table-row-duplicate td,
+[data-crm-theme="crms"] .crm-table tbody tr.crm-table-row-duplicate td,
+[data-crm-theme="crms"] .crm-list-page table tbody tr.crm-table-row-duplicate td,
+[data-crm-app] .crm-table tbody tr.crm-table-row-duplicate td,
+[data-crm-app] .crm-list-page table tbody tr.crm-table-row-duplicate td {
+  background: #fffbeb;
+}
+
+.crm-table tbody tr.crm-table-row-duplicate:hover td,
+.crm-list-page table tbody tr.crm-table-row-duplicate:hover td,
+[data-crm-app] .crm-table tbody tr.crm-table-row-duplicate:hover td,
+[data-crm-app] .crm-list-page table tbody tr.crm-table-row-duplicate:hover td {
+  background: #fef3c7;
+}
+
+.crm-table tbody tr.crm-table-row-duplicate td:first-child,
+.crm-list-page table tbody tr.crm-table-row-duplicate td:first-child {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+[data-theme="dark"] .crm-table tbody tr.crm-table-row-duplicate td,
+[data-theme="dark"] .crm-list-page table tbody tr.crm-table-row-duplicate td {
+  background: color-mix(in srgb, #f59e0b 12%, var(--card-bg, #1a1a1a)) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .crm-table tbody tr.crm-table-row-duplicate td,
+  .crm-list-page table tbody tr.crm-table-row-duplicate td,
+  [data-crm-app] .crm-table tbody tr.crm-table-row-duplicate td,
+  [data-crm-app] .crm-list-page table tbody tr.crm-table-row-duplicate td {
+    background: color-mix(in srgb, #f59e0b 12%, var(--card-bg, #1a1a1a)) !important;
+  }
 }
 
 /* Primary name / title in a row — Dreams `.fs-14.fw-medium` */

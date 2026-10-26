@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useDeferredValue } from 'react';
+import { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Trash2, GitBranch, Calendar, Tag, User, Building2 } from 'lucide-react';
 import LegalCaseCreatePanel from '@/components/crm/records/create/LegalCaseCreatePanel';
@@ -61,6 +61,7 @@ interface Pipeline {
 const VIEW_MODE_KEY = 'crm_legal_view_mode_v1';
 const INITIAL_STAGE_CARD_LIMIT = 40;
 const STAGE_CARD_INCREMENT = 40;
+const TWOBIGHA_READ_THROUGH_TIMEOUT_MS = 8000;
 
 function pipelineIdEq(a: unknown, b: unknown): boolean {
   return String(a ?? '') === String(b ?? '');
@@ -112,10 +113,15 @@ export default function LegalCasesPage() {
   const deferredSearch = useDeferredValue(search);
   const [stageVisibleCounts, setStageVisibleCounts] = useState<Record<string, number>>({});
 
+  const casesFetchAbortRef = useRef<AbortController | null>(null);
+
   const apiFilters = useMemo(() => mergeDateRangeFilter(filters, dateRange), [filters, dateRange]);
 
   const fetchCasesList = useCallback(
     async (pipelineId: string | null) => {
+      casesFetchAbortRef.current?.abort();
+      const controller = new AbortController();
+      casesFetchAbortRef.current = controller;
       setLoading(true);
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` } as Record<string, string>;
@@ -133,6 +139,7 @@ export default function LegalCasesPage() {
         const res = await fetch(`${CRM_API_URL}/crm/legal-cases${q ? `?${q}` : ''}`, {
           headers,
           cache: 'no-store',
+          signal: controller.signal,
         });
         if (res.ok) {
           const payload = await res.json();
@@ -140,14 +147,22 @@ export default function LegalCasesPage() {
           combined = unwrapped.data || [];
         }
       } catch (err) {
-        console.error('Failed to fetch legal cases', err);
+        if ((err as any)?.name !== 'AbortError') console.error('Failed to fetch legal cases', err);
+      } finally {
+        // CRM cases drive the spinner; the 2bigha read-through below must never block it.
+        if (casesFetchAbortRef.current === controller) {
+          setCases(combined);
+          setLoading(false);
+        }
       }
+      if (controller.signal.aborted) return;
 
-      // Live 2bigha GraphQL properties read-through
+      // Live 2bigha GraphQL properties read-through (best-effort, bounded by a timeout)
+      const timeoutId = setTimeout(() => controller.abort(), TWOBIGHA_READ_THROUGH_TIMEOUT_MS);
       try {
         const propRes = await fetch(
           `${CRM_API_URL}/crm/property-listings/twobigha/properties?limit=50${deferredSearch ? `&searchTerm=${encodeURIComponent(deferredSearch)}` : ''}`,
-          { headers, cache: 'no-store' },
+          { headers, cache: 'no-store', signal: controller.signal },
         );
         if (propRes.ok) {
           const propPayload = await propRes.json();
@@ -173,22 +188,25 @@ export default function LegalCasesPage() {
             } as LegalCase;
           });
 
-          const existingIds = new Set(combined.map((c) => c._id));
-          for (const tbc of twoBighaCases) {
-            if (!existingIds.has(tbc._id)) {
-              combined.push(tbc);
-            }
+          if (casesFetchAbortRef.current === controller && twoBighaCases.length > 0) {
+            setCases((prev) => {
+              const existingIds = new Set(prev.map((c) => c._id));
+              return [...prev, ...twoBighaCases.filter((tbc) => !existingIds.has(tbc._id))];
+            });
           }
         }
       } catch (propErr) {
-        console.warn('Failed to fetch 2bigha live properties for legal board:', propErr);
+        if ((propErr as any)?.name !== 'AbortError') {
+          console.warn('Failed to fetch 2bigha live properties for legal board:', propErr);
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      setCases(combined);
-      setLoading(false);
     },
     [deferredSearch],
   );
+
+  useEffect(() => () => casesFetchAbortRef.current?.abort(), []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -201,7 +219,8 @@ export default function LegalCasesPage() {
       });
       let pipelinesData: Pipeline[] = [];
       if (pipelinesRes.ok) {
-        pipelinesData = await pipelinesRes.json();
+        const payload = await pipelinesRes.json();
+        pipelinesData = Array.isArray(payload) ? payload : [];
         setPipelines(pipelinesData);
       }
 
@@ -214,16 +233,16 @@ export default function LegalCasesPage() {
           pipelinesData.find((p) => p.isDefault) ||
           pipelinesData[0];
         initialPipelineId = String(resolved._id);
-        setSelectedPipelineId(initialPipelineId);
       }
 
-      if (initialPipelineId) await fetchCasesList(initialPipelineId);
+      // The selectedPipelineId effect owns the cases fetch; calling it here too raced two requests.
+      if (initialPipelineId) setSelectedPipelineId(initialPipelineId);
       else setLoading(false);
     } catch (err) {
       console.error('Failed to fetch data', err);
       setLoading(false);
     }
-  }, [fetchCasesList]);
+  }, []);
 
   useEffect(() => {
     fetchData();
