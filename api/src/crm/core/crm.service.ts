@@ -131,6 +131,12 @@ import {
   mergePersonScalarFields,
   unionObjectIdStrings,
 } from '../shared/crm-duplicate.util';
+import {
+  CLIENT_DUPLICATE_PROJECTION,
+  CLIENT_DUPLICATE_REASON_LABELS,
+  CLIENT_DUPLICATE_SCAN_LIMIT,
+  ClientDuplicateIndex,
+} from '../shared/crm-client-duplicate.util';
 import { SalesAgentTriggerService } from '../sales-agent/sales-agent-cron.service';
 import { AssociationsService } from '../associations/associations.service';
 import { LeadIntentService } from '../records/lead-intent.service';
@@ -5568,6 +5574,9 @@ export class CRMService {
       result = { type: 'organization', entity: org };
     } else if (dto.type === 'client') {
       const email = (lead.email || '').trim();
+      // Leads usually store the number in `mobileNo`; `phone` is the secondary field.
+      const phone =
+        this.sanitizePhone(lead.mobileNo) || this.sanitizePhone(lead.phone);
       let client: any = null;
       const leadOidClient = new Types.ObjectId(resolvedLeadId);
       if (email && email.includes('@')) {
@@ -5581,8 +5590,8 @@ export class CRMService {
           const patch: Record<string, unknown> = {
             name: `${lead.firstName} ${lead.lastName}`,
             email,
-            phone: lead.phone,
           };
+          if (phone) patch.phone = phone;
           if (Object.keys(cf).length) patch.customFields = cf;
           if (!(client as { sourceLead?: Types.ObjectId }).sourceLead) {
             patch.sourceLead = leadOidClient;
@@ -5596,8 +5605,8 @@ export class CRMService {
         const cfNew = this.mergeCustomFieldsMaps(undefined, lead.customFields);
         client = await this.clientModel.create({
           name: `${lead.firstName} ${lead.lastName}`,
-          email: lead.email || undefined,
-          phone: lead.phone,
+          email: email || undefined,
+          phone,
           status: 'active',
           customFields: cfNew,
           sourceLead: leadOidClient,
@@ -5950,6 +5959,66 @@ export class CRMService {
           'createdAt',
         ];
         break;
+      case 'clients': {
+        const dupIndex = new ClientDuplicateIndex(
+          (await this.clientModel
+            .find({}, CLIENT_DUPLICATE_PROJECTION)
+            .limit(CLIENT_DUPLICATE_SCAN_LIMIT)
+            .lean()
+            .exec()) as any[],
+        );
+        const rows = await this.clientModel
+          .find(
+            selectedObjectIds.length
+              ? { _id: { $in: selectedObjectIds } }
+              : {},
+          )
+          .populate('organization', 'name')
+          .sort({ createdAt: -1 })
+          .limit(CRM_MAX_EXPORT_ROWS)
+          .maxTimeMS(CRM_LIST_MAX_TIME_MS)
+          .lean();
+        data = rows.map((r: any) => {
+          const dup = dupIndex.infoFor(String(r._id));
+          return {
+            _id: r._id,
+            name: r.name,
+            email: r.email,
+            additionalEmails: (r.additionalEmails || []).join('; '),
+            phone: r.phone,
+            whatsappNumber: r.whatsappNumber,
+            role: r.role,
+            status: r.status,
+            organization: r.organization?.name || '',
+            createdAt: r.createdAt,
+            duplicate: dup ? 'YES' : 'NO',
+            duplicateGroup: dup ? `Group ${dup.group} (${dup.groupSize} records)` : '',
+            duplicateReason: dup
+              ? dup.reasons.map((x) => CLIENT_DUPLICATE_REASON_LABELS[x]).join('; ')
+              : '',
+            duplicateOf: dup
+              ? dup.matches.map((m) => `${m.name} [${m._id}]`).join('; ')
+              : '',
+          };
+        });
+        headers = [
+          '_id',
+          'name',
+          'email',
+          'additionalEmails',
+          'phone',
+          'whatsappNumber',
+          'role',
+          'status',
+          'organization',
+          'createdAt',
+          'duplicate',
+          'duplicateGroup',
+          'duplicateReason',
+          'duplicateOf',
+        ];
+        break;
+      }
       default:
         throw new Error('Invalid export type');
     }

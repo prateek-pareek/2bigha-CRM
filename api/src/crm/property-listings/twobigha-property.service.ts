@@ -291,6 +291,9 @@ const GET_PROPERTY_MEDIA_QUERY = `
   }
 `;
 
+/** Cap for the optional per-row photo backfill on list reads — the card falls back to no photo. */
+const LIST_MEDIA_HYDRATION_TIMEOUT_MS = 3000;
+
 const CREATE_PROPERTY_MUTATION = `
   mutation CreateProperty($input: CreatePropertyInput!) {
     createProperty(input: $input) {
@@ -904,6 +907,7 @@ export class TwoBighaPropertyService {
   private async hydrateEnvelopeImages(
     config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
     envelope: Record<string, unknown>,
+    options?: { timeoutMs?: number },
   ): Promise<Record<string, unknown>> {
     if (this.envelopeHasHostedImages(envelope)) return envelope;
     const propertyId = (envelope.property as { id?: string } | undefined)?.id;
@@ -911,7 +915,7 @@ export class TwoBighaPropertyService {
     try {
       const media = await twoBighaGraphqlRequest<{
         getPropertyMedia?: { images?: { thumbnailUrl: string }[] };
-      }>(config, GET_PROPERTY_MEDIA_QUERY, { propertyId });
+      }>(config, GET_PROPERTY_MEDIA_QUERY, { propertyId }, options);
       const urls = this.mediaThumbnailUrls(media?.getPropertyMedia?.images);
       if (urls.length) {
         envelope.images = urls;
@@ -926,13 +930,19 @@ export class TwoBighaPropertyService {
    * List queries only carry envelope `images`, which are empty/unprocessed for
    * freshly uploaded listings — backfill those rows from getPropertyMedia so
    * every card shows its uploaded photos (same fallback the detail read uses).
+   * Each backfill is time-boxed: one slow media call must not hold the whole
+   * list response (and the portal's loading skeleton) hostage.
    */
   private async hydrateListImages(
     config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
     rows: Record<string, unknown>[] | undefined,
   ): Promise<Record<string, unknown>[]> {
     if (!rows?.length) return [];
-    return Promise.all(rows.map((row) => this.hydrateEnvelopeImages(config, row)));
+    return Promise.all(
+      rows.map((row) =>
+        this.hydrateEnvelopeImages(config, row, { timeoutMs: LIST_MEDIA_HYDRATION_TIMEOUT_MS }),
+      ),
+    );
   }
 
   private async hydrateEnvelopeUser(

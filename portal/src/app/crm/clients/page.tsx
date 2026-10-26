@@ -52,6 +52,40 @@ interface Client {
     name: string;
   };
   createdAt?: string;
+  duplicateInfo?: ClientDuplicateInfo;
+}
+
+type ClientDuplicateReason = 'name' | 'email' | 'phone';
+
+interface ClientDuplicateInfo {
+  group: number;
+  groupSize: number;
+  reasons: ClientDuplicateReason[];
+  matches: { _id: string; name: string; email: string; phone: string; reasons: ClientDuplicateReason[] }[];
+}
+
+const DUPLICATE_REASON_LABELS: Record<ClientDuplicateReason, string> = {
+  email: 'Same email',
+  phone: 'Same phone',
+  name: 'Same name',
+};
+
+function duplicateTooltip(info: ClientDuplicateInfo): string {
+  const lines = info.matches.map(
+    (m) => `• ${m.name || 'Unnamed'} — ${m.reasons.map((r) => DUPLICATE_REASON_LABELS[r]).join(', ')}`,
+  );
+  return `Duplicate group ${info.group} (${info.groupSize} records)\n${lines.join('\n')}`;
+}
+
+function DuplicateBadge({ info }: { info: ClientDuplicateInfo }) {
+  return (
+    <span
+      title={duplicateTooltip(info)}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+    >
+      Duplicate ×{info.groupSize}
+    </span>
+  );
 }
 
 interface Column {
@@ -98,6 +132,7 @@ export default function ClientsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [serverTotal, setServerTotal] = useState(0);
+  const [duplicateSummary, setDuplicateSummary] = useState<{ records: number; groups: number } | null>(null);
   const deferredSearch = useDeferredValue(search);
   const [columns, setColumns] = useState<Column[]>([]);
   const [isColumnEditorOpen, setIsColumnEditorOpen] = useState(false);
@@ -154,6 +189,7 @@ export default function ClientsPage() {
       if (data && typeof data === 'object' && 'data' in data && typeof data.total === 'number') {
         setClients(data.data);
         setServerTotal(data.total);
+        setDuplicateSummary(data.duplicateSummary ?? null);
       } else {
         const list = Array.isArray(data) ? data : [];
         setClients(list);
@@ -241,7 +277,13 @@ export default function ClientsPage() {
     switch (key) {
       case 'name': {
         const initials = client.name.split(' ').map(n => n[0]).join('').slice(0, 2);
-        return <CrmListPersonCell name={client.name} initials={initials} />;
+        return (
+          <CrmListPersonCell
+            name={client.name}
+            initials={initials}
+            trailing={client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} /> : undefined}
+          />
+        );
       }
       case 'email': return <CrmListMutedText className="crm-cell-wrap block">{client.email || '—'}</CrmListMutedText>;
       case 'phone': return <CrmListMutedText className="crm-cell-wrap block">{client.phone || '—'}</CrmListMutedText>;
@@ -341,6 +383,19 @@ export default function ClientsPage() {
             }
           />
 
+          {duplicateSummary && duplicateSummary.records > 0 && (
+            <div
+              role="status"
+              className="mt-1.5 flex items-center gap-2 rounded-[var(--crm-radius-ui)] border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            >
+              <span className="font-semibold">
+                {duplicateSummary.records} clients look like duplicates ({duplicateSummary.groups}{' '}
+                {duplicateSummary.groups === 1 ? 'group' : 'groups'}).
+              </span>
+              <span>Highlighted rows share a name, email or phone. Exports include a duplicate column.</span>
+            </div>
+          )}
+
           {viewMode === 'calendar' ? (
               <div className="crm-view-panel mt-1.5 min-h-0 flex-1 overflow-auto custom-scrollbar">
                 <CRMCalendarView items={clients} titleField="name" />
@@ -381,7 +436,12 @@ export default function ClientsPage() {
                             { key: 'email', icon: <CrmIcon.Mail size={15} />, label: client.email || '—' },
                             { key: 'phone', icon: <CrmIcon.Phone size={15} />, label: client.phone || '—' },
                           ]}
-                          footerLeft={<CrmListStatusBadge label={client.status || '—'} />}
+                          footerLeft={
+                            <div className="flex items-center gap-1.5">
+                              <CrmListStatusBadge label={client.status || '—'} />
+                              {client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} /> : null}
+                            </div>
+                          }
                           footerRight={
                             client.createdAt ? (
                               <CrmListMutedText className="text-xs">
@@ -443,7 +503,10 @@ export default function ClientsPage() {
                       ) : paginated.map(client => (
                         <tr
                           key={client._id}
-                          className="group cursor-pointer transition-colors"
+                          className={`group cursor-pointer transition-colors ${
+                            client.duplicateInfo ? 'crm-table-row-duplicate' : ''
+                          }`}
+                          title={client.duplicateInfo ? duplicateTooltip(client.duplicateInfo) : undefined}
                           onClick={() => router.push(`/crm/clients/${client._id}`)}
                         >
                           {visibleCols.map(col => (

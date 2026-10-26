@@ -107,6 +107,10 @@ import {
 import { suiteSidebarChrome } from '@/components/suite/shell/sidebar-chrome';
 
 const NAV_ICON_CLASS = 'h-3.5 w-3.5';
+/** Long labels wrap onto a second line instead of truncating with an ellipsis. */
+const NAV_LABEL_CLASS = 'min-w-0 flex-1 text-left whitespace-normal break-words leading-tight';
+/** Lets a nav row grow past the fixed rail height when its label wraps. */
+const NAV_ITEM_WRAP_CLASS = 'h-auto min-h-10 py-1.5';
 
 type NavIconComponent = ComponentType<{
     className?: string;
@@ -1034,6 +1038,7 @@ export default function Sidebar({
                                                     className={cn(
                                                         'crm-hs-nav-item w-full',
                                                         navChrome.navItem,
+                                                        !isCollapsed && NAV_ITEM_WRAP_CLASS,
                                                         (menuOpen || childActive) && !isCollapsed && openParentBg,
                                                         childActive && navChrome.navItemActive,
                                                         locked && navChrome.navItemLocked,
@@ -1049,7 +1054,7 @@ export default function Sidebar({
                                                     />
                                                     {!isCollapsed && (
                                                         <>
-                                                            <span className="truncate flex-1 text-left">{item.name}</span>
+                                                            <span className={NAV_LABEL_CLASS}>{item.name}</span>
                                                             {showAgentPill ? (
                                                                 <span className="inline-flex min-w-[16px] items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-black text-white">
                                                                     {agentPendingCount > 99 ? '99+' : agentPendingCount}
@@ -1118,6 +1123,7 @@ export default function Sidebar({
                                                                             className={cn(
                                                                                 'crm-hs-nav-item w-full',
                                                                                 navChrome.navItem,
+                                                                                NAV_ITEM_WRAP_CLASS,
                                                                                 (nestedOpen || nestedActive) &&
                                                                                     openParentBg,
                                                                                 nestedActive &&
@@ -1131,7 +1137,7 @@ export default function Sidebar({
                                                                                 iconBox={iconBox}
                                                                                 iconBoxActive={iconBoxActive}
                                                                             />
-                                                                            <span className="truncate flex-1 text-left">
+                                                                            <span className={NAV_LABEL_CLASS}>
                                                                                 {child.name}
                                                                             </span>
                                                                             <ChevronDown
@@ -1191,6 +1197,7 @@ export default function Sidebar({
                                                                                                     className={cn(
                                                                                                         'crm-hs-nav-item',
                                                                                                         navChrome.navItem,
+                                                                                                        NAV_ITEM_WRAP_CLASS,
                                                                                                         gcActive &&
                                                                                                             navChrome.navItemActive,
                                                                                                         gcLocked &&
@@ -1206,7 +1213,7 @@ export default function Sidebar({
                                                                                                         iconBox={iconBox}
                                                                                                         iconBoxActive={iconBoxActive}
                                                                                                     />
-                                                                                                    <span className="truncate">
+                                                                                                    <span className={NAV_LABEL_CLASS}>
                                                                                                         {gc.name}
                                                                                                     </span>
                                                                                                 </Link>
@@ -1243,6 +1250,7 @@ export default function Sidebar({
                                                                         className={cn(
                                                                             'crm-hs-nav-item',
                                                                             navChrome.navItem,
+                                                                            NAV_ITEM_WRAP_CLASS,
                                                                             childIsActive && navChrome.navItemActive,
                                                                             childLocked && navChrome.navItemLocked,
                                                                             !childIsActive && !childLocked && idleNavText,
@@ -1254,7 +1262,7 @@ export default function Sidebar({
                                                                             iconBox={iconBox}
                                                                             iconBoxActive={iconBoxActive}
                                                                         />
-                                                                        <span className="truncate">{child.name}</span>
+                                                                        <span className={NAV_LABEL_CLASS}>{child.name}</span>
                                                                         {childAgentPill ? (
                                                                             <span className="ml-auto inline-flex min-w-[16px] items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-black text-white">
                                                                                 {agentPendingCount > 99 ? '99+' : agentPendingCount}
@@ -1300,6 +1308,7 @@ export default function Sidebar({
                                                 className={cn(
                                                     'crm-hs-nav-item',
                                                     navChrome.navItem,
+                                                    !isCollapsed && NAV_ITEM_WRAP_CLASS,
                                                     isActive && navChrome.navItemActive,
                                                     locked && navChrome.navItemLocked,
                                                     isCollapsed && navChrome.navItemCollapsed,
@@ -1312,7 +1321,7 @@ export default function Sidebar({
                                                     iconBox={iconBox}
                                                     iconBoxActive={iconBoxActive}
                                                 />
-                                                {!isCollapsed && <span className="truncate">{item.name}</span>}
+                                                {!isCollapsed && <span className={NAV_LABEL_CLASS}>{item.name}</span>}
                                                 {showAgentPill && !isCollapsed ? (
                                                     <span className="ml-auto inline-flex min-w-[16px] items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-black text-white">
                                                         {agentPendingCount > 99 ? '99+' : agentPendingCount}

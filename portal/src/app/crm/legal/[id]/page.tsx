@@ -87,21 +87,29 @@ export default function LegalCaseDetailPage() {
   };
 
   useEffect(() => {
-    if (!recordId) return;
+    if (!recordId) {
+      setLoadError('Legal case not found.');
+      setLoading(false);
+      return;
+    }
     let isCancelled = false;
     setLoading(true);
     const token = localStorage.getItem('token');
     (async () => {
-      await fetchCase();
       try {
+        await fetchCase();
         const pipeRes = await fetch(`${CRM_API_URL}/crm/pipelines?type=legal`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!isCancelled && pipeRes.ok) setPipelines(await pipeRes.json());
+        if (!isCancelled && pipeRes.ok) {
+          const payload = await pipeRes.json();
+          setPipelines(Array.isArray(payload) ? payload : []);
+        }
       } catch (err) {
         console.error(err);
+      } finally {
+        if (!isCancelled) setLoading(false);
       }
-      if (!isCancelled) setLoading(false);
     })();
     return () => {
       isCancelled = true;

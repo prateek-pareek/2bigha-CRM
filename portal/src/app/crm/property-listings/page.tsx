@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, Building2, Home, IndianRupee, Landmark, ShieldCheck, Sprout, TrendingUp, X } from "lucide-react";
 import { toast } from "sonner";
@@ -223,9 +223,16 @@ function PropertyListingsPageContent() {
   const marketplace = isMarketplaceBucket(bucket);
   const bucketMeta = LISTING_BUCKETS.find((b) => b.key === bucket);
 
+  // Only the newest request may write rows/total/loading — an older, slower response
+  // (previous bucket, page or filter) must not overwrite them or clear the spinner early.
+  const loadSeqRef = useRef(0);
+
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
+    // Keep the current rows on screen while refetching so they stay in sync with the
+    // pagination total; bucket switches clear them explicitly in changeBucket.
     setLoading(true);
-    setListings([]);
     const safePageSize = Math.min(Math.max(1, pageSize), LISTING_PAGE_SIZE_MAX);
     try {
       if (bucket === "farm") {
@@ -235,6 +242,7 @@ function PropertyListingsPageContent() {
           searchTerm: search.trim() || undefined,
           approvalStatus: approvalFilter !== "all" ? approvalFilter : undefined,
         });
+        if (isStale()) return;
         setListings(data.map(mapTwoBighaFarmToRecord));
         setTotal(farmTotal);
         if (!search.trim() && approvalFilter === "all") {
@@ -253,6 +261,7 @@ function PropertyListingsPageContent() {
           priceOrder: sortBy === "price_asc" ? "ASC" : sortBy === "price_desc" ? "DESC" : undefined,
           newlyCreated: sortBy === "newest" ? true : undefined,
         });
+        if (isStale()) return;
         setListings(data.map((raw) => mapTwoBighaPropertyToRecord(raw)));
         setTotal(propTotal);
         if (statusFilter === "all" && !search.trim() && approvalFilter === "all") {
@@ -269,12 +278,16 @@ function PropertyListingsPageContent() {
         listingBucket: bucket,
         pmPlan: !marketplace && pmPlanFilter !== "all" ? pmPlanFilter : undefined,
       });
+      if (isStale()) return;
       setListings(data.data);
       setTotal(data.total);
     } catch {
+      if (isStale()) return;
+      setListings([]);
+      setTotal(0);
       toast.error("Failed to load property listings");
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [
     page,
@@ -453,6 +466,12 @@ function PropertyListingsPageContent() {
     return result;
   }, [listings, marketplace, statusFilter, approvalFilter, typeFilter, legalStatusFilter, sortBy]);
 
+  // Marketplace views render `sortedListings` (client-side filters applied); the count,
+  // pagination and empty state must follow the rows actually shown, not the raw page.
+  const visibleRows = marketplace ? sortedListings : listings;
+  const clientFiltered = visibleRows.length !== listings.length;
+  const displayTotal = clientFiltered ? visibleRows.length : total;
+
   const newHref =
     bucket === "pm"
       ? "/crm/property-listings/new?bucket=pm"
@@ -468,7 +487,7 @@ function PropertyListingsPageContent() {
         bordered={false}
         title={bucket === "farm" ? "Farms" : bucket === "pm" ? "Property Management" : "Properties"}
         icon={bucket === "farm" ? <Sprout size={18} className="text-emerald-600" /> : bucket === "pm" ? <ShieldCheck size={18} className="text-blue-600" /> : <Building2 size={18} className="text-amber-600" />}
-        badge={loading ? <span className="inline-block h-5 w-8 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" /> : <CrmCountBadge>{total}</CrmCountBadge>}
+        badge={loading ? <span className="inline-block h-5 w-8 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" /> : <CrmCountBadge>{displayTotal}</CrmCountBadge>}
         description={
           bucket === "pm"
             ? "Subscription verification pipeline — RM, legal, and field visit."
@@ -630,7 +649,7 @@ function PropertyListingsPageContent() {
         }
       />
 
-      {loading ? (
+      {loading && listings.length === 0 ? (
         marketplace && viewMode === "grid" ? (
           <div className="rounded-2xl bg-[#f4f6f8] p-4 sm:p-6">
             <PropertyListingCardSkeleton count={3} />
@@ -650,10 +669,16 @@ function PropertyListingsPageContent() {
             </CrmTable>
           </CrmTableShell>
         )
-      ) : listings.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <CrmEmptyState
           icon={<Home className="h-7 w-7" strokeWidth={1.5} />}
-          title={bucket === "pm" ? "No PM properties yet" : "No listings in this stream"}
+          title={
+            clientFiltered
+              ? "No listings match these filters"
+              : bucket === "pm"
+                ? "No PM properties yet"
+                : "No listings in this stream"
+          }
           description={
             bucket === "pm"
               ? "Create a PM property from a lead or here to start the verification pipeline."
@@ -919,7 +944,7 @@ function PropertyListingsPageContent() {
 
       <div className="mt-auto">
         <Pagination
-          total={total}
+          total={displayTotal}
           page={page}
           pageSize={pageSize}
           pageSizes={LISTING_PAGE_SIZES}

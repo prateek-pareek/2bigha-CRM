@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Client, ClientDocument } from '../schemas/client.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
@@ -53,6 +58,13 @@ import { CRMService } from '../core/crm.service';
 import { AssociationsService } from '../associations/associations.service';
 import { hasCrmAdminJwtBypass } from '../shared/crm-admin-access.util';
 import { TwoBighaClientService } from './twobigha-client.service';
+import {
+  CLIENT_DUPLICATE_PROJECTION,
+  CLIENT_DUPLICATE_REASON_LABELS,
+  CLIENT_DUPLICATE_SCAN_LIMIT,
+  ClientDuplicateIndex,
+  ClientDuplicateMatch,
+} from '../shared/crm-client-duplicate.util';
 
 @Injectable()
 export class ClientsService {
@@ -111,9 +123,63 @@ export class ClientsService {
     );
   }
 
+  private async loadDuplicateIndex(): Promise<ClientDuplicateIndex> {
+    const rows = await this.clientModel
+      .find({}, CLIENT_DUPLICATE_PROJECTION)
+      .limit(CLIENT_DUPLICATE_SCAN_LIMIT)
+      .lean()
+      .exec();
+    return new ClientDuplicateIndex(rows as any[]);
+  }
+
+  /** Live duplicate check for the Add Client form. */
+  async checkDuplicates(query: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    whatsappNumber?: string;
+    excludeId?: string;
+  }): Promise<{ duplicates: ClientDuplicateMatch[] }> {
+    const index = await this.loadDuplicateIndex();
+    const duplicates = index.findMatches(
+      {
+        name: query.name,
+        email: query.email,
+        phone: query.phone,
+        whatsappNumber: query.whatsappNumber,
+      },
+      query.excludeId ? String(query.excludeId) : '',
+    );
+    return { duplicates };
+  }
+
   async create(data: any, user?: any): Promise<Client> {
     const payload = this._cleanData({ ...(data || {}) });
+    const confirmDuplicate = payload.confirmDuplicate === true;
+    delete payload.confirmDuplicate;
     normalizeAdditionalEmailsPayload(payload);
+
+    // Block silent duplicates: an email match can never be saved (unique index),
+    // name/phone matches need an explicit "Create anyway" from the form.
+    const duplicates = (await this.loadDuplicateIndex()).findMatches(payload, '');
+    if (duplicates.length) {
+      const emailClash = duplicates.some((d) => d.reasons.includes('email'));
+      if (emailClash || !confirmDuplicate) {
+        const first = duplicates[0];
+        const why = first.reasons
+          .map((r) => CLIENT_DUPLICATE_REASON_LABELS[r].toLowerCase())
+          .join(', ');
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'CLIENT_DUPLICATE',
+          message: emailClash
+            ? `A client with this email already exists ("${first.name}"). Open that record instead of creating a duplicate.`
+            : `Possible duplicate of "${first.name}" (${why}). Review the existing record or choose "Create anyway".`,
+          canOverride: !emailClash,
+          duplicates,
+        });
+      }
+    }
     normalizeClientAssociations(payload);
     const actorId = this.getActorId(user);
     const canManageAll = this.canManageAllClients(user);
@@ -418,7 +484,23 @@ export class ClientsService {
       this.clientModel.countDocuments(filter),
     ]);
 
-    return { data, total, page, pageSize: limit };
+    const index = await this.loadDuplicateIndex();
+    const annotated = data.map((doc: any) => {
+      const obj = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+      const duplicateInfo = index.infoFor(String(obj._id));
+      return duplicateInfo ? { ...obj, duplicateInfo } : obj;
+    });
+
+    return {
+      data: annotated,
+      total,
+      page,
+      pageSize: limit,
+      duplicateSummary: {
+        records: index.duplicateRecordCount,
+        groups: index.duplicateGroupCount,
+      },
+    };
   }
 
   async findOne(id: string, actor?: any): Promise<Client | null> {
