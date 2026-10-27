@@ -220,6 +220,30 @@ export class CRMUsersService implements OnModuleInit {
     return user || undefined;
   }
 
+  /**
+   * Name/email for CRM user ids — used to label task assignees that have no HRMS account
+   * (HRMS populate leaves those null). Includes inactive users so old tasks keep a name.
+   */
+  async findDisplayByIds(
+    ids: string[],
+  ): Promise<Array<{ _id: string; firstName?: string; lastName?: string; email?: string }>> {
+    const valid = [...new Set(ids.map((id) => String(id || '').trim()))].filter((id) =>
+      Types.ObjectId.isValid(id),
+    );
+    if (!valid.length) return [];
+    const rows = await this.userModel
+      .find({ _id: { $in: valid.map((id) => new Types.ObjectId(id)) } })
+      .select('firstName lastName email')
+      .lean()
+      .exec();
+    return rows.map((u: any) => ({
+      _id: String(u._id),
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+    }));
+  }
+
   async findByTwobighaAdminId(adminId: string): Promise<CRMUserDocument | undefined> {
     const id = String(adminId || '').trim();
     if (!id) return undefined;

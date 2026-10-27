@@ -6496,7 +6496,7 @@ export class InboxAccountsService {
     return {
       module: 'leads',
       entityId: lead._id.toString(),
-      label: `${lead.firstName} ${lead.lastName}`.trim(),
+      label: [lead.firstName, lead.lastName].filter(Boolean).join(' ').trim(),
       email: lead.email,
     };
   }
