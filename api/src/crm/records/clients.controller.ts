@@ -61,6 +61,25 @@ export class ClientsController {
     }
   }
 
+  /** Duplicate check for the Add Client form (name / email / phone). */
+  @Get('clients/duplicates/check')
+  @Permissions('clients:read')
+  checkDuplicates(
+    @Query('name') name?: string,
+    @Query('email') email?: string,
+    @Query('phone') phone?: string,
+    @Query('whatsappNumber') whatsappNumber?: string,
+    @Query('excludeId') excludeId?: string,
+  ) {
+    return this.clientsService.checkDuplicates({
+      name,
+      email,
+      phone,
+      whatsappNumber,
+      excludeId,
+    });
+  }
+
   // ── 2bigha platform-user (Client) sync — Create & Fetch ──────────────────
   // Sync-health rollup for the Settings → 2bigha Sync hub. Declared before
   // the ':id' routes so 'twobigha' is never captured as a client id.

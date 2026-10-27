@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { CrmJiraPortal } from "@/components/crm/shell/CrmJiraPortal";
-import { Save, Plus, Check } from "lucide-react";
+import { Save, Plus, Check, AlertTriangle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { invalidateCrmForEntityType } from "@/lib/crm/shared/invalidate-on-mutation";
@@ -29,6 +29,22 @@ const LBL = CRM_HS_LABEL_CLASS;
 const INP = CRM_HS_CONTROL_CLASS;
 const SEL = CRM_HS_SELECT_CLASS;
 
+type ClientDuplicateReason = "name" | "email" | "phone";
+
+interface ClientDuplicateMatch {
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  reasons: ClientDuplicateReason[];
+}
+
+const DUPLICATE_REASON_LABELS: Record<ClientDuplicateReason, string> = {
+  email: "Same email",
+  phone: "Same phone",
+  name: "Same name",
+};
+
 interface ClientModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -48,6 +64,8 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
   const [addingField, setAddingField] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const [duplicates, setDuplicates] = useState<ClientDuplicateMatch[]>([]);
+  const confirmDuplicateRef = useRef(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -91,6 +109,46 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       }
     }
   }, [isOpen, client]);
+
+  // Live duplicate check while adding a client (name / email / phone).
+  useEffect(() => {
+    if (!isOpen || client) {
+      setDuplicates([]);
+      return;
+    }
+    const name = formData.name.trim();
+    const email = formData.email.trim();
+    const phone = formData.phone ? `${formData.countryCode} ${formData.phone}`.trim() : "";
+    if (name.length < 3 && !email.includes("@") && formData.phone.length < 7) {
+      setDuplicates([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const params = new URLSearchParams();
+      if (name) params.set("name", name);
+      if (email) params.set("email", email);
+      if (phone) params.set("phone", phone);
+      try {
+        const res = await fetch(`${CRM_API_URL}/crm/clients/duplicates/check?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDuplicates(Array.isArray(data?.duplicates) ? data.duplicates : []);
+        }
+      } catch {
+        /* aborted or offline — the server re-checks on save */
+      }
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isOpen, client, formData.name, formData.email, formData.phone, formData.countryCode]);
+
+  const emailDuplicate = duplicates.some((d) => d.reasons.includes("email"));
 
   const fetchCrmUsers = async () => {
     const token = localStorage.getItem("token");
@@ -200,6 +258,8 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       payload.customFields = Object.keys(customData).length > 0 ? customData : undefined;
       const additionalEmails = parseAdditionalEmailsFromForm(rawFormData, payload.email);
       payload.additionalEmails = additionalEmails.length ? additionalEmails : undefined;
+      if (!client && confirmDuplicateRef.current) payload.confirmDuplicate = true;
+      confirmDuplicateRef.current = false;
 
       const res = await fetch(url, {
         method,
@@ -230,6 +290,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
             assignedTo: [],
           });
           formRef.current?.reset();
+          setDuplicates([]);
           onSuccess();
         } else {
           onSuccess();
@@ -237,6 +298,9 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
         }
       } else {
         const data = await res.json().catch(() => ({}));
+        if (res.status === 409 && Array.isArray(data?.duplicates)) {
+          setDuplicates(data.duplicates);
+        }
         toast.error(typeof data.message === "string" ? data.message : "Operation failed");
       }
     } catch (error) {
@@ -301,6 +365,72 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       }
     >
       <form id="client-form" ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+        {!client && duplicates.length > 0 && (
+          <div
+            role="alert"
+            className="rounded-[var(--radius-md)] border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+          >
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertTriangle size={15} className="shrink-0" />
+              {duplicates.length === 1
+                ? "Possible duplicate client"
+                : `${duplicates.length} possible duplicate clients`}
+            </div>
+            <ul className="mt-2 space-y-1.5">
+              {duplicates.map((d) => (
+                <li
+                  key={d._id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-md)] bg-white/70 px-2.5 py-1.5"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{d.name || "Unnamed client"}</div>
+                    <div className="truncate text-xs text-amber-800">
+                      {[d.email, d.phone].filter(Boolean).join(" · ") || "No email or phone"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {d.reasons.map((r) => (
+                      <span
+                        key={r}
+                        className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold"
+                      >
+                        {DUPLICATE_REASON_LABELS[r]}
+                      </span>
+                    ))}
+                    <a
+                      href={`/crm/clients/${d._id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
+                    >
+                      Open <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {emailDuplicate ? (
+              <p className="mt-2 text-xs">
+                This email already belongs to an existing client. Open that record instead of creating a new one.
+              </p>
+            ) : (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs">Saving will ask you to confirm before creating another record.</p>
+                <CrmButton
+                  variant="secondary"
+                  disabled={loading}
+                  onClick={() => {
+                    confirmDuplicateRef.current = true;
+                    setSaveAndAddAnother(false);
+                    formRef.current?.requestSubmit();
+                  }}
+                >
+                  Create anyway
+                </CrmButton>
+              </div>
+            )}
+          </div>
+        )}
         <CrmFormSection title="Basic Info" defaultOpen>
           <CrmFormGrid>
             <div className="sm:col-span-2">

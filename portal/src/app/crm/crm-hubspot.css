@@ -122,14 +122,22 @@
   --font-sans: "Golos Text", sans-serif;
 
   /* Override HubSpot-dense suite tiers with CRMS sizes */
-  --suite-font-h1: 1.25rem; /* 20px — page title / .main-title */
-  --suite-font-h2: 1.125rem; /* 18px */
-  --suite-font-h3: 1rem; /* 16px — kanban column / h6 */
-  --suite-font-body: 0.875rem; /* 14px */
-  --suite-font-small: 0.875rem; /* 14px — do not crush text-sm */
-  --suite-font-caption: 0.75rem; /* 12px */
-  --crm-font-sidebar: 0.9375rem; /* 15px */
-  --crm-font-menu-title: 0.8125rem; /* 13px */
+  --suite-font-h1: 1.25rem;
+  /* 20px — page title / .main-title */
+  --suite-font-h2: 1.125rem;
+  /* 18px */
+  --suite-font-h3: 1rem;
+  /* 16px — kanban column / h6 */
+  --suite-font-body: 0.875rem;
+  /* 14px */
+  --suite-font-small: 0.875rem;
+  /* 14px — do not crush text-sm */
+  --suite-font-caption: 0.75rem;
+  /* 12px */
+  --crm-font-sidebar: 0.9375rem;
+  /* 15px */
+  --crm-font-menu-title: 0.8125rem;
+  /* 13px */
 }
 
 /* Force Golos on the CRM shell (beats body Inter + Tailwind font-sans) */
@@ -226,7 +234,8 @@
 
 .theme-crm-hubspot .crm-person-search-trigger:focus-within,
 .theme-crm-hubspot .crm-person-search-trigger[data-open="true"] {
-  border-color: #94a3b8 !important; /* slate-400 — slight dark, not primary red */
+  border-color: #94a3b8 !important;
+  /* slate-400 — slight dark, not primary red */
   box-shadow: none !important;
 }
 
@@ -246,9 +255,11 @@
   --tw-ring-offset-shadow: 0 0 #0000 !important;
   --tw-ring-shadow: 0 0 #0000 !important;
 }
+
 .theme-crm-hubspot input.crm-inline-title-input:hover {
   border-bottom-color: var(--border-color) !important;
 }
+
 .theme-crm-hubspot input.crm-inline-title-input:focus,
 .theme-crm-hubspot input.crm-inline-title-input:focus-visible:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]) {
   border-bottom-color: var(--text-main) !important;
@@ -414,6 +425,7 @@
 :root {
   --crm-floating-dock-space: 72px;
 }
+
 html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
   padding-bottom: var(--crm-floating-dock-space) !important;
   scroll-padding-bottom: var(--crm-floating-dock-space);
@@ -424,8 +436,8 @@ html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
   margin-top: 0 !important;
 }
 
-.crm-list-page > .crm-list-content,
-.crm-list-page > .crm-list-content > :first-child {
+.crm-list-page>.crm-list-content,
+.crm-list-page>.crm-list-content> :first-child {
   padding-top: 0 !important;
   margin-top: 0 !important;
 }
@@ -623,6 +635,7 @@ html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
 .theme-crm-hubspot .text-hs-link {
   color: var(--hs-link) !important;
 }
+
 .theme-crm-hubspot a.text-hs-link:hover,
 .theme-crm-hubspot .text-hs-link:hover {
   color: var(--hs-link-hover) !important;
@@ -642,6 +655,7 @@ html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
   background: var(--surface-dim);
   border-bottom: 1px solid var(--border-color);
 }
+
 .theme-crm-hubspot table.data-hs-table th {
   font-size: var(--suite-font-caption);
   font-weight: 600;
@@ -649,12 +663,15 @@ html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
   text-transform: uppercase;
   color: var(--text-muted);
 }
+
 .theme-crm-hubspot table.data-hs-table tbody tr:hover {
   background: var(--surface-hover);
 }
+
 .theme-crm-hubspot table.data-hs-table tbody td {
   border-bottom: 1px solid var(--border-color);
 }
+
 .theme-crm-hubspot table.data-hs-table thead th {
   border-bottom: 1px solid var(--border-color);
 }
@@ -683,12 +700,14 @@ html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
   background-color: var(--border-color) !important;
   border-color: var(--border-color) !important;
 }
+
 .theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="jira"] {
   border-radius: 8px !important;
   border-color: var(--border-color) !important;
   background-color: #ffffff !important;
   box-shadow: 0 1px 0 rgba(9, 30, 66, 0.13) !important;
 }
+
 .theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="jira"]:hover {
   background-color: var(--surface-dim) !important;
   box-shadow: 0 1px 2px rgba(9, 30, 66, 0.15) !important;
@@ -702,12 +721,14 @@ html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
 .theme-crm-hubspot [data-pm-board-column][data-pm-card-variant="hubspot"] {
   border-radius: 1rem !important;
 }
+
 .theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="hubspot"] {
   border-radius: var(--crm-radius-ui) !important;
   box-shadow: var(--crm-shadow-card) !important;
   border-color: var(--border-color) !important;
   background-color: var(--card-bg) !important;
 }
+
 .theme-crm-hubspot [data-pm-board-card][data-pm-card-variant="hubspot"]:hover {
   box-shadow: var(--crm-shadow-raised) !important;
 }
@@ -785,64 +806,84 @@ html[data-crm-floating-dock] [data-crm-app] .crm-app-main {
 html:not(.dark) .theme-crm-hubspot [class*="text-[#33475b]"] {
   color: #121212 !important;
 }
+
 html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
   color: #666666 !important;
 }
+
 .theme-crm-hubspot [class*="text-[#0091ae]"] {
   color: #ee5f3a !important;
 }
+
 .theme-crm-hubspot [class*="text-[#ff7a59]"] {
   color: #ee5f3a !important;
 }
+
 .theme-crm-hubspot [class*="bg-[#f5f8fa]"] {
   background-color: #f7f5f2 !important;
 }
+
 .theme-crm-hubspot [class*="bg-[#eaf0f6]"] {
   background-color: #ede9e3 !important;
 }
+
 .theme-crm-hubspot [class*="bg-[#fff5f2]"] {
   background-color: #fce7e0 !important;
 }
+
 .theme-crm-hubspot [class*="bg-[#ff7a59]"] {
   background-color: #ee5f3a !important;
 }
+
 .theme-crm-hubspot [class*="border-[#cbd6e2]"] {
   border-color: #ddd8d0 !important;
 }
+
 .theme-crm-hubspot [class*="border-[#0091ae]"] {
   border-color: #ee5f3a !important;
 }
+
 .theme-crm-hubspot [class*="border-[#ffd4c9]"] {
   border-color: #f9b8a7 !important;
 }
+
 .theme-crm-hubspot [class*="hover:bg-[#f5f8fa]"]:hover {
   background-color: #f7f5f2 !important;
 }
+
 .theme-crm-hubspot [class*="hover:bg-[#eaf0f6]"]:hover {
   background-color: #ede9e3 !important;
 }
+
 .theme-crm-hubspot [class*="hover:text-[#33475b]"]:hover {
   color: #121212 !important;
 }
+
 .theme-crm-hubspot [class*="hover:text-[#0091ae]"]:hover {
   color: #ee5f3a !important;
 }
+
 .theme-crm-hubspot [class*="text-[#253342]"] {
   color: #0a0a0a !important;
 }
+
 .theme-crm-hubspot [class*="bg-[#e0f4f7]"] {
   background-color: #fce7e0 !important;
 }
+
 .theme-crm-hubspot [class*="border-l-[#ff7a59]"] {
   border-left-color: #ee5f3a !important;
 }
+
 .theme-crm-hubspot [class*="from-[#f5f8fa]"] {
   --tw-gradient-from: #f7f5f2 var(--tw-gradient-from-position) !important;
   --tw-gradient-to: rgb(247 245 242 / 0) var(--tw-gradient-to-position) !important;
 }
+
 .theme-crm-hubspot [class*="to-[#f5f8fa]"] {
   --tw-gradient-to: #f7f5f2 var(--tw-gradient-to-position) !important;
 }
+
 .theme-crm-hubspot [class*="via-[#f5f8fa]"] {
   --tw-gradient-via: #f7f5f2 var(--tw-gradient-via-position) !important;
   --tw-gradient-to: rgb(247 245 242 / 0) var(--tw-gradient-to-position) !important;
@@ -894,12 +935,15 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 .theme-crm-hubspot h1 {
   font-size: var(--suite-font-h1) !important;
 }
+
 .theme-crm-hubspot h2 {
   font-size: var(--suite-font-h2) !important;
 }
+
 .theme-crm-hubspot h3 {
   font-size: var(--suite-font-h3) !important;
 }
+
 .theme-crm-hubspot h4 {
   font-size: var(--suite-font-h3) !important;
 }
@@ -916,36 +960,42 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
   letter-spacing: normal !important;
   color: var(--text-main);
 }
+
 [data-crm-app] .theme-crm-hubspot h2,
 [data-crm-app].theme-crm-hubspot h2 {
   font-size: 1.125rem !important;
   font-weight: 700 !important;
   letter-spacing: normal !important;
 }
+
 [data-crm-app] .theme-crm-hubspot h3,
 [data-crm-app].theme-crm-hubspot h3 {
   font-size: 1rem !important;
   font-weight: 700 !important;
   letter-spacing: normal !important;
 }
+
 [data-crm-app] .theme-crm-hubspot h4,
 [data-crm-app].theme-crm-hubspot h4 {
   font-size: 1.25rem !important;
   font-weight: 700 !important;
   letter-spacing: normal !important;
 }
+
 [data-crm-app] .theme-crm-hubspot h5,
 [data-crm-app].theme-crm-hubspot h5 {
   font-size: 1.125rem !important;
   font-weight: 700 !important;
   letter-spacing: normal !important;
 }
+
 [data-crm-app] .theme-crm-hubspot h6,
 [data-crm-app].theme-crm-hubspot h6 {
   font-size: 1rem !important;
   font-weight: 700 !important;
   letter-spacing: normal !important;
 }
+
 /* Form section titles stay compact (utility text-sm on h3) */
 [data-crm-app] .theme-crm-hubspot h3.text-sm {
   font-size: 0.875rem !important;
@@ -956,21 +1006,27 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 .theme-crm-hubspot .text-xs {
   font-size: var(--suite-font-caption) !important;
 }
+
 .theme-crm-hubspot .text-sm {
   font-size: var(--suite-font-small) !important;
 }
+
 .theme-crm-hubspot .text-base {
   font-size: var(--suite-font-body) !important;
 }
+
 .theme-crm-hubspot .text-lg {
   font-size: var(--suite-font-h3) !important;
 }
+
 .theme-crm-hubspot .text-xl {
   font-size: var(--suite-font-h2) !important;
 }
+
 .theme-crm-hubspot .text-2xl {
   font-size: var(--suite-font-h1) !important;
 }
+
 .theme-crm-hubspot .text-3xl {
   font-size: calc(var(--suite-font-h1) * 1.12) !important;
 }
@@ -983,26 +1039,32 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 [data-crm-app].theme-crm-hubspot .text-xs {
   font-size: 0.75rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot .text-sm,
 [data-crm-app].theme-crm-hubspot .text-sm {
   font-size: 0.875rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot .text-base,
 [data-crm-app].theme-crm-hubspot .text-base {
   font-size: 1rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot .text-lg,
 [data-crm-app].theme-crm-hubspot .text-lg {
   font-size: 1.125rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot .text-xl,
 [data-crm-app].theme-crm-hubspot .text-xl {
   font-size: 1.25rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot .text-2xl,
 [data-crm-app].theme-crm-hubspot .text-2xl {
   font-size: 1.5rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot .text-3xl,
 [data-crm-app].theme-crm-hubspot .text-3xl {
   font-size: 1.875rem !important;
@@ -1014,23 +1076,28 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 .theme-crm-hubspot [class*="text-[11px]"] {
   font-size: var(--suite-font-caption) !important;
 }
+
 .theme-crm-hubspot [class*="text-[12px]"] {
   font-size: var(--suite-font-small) !important;
 }
+
 .theme-crm-hubspot [class*="text-[13px]"],
 .theme-crm-hubspot [class*="text-[14px]"] {
   font-size: var(--suite-font-body) !important;
 }
+
 .theme-crm-hubspot [class*="text-[15px]"],
 .theme-crm-hubspot [class*="text-[16px]"],
 .theme-crm-hubspot [class*="text-[17px]"] {
   font-size: var(--suite-font-h3) !important;
 }
+
 .theme-crm-hubspot [class*="text-[18px]"],
 .theme-crm-hubspot [class*="text-[19px]"],
 .theme-crm-hubspot [class*="text-[20px]"] {
   font-size: var(--suite-font-h2) !important;
 }
+
 .theme-crm-hubspot [class*="text-[22px]"],
 .theme-crm-hubspot [class*="text-[24px]"] {
   font-size: var(--suite-font-h1) !important;
@@ -1041,47 +1108,67 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 [data-crm-app] .theme-crm-hubspot [class*="text-[10px]"] {
   font-size: 0.625rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[11px]"] {
   font-size: 0.6875rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[12px]"] {
   font-size: 0.75rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[13px]"] {
   font-size: 0.8125rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[14px]"] {
   font-size: 0.875rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[15px]"] {
   font-size: 0.9375rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[16px]"] {
   font-size: 1rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[17px]"] {
   font-size: 1.0625rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[18px]"] {
   font-size: 1.125rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[19px]"] {
   font-size: 1.1875rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[20px]"] {
   font-size: 1.25rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[22px]"] {
   font-size: 1.375rem !important;
 }
+
 [data-crm-app] .theme-crm-hubspot [class*="text-[24px]"] {
   font-size: 1.5rem !important;
 }
 
 /* Roundness — CRMS ~8px; keep sharp legacy 3px from becoming oversized */
-.theme-crm-hubspot [class*="rounded-[3px]"] { border-radius: var(--radius-sm) !important; }
-.theme-crm-hubspot [class*="rounded-[6px]"] { border-radius: var(--radius-md) !important; }
-.theme-crm-hubspot [class*="rounded-[8px]"] { border-radius: var(--radius-md) !important; }
+.theme-crm-hubspot [class*="rounded-[3px]"] {
+  border-radius: var(--radius-sm) !important;
+}
+
+.theme-crm-hubspot [class*="rounded-[6px]"] {
+  border-radius: var(--radius-md) !important;
+}
+
+.theme-crm-hubspot [class*="rounded-[8px]"] {
+  border-radius: var(--radius-md) !important;
+}
 
 /* Shared card shell (for legacy bespoke panel classes) */
 .theme-crm-hubspot [class*="shadow-[0_8px_24px"] {
@@ -1108,29 +1195,36 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 /* CRMS sidebar — uppercase section labels · nav items 14/500 · icon tiles */
 [data-crm-app] .crm-suite-sidebar .suite-sidebar-section-label,
 [data-crm-app] .crm-suite-sidebar .suite-sidebar-product-label {
-  font-size: 0.6875rem !important; /* 11px */
+  font-size: 0.6875rem !important;
+  /* 11px */
   font-weight: 600 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.06em !important;
   color: var(--text-muted) !important;
 }
+
 [data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item {
-  font-size: 0.875rem !important; /* 14px */
+  font-size: 0.875rem !important;
+  /* 14px */
   font-weight: 500;
   line-height: 1.5;
   color: var(--text-main, #1f2020) !important;
 }
+
 [data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item[class*="bg-[var(--suite-sidebar-active-bg)]"],
 [data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item[class*="text-[var(--primary)]"] {
   color: var(--primary) !important;
 }
+
 [data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-item span {
   font-size: inherit;
   font-weight: inherit;
 }
+
 [data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-icon {
   flex-shrink: 0;
 }
+
 [data-crm-app] .crm-suite-sidebar .suite-sidebar-nav-icon--active svg {
   color: #fff !important;
 }
@@ -1143,18 +1237,21 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
   letter-spacing: normal !important;
   color: #1f2020 !important;
 }
+
 [data-crm-app] .crm-kanban-column-summary {
   font-size: 0.875rem !important;
   font-weight: 500 !important;
   line-height: 1.4 !important;
   color: #1f2020 !important;
 }
+
 [data-crm-app] .crm-kanban-card-title {
   font-size: 0.875rem !important;
   font-weight: 500 !important;
   line-height: 1.2 !important;
   color: #1f2020 !important;
 }
+
 [data-crm-app] .crm-kanban-card-subtitle,
 [data-crm-app] .crm-kanban-meta-row {
   font-size: 0.875rem !important;
@@ -1401,6 +1498,7 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
   color: #34d399 !important;
   border-color: rgba(52, 211, 153, 0.3) !important;
 }
+
 .dark .theme-crm-hubspot button.text-emerald-600:hover {
   background-color: rgba(52, 211, 153, 0.1) !important;
 }
@@ -1409,6 +1507,7 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
   color: #fbbf24 !important;
   border-color: rgba(251, 191, 36, 0.3) !important;
 }
+
 .dark .theme-crm-hubspot button.text-amber-600:hover {
   background-color: rgba(251, 191, 36, 0.1) !important;
 }
@@ -1417,6 +1516,7 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
   color: #f87171 !important;
   border-color: rgba(248, 113, 113, 0.3) !important;
 }
+
 .dark .theme-crm-hubspot button.text-rose-600:hover {
   background-color: rgba(248, 113, 113, 0.1) !important;
 }
@@ -1428,9 +1528,11 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 .dark .theme-crm-hubspot .bg-slate-50\/5 {
   background-color: color-mix(in srgb, var(--surface-dim) 5%, transparent) !important;
 }
+
 .dark .theme-crm-hubspot .bg-slate-50\/10 {
   background-color: color-mix(in srgb, var(--surface-dim) 10%, transparent) !important;
 }
+
 .dark .theme-crm-hubspot .bg-slate-50\/20 {
   background-color: color-mix(in srgb, var(--surface-dim) 20%, transparent) !important;
 }
@@ -1439,9 +1541,11 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 .dark .theme-crm-hubspot .bg-\[var\(--surface-dim\)\] {
   background-color: #121212 !important;
 }
+
 .dark .theme-crm-hubspot .hover\:bg-\[var\(--surface-dim\)\]:hover {
   background-color: var(--surface-hover) !important;
 }
+
 .dark .theme-crm-hubspot .border-\[\#f1f4f8\] {
   border-color: var(--border-color) !important;
 }
@@ -1488,6 +1592,7 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
   color: #ffffff !important;
   border: 1px solid #ffffff !important;
 }
+
 .dark .theme-crm-hubspot .bg-\[var\(--text-main\)\] * {
   color: #ffffff !important;
 }
@@ -1496,10 +1601,13 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
 .no-scrollbar::-webkit-scrollbar {
   display: none !important;
 }
+
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overflow-style: none !important;  /* IE and Edge */
-  scrollbar-width: none !important;  /* Firefox */
+  -ms-overflow-style: none !important;
+  /* IE and Edge */
+  scrollbar-width: none !important;
+  /* Firefox */
 }
 
 /* Compact spacing, text, and padding for small screens scoped to the workspace */
@@ -1507,62 +1615,76 @@ html:not(.dark) .theme-crm-hubspot [class*="text-[#516f90]"] {
   .crm-workspace-container.theme-crm-hubspot .rounded-md.border {
     padding: 0.75rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot [class*="p-6"] {
     padding: 0.875rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot [class*="p-4"] {
     padding: 0.75rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot [class*="py-6"] {
     padding-top: 1rem !important;
     padding-bottom: 1rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot [class*="px-6"] {
     padding-left: 0.875rem !important;
     padding-right: 0.875rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot [class*="px-5"] {
     padding-left: 0.75rem !important;
     padding-right: 0.75rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot [class*="py-5"] {
     padding-top: 0.875rem !important;
     padding-bottom: 0.875rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot [class*="gap-4"] {
     gap: 0.75rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot [class*="gap-3"] {
     gap: 0.5rem !important;
   }
-  .crm-workspace-container.theme-crm-hubspot [class*="space-y-6"] > :not([hidden]) ~ :not([hidden]) {
+
+  .crm-workspace-container.theme-crm-hubspot [class*="space-y-6"]> :not([hidden])~ :not([hidden]) {
     margin-top: 0.875rem !important;
   }
-  .crm-workspace-container.theme-crm-hubspot [class*="space-y-4"] > :not([hidden]) ~ :not([hidden]) {
+
+  .crm-workspace-container.theme-crm-hubspot [class*="space-y-4"]> :not([hidden])~ :not([hidden]) {
     margin-top: 0.75rem !important;
   }
-  
+
   /* Compact typography */
   .crm-workspace-container.theme-crm-hubspot h1,
   .crm-workspace-container.theme-crm-hubspot .text-\[22px\],
   .crm-workspace-container.theme-crm-hubspot .text-\[24px\] {
     font-size: 1.15rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot h2,
   .crm-workspace-container.theme-crm-hubspot .text-xl {
     font-size: 0.95rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot h3,
   .crm-workspace-container.theme-crm-hubspot .text-lg {
     font-size: 0.875rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot .text-sm {
     font-size: 0.75rem !important;
   }
+
   .crm-workspace-container.theme-crm-hubspot .text-xs {
     font-size: 0.7rem !important;
   }
-  
+
   /* KPI value size override */
   .crm-workspace-container.theme-crm-hubspot .text-xl.font-semibold {
     font-size: 1.1rem !important;
@@ -1842,13 +1964,17 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 [data-pm-jira] .pm-page-padded {
   padding: 1.5rem !important;
 }
+
 @media (min-width: 640px) {
+
   [data-jira-module] .pm-page-padded,
   [data-pm-jira] .pm-page-padded {
     padding: 1.5rem !important;
   }
 }
+
 @media (min-width: 1024px) {
+
   [data-jira-module] .pm-page-padded,
   [data-pm-jira] .pm-page-padded {
     padding: 1.5rem !important;
@@ -1942,8 +2068,8 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   min-height: 6.5rem;
 }
 
-.theme-crm-hubspot .crm-workspace-container > .crm-panel:first-child,
-.theme-crm-hubspot .crm-workspace-container > div:first-child {
+.theme-crm-hubspot .crm-workspace-container>.crm-panel:first-child,
+.theme-crm-hubspot .crm-workspace-container>div:first-child {
   box-shadow: var(--crm-shadow-card);
 }
 
@@ -2170,11 +2296,30 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   line-height: 1;
 }
 
-.crm-kanban-avatar--info { background: #eaf2fd; color: #2f80ed; }
-.crm-kanban-avatar--danger { background: #fde9e9; color: #ef1e1e; }
-.crm-kanban-avatar--warning { background: #fef8e6; color: #f9b801; }
-.crm-kanban-avatar--success { background: #e8f9e8; color: #1abe17; }
-.crm-kanban-avatar--primary { background: #fce9e6; color: #e41f07; }
+.crm-kanban-avatar--info {
+  background: #eaf2fd;
+  color: #2f80ed;
+}
+
+.crm-kanban-avatar--danger {
+  background: #fde9e9;
+  color: #ef1e1e;
+}
+
+.crm-kanban-avatar--warning {
+  background: #fef8e6;
+  color: #f9b801;
+}
+
+.crm-kanban-avatar--success {
+  background: #e8f9e8;
+  color: #1abe17;
+}
+
+.crm-kanban-avatar--primary {
+  background: #fce9e6;
+  color: #e41f07;
+}
 
 .crm-kanban-avatar--sm {
   height: 24px;
@@ -2254,12 +2399,14 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   margin: 0 0 8px;
   font-size: 14px;
   font-weight: 400;
-  color: #707070; /* CRMS .text-default */
+  color: #707070;
+  /* CRMS .text-default */
   line-height: 21px;
 }
 
 .crm-kanban-meta-row:last-child {
-  margin-bottom: 16px; /* space before footer like reference */
+  margin-bottom: 16px;
+  /* space before footer like reference */
 }
 
 .crm-kanban-meta-icon {
@@ -2267,7 +2414,8 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  color: #1f2020; /* CRMS .text-dark on icons */
+  color: #1f2020;
+  /* CRMS .text-dark on icons */
 }
 
 .crm-kanban-card-footer {
@@ -2276,7 +2424,8 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   justify-content: space-between;
   gap: 0.5rem;
   margin-top: 0;
-  padding-top: 16px; /* Bootstrap pt-3 */
+  padding-top: 16px;
+  /* Bootstrap pt-3 */
   border-top: 1px solid #e2e8f0;
 }
 
@@ -2419,6 +2568,7 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 }
 
 @media (prefers-color-scheme: dark) {
+
   .crm-table,
   .crm-list-page table,
   [data-crm-theme="crms"] .crm-table,
@@ -2457,6 +2607,7 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 }
 
 @media (prefers-color-scheme: dark) {
+
   .crm-table thead th,
   .crm-list-page table thead th,
   [data-crm-theme="crms"] .crm-table thead th,
@@ -2479,6 +2630,7 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 }
 
 @media (prefers-color-scheme: dark) {
+
   .crm-table thead th.sticky,
   .crm-list-page table thead th.sticky,
   [data-crm-theme="crms"] .crm-table thead th.sticky,
@@ -2510,6 +2662,7 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 }
 
 @media (prefers-color-scheme: dark) {
+
   .crm-table tbody td,
   .crm-list-page table tbody td,
   [data-crm-theme="crms"] .crm-table tbody td,
@@ -2554,6 +2707,43 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 [data-crm-app] .crm-table tbody tr.crm-table-row-selected td,
 [data-crm-app] .crm-list-page table tbody tr.crm-table-row-selected td {
   background: color-mix(in srgb, var(--primary, #e41f07) 4%, white);
+}
+
+/* Possible-duplicate record (e.g. Clients list) — amber tint + left marker */
+.crm-table tbody tr.crm-table-row-duplicate td,
+.crm-list-page table tbody tr.crm-table-row-duplicate td,
+[data-crm-theme="crms"] .crm-table tbody tr.crm-table-row-duplicate td,
+[data-crm-theme="crms"] .crm-list-page table tbody tr.crm-table-row-duplicate td,
+[data-crm-app] .crm-table tbody tr.crm-table-row-duplicate td,
+[data-crm-app] .crm-list-page table tbody tr.crm-table-row-duplicate td {
+  background: #fffbeb;
+}
+
+.crm-table tbody tr.crm-table-row-duplicate:hover td,
+.crm-list-page table tbody tr.crm-table-row-duplicate:hover td,
+[data-crm-app] .crm-table tbody tr.crm-table-row-duplicate:hover td,
+[data-crm-app] .crm-list-page table tbody tr.crm-table-row-duplicate:hover td {
+  background: #fef3c7;
+}
+
+.crm-table tbody tr.crm-table-row-duplicate td:first-child,
+.crm-list-page table tbody tr.crm-table-row-duplicate td:first-child {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+[data-theme="dark"] .crm-table tbody tr.crm-table-row-duplicate td,
+[data-theme="dark"] .crm-list-page table tbody tr.crm-table-row-duplicate td {
+  background: color-mix(in srgb, #f59e0b 12%, var(--card-bg, #1a1a1a)) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+
+  .crm-table tbody tr.crm-table-row-duplicate td,
+  .crm-list-page table tbody tr.crm-table-row-duplicate td,
+  [data-crm-app] .crm-table tbody tr.crm-table-row-duplicate td,
+  [data-crm-app] .crm-list-page table tbody tr.crm-table-row-duplicate td {
+    background: color-mix(in srgb, #f59e0b 12%, var(--card-bg, #1a1a1a)) !important;
+  }
 }
 
 /* Primary name / title in a row — Dreams `.fs-14.fw-medium` */
@@ -2683,7 +2873,7 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   background-color: #ffffff;
 }
 
-.crm-table .crm-table-actions > div,
+.crm-table .crm-table-actions>div,
 .crm-table .crm-table-actions .crm-row-actions {
   display: inline-flex !important;
   width: 100%;
@@ -2943,7 +3133,7 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   min-width: 0;
 }
 
-.crm-record-sidebar-group + .crm-record-sidebar-group {
+.crm-record-sidebar-group+.crm-record-sidebar-group {
   margin-top: 0.125rem;
 }
 
@@ -2989,20 +3179,22 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 
 /* Dense list chrome — compact header/toolbar/pagination, table fills leftover space */
 .crm-list-dense .crm-list-page-header {
-  margin-bottom: 0.625rem !important; /* ~10px — space above filter row */
+  margin-bottom: 0.625rem !important;
+  /* ~10px — space above filter row */
 }
 
 .crm-list-dense .crm-list-toolbar {
-  margin-bottom: 0.625rem !important; /* ~10px — space above table */
+  margin-bottom: 0.625rem !important;
+  /* ~10px — space above table */
 }
 
-.crm-list-dense .crm-list-toolbar > div:first-child {
+.crm-list-dense .crm-list-toolbar>div:first-child {
   padding-top: 0.375rem !important;
   padding-bottom: 0.375rem !important;
   gap: 0.5rem !important;
 }
 
-.crm-list-dense .crm-list-toolbar > div:first-child > div {
+.crm-list-dense .crm-list-toolbar>div:first-child>div {
   gap: 0.5rem !important;
 }
 
@@ -3016,8 +3208,8 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 }
 
 /* Keep Filter label buttons from clipping leading icons */
-.crm-list-toolbar > div > div > div > button,
-.crm-list-page .crm-list-toolbar > div > div > div > button {
+.crm-list-toolbar>div>div>div>button,
+.crm-list-page .crm-list-toolbar>div>div>div>button {
   overflow: visible !important;
 }
 
@@ -3138,7 +3330,7 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   -webkit-overflow-scrolling: touch;
 }
 
-.crm-record-quick-actions-scroll > div {
+.crm-record-quick-actions-scroll>div {
   min-width: min-content;
 }
 
@@ -3174,6 +3366,7 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
 [data-crm-theme="crms"] .crm-modal .crm-person-search-trigger:focus-within,
 [data-crm-app] .crm-modal .crm-person-search-trigger:focus-within,
 .crm-modal .crm-person-search-trigger:focus-within {
-  border-color: #64748b !important; /* slate-500 slight dark */
+  border-color: #64748b !important;
+  /* slate-500 slight dark */
   box-shadow: none !important;
 }

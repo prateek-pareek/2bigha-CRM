@@ -68,7 +68,9 @@ export async function fetchTwoBighaLegalVerificationQueue(
 ): Promise<LegalVerificationResult | null> {
   const { data } = await api.get<LegalVerificationResult | null>(
     `/crm/legal-cases/twobigha/verification-queue/${bucket}`,
-    { params },
+    // Slightly above the backend's 15s upstream timeout, so the page's
+    // loading skeleton always resolves even if the proxy itself stalls.
+    { params, timeout: 20_000 },
   );
   return data;
 }

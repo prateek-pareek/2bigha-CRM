@@ -43,8 +43,8 @@ export function PageHeader({
 }: PageHeaderProps) {
   const body = (
     <>
-      <div className={cn("mb-0 flex flex-col sm:flex-row sm:items-center", compact ? "gap-1 sm:gap-2" : "gap-2", middle ? "sm:justify-start" : "sm:justify-between")}>
-        <div className={cn("flex min-w-0 items-start", compact ? "gap-2" : "gap-3")}>
+      <div className={cn("mb-0 flex flex-col sm:flex-row sm:flex-wrap sm:items-center", compact ? "gap-1 sm:gap-2" : "gap-2", middle ? "sm:justify-start" : "sm:justify-between")}>
+        <div className={cn("flex min-w-0 items-start sm:shrink-0", compact ? "gap-2" : "gap-3")}>
           {icon ? (
             <div className="mt-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--primary-light)] text-[var(--primary)] sm:flex">
               {icon}
@@ -63,12 +63,12 @@ export function PageHeader({
           </div>
         </div>
         {middle ? (
-          <div className="flex min-w-0 flex-1 items-center px-2 sm:justify-center sm:px-4">
+          <div className="flex min-w-[200px] flex-1 basis-[200px] items-center px-2 sm:justify-center sm:px-4">
             {middle}
           </div>
         ) : null}
         {actions ? (
-          <div className={cn("flex shrink-0 flex-wrap items-center", compact ? "gap-1.5" : "gap-2")}>{actions}</div>
+          <div className={cn("flex min-w-0 flex-wrap items-center sm:ml-auto", compact ? "gap-1.5" : "gap-2")}>{actions}</div>
         ) : null}
       </div>
       {footer ? (

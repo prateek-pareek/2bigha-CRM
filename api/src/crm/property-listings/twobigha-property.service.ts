@@ -291,6 +291,19 @@ const GET_PROPERTY_MEDIA_QUERY = `
   }
 `;
 
+/** Cap for the optional per-row photo backfill on list reads — the card falls back to no photo. */
+const LIST_MEDIA_HYDRATION_TIMEOUT_MS = 3000;
+
+/**
+ * Cap for the main 2bigha list query behind the Properties page. Without it a slow/hung
+ * 2bigha call holds the CRM request (and the portal's loading skeleton) open indefinitely.
+ */
+const LIST_QUERY_TIMEOUT_MS = 10_000;
+
+function isTimeoutError(e: any): boolean {
+  return e?.name === 'TimeoutError' || e?.name === 'AbortError';
+}
+
 const CREATE_PROPERTY_MUTATION = `
   mutation CreateProperty($input: CreatePropertyInput!) {
     createProperty(input: $input) {
@@ -904,6 +917,7 @@ export class TwoBighaPropertyService {
   private async hydrateEnvelopeImages(
     config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
     envelope: Record<string, unknown>,
+    options?: { timeoutMs?: number },
   ): Promise<Record<string, unknown>> {
     if (this.envelopeHasHostedImages(envelope)) return envelope;
     const propertyId = (envelope.property as { id?: string } | undefined)?.id;
@@ -911,7 +925,7 @@ export class TwoBighaPropertyService {
     try {
       const media = await twoBighaGraphqlRequest<{
         getPropertyMedia?: { images?: { thumbnailUrl: string }[] };
-      }>(config, GET_PROPERTY_MEDIA_QUERY, { propertyId });
+      }>(config, GET_PROPERTY_MEDIA_QUERY, { propertyId }, options);
       const urls = this.mediaThumbnailUrls(media?.getPropertyMedia?.images);
       if (urls.length) {
         envelope.images = urls;
@@ -926,13 +940,19 @@ export class TwoBighaPropertyService {
    * List queries only carry envelope `images`, which are empty/unprocessed for
    * freshly uploaded listings — backfill those rows from getPropertyMedia so
    * every card shows its uploaded photos (same fallback the detail read uses).
+   * Each backfill is time-boxed: one slow media call must not hold the whole
+   * list response (and the portal's loading skeleton) hostage.
    */
   private async hydrateListImages(
     config: NonNullable<ReturnType<typeof getTwoBighaConfig>>,
     rows: Record<string, unknown>[] | undefined,
   ): Promise<Record<string, unknown>[]> {
     if (!rows?.length) return [];
-    return Promise.all(rows.map((row) => this.hydrateEnvelopeImages(config, row)));
+    return Promise.all(
+      rows.map((row) =>
+        this.hydrateEnvelopeImages(config, row, { timeoutMs: LIST_MEDIA_HYDRATION_TIMEOUT_MS }),
+      ),
+    );
   }
 
   private async hydrateEnvelopeUser(
@@ -1674,40 +1694,49 @@ export class TwoBighaPropertyService {
       let resultMeta: Record<string, unknown> | undefined;
 
       const normApproval = (params.approvalStatus || "").toLowerCase();
+      const listOpts = { timeoutMs: LIST_QUERY_TIMEOUT_MS };
+      const startedAt = Date.now();
 
       if (normApproval === "pending" || normApproval === "pending review") {
         const data = await twoBighaGraphqlRequest<{
           getPendingApprovalProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
-        }>(config, GET_PENDING_PROPERTIES_QUERY, { input });
+        }>(config, GET_PENDING_PROPERTIES_QUERY, { input }, listOpts);
         resultData = data?.getPendingApprovalProperties?.data;
         resultMeta = data?.getPendingApprovalProperties?.meta;
       } else if (normApproval === "rejected") {
         const data = await twoBighaGraphqlRequest<{
           getRejectedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
-        }>(config, GET_REJECTED_PROPERTIES_QUERY, { input });
+        }>(config, GET_REJECTED_PROPERTIES_QUERY, { input }, listOpts);
         resultData = data?.getRejectedProperties?.data;
         resultMeta = data?.getRejectedProperties?.meta;
       } else if (normApproval === "approved") {
         const data = await twoBighaGraphqlRequest<{
           getApprovedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
-        }>(config, GET_APPROVED_PROPERTIES_QUERY, { input });
+        }>(config, GET_APPROVED_PROPERTIES_QUERY, { input }, listOpts);
         resultData = data?.getApprovedProperties?.data;
         resultMeta = data?.getApprovedProperties?.meta;
       } else {
         try {
           const data = await twoBighaGraphqlRequest<{
             properties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
-          }>(config, GET_PROPERTIES_QUERY, { input });
+          }>(config, GET_PROPERTIES_QUERY, { input }, listOpts);
           resultData = data?.properties?.data;
           resultMeta = data?.properties?.meta;
         } catch (gqlErr: any) {
+          // A timeout means 2bigha itself is slow — retrying another query would only double the wait.
+          if (isTimeoutError(gqlErr)) throw gqlErr;
           this.logger.warn(`2bigha properties query fallback to getApprovedProperties: ${gqlErr?.message}`);
           const data = await twoBighaGraphqlRequest<{
             getApprovedProperties?: { data?: Record<string, unknown>[]; meta?: Record<string, unknown> } | null;
-          }>(config, GET_APPROVED_PROPERTIES_QUERY, { input });
+          }>(config, GET_APPROVED_PROPERTIES_QUERY, { input }, listOpts);
           resultData = data?.getApprovedProperties?.data;
           resultMeta = data?.getApprovedProperties?.meta;
         }
+      }
+
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 3000) {
+        this.logger.warn(`2bigha listProperties slow: list query took ${elapsed}ms`);
       }
 
       return {
@@ -1715,7 +1744,11 @@ export class TwoBighaPropertyService {
         meta: resultMeta || { total: (resultData || []).length },
       };
     } catch (e: any) {
-      this.logger.error(`2bigha listProperties failed: ${e?.message}`);
+      this.logger.error(
+        isTimeoutError(e)
+          ? `2bigha listProperties timed out after ${LIST_QUERY_TIMEOUT_MS}ms`
+          : `2bigha listProperties failed: ${e?.message}`,
+      );
       return null;
     }
   }

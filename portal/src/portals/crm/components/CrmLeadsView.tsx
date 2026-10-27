@@ -2177,7 +2177,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
           const def = customFieldDefs.find((f: any) => f.key === cfKey);
           const raw = lead.customFields?.[cfKey];
           return (
-            <span className="text-text-muted font-medium text-sm inline-flex min-w-0 max-w-[220px]">
+            <span className="text-text-muted font-medium text-sm inline-flex min-w-0 max-w-[220px] overflow-hidden">
               <CrmCustomFieldValue value={raw} type={def?.type} />
             </span>
           );
@@ -2476,10 +2476,10 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                   />
                 </div>
                 {!(user as any)?.assignedLeadsPipeline ? (
-                  <div className="relative grid shrink-0">
+                  <div className="relative grid min-w-0 max-w-[240px] shrink">
                     <span
                       aria-hidden
-                      className="invisible col-start-1 row-start-1 h-8 whitespace-nowrap px-2.5 pr-7 text-xs font-medium"
+                      className="invisible col-start-1 row-start-1 h-8 truncate whitespace-nowrap px-2.5 pr-7 text-xs font-medium"
                     >
                       {pipelinesForActiveVertical.find((p) => String(p._id) === String(selectedPipelineId))?.name
                         || selectedPipeline?.name

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { GatewayTimeoutException, Injectable, Logger } from '@nestjs/common';
 import { getTwoBighaConfig, twoBighaGraphqlRequest } from '../shared/twobigha-graphql.util';
 import { PROPERTY_DETAIL_FIELDS } from '../property-listings/twobigha-property.service';
 
@@ -84,6 +84,10 @@ const GET_VERIFIED_PROPERTIES_QUERY = `
 
 export type LegalVerificationBucket = 'pending' | 'verified';
 
+// Bound the upstream call so a slow/hung 2bigha can't hold the CRM request
+// (and the portal's loading skeleton) open indefinitely.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 const LEGAL_VERIFICATION_QUERIES: Record<LegalVerificationBucket, { query: string; field: string }> = {
   pending: { query: GET_PENDING_VERIFICATION_PROPERTIES_QUERY, field: 'getPendingVerificationProperties' },
   verified: { query: GET_VERIFIED_PROPERTIES_QUERY, field: 'getVerifiedProperties' },
@@ -116,7 +120,7 @@ export class TwoBighaLegalVerificationService {
           limit: params.limit ?? 20,
           searchTerm: params.searchTerm || undefined,
         },
-      });
+      }, { timeoutMs: REQUEST_TIMEOUT_MS });
       const result = data?.[field];
       return {
         data: result?.data || [],
@@ -124,6 +128,11 @@ export class TwoBighaLegalVerificationService {
       };
     } catch (e: any) {
       this.logger.error(`2bigha ${field} failed: ${e?.message}`);
+      // A timeout is an upstream failure, not "not configured" — surface it
+      // as an error so the portal doesn't show the missing-credentials banner.
+      if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
+        throw new GatewayTimeoutException('2bigha legal verification queue timed out');
+      }
       return null;
     }
   }

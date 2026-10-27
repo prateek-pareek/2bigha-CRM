@@ -73,8 +73,21 @@ function taskPersonLabel(p: TaskPerson | string | undefined, fallback?: string):
     return formatCrmUserLabel(p) || fallback || '';
 }
 
-function taskPersonInitials(p: TaskPerson | string | undefined): string {
-    const label = taskPersonLabel(p);
+/** Plain display name for initials (no role suffix); falls back to metadata name when assignee isn't populated. */
+function taskPersonName(p: TaskPerson | string | undefined, fallback?: string): string {
+    if (p && typeof p === 'object') {
+        const n =
+            [p.firstName, p.lastName].filter(Boolean).join(' ').trim() ||
+            p.fullName?.trim() ||
+            p.name?.trim() ||
+            (p.email ? p.email.split('@')[0] : '');
+        if (n) return n;
+    }
+    return fallback?.trim() || '';
+}
+
+function taskPersonInitials(p: TaskPerson | string | undefined, fallback?: string): string {
+    const label = taskPersonName(p, fallback);
     if (!label) return '';
     return label
         .trim()
@@ -194,7 +207,10 @@ function TaskCard({
                     </label>
                 ) : null}
 
-                <h4 className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-[#1f2020] line-clamp-2 group-hover:text-[var(--primary)]">
+                <h4
+                    className="min-w-0 flex-1 whitespace-normal break-words text-[13px] font-semibold leading-snug text-[#1f2020] group-hover:text-[var(--primary)]"
+                    title={task.title || 'Untitled Task'}
+                >
                     {task.title || 'Untitled Task'}
                 </h4>
 
@@ -206,13 +222,16 @@ function TaskCard({
                 </span>
             </div>
 
-            <div className="mt-2.5 flex items-center gap-1.5 border-t border-[#e2e8f0] pt-2.5">
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-[#e2e8f0] pt-2.5">
                 <span title={assigneeLabel || 'Unassigned'} className="shrink-0">
                     <CrmKanbanAvatar
                         size="sm"
                         className={cn(!assigneeLabel && 'border-dashed text-[var(--text-muted)]/60')}
                     >
-                        {taskPersonInitials(task.assignee as TaskPerson) || <User size={11} strokeWidth={2} />}
+                        {taskPersonInitials(
+                            task.assignee as TaskPerson,
+                            task.metadata?.assigneeName || task.metadata?.pmAssigneeName,
+                        ) || <User size={11} strokeWidth={2} />}
                     </CrmKanbanAvatar>
                 </span>
 
@@ -332,7 +351,7 @@ function BoardColumn({ column, tasks, onTaskClick, onAddClick, onDeleteTask, onE
             onAdd={onAddClick}
             style={{ minHeight: 320 }}
             className={cn(
-                '!w-auto !max-w-none min-w-[220px] flex-1 basis-0',
+                '!w-auto !max-w-none min-w-0',
                 isOver && 'ring-2 ring-primary/30',
             )}
         >
@@ -386,11 +405,11 @@ function BoardColumn({ column, tasks, onTaskClick, onAddClick, onDeleteTask, onE
 /** Column-shaped shimmer so the board keeps its layout while the first fetch resolves. */
 function TaskBoardSkeleton() {
     return (
-        <div className="flex h-full items-start gap-3 overflow-hidden pb-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] content-start gap-3 overflow-hidden pb-4">
             {TASK_COLUMNS.map((column) => (
                 <div
                     key={column.name}
-                    className="flex min-w-[220px] flex-1 basis-0 flex-col gap-3 rounded-[5px] border border-[var(--border-color)] p-2"
+                    className="flex min-w-0 flex-col gap-3 rounded-[5px] border border-[var(--border-color)] p-2"
                 >
                     <div className="h-14 animate-pulse rounded-[5px] bg-[var(--surface-dim)]" />
                     {[0, 1].map((i) => (
@@ -1008,7 +1027,7 @@ export default function TasksPage() {
             {/* Unified Toolbar: Search, Filters, Show, Bulk Actions */}
             <div className="flex flex-wrap items-center gap-2 shrink-0 px-3 py-2 bg-white border-t border-b border-[var(--border-color)]">
                 {/* Left: Filter & Search */}
-                <div className="flex items-center gap-2 flex-nowrap flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap flex-1 min-w-[min(100%,260px)]">
                     <CRMFilterBar
                         module="activities"
                         filters={filters}
@@ -1016,7 +1035,7 @@ export default function TasksPage() {
                         onClear={() => setFilters([])}
                         onPropertiesReady={setFilterProperties}
                     />
-                    <div className="relative h-[38px] flex-1 min-w-[100px] max-w-[200px]">
+                    <div className="relative h-[38px] flex-1 min-w-[140px] max-w-[260px]">
                         <Search
                             size={14}
                             className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
@@ -1033,7 +1052,7 @@ export default function TasksPage() {
                 </div>
 
                 {/* Center: Show Filters */}
-                <div className="flex items-center gap-1.5 flex-nowrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
                     {(
                         [
                             { id: 'all', label: 'All tasks', shortLabel: 'All' },
@@ -1071,7 +1090,7 @@ export default function TasksPage() {
 
                 {/* Right: Bulk Actions (Admin only) */}
                 {isAdmin && (
-                    <div className="flex items-center gap-1.5 flex-wrap flex-shrink-0">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                         <button
                             type="button"
                             onClick={toggleSelectAllFiltered}
@@ -1152,7 +1171,7 @@ export default function TasksPage() {
                                         className="cursor-pointer border-t border-[var(--border-color)] hover:bg-[var(--surface-dim)]/50"
                                         onClick={() => { setEditingTask(task); setIsEditingForm(false); }}
                                     >
-                                        <td className="px-3 py-2 font-medium">{task.title}</td>
+                                        <td className="px-3 py-2 font-medium !whitespace-normal break-words min-w-[180px] max-w-[360px]">{task.title}</td>
                                         <td className="px-3 py-2">{taskPersonLabel(task.assignee as TaskPerson) || '—'}</td>
                                         <td className="px-3 py-2">
                                             {isTaskEscalated(task)
@@ -1165,7 +1184,7 @@ export default function TasksPage() {
                                         <td className="px-3 py-2">
                                             {task.metadata?.dueDate ? new Date(task.metadata.dueDate).toLocaleDateString() : '—'}
                                         </td>
-                                        <td className="px-3 py-2 text-xs">
+                                        <td className="crm-cell-wrap px-3 py-2 text-xs">
                                             {task.metadata?.relatedPropertyTitle || task.relatedType || '—'}
                                         </td>
                                     </tr>
@@ -1214,7 +1233,8 @@ export default function TasksPage() {
                         collisionDetection={collisionDetection}
                         onDragEnd={handleDragEnd}
                     >
-                        <CrmKanbanBoard className="flex-1 min-h-0 overflow-x-auto overflow-y-auto gap-3 pr-1 pb-4 custom-scrollbar">
+                        {/* Wrap columns onto extra rows instead of forcing horizontal scroll */}
+                        <CrmKanbanBoard className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] content-start flex-1 min-h-0 overflow-x-hidden overflow-y-auto gap-3 pr-1 pb-4 custom-scrollbar">
                             {TASK_COLUMNS.map((column) => (
                                 <BoardColumn
                                     key={column.name}
