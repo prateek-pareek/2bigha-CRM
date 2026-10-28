@@ -77,14 +77,21 @@ function duplicateTooltip(info: ClientDuplicateInfo): string {
   return `Duplicate group ${info.group} (${info.groupSize} records)\n${lines.join('\n')}`;
 }
 
-function DuplicateBadge({ info }: { info: ClientDuplicateInfo }) {
+function DuplicateBadge({ info, onMerge }: { info: ClientDuplicateInfo; onMerge?: () => void }) {
+  const className =
+    'inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900';
+  if (!onMerge) {
+    return <span title={duplicateTooltip(info)} className={className}>Duplicate ×{info.groupSize}</span>;
+  }
   return (
-    <span
-      title={duplicateTooltip(info)}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+    <button
+      type="button"
+      title={`${duplicateTooltip(info)}\n\nClick to merge the others into this record`}
+      onClick={(e) => { e.stopPropagation(); onMerge(); }}
+      className={`${className} cursor-pointer hover:bg-amber-200`}
     >
-      Duplicate ×{info.groupSize}
-    </span>
+      Duplicate ×{info.groupSize} · Merge
+    </button>
   );
 }
 
@@ -242,6 +249,22 @@ export default function ClientsPage() {
     }
   };
 
+  const handleMergeDuplicates = async (client: Client) => {
+    const others = client.duplicateInfo?.matches ?? [];
+    if (!others.length) return;
+    const names = others.map((m) => `• ${m.name || 'Unnamed'}${m.email ? ` (${m.email})` : ''}`).join('\n');
+    if (!window.confirm(`Keep "${client.name}" and merge these duplicates into it?\n\n${names}\n\nThe duplicates are moved to trash; their activities, emails and links are kept on this record.`)) return;
+    try {
+      await crmApi.post('/crm/clients/duplicates/merge', {
+        masterId: client._id,
+        duplicateIds: others.map((m) => m._id),
+      });
+      await fetchClients();
+    } catch (err: any) {
+      window.alert(err?.response?.data?.message || 'Failed to merge duplicate clients.');
+    }
+  };
+
   const visibleCols = columns.filter(c => c.visible);
 
   const paginated = useMemo(
@@ -281,7 +304,7 @@ export default function ClientsPage() {
           <CrmListPersonCell
             name={client.name}
             initials={initials}
-            trailing={client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} /> : undefined}
+            trailing={client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} onMerge={() => void handleMergeDuplicates(client)} /> : undefined}
           />
         );
       }
@@ -439,7 +462,7 @@ export default function ClientsPage() {
                           footerLeft={
                             <div className="flex items-center gap-1.5">
                               <CrmListStatusBadge label={client.status || '—'} />
-                              {client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} /> : null}
+                              {client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} onMerge={() => void handleMergeDuplicates(client)} /> : null}
                             </div>
                           }
                           footerRight={

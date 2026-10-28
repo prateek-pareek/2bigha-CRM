@@ -3209,3 +3209,36 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   border-color: #64748b !important; /* slate-500 slight dark */
   box-shadow: none !important;
 }
+
+/* ── Leads / Tasks: toolbar wraps and table columns stay readable (no clipped controls) ── */
+.crm-list-toolbar,
+.crm-list-toolbar > div,
+.crm-list-toolbar > div > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.crm-list-dense .crm-list-toolbar > div:first-child {
+  flex-wrap: wrap !important;
+  height: auto !important;
+}
+
+.crm-list-page .crm-table td {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.crm-list-page .crm-table-scroll {
+  padding-right: 0.5rem;
+  scroll-padding-right: 0.5rem;
+}
+
+.crm-table tbody .crm-table-actions,
+[data-crm-theme="crms"] .crm-table tbody .crm-table-actions {
+  width: 8.5rem;
+  min-width: 8.5rem;
+  max-width: 8.5rem;
+}

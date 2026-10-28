@@ -88,7 +88,7 @@ export function CrmListToolbar({
           ) : null}
         </div>
         {right ? (
-          <div className={cn("flex shrink-0 flex-wrap items-center", compact ? "gap-1.5" : "gap-2.5")}>{right}</div>
+          <div className={cn("flex min-w-0 max-w-full flex-wrap items-center", compact ? "gap-1.5" : "gap-2.5")}>{right}</div>
         ) : null}
       </div>
       {secondary ? (
@@ -96,7 +96,7 @@ export function CrmListToolbar({
           className={cn(
             "flex flex-wrap items-center gap-2",
             compact
-              ? "flex-nowrap overflow-visible bg-[var(--surface-dim)]/35 px-2 py-1 shadow-[inset_0_1px_0_rgba(0,0,0,0.04)]"
+              ? "flex-wrap overflow-visible bg-[var(--surface-dim)]/35 px-2 py-1 shadow-[inset_0_1px_0_rgba(0,0,0,0.04)]"
               : "flex-wrap rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] bg-white px-3 py-2 shadow-[var(--crm-shadow-input)]",
           )}
         >

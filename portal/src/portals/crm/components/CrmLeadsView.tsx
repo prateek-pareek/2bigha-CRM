@@ -2497,7 +2497,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
               </>
             }
             right={
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <CrmViewToggle
                   value={viewMode}
                   onChange={(mode) => {

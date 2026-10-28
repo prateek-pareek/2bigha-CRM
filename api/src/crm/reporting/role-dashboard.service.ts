@@ -98,7 +98,9 @@ interface Windows {
   week: Win;
   month: Win;
   now: Date;
+  /** Trend buckets for the selected window (days, weeks or months — see `granularity`). */
   months: Array<Win & { label: string }>;
+  granularity: 'day' | 'week' | 'month';
 }
 
 interface Acc {
@@ -641,6 +643,7 @@ export class RoleDashboardService {
         total: taskTotal,
         completionPct: pct(t.completed, taskTotal),
       },
+      trendGranularity: snap.windows.granularity,
       monthly: snap.windows.months.map((m, i) => ({
         month: m.label,
         leads: acc.monthly.leads[i] || 0,
@@ -1233,6 +1236,7 @@ export class RoleDashboardService {
                 c: '$createdBy',
                 y: { $year: { date: '$createdAt', timezone: tz } },
                 m: { $month: { date: '$createdAt', timezone: tz } },
+                d: { $dayOfMonth: { date: '$createdAt', timezone: tz } },
               },
               n: { $sum: 1 },
             },
@@ -1270,7 +1274,7 @@ export class RoleDashboardService {
     }
     const monthIdx = this.monthIndexer(w);
     for (const r of monthRows as any[]) {
-      const i = monthIdx(r._id.y, r._id.m);
+      const i = monthIdx(r._id.y, r._id.m, r._id.d);
       if (i >= 0) get(resolve(r._id.o, r._id.c).key).monthly.leads[i] += r.n;
     }
   }
@@ -1340,6 +1344,7 @@ export class RoleDashboardService {
                 ...who,
                 y: { $year: { date: '$_t', timezone: tz } },
                 m: { $month: { date: '$_t', timezone: tz } },
+                d: { $dayOfMonth: { date: '$_t', timezone: tz } },
               },
               n: { $sum: 1 },
             },
@@ -1373,7 +1378,7 @@ export class RoleDashboardService {
     }
     const monthIdx = this.monthIndexer(w);
     for (const r of monthRows as any[]) {
-      const i = monthIdx(r._id.y, r._id.m);
+      const i = monthIdx(r._id.y, r._id.m, r._id.d);
       if (i >= 0) get(resolve(r._id)).monthly.calls[i] += r.n;
     }
   }
@@ -1787,23 +1792,27 @@ export class RoleDashboardService {
     const todayYmd = this.ymd(now);
     const [y, m] = todayYmd.split('-').map(Number);
     let spec = key;
+    const qStart = Math.floor((m - 1) / 3) * 3 + 1;
     if (key === 'this_quarter') {
-      spec = `${y}-${pad(Math.floor((m - 1) / 3) * 3 + 1)}-01,${todayYmd}`;
+      spec = `${y}-${pad(qStart)}-01,${todayYmd}`;
+    } else if (key === 'last_quarter') {
+      const prev = qStart - 3;
+      const sy = prev < 1 ? y - 1 : y;
+      const sm = prev < 1 ? prev + 12 : prev;
+      const lastDay = new Date(Date.UTC(sy, sm + 2, 0)).getUTCDate();
+      spec = `${sy}-${pad(sm)}-01,${sy}-${pad(sm + 2)}-${pad(lastDay)}`;
+    } else if (key === 'last_month') {
+      const sy = m === 1 ? y - 1 : y;
+      const sm = m === 1 ? 12 : m - 1;
+      const lastDay = new Date(Date.UTC(sy, sm, 0)).getUTCDate();
+      spec = `${sy}-${pad(sm)}-01,${sy}-${pad(sm)}-${pad(lastDay)}`;
     } else if (key === 'this_year') {
       spec = `${y}-01-01,${todayYmd}`;
     } else if (key === 'all_time') {
       spec = `2000-01-01,${todayYmd}`;
     }
     const period = this.range(spec);
-    const months: Windows['months'] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(Date.UTC(y, m - 1 - i, 1));
-      const yy = d.getUTCFullYear();
-      const mm = d.getUTCMonth() + 1;
-      const lastDay = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
-      const r = this.range(`${yy}-${pad(mm)}-01,${yy}-${pad(mm)}-${pad(lastDay)}`).cur;
-      months.push({ ...r, label: d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }) });
-    }
+    const { granularity, buckets } = this.trendBuckets(period.cur);
     return {
       key,
       period: period.cur,
@@ -1812,13 +1821,71 @@ export class RoleDashboardService {
       week: this.range('this_week').cur,
       month: this.range('this_month').cur,
       now,
-      months,
+      months: buckets,
+      granularity,
     };
   }
 
+  /**
+   * Chart buckets that follow the selected window: daily up to ~5 weeks, weekly up to ~4 months,
+   * calendar months beyond (latest 24). Windows shorter than a week show the 7 days ending at
+   * the window's last day.
+   */
+  private trendBuckets(cur: Win): { granularity: Windows['granularity']; buckets: Windows['months'] } {
+    const addDays = (ymd: string, n: number) => {
+      const [yy, mm, dd] = ymd.split('-').map(Number);
+      return new Date(Date.UTC(yy, mm - 1, dd + n)).toISOString().slice(0, 10);
+    };
+    const diffDays = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
+    const label = (ymd: string, opts: Intl.DateTimeFormatOptions) =>
+      new Date(`${ymd}T12:00:00Z`).toLocaleString('en-US', { ...opts, timeZone: 'UTC' });
+    const mk = (a: string, b: string, text: string) => ({ ...this.range(`${a},${b}`).cur, label: text });
+
+    const endYmd = this.ymd(cur.end);
+    let startYmd = this.ymd(cur.start);
+    const span = diffDays(startYmd, endYmd) + 1;
+    const buckets: Windows['months'] = [];
+
+    if (span <= 35) {
+      if (span < 7) startYmd = addDays(endYmd, -6);
+      for (let d = startYmd; d <= endYmd; d = addDays(d, 1)) {
+        buckets.push(mk(d, d, label(d, { day: 'numeric', month: 'short' })));
+      }
+      return { granularity: 'day', buckets };
+    }
+    if (span <= 125) {
+      // Monday-based weeks, clipped to the window.
+      const dow = (new Date(`${startYmd}T12:00:00Z`).getUTCDay() + 6) % 7;
+      for (let ws = addDays(startYmd, -dow); ws <= endYmd; ws = addDays(ws, 7)) {
+        const a = ws < startYmd ? startYmd : ws;
+        const we = addDays(ws, 6);
+        const b = we > endYmd ? endYmd : we;
+        buckets.push(mk(a, b, label(a, { day: 'numeric', month: 'short' })));
+      }
+      return { granularity: 'week', buckets };
+    }
+    const [ey, em] = endYmd.split('-').map(Number);
+    const [sy, sm] = startYmd.split('-').map(Number);
+    const first = Math.max((sy - ey) * 12 + (sm - em), -23); // months relative to the end month
+    for (let i = first; i <= 0; i++) {
+      const dt = new Date(Date.UTC(ey, em - 1 + i, 1));
+      const yy = dt.getUTCFullYear();
+      const mm = dt.getUTCMonth() + 1;
+      const lastDay = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+      const from = `${yy}-${pad(mm)}-01`;
+      buckets.push(
+        mk(from, `${yy}-${pad(mm)}-${pad(lastDay)}`, label(from, first < -11 ? { month: 'short', year: '2-digit' } : { month: 'short' })),
+      );
+    }
+    return { granularity: 'month', buckets };
+  }
+
   private monthIndexer(w: Windows) {
-    const keys = w.months.map((m) => this.ymd(new Date(m.start.getTime() + 12 * 3600_000)).slice(0, 7));
-    return (y: number, m: number) => keys.indexOf(`${y}-${pad(m)}`);
+    // Map a calendar day (y, m, d in the reporting tz) to its trend bucket, or -1.
+    return (y: number, m: number, d: number) => {
+      const t = Date.UTC(y, m - 1, d, 12);
+      return w.months.findIndex((b) => t >= b.start.getTime() && t <= b.end.getTime());
+    };
   }
 }
 
@@ -1983,7 +2050,18 @@ function inWin(ms: number | null | undefined, w: Win): boolean {
 function normalizeWindow(window: string): string {
   const w = String(window || 'this_month').trim().toLowerCase();
   if (
-    ['today', 'yesterday', 'this_week', 'this_month', 'last_30_days', 'this_quarter', 'this_year', 'all_time'].includes(w)
+    [
+      'today',
+      'yesterday',
+      'this_week',
+      'this_month',
+      'last_30_days',
+      'last_month',
+      'this_quarter',
+      'last_quarter',
+      'this_year',
+      'all_time',
+    ].includes(w)
   ) {
     return w;
   }
