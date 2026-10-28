@@ -374,7 +374,7 @@ export default function ClientDetailPage() {
             <span
               className={cn(
                 'inline-flex h-8 items-center rounded-[var(--crm-radius-ui)] px-2.5 text-xs font-semibold capitalize',
-                client.status === 'active'
+                String(client.status || '').toLowerCase() === 'active'
                   ? 'bg-[var(--success-light)] text-[var(--success)]'
                   : 'bg-[var(--surface-dim)] text-[var(--text-muted)]',
               )}

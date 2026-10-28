@@ -234,7 +234,7 @@ describe('Disha · Client tab — only the selected client\'s properties + Agric
   it('unlinked client returns nothing instead of every platform property', async () => {
     const twoBighaClient = { getPropertiesByClientId: jest.fn() };
     const clientModel = { findById: jest.fn(() => q({ _id: 'c1', twobighaUserId: undefined })) };
-    const svc = new ClientsService(clientModel as any, {} as any, {} as any, {} as any, twoBighaClient as any);
+    const svc = new ClientsService(clientModel as any, {} as any, {} as any, {} as any, {} as any, twoBighaClient as any);
 
     const res = await svc.getClientProperties('6a96958b7541df7314520e84');
     expect(res).toMatchObject({ result: [], totalCount: 0, clientLinked: false });
@@ -244,7 +244,7 @@ describe('Disha · Client tab — only the selected client\'s properties + Agric
   it('linked client always queries with its own 2bigha clientId', async () => {
     const twoBighaClient = { getPropertiesByClientId: jest.fn().mockResolvedValue({ result: [] }) };
     const clientModel = { findById: jest.fn(() => q({ _id: 'c1', twobighaUserId: 'tb-user-7' })) };
-    const svc = new ClientsService(clientModel as any, {} as any, {} as any, {} as any, twoBighaClient as any);
+    const svc = new ClientsService(clientModel as any, {} as any, {} as any, {} as any, {} as any, twoBighaClient as any);
 
     await svc.getClientProperties('6a96958b7541df7314520e84', { propertyCategory: 'AGRICULTURAL' });
     expect(twoBighaClient.getPropertiesByClientId).toHaveBeenCalledWith(

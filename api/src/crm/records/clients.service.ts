@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,6 +10,11 @@ import { Client, ClientDocument } from '../schemas/client.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
 import { Model, Types } from 'mongoose';
 import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
+import {
+  CrmAssociation,
+  CrmAssociationDocument,
+} from '../associations/schemas/crm-association.schema';
+import { normalizeEmail, normalizePhoneDigits } from '../shared/crm-person-identifiers.util';
 
 const CLIENT_ASSOC_KEYS = [
   'associatedLeads',
@@ -64,6 +70,8 @@ import {
   CLIENT_DUPLICATE_SCAN_LIMIT,
   ClientDuplicateIndex,
   ClientDuplicateMatch,
+  ClientDuplicateReason,
+  clientNameKey,
 } from '../shared/crm-client-duplicate.util';
 
 @Injectable()
@@ -73,6 +81,8 @@ export class ClientsService {
     private clientModel: Model<ClientDocument>,
     @InjectModel(Activity.name, 'crmConnection')
     private activityModel: Model<ActivityDocument>,
+    @InjectModel(CrmAssociation.name, 'crmConnection')
+    private associationModel: Model<CrmAssociationDocument>,
     private readonly crmService: CRMService,
     private readonly associationsService: AssociationsService,
     private readonly twoBighaClientService: TwoBighaClientService,
@@ -151,6 +161,201 @@ export class ClientsService {
       query.excludeId ? String(query.excludeId) : '',
     );
     return { duplicates };
+  }
+
+  /**
+   * Edits must not create a duplicate that the Add Client form would have
+   * blocked. Only keys the patch actually changes are checked, so editing a
+   * record that is already part of a duplicate group stays possible.
+   */
+  private async assertNoNewDuplicate(
+    id: string,
+    existing: any,
+    patch: Record<string, any>,
+    confirmDuplicate: boolean,
+  ): Promise<void> {
+    const touches = ['name', 'email', 'additionalEmails', 'phone', 'whatsappNumber'].some(
+      (k) => patch[k] !== undefined,
+    );
+    if (!touches) return;
+    const before = {
+      name: existing.name,
+      email: existing.email,
+      additionalEmails: existing.additionalEmails,
+      phone: existing.phone,
+      whatsappNumber: existing.whatsappNumber,
+    };
+    const after = { ...before, ...patch };
+    const changed = new Set<ClientDuplicateReason>();
+    if (clientNameKey(before.name) !== clientNameKey(after.name)) changed.add('name');
+    const emails = (c: any) =>
+      [c.email, ...(c.additionalEmails || [])]
+        .map((e) => normalizeEmail(e))
+        .filter(Boolean)
+        .sort()
+        .join('|');
+    if (emails(before) !== emails(after)) changed.add('email');
+    const phones = (c: any) =>
+      [c.phone, c.whatsappNumber]
+        .map((p) => normalizePhoneDigits(p))
+        .filter(Boolean)
+        .sort()
+        .join('|');
+    if (phones(before) !== phones(after)) changed.add('phone');
+    if (!changed.size) return;
+
+    const duplicates = (await this.loadDuplicateIndex())
+      .findMatches(after, id)
+      .map((d) => ({ ...d, reasons: d.reasons.filter((r) => changed.has(r)) }))
+      .filter((d) => d.reasons.length);
+    if (!duplicates.length) return;
+
+    const emailClash = duplicates.some((d) => d.reasons.includes('email'));
+    if (!emailClash && confirmDuplicate) return;
+    const first = duplicates[0];
+    const why = first.reasons
+      .map((r) => CLIENT_DUPLICATE_REASON_LABELS[r].toLowerCase())
+      .join(', ');
+    throw new ConflictException({
+      statusCode: 409,
+      code: 'CLIENT_DUPLICATE',
+      message: emailClash
+        ? `Another client already uses this email ("${first.name}"). Merge the records instead of duplicating it.`
+        : `This change makes the client a possible duplicate of "${first.name}" (${why}).`,
+      canOverride: !emailClash,
+      duplicates,
+    });
+  }
+
+  /**
+   * Merge duplicate clients into `masterId` (admin only). Empty master fields
+   * are back-filled, emails / assignees / associations are unioned, activities
+   * and association edges are re-pointed, and the duplicates are soft-deleted
+   * (their email is released so the unique index stays free).
+   */
+  async mergeClients(masterId: string, duplicateIds: string[], actor?: any) {
+    if (!hasCrmAdminJwtBypass(actor)) {
+      throw new ForbiddenException('Merging clients is restricted to administrators.');
+    }
+    if (!Types.ObjectId.isValid(masterId)) throw new BadRequestException('Invalid master id');
+    const dupIds = [...new Set((duplicateIds || []).map(String))].filter(
+      (d) => d !== masterId && Types.ObjectId.isValid(d),
+    );
+    if (!dupIds.length) throw new BadRequestException('At least one duplicate id required');
+
+    const master: any = await this.clientModel.findById(masterId).lean().exec();
+    if (!master) throw new NotFoundException('Master client not found');
+    const dups: any[] = await this.clientModel
+      .find({ _id: { $in: dupIds.map((d) => new Types.ObjectId(d)) } })
+      .lean()
+      .exec();
+    if (dups.length !== dupIds.length) {
+      throw new BadRequestException('One or more duplicate clients not found');
+    }
+
+    const patch: Record<string, unknown> = {};
+    for (const f of ['phone', 'whatsappNumber', 'address', 'photoUrl', 'role', 'organization', 'sourceLead']) {
+      if (master[f]) continue;
+      const src = dups.find((d) => d[f]);
+      if (src) patch[f] = src[f];
+    }
+    if (!master.twobighaUserId) {
+      const src = dups.find((d) => d.twobighaUserId);
+      if (src) {
+        patch.twobighaUserId = src.twobighaUserId;
+        patch.twobighaSyncStatus = src.twobighaSyncStatus;
+        patch.twobighaSyncedAt = src.twobighaSyncedAt;
+      }
+    }
+
+    const primary = master.email || dups.find((d) => d.email)?.email;
+    if (primary && !master.email) patch.email = primary;
+    const primaryKey = normalizeEmail(primary);
+    const seen = new Set<string>();
+    patch.additionalEmails = [master, ...dups]
+      .flatMap((c) => [c.email, ...(c.additionalEmails || [])])
+      .map((e) => String(e ?? '').trim())
+      .filter((e) => {
+        const k = normalizeEmail(e);
+        if (!k || !k.includes('@') || k === primaryKey || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+
+    const union = (field: string) => [
+      ...new Map(
+        [master, ...dups]
+          .flatMap((c) => c[field] || [])
+          .map((x: any) => [String(x), x] as const),
+      ).values(),
+    ];
+    for (const f of ['assignedTo', ...CLIENT_ASSOC_KEYS]) patch[f] = union(f);
+    patch.customFields = Object.assign(
+      {},
+      ...dups.map((d) => d.customFields || {}),
+      master.customFields || {},
+    );
+
+    const dupOids = dupIds.map((d) => new Types.ObjectId(d));
+    const masterOid = new Types.ObjectId(masterId);
+    const actorId = this.getActorId(actor);
+    // Release the duplicates' unique email before the master adopts it.
+    await this.clientModel.updateMany(
+      { _id: { $in: dupOids } },
+      { ...softDeleteUpdate(actorId || undefined), $unset: { email: '' } },
+    );
+    await this.clientModel.updateOne({ _id: masterOid }, { $set: patch });
+
+    await this.activityModel.updateMany(
+      { relatedTo: { $in: dupOids }, relatedType: 'Client' },
+      { $set: { relatedTo: masterOid } },
+    );
+    await this.rewireClientEdges(dupOids, masterOid);
+
+    const populated = await this.clientModel.findById(masterOid).populate('organization').exec();
+    if (populated) await this.crmService.syncContactFromClientSafe(populated);
+    if (actorId) {
+      await new this.activityModel({
+        type: 'Note',
+        title: 'Clients Merged',
+        content: `${dups.length} duplicate client record(s) merged into ${master.name}`,
+        relatedTo: masterOid,
+        relatedType: 'Client',
+        author: new Types.ObjectId(actorId),
+      }).save();
+    }
+    return { ok: true, masterId, removedIds: dupIds };
+  }
+
+  /** Re-point crm_associations edges from merged clients, dropping edges the master already has. */
+  private async rewireClientEdges(dupOids: Types.ObjectId[], masterOid: Types.ObjectId) {
+    for (const side of ['from', 'to'] as const) {
+      const other = side === 'from' ? 'to' : 'from';
+      const edges = await this.associationModel
+        .find({ [`${side}Type`]: 'clients', [`${side}Id`]: { $in: dupOids } })
+        .lean()
+        .exec();
+      for (const e of edges as any[]) {
+        const clash = await this.associationModel
+          .findOne({
+            [`${side}Type`]: 'clients',
+            [`${side}Id`]: masterOid,
+            [`${other}Type`]: e[`${other}Type`],
+            [`${other}Id`]: e[`${other}Id`],
+            associationType: e.associationType,
+          })
+          .lean()
+          .exec();
+        if (clash || String(e[`${other}Id`]) === String(masterOid)) {
+          await this.associationModel.deleteOne({ _id: e._id });
+        } else {
+          await this.associationModel.updateOne(
+            { _id: e._id },
+            { $set: { [`${side}Id`]: masterOid } },
+          );
+        }
+      }
+    }
   }
 
   async create(data: any, user?: any): Promise<Client> {
@@ -527,7 +732,7 @@ export class ClientsService {
     const existing = await this.clientModel
       .findById(id)
       .select(
-        'assignedTo associatedLeads associatedOrganizations associatedContacts',
+        'name email additionalEmails phone whatsappNumber assignedTo associatedLeads associatedOrganizations associatedContacts',
       )
       .exec();
     if (!existing) return null;
@@ -548,8 +753,11 @@ export class ClientsService {
     }
 
     const patch = this._cleanData({ ...(data || {}) });
+    const confirmDuplicate = patch.confirmDuplicate === true;
+    delete patch.confirmDuplicate;
     normalizeAdditionalEmailsPayload(patch);
     normalizeClientAssociations(patch);
+    await this.assertNoNewDuplicate(id, existing, patch, confirmDuplicate);
 
     const updated = await this.clientModel
       .findByIdAndUpdate(id, patch, { new: true })

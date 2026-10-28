@@ -80,6 +80,16 @@ export class ClientsController {
     });
   }
 
+  /** Merge duplicate clients into one master record (admin only). */
+  @Post('clients/duplicates/merge')
+  @Permissions('clients:edit')
+  mergeDuplicates(
+    @Body() body: { masterId: string; duplicateIds: string[] },
+    @Request() req: any,
+  ) {
+    return this.clientsService.mergeClients(body?.masterId, body?.duplicateIds || [], req.user);
+  }
+
   // ── 2bigha platform-user (Client) sync — Create & Fetch ──────────────────
   // Sync-health rollup for the Settings → 2bigha Sync hub. Declared before
   // the ':id' routes so 'twobigha' is never captured as a client id.
