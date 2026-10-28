@@ -292,7 +292,9 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
   { id: 'quotations', label: 'Quotations', routes: ['/crm/quotations'] },
   { id: 'approval-queue', label: 'Approval Queue', routes: ['/crm/approval-queue'] },
   { id: 'ivr-service', label: 'IVR Service', routes: ['/crm/ivr'] },
-  { id: 'settings', label: 'Settings & templates', routes: ['/crm/settings'] },
+  { id: 'settings', label: 'Settings (CRM configuration & templates)', routes: ['/crm/settings'] },
+  { id: 'settings-users', label: 'Settings · Users & access', routes: ['/crm/settings/users'] },
+  { id: 'settings-roles', label: 'Settings · Roles', routes: ['/crm/settings/roles'] },
   { id: 'proposals', label: 'Proposals & CVs', routes: ['/crm/proposals'] },
   { id: 'services', label: 'Services catalog', routes: ['/crm/services'] },
   { id: 'settings-email-templates', label: 'Settings · Email Templates', routes: ['/crm/settings/email-templates'] },
@@ -308,6 +310,7 @@ const CRM_MODULE_ROWS: Omit<PermissionModuleDef, 'suite'>[] = [
   { id: 'settings-currency', label: 'Settings · Currency', routes: ['/crm/settings/currency'] },
   { id: 'settings-integrations', label: 'Settings · Integrations', routes: ['/crm/settings/integrations'] },
   { id: 'settings-audit-logs', label: 'Settings · Audit', routes: ['/crm/settings/audit-logs'] },
+  { id: 'settings-access-log', label: 'Settings · Users & Roles Activity Log', routes: ['/crm/settings/access-log'] },
   { id: 'settings-wiki', label: 'Settings · Wiki', routes: ['/crm/settings/wiki'] },
   { id: 'settings-duplicates', label: 'Settings · Duplicate Management', routes: ['/crm/settings/duplicates'] },
 ];

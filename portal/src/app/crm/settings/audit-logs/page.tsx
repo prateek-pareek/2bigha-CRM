@@ -91,7 +91,7 @@ const getActionStyle = (action: string) => {
     case "enroll":
     case "start": return { badge: "bg-indigo-50 text-indigo-600 border border-indigo-100", icon: "bg-indigo-50 text-indigo-500 border border-indigo-100" };
     case "cancel": return { badge: "bg-amber-50 text-amber-700 border border-amber-100", icon: "bg-amber-50 text-amber-600 border border-amber-100" };
-    default: return { badge: "bg-[var(--background)] text-[var(--text-muted)] border border-[var(--surface-dim)]", icon: "bg-[var(--background)] text-[var(--primary-muted)] border border-[var(--surface-dim)]" };
+    default: return { badge: "bg-[var(--background)] text-[var(--text-muted)] border border-[var(--surface-dim)]", icon: "bg-[var(--background)] text-[var(--text-muted)] border border-[var(--surface-dim)]" };
   }
 };
 
@@ -99,7 +99,7 @@ export default function AuditLogsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center py-20 text-[var(--primary-muted)]">
+        <div className="flex items-center justify-center py-20 text-[var(--text-muted)]">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
       }
@@ -230,7 +230,7 @@ function AuditLogsPageInner() {
             href="/crm/settings"
             className="p-1.5 hover:bg-[var(--background)] rounded-md transition-colors border border-transparent hover:border-[var(--surface-dim)]"
           >
-            <ChevronLeft size={18} className="text-[var(--primary-muted)]" />
+            <ChevronLeft size={18} className="text-[var(--text-muted)]" />
           </Link>
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-md bg-[#fff3f0] border border-[#ffd6cc] flex items-center justify-center">
@@ -238,7 +238,7 @@ function AuditLogsPageInner() {
             </div>
             <div>
               <h1 className="text-sm font-semibold text-[var(--text-main)] leading-tight">Audit</h1>
-              <p className="text-xs text-[var(--primary-muted)]">
+              <p className="text-xs text-[var(--text-muted)]">
                 Sales activity stream and system audit trail.
               </p>
             </div>
@@ -291,13 +291,13 @@ function AuditLogsPageInner() {
       <div className="bg-white border border-[var(--surface-dim)] rounded-md overflow-hidden">
         <div className="px-5 py-3 border-b border-[var(--surface-dim)] bg-[var(--background)] flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--primary-muted)] pointer-events-none" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
             <input
               type="text"
               placeholder="Search user, module, changes, IP…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 bg-white border border-[var(--border-color)] rounded-md text-sm text-[var(--text-main)] placeholder:text-[var(--primary-muted)] outline-none focus:border-[var(--hs-link)] focus:ring-1 focus:ring-[var(--hs-link)]/30 transition-all"
+              className="w-full h-8 pl-8 pr-3 bg-white border border-[var(--border-color)] rounded-md text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--hs-link)] focus:ring-1 focus:ring-[var(--hs-link)]/30 transition-all"
             />
           </div>
 
@@ -341,7 +341,7 @@ function AuditLogsPageInner() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <span className="text-xs text-[var(--primary-muted)] ml-auto">
+          <span className="text-xs text-[var(--text-muted)] ml-auto">
             {filteredLogs.length} of {logs.length} entries
           </span>
         </div>
@@ -360,10 +360,10 @@ function AuditLogsPageInner() {
           ) : filteredLogs.length === 0 ? (
             <div className="py-16 text-center">
               <div className="w-12 h-12 bg-[var(--background)] border border-[var(--surface-dim)] rounded-md flex items-center justify-center mx-auto mb-3">
-                <Activity size={22} className="text-[var(--primary-muted)]" />
+                <Activity size={22} className="text-[var(--text-muted)]" />
               </div>
               <p className="text-sm font-semibold text-[var(--text-main)]">No logs found</p>
-              <p className="text-sm text-[var(--primary-muted)] mt-1">No activity matching your filters was found.</p>
+              <p className="text-sm text-[var(--text-muted)] mt-1">No activity matching your filters was found.</p>
             </div>
           ) : (
             filteredLogs.map((log) => {
@@ -394,14 +394,14 @@ function AuditLogsPageInner() {
                           {log.action}
                         </span>
                         <span className="text-[var(--border-color)]">·</span>
-                        <span className="text-xs font-semibold text-[var(--primary-muted)] uppercase tracking-wide">
+                        <span className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">
                           {log.module?.replace(/-/g, ' ')}
                         </span>
                       </div>
 
                       <p className="text-sm text-[var(--text-muted)] leading-relaxed">{log.description}</p>
 
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-[var(--primary-muted)]">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-[var(--text-muted)]">
                         <span className="inline-flex items-center gap-1">
                           <Clock size={11} />
                           {new Date(log.createdAt).toLocaleString()}
@@ -441,7 +441,7 @@ function AuditLogsPageInner() {
                         <div className="mt-3 rounded-md border border-[var(--surface-dim)] overflow-hidden text-xs">
                           <table className="w-full">
                             <thead>
-                              <tr className="bg-[var(--background)] text-left text-[var(--primary-muted)]">
+                              <tr className="bg-[var(--background)] text-left text-[var(--text-muted)]">
                                 <th className="px-3 py-2 font-semibold w-[28%]">Field</th>
                                 <th className="px-3 py-2 font-semibold w-[36%]">Before</th>
                                 <th className="px-3 py-2 font-semibold w-[36%]">After</th>
@@ -467,7 +467,7 @@ function AuditLogsPageInner() {
                           </table>
                         </div>
                       ) : isExpanded && !changeRows.length ? (
-                        <p className="mt-2 text-xs text-[var(--primary-muted)]">No field-level changes captured for this entry.</p>
+                        <p className="mt-2 text-xs text-[var(--text-muted)]">No field-level changes captured for this entry.</p>
                       ) : null}
                     </div>
 
@@ -475,7 +475,7 @@ function AuditLogsPageInner() {
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDeleteLog(log._id); }}
                         disabled={isDeleting === log._id}
-                        className="p-1.5 text-[var(--primary-muted)] hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100 shrink-0"
+                        className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100 shrink-0"
                         title="Delete log"
                       >
                         {isDeleting === log._id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

@@ -8,7 +8,12 @@ export type RoleAuditAction =
   | 'role_updated'
   | 'role_deleted'
   | 'user_role_assigned'
-  | 'ownership_changed';
+  | 'ownership_changed'
+  | 'user_created'
+  | 'user_updated'
+  | 'user_deleted'
+  | 'user_invited'
+  | 'permission_created';
 
 export type RoleAuditEntry = {
   actor?: any;
@@ -59,8 +64,30 @@ export class RoleAuditLogService {
     }
   }
 
-  async list(filters: { targetType?: string; targetId?: string; page?: number; pageSize?: number }) {
-    const query: Record<string, unknown> = {};
+  async list(filters: {
+    targetType?: string;
+    targetId?: string;
+    action?: string;
+    actor?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const query: Record<string, any> = {};
+    if (filters.action) query.action = filters.action;
+    if (filters.actor) {
+      query.actorLabel = {
+        $regex: filters.actor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        $options: 'i',
+      };
+    }
+    if (filters.from || filters.to) {
+      query.createdAt = {};
+      if (filters.from && !isNaN(Date.parse(filters.from))) query.createdAt.$gte = new Date(filters.from);
+      if (filters.to && !isNaN(Date.parse(filters.to))) query.createdAt.$lte = new Date(filters.to);
+      if (!Object.keys(query.createdAt).length) delete query.createdAt;
+    }
     if (filters.targetType) query.targetType = filters.targetType;
     if (filters.targetId && Types.ObjectId.isValid(filters.targetId)) {
       query.targetId = new Types.ObjectId(filters.targetId);
