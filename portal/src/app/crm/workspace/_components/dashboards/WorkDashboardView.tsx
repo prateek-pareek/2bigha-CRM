@@ -7,6 +7,7 @@ import {
   CRM_CHART_SECONDARY,
   CRM_CHART_WARNING,
 } from "@/lib/crm/shared/chart-theme";
+import { formatDateWindowLabel } from "@/lib/crm/shared/date-range-window";
 import { type WorkspacePayload } from "../workspace-ui";
 import { DashSkeleton } from "./dashboardShared";
 import {
@@ -26,34 +27,7 @@ type Props = {
 };
 
 function formatWindowLabel(windowFilter: string): string {
-  if (windowFilter.includes(",")) {
-    const [a, b] = windowFilter.split(",");
-    return `${formatShortDate(a)} – ${formatShortDate(b)}`;
-  }
-  switch (windowFilter) {
-    case "today":
-      return "Today";
-    case "yesterday":
-      return "Yesterday";
-    case "this_week":
-      return "This week";
-    case "this_month":
-      return "This month";
-    case "last_30_days":
-      return "Last 30 days";
-    default:
-      return "Selected window";
-  }
-}
-
-function formatShortDate(ymd: string): string {
-  const d = new Date(ymd.trim());
-  if (Number.isNaN(d.getTime())) return ymd;
-  return d.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "2-digit",
-  });
+  return formatDateWindowLabel(windowFilter);
 }
 
 function isDueToday(dueDate?: string): boolean {

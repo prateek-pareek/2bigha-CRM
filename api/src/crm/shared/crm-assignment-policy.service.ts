@@ -34,6 +34,8 @@ export type AssignableUser = {
   lastName: string;
   email?: string;
   label: string;
+  /** CRM role name — only filled for the Super Admin ('all') picker. */
+  roleName?: string;
 };
 
 export type AssignableUsersPage = {
@@ -44,7 +46,10 @@ export type AssignableUsersPage = {
   tier: CrmAssignTier;
 };
 
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Page-size ceiling of the Super Admin assignee picker. */
+const ALL_TIER_PICKER_MAX = 200;
+
+const escapeRegex =(s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 @Injectable()
 export class CrmAssignmentPolicyService {
@@ -149,7 +154,10 @@ export class CrmAssignmentPolicyService {
   ): Promise<AssignableUsersPage> {
     const tier = this.assignTier(moduleKey, actor);
     const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
-    const limit = Math.min(50, Math.max(1, Math.floor(Number(opts.limit)) || 10));
+    // Super Admin picks from the whole company (imports spread over many people), so their
+    // page may be larger; Team Lead / own-tier pickers keep the original 50 cap.
+    const maxLimit = tier === 'all' ? ALL_TIER_PICKER_MAX : 50;
+    const limit = Math.min(maxLimit, Math.max(1, Math.floor(Number(opts.limit)) || 10));
     const empty: AssignableUsersPage = { items: [], total: 0, page, limit, tier };
     if (!tier) return empty;
 
@@ -184,6 +192,7 @@ export class CrmAssignmentPolicyService {
         .lean()
         .exec(),
     ]);
+    const roleByEmail = tier === 'all' ? await this.roleNamesByEmail(rows as any[]) : null;
     return {
       items: rows.map((u: any) => ({
         _id: String(u._id),
@@ -191,12 +200,37 @@ export class CrmAssignmentPolicyService {
         lastName: u.lastName || '',
         email: u.email,
         label: this.label(u),
+        ...(roleByEmail
+          ? { roleName: roleByEmail.get(String(u.email || '').toLowerCase()) || undefined }
+          : {}),
       })),
       total,
       page,
       limit,
       tier,
     };
+  }
+
+  /** CRM role display name per (lower-cased) email, so the admin picker can show Team Lead / Agent badges. */
+  private async roleNamesByEmail(rows: { email?: string }[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const emails = rows.map((r) => String(r.email || '').trim()).filter(Boolean);
+    if (!emails.length) return out;
+    try {
+      const users = await this.crmUserModel
+        .find({ email: { $in: emails.map((e) => new RegExp(`^${escapeRegex(e)}$`, 'i')) } })
+        .select('email roleId')
+        .populate('roleId', 'name')
+        .lean()
+        .exec();
+      for (const u of users as any[]) {
+        const name = u?.roleId?.name;
+        if (u?.email && name) out.set(String(u.email).toLowerCase(), String(name));
+      }
+    } catch {
+      // Role badges are cosmetic — never fail the picker over them.
+    }
+    return out;
   }
 
   /** Emails of CRM users whose role is scoped to exactly `workspace` (what `assertAssignee` 'own' accepts). */

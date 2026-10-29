@@ -8,7 +8,7 @@ export const LEAD_IMPORT_ASSIGN_MODES = ['self', 'single', 'round_robin', 'file'
 export type LeadImportAssignMode = (typeof LEAD_IMPORT_ASSIGN_MODES)[number];
 
 /** Upper bound on assignees in one import — keeps the up-front policy checks cheap. */
-export const LEAD_IMPORT_MAX_ASSIGNEES = 50;
+export const LEAD_IMPORT_MAX_ASSIGNEES = 200;
 
 export type LeadImportAssignment = {
   mode: LeadImportAssignMode;

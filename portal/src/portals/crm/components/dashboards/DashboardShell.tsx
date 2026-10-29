@@ -2,8 +2,7 @@
 
 import React from "react";
 import { CrmPageHeader } from "@/components/crm/ui";
-import { Dropdown } from "@/app/crm/workspace/_components/workspace-ui";
-import { CrmIcon } from "@/lib/crm/shared/icons";
+import CRMDateRangePicker from "@/components/crm/CRMDateRangePicker";
 
 export type DateRangeFilter = "today" | "yesterday" | "this_week" | "this_month" | "last_30_days" | "this_quarter" | "this_year" | "all_time" | (string & {});
 
@@ -39,25 +38,10 @@ export function DashboardShell({
           <div className="flex flex-wrap items-center gap-2">
             {extraFilters}
             {dateRange && setDateRange && (
-              <div className="inline-flex h-[38px] items-center gap-2 rounded-[5px] border border-[var(--border-color)] bg-white px-2.5 shadow-[var(--crm-shadow-input)] dark:bg-black dark:border-white/10">
-                <CrmIcon.Calendar size={16} className="text-[var(--text-muted)]" aria-hidden />
-                <Dropdown
-                  value={dateRange}
-                  onChange={(v: any) => setDateRange(v as DateRangeFilter)}
-                  widthClass="min-w-[140px] border-0 shadow-none bg-transparent h-[34px]"
-                  showCustomDateRange
-                  options={[
-                    { value: "today", label: "Today" },
-                    { value: "yesterday", label: "Yesterday" },
-                    { value: "this_week", label: "This week" },
-                    { value: "this_month", label: "This month" },
-                    { value: "last_30_days", label: "Last 30 days" },
-                    { value: "this_quarter", label: "This quarter" },
-                    { value: "this_year", label: "This year" },
-                    { value: "all_time", label: "All time" },
-                  ]}
-                />
-              </div>
+              <CRMDateRangePicker
+                value={dateRange}
+                onWindowChange={(windowKey) => setDateRange(windowKey)}
+              />
             )}
           </div>
         }

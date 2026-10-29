@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Target, Eye, EyeOff, CalendarClock } from "lucide-react";
+import { Loader2, Target, Eye, EyeOff, CalendarClock, Search } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
@@ -154,6 +154,18 @@ export default function AgentPerformancePage() {
         title="Agent Performance"
         bordered={false}
         breadcrumbs={[{ label: "Home", href: "/crm" }, { label: "Reports" }, { label: "Agent Performance" }]}
+        actions={
+          <div className="relative w-full sm:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search agents..."
+              value={filter.searchTerm || ""}
+              onChange={(e) => setFilter((f) => ({ ...f, searchTerm: e.target.value }))}
+              className="h-10 w-full rounded-[3px] border border-[var(--border-color)] bg-[var(--surface-dim)] pl-8 pr-3 text-sm text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)] transition-all focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
+            />
+          </div>
+        }
       />
 
       <div className="mb-2">

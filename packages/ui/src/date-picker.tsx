@@ -57,6 +57,8 @@ export interface DatePickerFieldProps {
   buttonClassName?: string;
   disableFuture?: boolean;
   disablePast?: boolean;
+  /** date-fns pattern for the closed field. Defaults to `MMM d, yyyy`. */
+  dateFormat?: string;
 }
 
 export function DatePickerField({
@@ -71,12 +73,14 @@ export function DatePickerField({
   buttonClassName,
   disableFuture,
   disablePast,
+  dateFormat = "MMM d, yyyy",
 }: DatePickerFieldProps) {
   const selected = parseDateOnly(value);
   const [open, setOpen] = React.useState(false);
+  const label = selected ? format(selected, dateFormat) : placeholder;
 
   return (
-    <div className={cn(fullWidth && "w-full", "relative", className)}>
+    <div className={cn(fullWidth && "w-full min-w-0", "relative", className)}>
       {name != null ? (
         <input type="hidden" name={name} value={value} readOnly aria-hidden />
       ) : null}
@@ -87,19 +91,16 @@ export function DatePickerField({
             type="button"
             variant="outline"
             disabled={disabled}
+            title={label}
             className={cn(
               fullWidth && "w-full",
-              "justify-start rounded-xl border-slate-200 bg-card px-4 text-left text-sm font-medium text-text-main hover:bg-surface-dim",
+              "min-w-0 justify-start overflow-hidden rounded-xl border-slate-200 bg-card px-4 text-left text-sm font-medium text-text-main hover:bg-surface-dim",
               !value && "text-text-muted",
               buttonClassName
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-text-muted" />
-            {selected ? (
-              format(selected, "MMM d, yyyy")
-            ) : (
-              <span>{placeholder}</span>
-            )}
+            <span className="min-w-0 truncate text-left">{label}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent

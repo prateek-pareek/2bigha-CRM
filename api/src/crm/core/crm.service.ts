@@ -52,6 +52,7 @@ import {
   normalizeLeadImportRow,
   resolveImportStageName,
 } from '../shared/lead-import-normalize.util';
+import { validateClientImportMapped } from '../shared/client-import-normalize.util';
 import {
   displayName,
   hasAtLeastOneContactOrPortalListing,
@@ -163,6 +164,8 @@ type LeadImportOptions = {
   assignment?: LeadImportAssignment;
   /** Owner labels of `assignment.assignees`, resolved + policy-checked before the job starts. */
   assigneeLabels?: string[];
+  /** Clients keep owners in `assignedTo` (HRMS user ids), so they need the ids too. */
+  clientAssignees?: { id: Types.ObjectId; label: string }[];
 };
 /** Rows per import — the job runs in-process, so very large files must be split. */
 const MAX_IMPORT_ROWS = 10_000;
@@ -6367,9 +6370,15 @@ export class CRMService {
     const isBinaryWorkbook =
       (buffer[0] === 0x50 && buffer[1] === 0x4b) ||
       (buffer[0] === 0xd0 && buffer[1] === 0xcf);
-    return isBinaryWorkbook
-      ? XLSX.read(buffer, { type: 'buffer' })
-      : XLSX.read(buffer.toString('utf8').replace(/^﻿/, ''), { type: 'string' });
+    if (isBinaryWorkbook) return XLSX.read(buffer, { type: 'buffer' });
+    const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
+    const firstLine = text.split(/\r?\n/, 1)[0] || '';
+    const commas = (firstLine.match(/,/g) || []).length;
+    const semis = (firstLine.match(/;/g) || []).length;
+    const tabs = (firstLine.match(/\t/g) || []).length;
+    const FS =
+      tabs > commas && tabs >= semis ? '\t' : semis > commas ? ';' : undefined;
+    return XLSX.read(text, FS ? { type: 'string', FS } : { type: 'string' });
   }
 
   getFileHeaders(buffer: Buffer): string[] {
@@ -6639,6 +6648,34 @@ export class CRMService {
     return labels;
   }
 
+  /**
+   * Client imports: only a Super Admin / full-access user may hand imported clients to other
+   * people (Team Leads keep the existing import behaviour). Checked before any row is written.
+   */
+  private async resolveClientImportAssignees(
+    assignment: LeadImportAssignment | undefined,
+    user?: any,
+  ): Promise<{ id: Types.ObjectId; label: string }[]> {
+    if (!assignment || assignment.mode === 'self') return [];
+    if (assignment.mode === 'file') {
+      throw new BadRequestException('Clients have no owner column — pick people to assign them to.');
+    }
+    if (this.assignmentPolicy.assignTier('leads', user) !== 'all') {
+      throw new ForbiddenException('Only an admin can assign imported clients to other people.');
+    }
+    const out: { id: Types.ObjectId; label: string }[] = [];
+    for (const ref of assignment.assignees) {
+      const a = await this.assignmentPolicy.resolveAssignee(ref);
+      if (!a?.hrmsId) {
+        throw new BadRequestException(`"${ref}" is not a CRM user — pick people from the list.`);
+      }
+      if (!out.some((o) => String(o.id) === String(a.hrmsId))) {
+        out.push({ id: a.hrmsId, label: a.label || ref });
+      }
+    }
+    return out;
+  }
+
   async startImportFromExcel(
     type: string,
     buffer: Buffer,
@@ -6661,6 +6698,12 @@ export class CRMService {
       options = {
         ...options,
         assigneeLabels: await this.resolveImportAssignees(options.assignment, user),
+      };
+    }
+    if (type === 'clients' && options.assignment) {
+      options = {
+        ...options,
+        clientAssignees: await this.resolveClientImportAssignees(options.assignment, user),
       };
     }
     const jobId = `imp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -6809,6 +6852,28 @@ export class CRMService {
           return importerLabel;
       }
     };
+    // --- Client ownership (`assignedTo`) — only when the admin chose an assignment ---
+    const clientAssignment = type === 'clients' ? options.assignment : undefined;
+    const nextClientOwner =
+      clientAssignment?.mode === 'round_robin' && options.clientAssignees?.length
+        ? createRoundRobin(options.clientAssignees)
+        : null;
+    const importerRaw = user?.userId ?? user?._id;
+    /** Owner for one client row, or null to keep the legacy behaviour (no explicit owner). */
+    const pickClientOwner = (): { id: Types.ObjectId; label: string } | null => {
+      switch (clientAssignment?.mode) {
+        case 'single':
+          return options.clientAssignees?.[0] ?? null;
+        case 'round_robin':
+          return nextClientOwner ? nextClientOwner() : null;
+        case 'self':
+          return importerRaw && Types.ObjectId.isValid(String(importerRaw))
+            ? { id: new Types.ObjectId(String(importerRaw)), label: importerLabel }
+            : null;
+        default:
+          return null;
+      }
+    };
     const visibilityScope = type === 'leads' ? leadVisibilityFilter(user) : null;
     const importedThisRun = new Set<string>();
     const noteAssigned = (label: string) => {
@@ -6839,6 +6904,7 @@ export class CRMService {
     let rowIndex = 0;
     for (const row of jsonData) {
       rowIndex++;
+      const reportedRow = Number((row as { __excelRow?: unknown }).__excelRow) || rowIndex;
       let rowOutcome: ImportRowOutcome | 'failed' = 'failed';
       let rowSkipReason: string | undefined;
       try {
@@ -7348,30 +7414,59 @@ export class CRMService {
           }
         } else if (type === 'clients') {
           if (!mapping) {
-            mappedData.name = row.Name || row.name || row['Client Name'] || 'Unknown';
+            mappedData.name = row.Name || row.name || row['Client Name'];
             mappedData.email = row.Email || row.email;
-            mappedData.phone = row.Phone || row.phone;
+            mappedData.phone =
+              row.Phone || row.phone || row['Phone Number'] || row.Mobile || row['Mobile No'];
+            mappedData.whatsappNumber =
+              row['WhatsApp Number'] || row.WhatsApp || row.whatsappNumber;
+            mappedData.address = row.Address || row.address;
+            mappedData.role = row.Role || row.role;
+            mappedData.status = row.Status || row.status;
+            mappedData.additionalEmails =
+              row['Additional Emails'] || row.additionalEmails;
+          } else {
+            // mapImportRowFields already rewrote phones. Put the original cell back
+            // so "two numbers in one cell" and scientific notation stay visible.
+            for (const key of [
+              'name',
+              'email',
+              'phone',
+              'whatsappNumber',
+              'address',
+              'role',
+              'status',
+              'additionalEmails',
+            ] as const) {
+              const col = mapping[key];
+              if (col && !isBlankImportValue(row[col])) mappedData[key] = row[col];
+            }
           }
           this.stripImportRoutingFields(mappedData);
-          const clientName = String(mappedData.name || 'Unknown').trim() || 'Unknown';
-          const clientEmail = String(mappedData.email ?? '').trim();
-          const clientPhone = this.sanitizePhone(mappedData.mobileNo ?? mappedData.phone);
-          const rawRole = String(mappedData.role ?? '').trim().toUpperCase();
-          const clientRole = this.CLIENT_ROLE_OPTIONS.includes(rawRole)
-            ? rawRole
-            : undefined;
+          const cells = Object.entries(row).filter(([key]) => key !== '__excelRow');
+          if (cells.every(([, value]) => isBlankImportValue(value))) {
+            rowOutcome = 'skipped';
+            rowSkipReason = 'Empty row skipped';
+          } else {
+          const verdict = validateClientImportMapped(mappedData);
+          if (verdict.errors.length) {
+            throw new Error(verdict.errors.join('; '));
+          }
+          const cleaned = verdict.normalized;
+          const clientEmail = cleaned.email || '';
+          const clientPhone = cleaned.phone;
 
           const clientPayload: Record<string, unknown> = {
-            name: clientName,
+            name: cleaned.name,
             email: clientEmail || undefined,
-            additionalEmails: Array.isArray(mappedData.additionalEmails)
-              ? mappedData.additionalEmails
+            additionalEmails: cleaned.additionalEmails.length
+              ? cleaned.additionalEmails
               : undefined,
-            phone: clientPhone || undefined,
-            whatsappNumber: mappedData.whatsappNumber || undefined,
-            address: mappedData.address || undefined,
-            role: clientRole,
-            status: mappedData.status || undefined,
+            phone: clientPhone,
+            whatsappNumber: cleaned.whatsappNumber || undefined,
+            address: cleaned.address || undefined,
+            role: cleaned.role,
+            status: cleaned.status || undefined,
             customFields,
           };
 
@@ -7381,7 +7476,14 @@ export class CRMService {
             if (clientEmail && clientEmail.includes('@')) {
               matchOr.push({ email: this.emailRegexForMatch(clientEmail) });
             }
-            if (clientPhone) matchOr.push({ phone: clientPhone });
+            if (clientPhone) {
+              matchOr.push({ phone: clientPhone });
+              const digits = clientPhone.replace(/\D/g, '').slice(-10);
+              if (digits.length === 10) {
+                matchOr.push({ phone: digits });
+                matchOr.push({ phone: `0${digits}` });
+              }
+            }
             if (matchOr.length) {
               existingClient = await this.clientModel
                 .findOne({ $or: matchOr })
@@ -7393,11 +7495,20 @@ export class CRMService {
             rowOutcome = 'skipped';
           } else if (existingClient && duplicateStrategy === 'replace') {
             const mergedCf = this.mergeCustomFieldsMaps(undefined, customFields);
+            const reassignTo = clientAssignment?.reassignExisting ? pickClientOwner() : null;
             await this.clientModel
               .findByIdAndUpdate(existingClient._id, {
-                $set: { ...clientPayload, customFields: mergedCf },
+                $set: {
+                  ...clientPayload,
+                  ...(reassignTo ? { assignedTo: [reassignTo.id] } : {}),
+                  customFields: mergedCf,
+                },
               })
               .exec();
+            if (reassignTo) {
+              noteAssigned(reassignTo.label);
+              if (job) job.reassignedCount++;
+            }
             rowOutcome = 'replaced';
           } else if (existingClient && duplicateStrategy === 'merge') {
             const mergedCf = this.mergeCustomFieldsMaps(
@@ -7412,15 +7523,29 @@ export class CRMService {
               clientPayload,
               ['name', 'email', 'phone', 'whatsappNumber', 'address', 'role', 'status'],
             );
+            const reassignTo = clientAssignment?.reassignExisting ? pickClientOwner() : null;
             await this.clientModel
               .findByIdAndUpdate(existingClient._id, {
-                $set: { ...mergePatch, customFields: mergedCf },
+                $set: {
+                  ...mergePatch,
+                  ...(reassignTo ? { assignedTo: [reassignTo.id] } : {}),
+                  customFields: mergedCf,
+                },
               })
               .exec();
+            if (reassignTo) {
+              noteAssigned(reassignTo.label);
+              if (job) job.reassignedCount++;
+            }
             rowOutcome = 'merged';
           } else {
-            await this.clientModel.create(clientPayload);
+            const owner = pickClientOwner();
+            await this.clientModel.create(
+              owner ? { ...clientPayload, assignedTo: [owner.id] } : clientPayload,
+            );
+            if (owner) noteAssigned(owner.label);
             rowOutcome = 'created';
+          }
           }
         }
 
@@ -7429,11 +7554,13 @@ export class CRMService {
             if (job) {
               this.bumpImportJobOutcome(job, 'skipped');
               job.skippedRows.push({
-                rowNumber: rowIndex,
+                rowNumber: reportedRow,
                 rowData: row,
                 reason:
                   rowSkipReason ||
-                  `Duplicate record skipped (existing lead with matching phone or email)`,
+                  (type === 'clients'
+                    ? 'Duplicate client skipped (existing client with matching phone or email)'
+                    : 'Duplicate record skipped (existing lead with matching phone or email)'),
               });
             }
           } else {
@@ -7454,7 +7581,7 @@ export class CRMService {
           if (job) {
             this.bumpImportJobOutcome(job, 'skipped');
             job.skippedRows.push({
-              rowNumber: rowIndex,
+              rowNumber: reportedRow,
               rowData: row,
               reason: errMsg,
             });
@@ -7463,7 +7590,7 @@ export class CRMService {
           rowOutcome = 'failed';
           if (job) {
             job.failedRows.push({
-              rowNumber: rowIndex,
+              rowNumber: reportedRow,
               rowData: row,
               reason: errMsg,
             });
@@ -7515,6 +7642,18 @@ export class CRMService {
           })
           .catch(() => null);
       }
+    }
+    if (type === 'clients' && job && clientAssignment && Object.keys(job.assignedCounts).length) {
+      await this.roleAuditLog
+        .log({
+          actor: user,
+          action: 'ownership_changed',
+          targetType: 'Client',
+          targetLabel: `Import ${jobId}: ${count} client(s) assigned (${clientAssignment.mode})`,
+          before: {},
+          after: { importBatchId: jobId, assignedCounts: job.assignedCounts },
+        })
+        .catch(() => null);
     }
     return { count };
   }

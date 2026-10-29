@@ -304,13 +304,34 @@ export class ReportingService {
       .trim()
       .toLowerCase() as WorkspaceWindow;
     const key: WorkspaceWindow = (
-      ['today', 'yesterday', 'this_week', 'this_month', 'last_30_days'].includes(
-        normalized,
-      )
+      [
+        'today',
+        'yesterday',
+        'this_week',
+        'this_month',
+        'last_7_days',
+        'last_30_days',
+        'all_time',
+      ].includes(normalized)
         ? normalized
         : 'this_week'
     ) as WorkspaceWindow;
 
+    if (key === 'all_time') {
+      return {
+        key,
+        start: this.startOfYmdInTz('2000-01-01', tz),
+        end: this.endOfYmdInTz(todayYmd, tz),
+      };
+    }
+    if (key === 'last_7_days') {
+      const fromYmd = this.addDaysToYmd(todayYmd, -7);
+      return {
+        key,
+        start: this.startOfYmdInTz(fromYmd, tz),
+        end: this.endOfYmdInTz(todayYmd, tz),
+      };
+    }
     if (key === 'today') {
       return {
         key,
@@ -418,19 +439,31 @@ export class ReportingService {
     let safeDays: number;
 
     // Same calendar keys as GET /crm/workspace `window` (Today / This week / …)
+    const periodKey =
+      typeof period === 'string' ? period.trim().toLowerCase() : '';
     if (
-      typeof period === 'string' &&
-      ['today', 'yesterday', 'this_week', 'this_month', 'last_30_days'].includes(
-        period.trim().toLowerCase(),
-      )
+      [
+        'today',
+        'yesterday',
+        'this_week',
+        'this_month',
+        'last_7_days',
+        'last_30_days',
+        'all_time',
+      ].includes(periodKey)
     ) {
-      const range = this.resolveReportingCalendarWindow(period.trim().toLowerCase());
+      const range = this.resolveReportingCalendarWindow(periodKey);
       currentStart = range.start;
       currentEnd = range.end;
       const diffMs = Math.max(0, range.end.getTime() - range.start.getTime());
       safeDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) || 1);
-      previousStart = new Date(range.start.getTime() - diffMs);
-      previousEnd = new Date(range.end.getTime() - diffMs);
+      if (periodKey === 'all_time') {
+        previousStart = new Date(0);
+        previousEnd = new Date(0);
+      } else {
+        previousStart = new Date(range.start.getTime() - diffMs);
+        previousEnd = new Date(range.end.getTime() - diffMs);
+      }
     } else if (typeof period === 'string' && period.includes(',')) {
       const [s, e] = period.split(',', 2);
       const startYmd =
@@ -506,7 +539,10 @@ export class ReportingService {
     const compareFromYmd = this.formatYmdInTz(previousStart, tz);
     const compareToYmd = this.formatYmdInTz(previousEnd, tz);
     if (compareMode === 'previous') {
-      compareLabel = `vs prior period (${this.formatShortRangeLabel(compareFromYmd, compareToYmd)})`;
+      compareLabel =
+        previousStart.getTime() === 0 && previousEnd.getTime() === 0
+          ? 'vs prior period'
+          : `vs prior period (${this.formatShortRangeLabel(compareFromYmd, compareToYmd)})`;
     } else if (compareMode === 'previous_year') {
       compareLabel = `vs same period last year (${this.formatShortRangeLabel(compareFromYmd, compareToYmd)})`;
     }
@@ -3447,7 +3483,9 @@ export class ReportingService {
       yesterday: 'Yesterday',
       this_week: 'This week',
       this_month: 'This month',
+      last_7_days: 'Last 7 days',
       last_30_days: 'Last 30 days',
+      all_time: 'All time',
     };
     return labels[key] || key;
   }

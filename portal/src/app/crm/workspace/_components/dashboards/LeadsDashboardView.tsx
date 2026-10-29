@@ -8,6 +8,7 @@ import {
   resolveDashboardOwnerParam,
   windowToDashboardPeriod,
 } from "@/lib/crm/shared/dashboard-period";
+import { formatDateWindowLabel } from "@/lib/crm/shared/date-range-window";
 import {
   CRM_CHART_INFO,
   CRM_CHART_PRIMARY,
@@ -95,34 +96,7 @@ function authHeaders(): HeadersInit {
 }
 
 function formatWindowLabel(windowFilter: string): string {
-  if (windowFilter.includes(",")) {
-    const [a, b] = windowFilter.split(",");
-    return `${formatShortDate(a)} - ${formatShortDate(b)}`;
-  }
-  switch (windowFilter) {
-    case "today":
-      return "Today";
-    case "yesterday":
-      return "Yesterday";
-    case "this_week":
-      return "This week";
-    case "this_month":
-      return "This month";
-    case "last_30_days":
-      return "Last 30 days";
-    default:
-      return "Selected window";
-  }
-}
-
-function formatShortDate(ymd: string): string {
-  const d = new Date(ymd.trim());
-  if (Number.isNaN(d.getTime())) return ymd;
-  return d.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "2-digit",
-  });
+  return formatDateWindowLabel(windowFilter);
 }
 
 function formatTrendLabel(name: string): string {

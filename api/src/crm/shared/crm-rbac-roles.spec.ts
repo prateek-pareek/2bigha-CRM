@@ -299,5 +299,12 @@ describe('CrmAssignmentPolicyService', () => {
       const res = await p.assignableUsers('leads', actor('2bigha_team_lead', lead), { limit: '500' });
       expect(res.limit).toBe(50);
     });
+
+    it('Super Admin gets a 200-row page', async () => {
+      const p = pickerPolicy(() => undefined);
+      const admin = { ...actor('super_admin', lead), crmPermissions: ['admin:manage'] };
+      const res = await p.assignableUsers('leads', admin, { limit: '500' });
+      expect(res).toMatchObject({ tier: 'all', limit: 200 });
+    });
   });
 });

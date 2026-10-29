@@ -8,7 +8,9 @@ const WORKSPACE_WINDOW_KEYS = new Set([
   "yesterday",
   "this_week",
   "this_month",
+  "last_7_days",
   "last_30_days",
+  "all_time",
 ]);
 
 /**

@@ -62,7 +62,7 @@ function normalizeClientAssociations(data: any): void {
 import { appendCrmListFilters, parseCrmFiltersQuery } from '../shared/crm-list-filters';
 import { CRMService } from '../core/crm.service';
 import { AssociationsService } from '../associations/associations.service';
-import { hasCrmAdminJwtBypass } from '../shared/crm-admin-access.util';
+import { hasCrmAdminFromDbUser, hasCrmAdminJwtBypass } from '../shared/crm-admin-access.util';
 import { TwoBighaClientService } from './twobigha-client.service';
 import {
   CLIENT_DUPLICATE_PROJECTION,
@@ -124,6 +124,8 @@ export class ClientsService {
   private canManageAllClients(actor?: any): boolean {
     if (!actor) return true;
     if (this.isActorAdminLike(actor)) return true;
+    // CRM Super Admin / admin role (e.g. HRMS role "Employee" + CRM `admin:manage`) sees every client.
+    if (hasCrmAdminJwtBypass(actor) || hasCrmAdminFromDbUser(actor?.crmDbUser)) return true;
     const perms = this.actorPermissions(actor);
     return (
       perms.includes('clients:read:all') ||

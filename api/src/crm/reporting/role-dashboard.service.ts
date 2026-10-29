@@ -2066,6 +2066,7 @@ function normalizeWindow(window: string): string {
       'yesterday',
       'this_week',
       'this_month',
+      'last_7_days',
       'last_30_days',
       'last_month',
       'this_quarter',
