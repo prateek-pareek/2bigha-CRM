@@ -120,6 +120,13 @@ services:
       # WhatsApp (AiSensy)
       - AISENSY_WEBHOOK_SECRET=${AISENSY_WEBHOOK_SECRET}
       - AISENSY_API_BASE_URL=${AISENSY_API_BASE_URL:-https://backend.aisensy.com}
+      # HRMS <-> CRM sync (api/src/crm/integrations/hrms). Unset = integration off.
+      # HRMS_API_URL must be reachable from inside this container - not 127.0.0.1.
+      - HRMS_WEBHOOK_SECRET=${HRMS_WEBHOOK_SECRET:-}
+      - HRMS_API_URL=${HRMS_API_URL:-}
+      - HRMS_PORTAL_URL=${HRMS_PORTAL_URL:-}
+      - HRMS_SYNC_PLACEHOLDER_PASSWORD=${HRMS_SYNC_PLACEHOLDER_PASSWORD:-}
+      - CRM_ALLOW_LOCAL_USER_MANAGEMENT=${CRM_ALLOW_LOCAL_USER_MANAGEMENT:-}
 
   frontend:
     image: ${FRONTEND_IMAGE:-myapp_frontend:latest}
