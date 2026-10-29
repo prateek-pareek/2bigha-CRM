@@ -39,6 +39,7 @@ import {
 import { CrmIcon } from '@/lib/crm/shared/icons';
 import { CRM_LIST_PAGE } from '@/lib/crm/ui';
 
+const ClientDuplicatesModal = dynamic(() => import('@/components/crm/records/create/ClientDuplicatesModal'), { ssr: false });
 const ImportModal = dynamic(() => import('@/components/crm/records/create/ImportModal'), { ssr: false });
 
 interface Client {
@@ -167,6 +168,7 @@ export default function ClientsPage() {
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isDuplicatesOpen, setIsDuplicatesOpen] = useState(false);
   const { hasAccess, isAdmin, isLoaded } = usePermissions();
 
   useEffect(() => {
@@ -265,6 +267,18 @@ export default function ClientsPage() {
     }
   };
 
+  const handleStatusChange = async (client: Client, status: string) => {
+    if (status === client.status) return;
+    const previous = client.status;
+    setClients((prev) => prev.map((c) => (c._id === client._id ? { ...c, status } : c)));
+    try {
+      await crmApi.patch(`/crm/clients/${client._id}`, { status });
+    } catch (err: any) {
+      setClients((prev) => prev.map((c) => (c._id === client._id ? { ...c, status: previous } : c)));
+      window.alert(err?.response?.data?.message || 'Failed to update client status.');
+    }
+  };
+
   const visibleCols = columns.filter(c => c.visible);
 
   const paginated = useMemo(
@@ -310,7 +324,25 @@ export default function ClientsPage() {
       }
       case 'email': return <CrmListMutedText className="crm-cell-wrap block">{client.email || '—'}</CrmListMutedText>;
       case 'phone': return <CrmListMutedText className="crm-cell-wrap block">{client.phone || '—'}</CrmListMutedText>;
-      case 'status': return <CrmListStatusBadge label={client.status || '—'} />;
+      case 'status':
+        if (!hasAccess('clients:edit')) return <CrmListStatusBadge label={client.status || '—'} />;
+        return (
+          <span className="relative inline-flex items-center" onClick={(e) => e.stopPropagation()}>
+            <CrmListStatusBadge label={client.status || '—'} className="pr-4" />
+            <select
+              aria-label={`Status for ${client.name}`}
+              title="Change status"
+              value={client.status || 'active'}
+              onChange={(e) => void handleStatusChange(client, e.target.value)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="prospective">Prospective</option>
+            </select>
+            <span className="pointer-events-none absolute right-1 text-[9px] text-white">▾</span>
+          </span>
+        );
       case 'createdAt': return (
         <CrmListMutedText>
           {client.createdAt ? new Date(client.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
@@ -416,6 +448,15 @@ export default function ClientsPage() {
                 {duplicateSummary.groups === 1 ? 'group' : 'groups'}).
               </span>
               <span>Highlighted rows share a name, email or phone. Exports include a duplicate column.</span>
+              {hasAccess('clients:edit') && (
+                <button
+                  type="button"
+                  onClick={() => setIsDuplicatesOpen(true)}
+                  className="ml-auto shrink-0 rounded-[var(--crm-radius-ui)] bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700"
+                >
+                  Manage duplicates
+                </button>
+              )}
             </div>
           )}
 
@@ -590,6 +631,11 @@ export default function ClientsPage() {
       {isImportModalOpen && (
         <ImportModal isOpen onClose={() => setIsImportModalOpen(false)} onSuccess={fetchClients} type="clients" />
       )}
+      <ClientDuplicatesModal
+        isOpen={isDuplicatesOpen}
+        onClose={() => setIsDuplicatesOpen(false)}
+        onMerged={() => void fetchClients()}
+      />
       <ClientModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

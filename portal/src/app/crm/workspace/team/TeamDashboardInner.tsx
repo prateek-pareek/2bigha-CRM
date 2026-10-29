@@ -79,12 +79,23 @@ export default function TeamDashboardInner() {
   }, [canPickTeamLead, selectedTeamLeadId, teams, setTeamLead]);
 
   const waitingForAdminPick = canPickTeamLead && !selectedTeamLeadId;
+
+  // Agent filter: this team's members only (the API also ignores ids outside the team).
+  const [agentPick, setAgentPick] = useState("");
+  const peoplePath =
+    !isLoaded || waitingForAdminPick
+      ? null
+      : `/crm/dashboard/people${canPickTeamLead && selectedTeamLeadId ? `?teamLead=${encodeURIComponent(selectedTeamLeadId)}` : ""}`;
+  const people = useDashboardList<{ id: string; name: string; team?: string }>(peoplePath);
+  const agentOptions: DashboardPersonOption[] = people.map((p) => ({ id: p.id, label: p.name }));
+  const agentFilter = agentPick && people.some((p) => p.id === agentPick) ? agentPick : "";
   const path = useMemo(() => {
     if (!isLoaded || waitingForAdminPick) return null;
     const qs = new URLSearchParams({ window: String(dateRange) });
     if (canPickTeamLead && selectedTeamLeadId) qs.set("teamLead", selectedTeamLeadId);
+    if (agentFilter) qs.set("agents", agentFilter);
     return `/crm/dashboard/team?${qs.toString()}`;
-  }, [isLoaded, waitingForAdminPick, dateRange, canPickTeamLead, selectedTeamLeadId]);
+  }, [isLoaded, waitingForAdminPick, dateRange, canPickTeamLead, selectedTeamLeadId, agentFilter]);
   const { data, loading, refreshing, error, reload, refresh } = useRoleDashboard(path);
 
   const memberPath = selectedMember
@@ -114,15 +125,32 @@ export default function TeamDashboardInner() {
       dateRange={dateRange}
       setDateRange={setDateRange}
       extraFilters={
-        canPickTeamLead ? (
-          <DashboardPersonSelect
-            label="Team Lead"
-            value={selectedTeamLeadId}
-            options={teamLeadOptions}
-            onChange={setTeamLead}
-            placeholder={teamLeadOptions.length ? "Select team lead…" : "No teams yet"}
-          />
-        ) : undefined
+        <div className="flex flex-wrap items-center gap-2">
+          {canPickTeamLead && (
+            <DashboardPersonSelect
+              label="Team Lead"
+              value={selectedTeamLeadId}
+              options={teamLeadOptions}
+              onChange={(id) => {
+                setAgentPick("");
+                setTeamLead(id);
+              }}
+              placeholder={teamLeadOptions.length ? "Select team lead…" : "No teams yet"}
+            />
+          )}
+          {agentOptions.length > 0 && (
+            <DashboardPersonSelect
+              label="Agent"
+              value={agentFilter}
+              options={agentOptions}
+              onChange={(id) => {
+                setAgentPick(id);
+                setSelectedMember(null);
+              }}
+              placeholder="All agents"
+            />
+          )}
+        </div>
       }
     >
       {waitingForAdminPick ? (

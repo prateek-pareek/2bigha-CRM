@@ -29,7 +29,8 @@
     "backfill:client-contact": "ts-node --transpile-only scripts/backfill-client-contact-info.ts",
     "seed:agents": "ts-node --transpile-only scripts/seed-agents.ts",
     "seed:workspace-roles": "ts-node --transpile-only scripts/seed-workspace-roles.ts",
-    "seed:role-test-users": "ts-node --transpile-only scripts/seed-role-test-users.ts"
+    "seed:role-test-users": "ts-node --transpile-only scripts/seed-role-test-users.ts",
+    "seed:test-team": "ts-node --transpile-only scripts/seed-test-team.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

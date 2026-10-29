@@ -164,6 +164,13 @@ export class Lead {
   leadCategory?: string;
 
   /**
+   * Manual hot/warm/cold interest rating, editable inline from the Leads table.
+   * Unset means "not rated yet".
+   */
+  @Prop({ type: String, enum: ['hot', 'warm', 'cold'], index: true })
+  leadTemperature?: 'hot' | 'warm' | 'cold';
+
+  /**
    * Seller/Buyer-style grouping shown in the "Group" filter and Set Activity/View Lead cards.
    * Value is the `label` of an active `LeadPicklistOption` with listKey 'group'.
    */
@@ -284,6 +291,10 @@ export class Lead {
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy: Types.ObjectId;
+
+  /** Set on leads created by a bulk import (the import job id) so a batch can be found/assigned later. */
+  @Prop({ index: true })
+  importBatchId?: string;
 
   /** Explicit per-record access grants for restricted users. */
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })

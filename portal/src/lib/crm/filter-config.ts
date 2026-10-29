@@ -79,6 +79,7 @@ const LEAD_PROPERTIES: FilterProperty[] = [
   { key: 'linkedinUrl', label: 'LinkedIn URL', type: 'text' },
   { key: 'twitterHandle', label: 'X handle', type: 'text' },
   { key: 'relatedService', label: 'Related service', type: 'text' },
+  { key: 'leadTemperature', label: 'Temperature', type: 'select', options: ['hot', 'warm', 'cold'] },
   { key: 'leadScore', label: 'Lead score', type: 'number' },
 ];
 

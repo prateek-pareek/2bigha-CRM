@@ -52,15 +52,31 @@ export default function AdminDashboardPage() {
     sublabel: `${t.members} members`,
   }));
 
+  // Agent picker follows the team: all CRM users, or just the picked team's members.
+  const [agent, setAgent] = useState("");
+  const people = useDashboardList<{ id: string; name: string; team?: string }>(
+    `/crm/dashboard/people${team ? `?teamLead=${encodeURIComponent(team)}` : ""}`,
+  );
+  const agentOptions: DashboardPersonOption[] = people.map((p) => ({ id: p.id, label: p.name, sublabel: p.team }));
+  const agentValid = agent && people.some((p) => p.id === agent) ? agent : "";
+
   const qs = new URLSearchParams({ window: String(dateRange) });
   if (team) qs.set("team", team);
+  if (agentValid) qs.set("agents", agentValid);
   const { data, loading, refreshing, error, reload, refresh } = useRoleDashboard(
     `/crm/dashboard/admin?${qs.toString()}`,
   );
 
   const g = data?.glance || {};
   const period = periodLabel(String(dateRange));
-  const scopeLabel = team ? teams.find((t) => t.id === team)?.name || "Selected team" : "Whole organization";
+  const teamLabel = team ? teams.find((t) => t.id === team)?.name || "Selected team" : "";
+  const agentLabel = agentValid ? people.find((p) => p.id === agentValid)?.name || "Selected agent" : "";
+  const scopeLabel = agentLabel
+    ? `${agentLabel}${teamLabel ? ` (${teamLabel}'s team)` : ""}`
+    : teamLabel
+      ? `${teamLabel}'s team`
+      : "Whole organization";
+  const filtered = !!(team || agentValid);
 
   return (
     <DashboardShell
@@ -71,7 +87,19 @@ export default function AdminDashboardPage() {
       extraFilters={
         <div className="flex flex-wrap items-center gap-2">
           {teams.length > 0 && (
-            <DashboardPersonSelect label="Scope" value={team} options={teamOptions} onChange={setTeam} placeholder="All teams" />
+            <DashboardPersonSelect
+              label="Team Lead"
+              value={team}
+              options={teamOptions}
+              onChange={(id) => {
+                setTeam(id);
+                setAgent("");
+              }}
+              placeholder="All team leads"
+            />
+          )}
+          {people.length > 0 && (
+            <DashboardPersonSelect label="Agent" value={agentValid} options={agentOptions} onChange={setAgent} placeholder="All agents" />
           )}
           <Link
             href="/crm/workspace/team"
@@ -123,7 +151,7 @@ export default function AdminDashboardPage() {
           </Panel>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <LeadMetricsPanel leads={data?.leads} title="Lead Metrics" window={String(dateRange)} showUnassigned={!team} />
+            <LeadMetricsPanel leads={data?.leads} title="Lead Metrics" window={String(dateRange)} showUnassigned={!filtered} />
             <PropertyMetricsPanel properties={data?.properties} title="Property Metrics" window={String(dateRange)} />
           </div>
 
@@ -131,7 +159,7 @@ export default function AdminDashboardPage() {
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <WhatsAppPanel whatsapp={data?.whatsapp} title="WhatsApp Metrics" window={String(dateRange)} />
-            <SubscriptionsPanel subscriptions={data?.subscriptions} title="Subscriptions" window={String(dateRange)} showPlans={!team} />
+            <SubscriptionsPanel subscriptions={data?.subscriptions} title="Subscriptions" window={String(dateRange)} showPlans={!filtered} />
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
