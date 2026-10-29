@@ -345,16 +345,22 @@ export class RoleDashboardService {
   // ADMIN
   // ---------------------------------------------------------------------------
 
-  async getAdminDashboard(window: string, teamFilter?: string): Promise<any> {
+  async getAdminDashboard(window: string, teamFilter?: string, agentIds: string[] = []): Promise<any> {
     const snap = await this.getSnapshot(window);
     const { dir } = snap;
     let keys: string[] | null = null;
-    if (teamFilter && teamFilter !== 'all' && dir.byId.has(teamFilter)) {
-      keys = this.teamMembers(dir, teamFilter).map((p) => p.id);
-    }
+    const teamId = teamFilter && teamFilter !== 'all' && dir.byId.has(teamFilter) ? teamFilter : null;
+    if (teamId) keys = this.teamMembers(dir, teamId).map((p) => p.id);
+    // Agent filter: narrow to the picked people (inside the picked team, if any).
+    const picked = agentIds.filter((id) => dir.byId.has(id));
+    if (picked.length) keys = keys ? keys.filter((k) => picked.includes(k)) : [...new Set(picked)];
     const acc = this.sumAcc(snap, keys);
-    const teams = this.teamRows(snap);
-    const leaderboard = this.personRows(snap, dir.people, true).slice(0, 50);
+    // Team table + leaderboard follow the filter; target maths below still uses every team.
+    const allTeams = this.teamRows(snap);
+    const teams = teamId ? allTeams.filter((t) => t.teamId === teamId) : allTeams;
+    const scopedKeys = keys;
+    const scopedPeople = scopedKeys === null ? dir.people : dir.people.filter((p) => scopedKeys.includes(p.id));
+    const leaderboard = this.personRows(snap, scopedPeople, scopedKeys === null).slice(0, 50);
     const [targets, recent] = await Promise.all([
       this.targets(snap, keys),
       this.recentWhatsApp(snap, keys),
@@ -372,6 +378,7 @@ export class RoleDashboardService {
 
     return {
       tier: 'admin',
+      filters: { team: teamId, agents: picked.length && keys ? keys : [] },
       window: snap.windows.key,
       range: this.rangeMeta(snap.windows),
       computedAt: snap.computedAt,
@@ -408,10 +415,13 @@ export class RoleDashboardService {
   // TEAM
   // ---------------------------------------------------------------------------
 
-  async getTeamDashboard(window: string, teamLeadId: string): Promise<any> {
+  async getTeamDashboard(window: string, teamLeadId: string, agentIds: string[] = []): Promise<any> {
     const snap = await this.getSnapshot(window);
     const { dir } = snap;
-    const members = this.teamMembers(dir, teamLeadId);
+    const teamAll = this.teamMembers(dir, teamLeadId);
+    // Agent filter only narrows within this team — ids outside it are ignored.
+    const picked = teamAll.filter((p) => agentIds.includes(p.id));
+    const members = picked.length ? picked : teamAll;
     const keys = members.map((p) => p.id);
     const acc = this.sumAcc(snap, keys);
     const memberRows = this.personRows(snap, members, false);
@@ -433,6 +443,7 @@ export class RoleDashboardService {
       teamLeadId,
       teamLead: dir.byId.get(teamLeadId)?.name || null,
       teamSize: members.length,
+      filters: { agents: picked.map((p) => p.id) },
       glance: {
         newLeads: acc.leads.period,
         newLeadsDeltaPct: pctDelta(acc.leads.period, acc.leads.prev),

@@ -1,0 +1,9 @@
+Client Name,Email,Additional Emails (comma or semicolon-separated),Phone,WhatsApp Number,Address,Role (OWNER/AGENT/USER),Status
+Client One,client.one@example.com,,+919881100001,,Gurugram Haryana,USER,active
+Client Two,client.two@example.com,client.two.alt@example.com,+919881100002,,Karnal Haryana,AGENT,active
+Client Three,client.three@example.com,,+919881100003,,Jaipur Rajasthan,OWNER,active
+Client One Again,client.one@example.com,,+919881100099,,Gurugram Haryana,USER,active
+Client Two Phone,other.two@example.com,,9881100002,,Karnal Haryana,AGENT,active
+Client Two Alt Email,client.two.alt@example.com,,+919881100098,,Karnal Haryana,AGENT,active
+Client Four,client.four@example.com,,+919881100004,,Noida UP,USER,active
+Client Five,client.five@example.com,,+919881100005,,Delhi,BOGUS_ROLE,active

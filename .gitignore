@@ -45,4 +45,5 @@ BIM_CRM_IMPLEMENTATION_PLAN_v2.md
 
 # Local role test logins (api/scripts/seed-role-test-users.ts)
 ROLE_TEST_LOGINS.local.md
+TEAM_TEST_LOGINS.local.md
 ROLE_TEST_LOGINS.local.txt

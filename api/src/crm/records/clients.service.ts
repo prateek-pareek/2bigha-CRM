@@ -327,6 +327,46 @@ export class ClientsService {
     return { ok: true, masterId, removedIds: dupIds };
   }
 
+  /** Duplicate clusters for the bulk "Manage duplicates" dialog (admin only). */
+  async listDuplicateGroups(actor?: any) {
+    if (!hasCrmAdminJwtBypass(actor)) {
+      throw new ForbiddenException('Managing duplicate clients is restricted to administrators.');
+    }
+    const groups = (await this.loadDuplicateIndex()).groups();
+    return { groups, total: groups.length };
+  }
+
+  /**
+   * Merge many duplicate clusters in one call. Each group is merged
+   * independently so one failure never blocks the rest.
+   */
+  async mergeDuplicateGroups(
+    groups: Array<{ masterId: string; duplicateIds: string[] }>,
+    actor?: any,
+  ) {
+    if (!hasCrmAdminJwtBypass(actor)) {
+      throw new ForbiddenException('Merging clients is restricted to administrators.');
+    }
+    if (!Array.isArray(groups) || !groups.length) {
+      throw new BadRequestException('At least one duplicate group is required');
+    }
+    const results: Array<{ masterId: string; merged: number; error?: string }> = [];
+    for (const g of groups.slice(0, 500)) {
+      try {
+        const r = await this.mergeClients(g?.masterId, g?.duplicateIds || [], actor);
+        results.push({ masterId: String(g.masterId), merged: r.removedIds.length });
+      } catch (e: any) {
+        results.push({ masterId: String(g?.masterId), merged: 0, error: e?.message || 'Merge failed' });
+      }
+    }
+    return {
+      ok: results.every((r) => !r.error),
+      groupsMerged: results.filter((r) => !r.error).length,
+      recordsMerged: results.reduce((n, r) => n + r.merged, 0),
+      results,
+    };
+  }
+
   /** Re-point crm_associations edges from merged clients, dropping edges the master already has. */
   private async rewireClientEdges(dupOids: Types.ObjectId[], masterOid: Types.ObjectId) {
     for (const side of ['from', 'to'] as const) {
@@ -753,6 +793,13 @@ export class ClientsService {
     }
 
     const patch = this._cleanData({ ...(data || {}) });
+    if (patch.status !== undefined) {
+      const status = String(patch.status).toLowerCase();
+      if (!['active', 'inactive', 'prospective'].includes(status)) {
+        throw new BadRequestException('Status must be active, inactive or prospective');
+      }
+      patch.status = status;
+    }
     const confirmDuplicate = patch.confirmDuplicate === true;
     delete patch.confirmDuplicate;
     normalizeAdditionalEmailsPayload(patch);

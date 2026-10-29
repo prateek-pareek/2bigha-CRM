@@ -80,6 +80,7 @@ import {
   crmCacheShouldRevalidate,
   resolveActivePipelineId,
 } from '@/lib/crm/shared/prefetch-cache';
+import { CrmLeadTemperatureCell, normalizeLeadTemperature, type LeadTemperature } from './ui/CrmLeadTemperature';
 import { invalidateCrmAfterMutation } from '@/lib/crm/shared/invalidate-on-mutation';
 import { cn } from '@/lib/utils';
 import { BulkEmailToolbarButton } from '@/components/crm/email/composer/BulkEmailToolbarButton';
@@ -172,6 +173,7 @@ interface Lead {
   lastEmailActivityAt?: string | null;
   clientId?: string;
   leadCategory?: string;
+  leadTemperature?: LeadTemperature | null;
   group?: string;
   nextFollowUpAt?: string | null;
   notes?: string;
@@ -185,6 +187,7 @@ interface Column {
 
 const BUILT_IN_COLUMNS: Omit<Column, 'visible'>[] = [
   { key: 'name', label: 'Name' },
+  { key: 'leadTemperature', label: 'Temperature' },
   { key: 'planningToBuyLand', label: 'Planning To Buy Land' },
   { key: 'firstCallResponse', label: 'First Call Response' },
   { key: 'propertiesCount', label: 'Property Count' },
@@ -279,6 +282,10 @@ function formatLeadExportCell(
       return lead.stage || lead.status || '—';
     case 'callStatus':
       return lead.callStatus || 'Not Called';
+    case 'leadTemperature': {
+      const t = normalizeLeadTemperature(lead.leadTemperature);
+      return t ? t.charAt(0).toUpperCase() + t.slice(1) : '—';
+    }
     case 'leadCategory':
       return lead.leadCategory || '—';
     case 'leadVertical':
@@ -2046,8 +2053,38 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
     [selectedIds, leads],
   );
 
+  const handleTemperatureChange = useCallback(async (leadId: string, next: LeadTemperature | null) => {
+    let previous: LeadTemperature | null = null;
+    setLeads((prev) => prev.map((l) => {
+      if (l._id !== leadId) return l;
+      previous = normalizeLeadTemperature(l.leadTemperature);
+      return { ...l, leadTemperature: next };
+    }));
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/leads/${leadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ leadTemperature: next ?? '' }),
+      });
+      if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+      invalidateCrmAfterMutation('leads', 'workspace', 'attention');
+    } catch (err) {
+      console.error(err);
+      setLeads((prev) => prev.map((l) => (l._id === leadId ? { ...l, leadTemperature: previous } : l)));
+      alert('Could not update lead temperature. Check permissions or try again.');
+    }
+  }, []);
+
   const renderCell = useCallback((lead: Lead, key: string) => {
     switch (key) {
+      case 'leadTemperature':
+        return (
+          <CrmLeadTemperatureCell
+            value={lead.leadTemperature}
+            editable={canWrite}
+            onChange={(next) => handleTemperatureChange(lead._id, next)}
+          />
+        );
       case 'name': {
         const fullName = `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '—';
         const initials = `${lead.firstName?.[0] || ''}${lead.lastName?.[0] || ''}`.trim() || fullName[0] || '?';
@@ -2168,7 +2205,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
         return null;
       }
     }
-  }, [pipelineNameById, customFieldDefs, leadEmailStatsById, leadListingCounts]);
+  }, [pipelineNameById, customFieldDefs, leadEmailStatsById, leadListingCounts, canWrite, handleTemperatureChange]);
 
   return (
     <div className={cn(CRM_LIST_PAGE, "crm-list-dense")}>

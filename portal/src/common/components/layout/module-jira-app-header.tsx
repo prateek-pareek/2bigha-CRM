@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ComponentType } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, type ComponentType } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
@@ -283,20 +283,25 @@ export function ModuleJiraAppHeader({
     }
   }, []);
 
+  // Mirror of `headerCollapsed` so the toggle handler can compute the next value without
+  // doing side effects inside a state updater (that dispatched an event, which set state in
+  // CrmLeadsView, while React was rendering this component).
+  const headerCollapsedRef = useRef(headerCollapsed);
+  headerCollapsedRef.current = headerCollapsed;
+
   useEffect(() => {
     if (!isCrm) return;
     const stored = localStorage.getItem(CRM_HEADER_COLLAPSED_KEY);
     if (stored === "true") setHeaderCollapsed(true);
 
     const onToggle = () => {
-      setHeaderCollapsed((prev) => {
-        const next = !prev;
-        localStorage.setItem(CRM_HEADER_COLLAPSED_KEY, String(next));
-        window.dispatchEvent(
-          new CustomEvent("crm-header:collapsed", { detail: { collapsed: next } }),
-        );
-        return next;
-      });
+      const next = !headerCollapsedRef.current;
+      headerCollapsedRef.current = next;
+      setHeaderCollapsed(next);
+      localStorage.setItem(CRM_HEADER_COLLAPSED_KEY, String(next));
+      window.dispatchEvent(
+        new CustomEvent("crm-header:collapsed", { detail: { collapsed: next } }),
+      );
     };
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
     window.addEventListener("crm-header:toggle-collapse", onToggle);
