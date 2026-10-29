@@ -1,3 +1,5 @@
+import { CRM_DATE_RANGE_PRESETS } from "@/lib/crm/shared/date-range-window";
+
 /** Shared period + compare helpers for CRM Reports and Workspace dashboards. */
 
 export type CompareMode = "off" | "previous" | "previous_year" | "custom";
@@ -13,17 +15,8 @@ export type PeriodMeta = {
   days?: number;
 };
 
-export const REPORT_PERIOD_OPTIONS: { value: string; label: string }[] = [
-  { value: "yesterday", label: "Yesterday" },
-  { value: "7", label: "Last 7 days" },
-  { value: "15", label: "Last 15 days" },
-  { value: "30", label: "Last 30 days" },
-  { value: "this_week", label: "This week" },
-  { value: "this_month", label: "This month" },
-  { value: "75", label: "Last 75 days" },
-  { value: "100", label: "Last 100 days" },
-  { value: "custom", label: "Custom range" },
-];
+export const REPORT_PERIOD_OPTIONS: { value: string; label: string }[] =
+  CRM_DATE_RANGE_PRESETS.map((preset) => ({ value: preset.value, label: preset.label }));
 
 export const COMPARE_MODE_OPTIONS: { value: CompareMode; label: string }[] = [
   { value: "off", label: "No compare" },
@@ -32,34 +25,29 @@ export const COMPARE_MODE_OPTIONS: { value: CompareMode; label: string }[] = [
   { value: "custom", label: "Custom range" },
 ];
 
-function toLocalYmd(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+const API_PERIOD_KEYS = new Set([
+  "today",
+  "yesterday",
+  "this_week",
+  "this_month",
+  "last_7_days",
+  "last_30_days",
+  "all_time",
+]);
 
-/** Convert UI period presets to API `days` values (rolling count, yesterday, or YMD range). */
+/**
+ * Pass preset keys and `YYYY-MM-DD,YYYY-MM-DD` through.
+ * The reporting API resolves those in the reporting timezone.
+ * Numeric day counts (legacy "7" / "30") still pass through.
+ */
 export function resolveReportPeriodParam(period: string): string {
-  const raw = String(period || "30").trim();
-  if (!raw || raw === "custom") return "30";
-  if (raw === "yesterday") return "yesterday";
+  const raw = String(period || "last_30_days").trim();
+  if (!raw || raw === "custom") return "last_30_days";
+  const key = raw.toLowerCase();
+  if (API_PERIOD_KEYS.has(key)) return key;
   if (raw.includes(",")) return raw;
-
-  const now = new Date();
-  if (raw === "this_week") {
-    const day = now.getDay();
-    const mondayOffset = day === 0 ? -6 : 1 - day;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + mondayOffset);
-    return `${toLocalYmd(monday)},${toLocalYmd(now)}`;
-  }
-  if (raw === "this_month") {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    return `${toLocalYmd(start)},${toLocalYmd(now)}`;
-  }
-  if (raw === "last_7_days") return "7";
-  return raw;
+  if (/^\d+$/.test(raw)) return raw;
+  return "last_30_days";
 }
 
 /** Build API `compare` query value, or undefined when compare is off. */

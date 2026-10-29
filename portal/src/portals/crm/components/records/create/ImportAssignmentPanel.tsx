@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, Search, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CRM_API_URL } from "@/lib/crm/config";
@@ -40,29 +40,46 @@ export function importAssignmentProblem(v: ImportAssignmentValue): string | null
   return null;
 }
 
-type AssignablePage = { items: CrmAssignableUser[]; total: number; tier: "all" | "team" | "own" | null };
+type AssignableTier = "all" | "team" | "own" | null;
+type AssignablePage = { items: AssignableRow[]; total: number; tier: AssignableTier };
+/** Super Admin rows also carry the CRM role name (Team Lead, Calling Agent, …). */
+type AssignableRow = CrmAssignableUser & { roleName?: string };
 
 type Props = {
   value: ImportAssignmentValue;
   onChange: (v: ImportAssignmentValue) => void;
-  /** True when a file column is mapped to "Lead Owner". */
+  /** True when a file column is mapped to "Lead Owner" (leads only). */
   ownerColumnMapped: boolean;
+  /**
+   * `clients` imports can only be handed to other people by an admin, and have no owner
+   * column — for anyone else the panel renders nothing and reports its tier via `onTierChange`.
+   */
+  entity?: "leads" | "clients";
+  onTierChange?: (tier: AssignableTier) => void;
 };
 
 const MODES: { id: ImportAssignMode; label: string; hint: string }[] = [
-  { id: "self", label: "Assign to me", hint: "You own every imported lead." },
-  { id: "single", label: "One person", hint: "All leads go to the person you pick." },
-  { id: "round_robin", label: "Distribute evenly", hint: "Leads rotate between the people you pick." },
+  { id: "self", label: "Assign to me", hint: "You own every imported record." },
+  { id: "single", label: "One person", hint: "Everything goes to the person you pick." },
+  { id: "round_robin", label: "Distribute evenly", hint: "Records rotate equally between the people you pick." },
   { id: "file", label: "Use owner column", hint: "Each row's Lead Owner from the file (checked against your access)." },
 ];
 
 /**
- * Who owns the imported leads. The picker only lists people the server would accept for this
- * user (a Team Lead / Manager sees only their own team) — the server re-checks every name.
+ * Who owns the imported records. The picker only lists people the server would accept for this
+ * user (a Team Lead / Manager sees only their own team; an admin sees everyone) — the server
+ * re-checks every name.
  */
-export default function ImportAssignmentPanel({ value, onChange, ownerColumnMapped }: Props) {
+export default function ImportAssignmentPanel({
+  value,
+  onChange,
+  ownerColumnMapped,
+  entity = "leads",
+  onTierChange,
+}: Props) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("");
   const [data, setData] = useState<AssignablePage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +93,8 @@ export default function ImportAssignmentPanel({ value, onChange, ownerColumnMapp
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ page: "1", limit: "50" });
+    // The server clamps this to 50 for Team Leads and to 200 for admins.
+    const params = new URLSearchParams({ page: "1", limit: "200" });
     if (query) params.set("search", query);
     void fetch(`${CRM_API_URL}/crm/leads/assignable-users?${params}`, {
       headers: { Authorization: `Bearer ${getCrmAuthToken() || ""}` },
@@ -95,11 +113,37 @@ export default function ImportAssignmentPanel({ value, onChange, ownerColumnMapp
   }, [query]);
 
   const tier = data?.tier ?? null;
+  useEffect(() => {
+    if (!loading) onTierChange?.(error ? null : tier);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tier, error]);
+
   // No `leads:assign` grant → importing for yourself is the only option.
   const canAssign = tier !== null || loading;
   const multi = value.mode === "round_robin";
   const needsPeople = value.mode === "single" || value.mode === "round_robin";
   const selectedIds = new Set(value.assignees.map((a) => a._id));
+  const isAdminPicker = tier === "all";
+
+  const roleNames = useMemo(
+    () => Array.from(new Set((data?.items ?? []).map((u) => u.roleName).filter((r): r is string => !!r))).sort(),
+    [data],
+  );
+  const visibleItems = useMemo(
+    () => (data?.items ?? []).filter((u) => !roleFilter || u.roleName === roleFilter),
+    [data, roleFilter],
+  );
+  const allVisibleSelected = visibleItems.length > 0 && visibleItems.every((u) => selectedIds.has(u._id));
+
+  const selectAllVisible = () => {
+    const merged = [...value.assignees];
+    for (const u of visibleItems) if (!selectedIds.has(u._id)) merged.push(u);
+    onChange({ ...value, assignees: merged });
+  };
+  const clearVisible = () => {
+    const hide = new Set(visibleItems.map((u) => u._id));
+    onChange({ ...value, assignees: value.assignees.filter((a) => !hide.has(a._id)) });
+  };
 
   const toggle = (u: CrmAssignableUser) => {
     if (!multi) return onChange({ ...value, assignees: [u] });
@@ -115,10 +159,17 @@ export default function ImportAssignmentPanel({ value, onChange, ownerColumnMapp
       assignees: mode === "single" ? value.assignees.slice(0, 1) : mode === "round_robin" ? value.assignees : [],
     });
 
+  // Clients: only admins can hand imports to others, and there is no owner column to read.
+  if (entity === "clients" && !loading && !isAdminPicker) return null;
+  const modes = entity === "clients" ? MODES.filter((m) => m.id !== "file") : MODES;
+  const noun = entity === "clients" ? "client" : "lead";
+
   return (
     <div className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Lead assignment</span>
+        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+          {entity === "clients" ? "Client assignment" : "Lead assignment"}
+        </span>
         {tier && (
           <span className="flex items-center gap-1 text-[11px] font-medium text-slate-500">
             <ShieldCheck size={12} />
@@ -127,8 +178,8 @@ export default function ImportAssignmentPanel({ value, onChange, ownerColumnMapp
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {MODES.map((m) => {
+      <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", modes.length > 3 ? "lg:grid-cols-4" : "lg:grid-cols-3")}>
+        {modes.map((m) => {
           const disabled = (m.id !== "self" && !canAssign) || (m.id === "file" && !ownerColumnMapped);
           const selected = value.mode === m.id;
           return (
@@ -154,7 +205,7 @@ export default function ImportAssignmentPanel({ value, onChange, ownerColumnMapp
 
       {!loading && tier === null && !error && (
         <p className="text-[11px] font-medium text-amber-700">
-          Your role can't assign leads to others — imported leads will be yours. Ask your Team Lead / Manager to reassign.
+          Your role can't assign {noun}s to others — imported {noun}s will be yours. Ask your Team Lead / Manager to reassign.
         </p>
       )}
       {error && <p className="text-[11px] font-medium text-rose-600">{error}</p>}
@@ -170,17 +221,57 @@ export default function ImportAssignmentPanel({ value, onChange, ownerColumnMapp
               className="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-3 text-xs outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
-          <div className="max-h-44 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+          {isAdminPicker && (roleNames.length > 0 || multi) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {roleNames.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setRoleFilter("")}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
+                      !roleFilter ? "border-primary bg-primary/10 text-primary" : "border-slate-200 text-slate-500 hover:border-slate-300",
+                    )}
+                  >
+                    Everyone
+                  </button>
+                  {roleNames.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRoleFilter(roleFilter === r ? "" : r)}
+                      className={cn(
+                        "rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
+                        roleFilter === r ? "border-primary bg-primary/10 text-primary" : "border-slate-200 text-slate-500 hover:border-slate-300",
+                      )}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </>
+              )}
+              {multi && visibleItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={allVisibleSelected ? clearVisible : selectAllVisible}
+                  className="ml-auto rounded-md px-2 py-0.5 text-[11px] font-bold text-primary hover:bg-primary/5"
+                >
+                  {allVisibleSelected ? `Clear ${roleFilter || "shown"}` : `Select all ${roleFilter || "shown"} (${visibleItems.length})`}
+                </button>
+              )}
+            </div>
+          )}
+          <div className="max-h-52 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
             {loading ? (
               <div className="flex items-center justify-center p-4 text-slate-400">
                 <Loader2 size={16} className="animate-spin" />
               </div>
-            ) : (data?.items.length ?? 0) === 0 ? (
+            ) : visibleItems.length === 0 ? (
               <p className="p-3 text-[11px] text-slate-500">
                 {query ? `No one matches "${query}".` : tier === "team" ? "No one reports to you yet — ask an admin to set your team." : "No teammates available."}
               </p>
             ) : (
-              data!.items.map((u) => (
+              visibleItems.map((u) => (
                 <label key={u._id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 hover:bg-slate-50">
                   <input
                     type={multi ? "checkbox" : "radio"}
@@ -189,6 +280,11 @@ export default function ImportAssignmentPanel({ value, onChange, ownerColumnMapp
                     className="accent-primary"
                   />
                   <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800">{u.label}</span>
+                  {u.roleName && (
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                      {u.roleName}
+                    </span>
+                  )}
                   {u.email && <span className="truncate text-[11px] text-slate-400">{u.email}</span>}
                 </label>
               ))

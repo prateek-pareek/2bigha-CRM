@@ -28,9 +28,8 @@ import { getCrmAuthToken } from "@/lib/crm/api";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { isAdmin } from "@/lib/suite/auth";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DatePickerField, parseDateOnly, formatDateOnly } from "@/components/ui/date-picker";
+import { parseDateOnly, formatDateOnly } from "@/components/ui/date-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { CrmKpiCard } from "@/components/crm/ui/CrmKpiCard";
@@ -41,7 +40,9 @@ export type WorkspaceWindowPreset =
   | "yesterday"
   | "this_week"
   | "this_month"
-  | "last_30_days";
+  | "last_7_days"
+  | "last_30_days"
+  | "all_time";
 export type WorkspaceWindowFilter = WorkspaceWindowPreset | `${string},${string}`;
 
 function formatWorkspaceWindowLabel(
@@ -67,12 +68,6 @@ function formatWorkspaceWindowLabel(
     return value.replace(",", " – ");
   }
   return "Select...";
-}
-
-function isValidCustomWindowRange(from: string, to: string): boolean {
-  const start = parseDateOnly(from);
-  const end = parseDateOnly(to);
-  return !!(start && end && start.getTime() <= end.getTime());
 }
 
 /**
@@ -405,144 +400,55 @@ export function WorkspaceLeadLinkList({
   );
 }
 
-export function Dropdown({ value, onChange, options, widthClass = "min-w-[160px]", showCustomDateRange }: {
+export function Dropdown({ value, onChange, options, widthClass = "min-w-[160px]" }: {
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
   widthClass?: string;
-  showCustomDateRange?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const selected = options.find((o) => o.value === value);
-  const isCustomValue = !selected && value.includes(',');
-
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const customRangeReady = isValidCustomWindowRange(customFrom, customTo);
-  const [specificDate, setSpecificDate] = useState('');
-
-  useEffect(() => {
-    if (!value.includes(',')) return;
-    const [from, to] = value.split(',', 2);
-    if (from?.trim()) setCustomFrom(from.trim());
-    if (to?.trim()) setCustomTo(to.trim());
-  }, [value]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        const target = e.target as Element;
-        if (target?.closest?.('[data-radix-popper-content-wrapper]')) {
-          return;
-        }
-        setOpen(false);
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  const handleApplyCustom = () => {
-    if (customFrom && customTo) {
-      onChange(`${customFrom},${customTo}`);
-      setOpen(false);
-    }
-  };
-
-  const handleApplySpecific = () => {
-    if (specificDate) {
-      onChange(`${specificDate},${specificDate}`);
-      setOpen(false);
-    }
-  };
 
   return (
     <div ref={ref} className={`relative ${widthClass}`}>
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className={`h-9 w-full inline-flex items-center gap-2 bg-[var(--card-bg)] border rounded-md px-4 text-sm font-medium text-[var(--text-main)] shadow-sm transition-colors whitespace-nowrap justify-between ${
-          open ? 'border-primary ring-1 ring-primary/30' : 'border-[var(--border-color)] hover:border-[var(--text-muted)]'
+        className={`inline-flex h-9 w-full items-center justify-between gap-2 whitespace-nowrap rounded-md border bg-[var(--card-bg)] px-4 text-sm font-medium text-[var(--text-main)] shadow-sm transition-colors ${
+          open ? "border-primary ring-1 ring-primary/30" : "border-[var(--border-color)] hover:border-[var(--text-muted)]"
         }`}
       >
         <span className="truncate">{formatWorkspaceWindowLabel(value, options)}</span>
-        <ChevronDown size={13} className={`text-[var(--text-muted)] shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={13} className={`shrink-0 text-[var(--text-muted)] transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 sm:left-0 sm:right-auto mt-1.5 z-[9999] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md shadow-lg min-w-[260px] overflow-hidden flex flex-col max-h-[80vh]">
-          <div className="py-1 flex-shrink-0 overflow-y-auto">
+        <div className="absolute right-0 top-full z-[9999] mt-1.5 flex max-h-[80vh] min-w-[220px] flex-col overflow-hidden rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] shadow-lg sm:left-0 sm:right-auto">
+          <div className="overflow-y-auto py-1">
             {options.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => { onChange(opt.value); setOpen(false); }}
-                className={`w-full flex items-center justify-between px-4 py-2 text-sm transition-colors text-left ${
+                className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors ${
                   opt.value === value
-                    ? 'bg-primary/10 text-primary font-semibold'
-                    : 'text-[var(--text-main)] font-medium hover:bg-[var(--background)]'
+                    ? "bg-primary/10 font-semibold text-primary"
+                    : "font-medium text-[var(--text-main)] hover:bg-[var(--background)]"
                 }`}
               >
                 <span className="truncate pr-3">{opt.label}</span>
-                {opt.value === value && <Check size={13} className="text-primary shrink-0" />}
+                {opt.value === value && <Check size={13} className="shrink-0 text-primary" />}
               </button>
             ))}
           </div>
-
-          {showCustomDateRange && (
-            <div className="p-3 border-t border-[var(--border-color)] bg-[var(--surface-dim)]/50 space-y-4 flex-shrink-0">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Specific Date</span>
-                </div>
-                <div className="flex gap-2">
-                  <DatePickerField
-                    value={specificDate}
-                    onChange={setSpecificDate}
-                    placeholder="Select date"
-                    buttonClassName="h-8 w-full justify-start rounded-md border-[var(--border-color)] bg-[var(--card-bg)] px-2 text-xs font-semibold hover:bg-[var(--background)]"
-                  />
-                  <Button 
-                    size="sm" 
-                    onClick={handleApplySpecific} 
-                    disabled={!specificDate}
-                    className="h-8 px-4 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 rounded-md shrink-0"
-                  >
-                    Apply
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2 border-t border-[var(--border-color)] pt-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Custom Range</span>
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <DatePickerField
-                    value={customFrom}
-                    onChange={setCustomFrom}
-                    placeholder="Start date"
-                    buttonClassName="h-8 w-full justify-start rounded-md border-[var(--border-color)] bg-[var(--card-bg)] px-2 text-xs font-semibold hover:bg-[var(--background)]"
-                  />
-                  <DatePickerField
-                    value={customTo}
-                    onChange={setCustomTo}
-                    placeholder="End date"
-                    buttonClassName="h-8 w-full justify-start rounded-md border-[var(--border-color)] bg-[var(--card-bg)] px-2 text-xs font-semibold hover:bg-[var(--background)]"
-                  />
-                </div>
-                <Button 
-                  size="sm" 
-                  onClick={handleApplyCustom} 
-                  disabled={!customFrom || !customTo}
-                  className="w-full h-8 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 rounded-md mt-2"
-                >
-                  Apply Custom Range
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

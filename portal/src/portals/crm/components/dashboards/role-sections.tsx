@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { getCrmAuthToken } from "@/lib/crm/api";
 import { CRM_API_URL } from "@/lib/crm/config";
+import { formatDateWindowLabel } from "@/lib/crm/shared/date-range-window";
 import {
   Panel,
   StatCell,
@@ -119,25 +120,9 @@ export function useDashboardList<T>(path: string | null): T[] {
   return rows;
 }
 
-const PERIOD_LABELS: Record<string, string> = {
-  today: "Today",
-  yesterday: "Yesterday",
-  this_week: "This week",
-  this_month: "This month",
-  last_30_days: "Last 30 days",
-  this_quarter: "This quarter",
-  this_year: "This year",
-  all_time: "All time",
-};
-
 export function periodLabel(window?: string): string {
   if (!window) return "This period";
-  if (PERIOD_LABELS[window]) return PERIOD_LABELS[window];
-  if (window.includes(",")) {
-    const [a, b] = window.split(",");
-    return `${a} → ${b}`;
-  }
-  return "This period";
+  return formatDateWindowLabel(window);
 }
 
 /** "Live · updated 2m ago" + data-source chips + manual refresh. */

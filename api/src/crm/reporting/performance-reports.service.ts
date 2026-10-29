@@ -918,7 +918,9 @@ export class PerformanceReportsService {
       yesterday: 'Yesterday',
       this_week: 'This week',
       this_month: 'This month',
+      last_7_days: 'Last 7 days',
       last_30_days: 'Last 30 days',
+      all_time: 'All time',
     };
     return labels[window] || (from === to ? from : `${from} → ${to}`);
   }

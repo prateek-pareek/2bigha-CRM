@@ -13,9 +13,9 @@ import {
   REPORT_SECTION_DESCRIPTIONS,
 } from "@/lib/crm/shared/dashboard-routes";
 import { CrmPageHeader, CrmHeaderTools } from "@/components/crm/ui";
+import CRMDateRangePicker from "@/components/crm/CRMDateRangePicker";
 import {
   COMPARE_MODE_OPTIONS,
-  REPORT_PERIOD_OPTIONS,
   resolveCompareParam,
   resolveReportPeriodParam,
   type CompareMode,
@@ -117,9 +117,7 @@ export default function ReportsShell({ slug, onRefresh, children }: ReportsShell
   const description =
     REPORT_SECTION_DESCRIPTIONS[slug] || "Pipeline outcomes, outreach analytics, and sales operations.";
 
-  const [period, setPeriod] = useState("30");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
+  const [period, setPeriod] = useState("last_30_days");
   const [compareMode, setCompareMode] = useState<CompareMode>("previous");
   const [compareStart, setCompareStart] = useState("");
   const [compareEnd, setCompareEnd] = useState("");
@@ -127,12 +125,7 @@ export default function ReportsShell({ slug, onRefresh, children }: ReportsShell
   const [owners, setOwners] = useState<ReportOwner[]>([]);
   const [filters, setFilters] = useState<FilterCriteria[]>([]);
 
-  const periodKey =
-    period === "custom"
-      ? customStart && customEnd
-        ? `${customStart},${customEnd}`
-        : "30"
-      : period;
+  const periodKey = period;
   const actualPeriod = resolveReportPeriodParam(periodKey);
   const compare = resolveCompareParam(compareMode, compareStart, compareEnd);
 
@@ -193,28 +186,7 @@ export default function ReportsShell({ slug, onRefresh, children }: ReportsShell
             onClear={() => setFilters([])}
           />
         )}
-        <Dropdown
-          value={period === "custom" ? "custom" : period}
-          onChange={setPeriod}
-          options={REPORT_PERIOD_OPTIONS}
-        />
-        {period === "custom" && (
-          <div className="flex h-[38px] items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-white px-2 shadow-[var(--crm-shadow-input)]">
-            <input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="bg-transparent text-sm text-text-main outline-none"
-            />
-            <span className="text-xs text-text-muted">to</span>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="bg-transparent text-sm text-text-main outline-none"
-            />
-          </div>
-        )}
+        <CRMDateRangePicker value={period} onWindowChange={setPeriod} />
         <div className="flex h-[38px] items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--background)] px-2 text-xs font-medium text-[var(--text-muted)]">
           Compare
         </div>

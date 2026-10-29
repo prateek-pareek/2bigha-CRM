@@ -32,7 +32,8 @@ import {
 } from "lucide-react";
 import { CRM_API_URL } from '@/lib/crm/config';
 import { getCrmAuthToken } from "@/lib/crm/api";
-import { CrmChartPanel, CrmDropdown, CrmKpiCard, CrmSectionCard, CrmSegmentedControl } from "@/components/crm/ui";
+import { CrmChartPanel, CrmKpiCard, CrmSectionCard } from "@/components/crm/ui";
+import CRMDateRangePicker from "@/components/crm/CRMDateRangePicker";
 import {
   CRM_CHART_GRID,
   CRM_CHART_INFO,
@@ -99,14 +100,6 @@ export type SalesHealthPayload = {
     emailReplyRatePercent: number;
   };
 };
-
-const WINDOW_OPTIONS = [
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "this_week", label: "This week" },
-  { value: "this_month", label: "This month" },
-  { value: "last_30_days", label: "Last 30 days" },
-];
 
 const STATUS_COLORS = {
   healthy: { border: "border-[var(--success)]/30", bg: "bg-[var(--success-light)]", text: "text-[var(--success)]", bar: "#28c76f" },
@@ -260,7 +253,7 @@ export default function CrmSalesHealthPanel({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <CrmDropdown value={window} onChange={setWindow} options={WINDOW_OPTIONS} />
+          <CRMDateRangePicker value={window} onWindowChange={setWindow} />
         </div>
       </div>
 

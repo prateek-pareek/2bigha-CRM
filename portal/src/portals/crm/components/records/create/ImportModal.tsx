@@ -19,6 +19,7 @@ import ImportAssignmentPanel, {
   type ImportAssignmentValue,
 } from './ImportAssignmentPanel';
 import ImportDryRunCard from './ImportDryRunCard';
+import { clientDuplicateWarning, validateClientImportMapped } from './clientImportValidate';
 import * as XLSX from 'xlsx';
 import { useCrmImportStore } from '@/stores/crmImportStore';
 import type { CrmImportEntityType } from '@/stores/crmImportStore';
@@ -172,6 +173,38 @@ function applyHubSpotHints(
     }
     return '';
   };
+  if (type === 'clients') {
+    if (!out.name) out.name = pick('Client Name', 'Name', 'Full Name', 'Full name', 'Customer Name', 'Contact Name');
+    if (!out.email) out.email = pick('Email', 'Email Address', 'E-mail', 'Work Email');
+    if (!out.phone) out.phone = pick('Phone', 'Phone Number', 'Mobile', 'Mobile No', 'Mobile Number', 'Contact Number', 'Contact No', 'Mobile Phone');
+    if (!out.whatsappNumber) out.whatsappNumber = pick('WhatsApp Number', 'WhatsApp', 'Whatsapp', 'WhatsApp No');
+    if (!out.address) out.address = pick('Address', 'Full Address', 'Street Address', 'City / Address');
+    if (!out.role) out.role = pick('Role (OWNER/AGENT/USER)', 'Role', 'User Type', 'Client Role');
+    if (!out.status) out.status = pick('Status', 'Client Status');
+    if (!out.additionalEmails) {
+      out.additionalEmails = pick(
+        'Additional Emails (comma or semicolon-separated)',
+        'Additional Emails',
+        'Alternate Email',
+        'Other Email',
+        'Secondary Email',
+      );
+    }
+    // One spreadsheet column belongs to one client field. A Phone column used to
+    // also be stored on a hidden mobileNo key, which blocked the step with
+    // "Also mapped to another field" on an otherwise normal file.
+    const used = new Set<string>();
+    for (const field of CRM_FIELDS_MAP.clients) {
+      const col = out[field.key];
+      if (!col) continue;
+      if (used.has(col)) delete out[field.key];
+      else used.add(col);
+    }
+    for (const key of Object.keys(out)) {
+      if (!CRM_FIELDS_MAP.clients.some((f) => f.key === key)) delete out[key];
+    }
+    return out;
+  }
   if (!out.firstName) out.firstName = pick('First Name', 'First name');
   if (!out.lastName) out.lastName = pick('Last Name', 'Last name');
   if (!out.email) out.email = pick('Email', 'Work Email', 'Email Address');
@@ -352,10 +385,33 @@ const planKey = (v: unknown) => String(v ?? '').toUpperCase().replace(/[\s_\-–
 
 export interface ParsedValidationRow {
   index: number;
+  /** 1-based spreadsheet row (header is row 1). */
+  excelRow?: number;
   original: Record<string, any>;
   mapped: Record<string, any>;
   errors: string[];
+  /** Duplicate phones/emails inside the file. Not a failure — the chosen strategy handles them. */
+  warnings?: string[];
   isValid: boolean;
+}
+
+function uniqueImportHeaders(raw: string[]): string[] {
+  const seen = new Map<string, number>();
+  return raw.map((cell, i) => {
+    const base = cell.trim() || `Column ${i + 1}`;
+    const n = (seen.get(base.toLowerCase()) || 0) + 1;
+    seen.set(base.toLowerCase(), n);
+    return n === 1 ? base : `${base} (${n})`;
+  });
+}
+
+function spreadsheetDelimiter(firstLine: string): string | undefined {
+  const commas = (firstLine.match(/,/g) || []).length;
+  const semis = (firstLine.match(/;/g) || []).length;
+  const tabs = (firstLine.match(/\t/g) || []).length;
+  if (tabs > commas && tabs >= semis) return '\t';
+  if (semis > commas) return ';';
+  return undefined;
 }
 
 export interface ImportSummaryData {
@@ -391,6 +447,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
   const [customMappings, setCustomMappings] = useState<{ id: string; label: string; column: string }[]>([]);
   const [duplicateStrategy, setDuplicateStrategy] = useState<ImportDuplicateStrategy>('merge');
   const [assignment, setAssignment] = useState<ImportAssignmentValue>(DEFAULT_IMPORT_ASSIGNMENT);
+  // Client imports only carry an assignment for admins (the panel reports the viewer's tier).
+  const [clientAssignIsAdmin, setClientAssignIsAdmin] = useState(false);
   const ownerAutoPicked = useRef(false);
 
   // "Use owner column" only makes sense while a column is mapped to Lead Owner: pick it once
@@ -407,6 +465,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
   const [creatingCustomFields, setCreatingCustomFields] = useState(false);
 
   const [parsedRows, setParsedRows] = useState<Record<string, any>[]>([]);
+  const [ignoredEmptyRows, setIgnoredEmptyRows] = useState(0);
   const [validationRows, setValidationRows] = useState<ParsedValidationRow[]>([]);
   const [validationFilter, setValidationFilter] = useState<'all' | 'valid' | 'invalid'>('all');
   const [showUnmapped, setShowUnmapped] = useState(false);
@@ -515,6 +574,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
       setDuplicateStrategy('merge');
       setError(null);
       setParsedRows([]);
+      setIgnoredEmptyRows(0);
       setValidationRows([]);
       setValidationFilter('all');
       setShowUnmapped(false);
@@ -542,15 +602,58 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
         // garbling names like "Rāhul" or Devanagari text. xlsx (PK zip) / xls (D0 CF) stay binary.
         const isBinaryWorkbook =
           (data[0] === 0x50 && data[1] === 0x4b) || (data[0] === 0xd0 && data[1] === 0xcf);
+        const text = isBinaryWorkbook ? '' : new TextDecoder('utf-8').decode(data).replace(/^\uFEFF/, '');
+        const firstLine = text.split(/\r?\n/, 1)[0] || '';
+        const FS = text ? spreadsheetDelimiter(firstLine) : undefined;
         const workbook = isBinaryWorkbook
           ? XLSX.read(data, { type: 'array' })
-          : XLSX.read(new TextDecoder('utf-8').decode(data).replace(/^﻿/, ''), { type: 'string' });
+          : XLSX.read(text, FS ? { type: 'string', FS } : { type: 'string' });
         const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-        const headerData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        const fileHeaders = (headerData[0] as string[]) || [];
+        const worksheet = sheetName ? workbook.Sheets[sheetName] : undefined;
+        if (!worksheet) {
+          setError('This file has no sheet to import.');
+          return;
+        }
+        const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+          header: 1,
+          defval: '',
+          raw: false,
+        });
+        const headerRowIndex = matrix.findIndex(
+          (row) => Array.isArray(row) && row.some((cell) => String(cell ?? '').trim() !== ''),
+        );
+        if (headerRowIndex < 0) {
+          setError('This file is empty. Add a header row and at least one data row.');
+          return;
+        }
+        const rawHeaders = (matrix[headerRowIndex] as unknown[]).map((cell) => String(cell ?? '').trim());
+        while (rawHeaders.length && !rawHeaders[rawHeaders.length - 1]) rawHeaders.pop();
+        if (!rawHeaders.some(Boolean)) {
+          setError('This file has no column headers. The first row should name each column.');
+          return;
+        }
+        const fileHeaders = uniqueImportHeaders(rawHeaders);
+        let emptyRows = 0;
+        const jsonData: Record<string, any>[] = [];
+        for (let r = headerRowIndex + 1; r < matrix.length; r++) {
+          const cells = (matrix[r] as unknown[]) || [];
+          const hasValue = fileHeaders.some((_, i) => String(cells[i] ?? '').trim() !== '');
+          if (!hasValue) {
+            emptyRows += 1;
+            continue;
+          }
+          const obj: Record<string, any> = { __excelRow: r + 1 };
+          fileHeaders.forEach((header, i) => {
+            obj[header] = cells[i] ?? '';
+          });
+          jsonData.push(obj);
+        }
+        if (!jsonData.length) {
+          setError('This file has column headers but no data rows.');
+          return;
+        }
 
+        setIgnoredEmptyRows(emptyRows);
         setHeaders(fileHeaders);
         setParsedRows(jsonData);
         setStep('mapping');
@@ -697,7 +800,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
       ...categories.map((c) => c.toUpperCase().trim()),
     ];
 
-    return rows.map((row, idx) => {
+    const checked = rows.map((row, idx) => {
       const mapped: Record<string, any> = {};
       Object.entries(finalMapping).forEach(([crmKey, fileCol]) => {
         if (fileCol && row[fileCol] !== undefined) {
@@ -875,7 +978,19 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
             mapped.whatsappNumber = check.formatted;
           }
         }
-      } else if (type === 'clients' || type === 'organizations') {
+      } else if (type === 'clients') {
+        const verdict = validateClientImportMapped(mapped);
+        errors.push(...verdict.errors);
+        const cleaned = verdict.normalized;
+        if (cleaned.name) mapped.name = cleaned.name;
+        if (cleaned.phone) mapped.phone = cleaned.phone;
+        if (cleaned.email) mapped.email = cleaned.email;
+        if (cleaned.whatsappNumber) mapped.whatsappNumber = cleaned.whatsappNumber;
+        if (cleaned.address) mapped.address = cleaned.address;
+        if (cleaned.role) mapped.role = cleaned.role;
+        if (cleaned.status) mapped.status = cleaned.status;
+        if (cleaned.additionalEmails.length) mapped.additionalEmails = cleaned.additionalEmails.join('; ');
+      } else if (type === 'organizations') {
         const name = String(mapped.name || '').trim();
         const phone = String(mapped.phone || '').trim();
         const whatsappNumber = String(mapped.whatsappNumber || '').trim();
@@ -914,12 +1029,37 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
 
       return {
         index: idx + 1,
+        excelRow: Number(row.__excelRow) || idx + 2,
         original: row,
         mapped,
         errors,
+        warnings: [] as string[],
         isValid: errors.length === 0,
       };
     });
+
+    if (type === 'clients') {
+      const phoneSeen = new Map<string, number>();
+      const emailSeen = new Map<string, number>();
+      for (const row of checked) {
+        if (!row.isValid) continue;
+        const digits = String(row.mapped.phone || '').replace(/\D/g, '');
+        const phoneKey = digits.length >= 10 ? digits.slice(-10) : '';
+        const label = row.excelRow ?? row.index;
+        if (phoneKey) {
+          const first = phoneSeen.get(phoneKey);
+          if (first) row.warnings!.push(clientDuplicateWarning(duplicateStrategy, 'phone', first));
+          else phoneSeen.set(phoneKey, label);
+        }
+        const email = String(row.mapped.email || '').trim().toLowerCase();
+        if (email.includes('@')) {
+          const first = emailSeen.get(email);
+          if (first) row.warnings!.push(clientDuplicateWarning(duplicateStrategy, 'email', first));
+          else emailSeen.set(email, label);
+        }
+      }
+    }
+    return checked;
   };
 
   const runValidation = (): ParsedValidationRow[] => {
@@ -928,16 +1068,23 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
 
   const handleUpdateRowField = (rowIndex: number, crmKey: string, newValue: any) => {
     const updated = [...parsedRows];
-    const fileCol = mapping[crmKey] || customMappings.find(cm => `cf_${cm.label.toLowerCase().replace(/[^a-z0-9]/g, '_')}` === crmKey)?.column;
-    const targetKey = fileCol || crmKey;
+    let fileCol = mapping[crmKey] || customMappings.find(cm => `cf_${cm.label.toLowerCase().replace(/[^a-z0-9]/g, '_')}` === crmKey)?.column;
+    let nextMapping = mapping;
+    if (!fileCol) {
+      const label = (CRM_FIELDS_MAP[type] || []).find((f) => f.key === crmKey)?.label || crmKey;
+      fileCol = `${label} (added)`;
+      nextMapping = { ...mapping, [crmKey]: fileCol };
+      setMapping(nextMapping);
+      setHeaders((prev) => (prev.includes(fileCol!) ? prev : [...prev, fileCol!]));
+    }
 
     updated[rowIndex] = {
       ...updated[rowIndex],
-      [targetKey]: newValue,
+      [fileCol]: newValue,
     };
 
     setParsedRows(updated);
-    const newValidation = validateDataset(updated, mapping, customMappings, picklistLeadCategories);
+    const newValidation = validateDataset(updated, nextMapping, customMappings, picklistLeadCategories);
     setValidationRows(newValidation);
   };
 
@@ -946,7 +1093,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
   useEffect(() => {
     if (step === 'validate') setValidationRows(runValidation());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, parsedRows, mapping, customMappings, picklistLeadCategories]);
+  }, [step, parsedRows, mapping, customMappings, picklistLeadCategories, duplicateStrategy]);
 
   const handleGoToValidation = () => {
     const results = runValidation();
@@ -1036,7 +1183,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
     const invalidRowsList = validationRows
       .filter((r) => !r.isValid)
       .map((r) => ({
-        rowNumber: r.index,
+        rowNumber: r.excelRow ?? r.index,
         rowData: r.original,
         errors: r.errors,
       }));
@@ -1077,7 +1224,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
     if (type === 'leads' && defaultLeadVertical) {
       formData.append('leadVertical', defaultLeadVertical);
     }
-    if (type === 'leads') {
+    if (type === 'leads' || (type === 'clients' && clientAssignIsAdmin)) {
       formData.append('assignment', importAssignmentPayload(assignment));
     }
 
@@ -1173,17 +1320,38 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
   const typeLabel = IMPORT_TYPE_LABEL[type] || type;
   const crmFields = CRM_FIELDS_MAP[type] || [];
 
+  const fieldKeys = new Set(crmFields.map((f) => f.key));
+  const sharersOf = (col: string) => {
+    const keys = Object.entries(mapping)
+      .filter(([key, value]) => value === col && fieldKeys.has(key))
+      .map(([key]) => key);
+    if (customMappings.some((cm) => cm.column === col)) keys.push('custom');
+    return keys;
+  };
   const columnUsage = new Map<string, number>();
-  Object.values(mapping).forEach((col) => {
-    if (col) columnUsage.set(col, (columnUsage.get(col) || 0) + 1);
+  Object.entries(mapping).forEach(([key, col]) => {
+    if (col && fieldKeys.has(key)) columnUsage.set(col, (columnUsage.get(col) || 0) + 1);
   });
+  customMappings.forEach((cm) => {
+    if (cm.column) columnUsage.set(cm.column, (columnUsage.get(cm.column) || 0) + 1);
+  });
+  // Phone and WhatsApp may share one column (the file only has a single number).
+  // That is not a broken mapping — duplicate clients are handled by the strategy below.
+  const isHarmlessShare = (col: string) => {
+    if (type !== 'clients') return false;
+    const keys = sharersOf(col);
+    return keys.length > 1 && keys.every((key) => key === 'phone' || key === 'whatsappNumber');
+  };
   const duplicateMappedColumns = new Set(
-    [...columnUsage.entries()].filter(([, n]) => n > 1).map(([col]) => col),
+    [...columnUsage.entries()]
+      .filter(([col, n]) => n > 1 && !isHarmlessShare(col))
+      .map(([col]) => col),
   );
   const hasDuplicateMapping = duplicateMappedColumns.size > 0;
 
   const ownerColumnMapped = !!mapping.leadOwner;
-  const assignmentProblem = type === 'leads' ? importAssignmentProblem(assignment) : null;
+  const assignmentProblem =
+    type === 'leads' || (type === 'clients' && clientAssignIsAdmin) ? importAssignmentProblem(assignment) : null;
 
   const validCount = validationRows.filter((r) => r.isValid).length;
   const invalidCount = validationRows.filter((r) => !r.isValid).length;
@@ -1346,7 +1514,10 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                     </div>
                     <div>
                       <span className="text-xs font-bold text-slate-800">{file?.name || 'Uploaded File'}</span>
-                      <span className="text-xs text-slate-400 font-medium ml-2">({parsedRows.length} rows, {headers.length} columns)</span>
+                      <span className="text-xs text-slate-400 font-medium ml-2">
+                        ({parsedRows.length} rows, {headers.length} columns
+                        {ignoredEmptyRows > 0 ? `, ${ignoredEmptyRows} empty row${ignoredEmptyRows === 1 ? '' : 's'} ignored` : ''})
+                      </span>
                     </div>
                   </div>
 
@@ -1449,7 +1620,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                             {isSelected && <Check size={12} className="text-primary stroke-[3]" />}
                           </div>
                           <p className="text-[11px] text-slate-400 leading-tight font-medium line-clamp-2">
-                            {opt.description}
+                            {type === 'clients' && opt.value === 'skip'
+                              ? 'Do not change clients that already exist (matched by phone or email).'
+                              : opt.description}
                           </p>
                         </button>
                       );
@@ -1457,12 +1630,20 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                   </div>
                 </div>
 
-                {type === 'leads' && (
+                {(type === 'leads' || type === 'clients') && (
                   <ImportAssignmentPanel
                     value={assignment}
                     onChange={setAssignment}
                     ownerColumnMapped={ownerColumnMapped}
+                    entity={type}
+                    onTierChange={type === 'clients' ? (t) => setClientAssignIsAdmin(t === 'all') : undefined}
                   />
+                )}
+
+                {type === 'clients' && (
+                  <p className="text-xs text-slate-500 font-medium">
+                    Name and phone are checked on each row in the next step. A row missing either one can be filled in there. Rows that share a phone or email follow the duplicate option above.
+                  </p>
                 )}
 
                 {/* Mapping Table */}
@@ -1477,7 +1658,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                       const selectedCol = mapping[field.key] || '';
                       const isDuplicate = !!selectedCol && duplicateMappedColumns.has(selectedCol);
                       const sampleValue = selectedCol && parsedRows[0] ? parsedRows[0][selectedCol] : undefined;
-                      const isRequired = field.key === 'firstName' || (type === 'leads' && field.key === 'mobileNo') || (type === 'clients' && field.key === 'name') || (type === 'organizations' && field.key === 'name');
+                      const isRequired = field.key === 'firstName' || (type === 'leads' && field.key === 'mobileNo') || (type === 'clients' && (field.key === 'name' || field.key === 'phone')) || (type === 'organizations' && field.key === 'name');
+                      const sharesPhoneColumn = type === 'clients' && !!selectedCol && isHarmlessShare(selectedCol) && field.key === 'whatsappNumber';
 
                       return (
                         <div key={field.key} className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50/60 transition-colors">
@@ -1489,7 +1671,12 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                               <div className="flex items-center gap-1.5">
                                 <span className="text-xs font-bold text-slate-800 truncate">{field.label}</span>
                                 {isRequired && (
-                                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200/60 px-1.5 py-0.2 rounded">
+                                  <span className={cn(
+                                    "text-[10px] font-bold px-1.5 py-0.2 rounded border",
+                                    type === 'clients'
+                                      ? "text-slate-500 bg-slate-100 border-slate-200"
+                                      : "text-rose-600 bg-rose-50 border-rose-200/60"
+                                  )}>
                                     Required
                                   </span>
                                 )}
@@ -1523,6 +1710,10 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                             {isDuplicate ? (
                               <p className="mt-1 text-[11px] font-bold text-rose-600 flex items-center gap-1">
                                 <AlertCircle size={12} /> Also mapped to another field — select a different column.
+                              </p>
+                            ) : sharesPhoneColumn ? (
+                              <p className="mt-1 text-[11px] font-medium text-slate-500">
+                                Uses the same column as Phone.
                               </p>
                             ) : sampleValue !== undefined && sampleValue !== '' ? (
                               <p className="mt-1 text-[11px] text-slate-500 font-medium truncate flex items-center gap-1">
@@ -1608,6 +1799,11 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
             {/* STEP 3: PREVIEW & VALIDATION */}
             {step === 'validate' && (
               <div className="space-y-5 animate-in fade-in duration-300">
+                {type === 'clients' && (
+                  <p className="text-xs text-slate-600 font-medium">
+                    Each row is checked on its own. Missing or bad name and phone are highlighted — use Fix to type them in. Duplicate phones and emails are not errors; they follow {duplicateStrategy === 'merge' ? 'Merge with existing' : duplicateStrategy === 'skip' ? 'Skip duplicates' : duplicateStrategy === 'replace' ? 'Replace existing' : 'Always create new'}.
+                  </p>
+                )}
                 {assignmentProblem && (
                   <p className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
                     <AlertCircle size={14} /> {assignmentProblem} Go back to Field Mapping to fix the assignment.
@@ -1726,6 +1922,14 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                               <th className="px-3 py-3 font-bold text-slate-500">Validation</th>
                               <th className="px-3 py-3 font-bold text-slate-500 text-right w-20">Action</th>
                             </>
+                          ) : type === 'clients' ? (
+                            <>
+                              <th className="px-3 py-3 font-bold text-slate-500">Name</th>
+                              <th className="px-3 py-3 font-bold text-slate-500">Phone</th>
+                              <th className="px-3 py-3 font-bold text-slate-500">Email / Role</th>
+                              <th className="px-3 py-3 font-bold text-slate-500">Validation</th>
+                              <th className="px-3 py-3 font-bold text-slate-500 text-right w-20">Action</th>
+                            </>
                           ) : (
                             <>
                               <th className="px-4 py-3 font-bold text-slate-500">Name</th>
@@ -1743,24 +1947,32 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                             if (validationFilter === 'invalid') return !r.isValid;
                             return true;
                           })
-                          .slice(0, 150)
+                          .slice(0, 200)
                           .map((row) => (
                             <tr
                               key={row.index}
                               className={cn(
                                 "transition-colors",
-                                row.isValid ? "hover:bg-slate-50/70" : "bg-rose-50/30 hover:bg-rose-50/60"
+                                !row.isValid
+                                  ? "bg-rose-50/30 hover:bg-rose-50/60"
+                                  : row.warnings?.length
+                                    ? "bg-amber-50/40 hover:bg-amber-50/70"
+                                    : "hover:bg-slate-50/70"
                               )}
                             >
-                              <td className="px-3 py-2.5 font-medium text-slate-400 text-center">{row.index}</td>
+                              <td className="px-3 py-2.5 font-medium text-slate-400 text-center">{row.excelRow ?? row.index}</td>
                               <td className="px-3 py-2.5">
-                                {row.isValid ? (
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
-                                    <Check size={11} className="text-emerald-600 stroke-[3]" /> Valid
-                                  </span>
-                                ) : (
+                                {!row.isValid ? (
                                   <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200/60 px-2 py-0.5 rounded-full">
                                     <AlertCircle size={11} className="text-rose-600" /> Issue
+                                  </span>
+                                ) : row.warnings?.length ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full">
+                                    Duplicate
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+                                    <Check size={11} className="text-emerald-600 stroke-[3]" /> Valid
                                   </span>
                                 )}
                               </td>
@@ -1863,6 +2075,81 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                                     </button>
                                   </td>
                                 </>
+                              ) : type === 'clients' ? (
+                                <>
+                                  <td className="px-3 py-2.5 font-bold text-slate-800">
+                                    {row.errors.some((err) => err.toLowerCase().includes('name')) || !String(row.mapped.name || '').trim() ? (
+                                      <span className="text-rose-600 font-bold italic flex items-center gap-1">
+                                        <AlertCircle size={11} /> {String(row.mapped.name || '').trim() || 'Missing name'}
+                                      </span>
+                                    ) : (
+                                      row.mapped.name
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 font-medium text-slate-700">
+                                    {row.errors.some((err) => /^phone number/i.test(err)) || !String(row.mapped.phone || '').trim() ? (
+                                      <span className="text-rose-600 font-bold">
+                                        {String(row.mapped.phone || '').trim() || 'Missing phone'}
+                                      </span>
+                                    ) : (
+                                      <span className="font-mono">{row.mapped.phone}</span>
+                                    )}
+                                    {row.mapped.whatsappNumber && (
+                                      <div className="text-[11px] text-slate-500">WA: {row.mapped.whatsappNumber}</div>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-slate-700">
+                                    <div className={row.errors.some((err) => err.toLowerCase().includes('email')) ? 'text-rose-600 font-bold' : ''}>
+                                      {row.mapped.email || <span className="text-slate-400 font-normal">No email</span>}
+                                    </div>
+                                    {row.mapped.role && (
+                                      <div className={cn('text-[11px]', row.errors.some((err) => err.toLowerCase().includes('role')) ? 'text-rose-600 font-bold' : 'text-slate-500')}>
+                                        {row.mapped.role}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 min-w-[280px]">
+                                    {row.isValid && !(row.warnings?.length) ? (
+                                      <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                                        <Check size={12} /> Ready
+                                      </span>
+                                    ) : (
+                                      <div className="flex flex-col items-start gap-1">
+                                        {row.errors.slice(0, 3).map((err, i) => (
+                                          <button
+                                            key={i}
+                                            type="button"
+                                            onClick={() => setEditingRowIndex(row.index - 1)}
+                                            className="max-w-[320px] line-clamp-2 break-words text-left text-[11px] leading-snug font-bold bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded-md"
+                                            title={`${err} — click to fix`}
+                                          >
+                                            {err} ✎
+                                          </button>
+                                        ))}
+                                        {row.errors.length > 3 && (
+                                          <span className="text-[10px] font-bold text-rose-500">+{row.errors.length - 3} more — click Fix</span>
+                                        )}
+                                        {(row.warnings || []).map((warn, i) => (
+                                          <span key={`w-${i}`} className="max-w-[320px] text-left text-[11px] leading-snug font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md">
+                                            {warn}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingRowIndex(row.index - 1)}
+                                      className={cn(
+                                        "px-2.5 py-1 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 shadow-xs cursor-pointer",
+                                        row.isValid ? "bg-slate-100 hover:bg-slate-200 text-slate-700" : "bg-rose-600 hover:bg-rose-700 text-white"
+                                      )}
+                                    >
+                                      <Pencil size={11} /> {row.isValid ? 'Edit' : 'Fix'}
+                                    </button>
+                                  </td>
+                                </>
                               ) : (
                                 <>
                                   <td className="px-4 py-2.5 font-bold text-slate-800">
@@ -1914,6 +2201,11 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                       </tbody>
                     </table>
                   </div>
+                  {validationRows.length > 200 && (
+                    <p className="px-4 py-2 text-[11px] font-medium text-slate-500 border-t border-slate-100">
+                      Showing the first 200 rows. Every row is still checked — fix these, then the next ones appear, or import the valid rows only.
+                    </p>
+                  )}
                 </div>
 
                 {/* Quick Fix / Edit Record Modal Overlay */}
@@ -1944,7 +2236,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                             </div>
                             <div>
                               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                                Edit & Fix Record #{currentRow.index}
+                                Edit & Fix Record row {currentRow.excelRow ?? currentRow.index}
                                 {currentRow.isValid ? (
                                   <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
                                     <Check size={11} /> Valid
@@ -2446,6 +2738,121 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                                 />
                               </div>
                             </div>
+                          ) : type === 'clients' ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {(() => {
+                                const has = (needle: string) => currentRow.errors.some((err) => err.toLowerCase().includes(needle));
+                                const fieldClass = (bad: boolean) => cn(
+                                  "w-full border rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none",
+                                  bad
+                                    ? "border-rose-300 bg-rose-50/40 text-rose-900 focus:border-rose-500"
+                                    : "border-slate-200 text-slate-800 focus:border-primary"
+                                );
+                                const roleValue = String(currentMapped.role || '');
+                                const roleKnown = ['USER', 'AGENT', 'OWNER'].includes(roleValue);
+                                const statusValue = String(currentMapped.status || '');
+                                const statusKnown = ['active', 'inactive', 'prospective'].includes(statusValue);
+                                return (
+                                  <>
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                                        Client Name <span className="text-rose-500">*</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={currentMapped.name || ''}
+                                        onChange={(e) => handleUpdateRowField(editingRowIndex, 'name', e.target.value)}
+                                        placeholder="e.g. Amit Kumar"
+                                        className={fieldClass(has('name'))}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                                        Phone <span className="text-rose-500">*</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={currentMapped.phone || ''}
+                                        onChange={(e) => handleUpdateRowField(editingRowIndex, 'phone', e.target.value)}
+                                        placeholder="10-digit mobile"
+                                        className={cn(fieldClass(has('phone number')), 'font-mono')}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-700 mb-1">Email</label>
+                                      <input
+                                        type="email"
+                                        value={currentMapped.email || ''}
+                                        onChange={(e) => handleUpdateRowField(editingRowIndex, 'email', e.target.value)}
+                                        placeholder="name@example.com"
+                                        className={fieldClass(currentRow.errors.some((err) => err === 'Invalid email format' || err.startsWith('Email has')))}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-700 mb-1">Additional Emails</label>
+                                      <input
+                                        type="text"
+                                        value={currentMapped.additionalEmails || ''}
+                                        onChange={(e) => handleUpdateRowField(editingRowIndex, 'additionalEmails', e.target.value)}
+                                        placeholder="one@example.com; two@example.com"
+                                        className={fieldClass(has('additional email'))}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-700 mb-1">WhatsApp Number</label>
+                                      <input
+                                        type="text"
+                                        value={currentMapped.whatsappNumber || ''}
+                                        onChange={(e) => handleUpdateRowField(editingRowIndex, 'whatsappNumber', e.target.value)}
+                                        placeholder="Optional"
+                                        className={cn(fieldClass(has('whatsapp')), 'font-mono')}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-700 mb-1">Role</label>
+                                      <select
+                                        value={roleKnown ? roleValue : roleValue}
+                                        onChange={(e) => handleUpdateRowField(editingRowIndex, 'role', e.target.value)}
+                                        className={cn(fieldClass(has('role')), 'bg-white cursor-pointer')}
+                                      >
+                                        <option value="">— Optional —</option>
+                                        {roleValue && !roleKnown && (
+                                          <option value={roleValue}>Invalid: {roleValue}</option>
+                                        )}
+                                        <option value="USER">USER</option>
+                                        <option value="AGENT">AGENT</option>
+                                        <option value="OWNER">OWNER</option>
+                                      </select>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <label className="block text-xs font-bold text-slate-700 mb-1">Address</label>
+                                      <input
+                                        type="text"
+                                        value={currentMapped.address || ''}
+                                        onChange={(e) => handleUpdateRowField(editingRowIndex, 'address', e.target.value)}
+                                        className={fieldClass(has('address'))}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-700 mb-1">Status</label>
+                                      <select
+                                        value={statusValue}
+                                        onChange={(e) => handleUpdateRowField(editingRowIndex, 'status', e.target.value)}
+                                        className={cn(fieldClass(has('status')), 'bg-white cursor-pointer')}
+                                      >
+                                        <option value="">— Default (active) —</option>
+                                        {statusValue && !statusKnown && (
+                                          <option value={statusValue}>Invalid: {statusValue}</option>
+                                        )}
+                                        <option value="active">active</option>
+                                        <option value="inactive">inactive</option>
+                                        <option value="prospective">prospective</option>
+                                      </select>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
                           ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div>
@@ -2525,7 +2932,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                 {summaryData?.status === 'completed' && Object.keys(summaryData.assignedCounts ?? {}).length > 0 && (
                   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
                     <p className="text-xs font-bold text-slate-800">
-                      Lead assignment
+                      {type === 'clients' ? 'Client' : 'Lead'} assignment
                       {(summaryData.reassignedCount ?? 0) > 0 && (
                         <span className="ml-2 font-medium text-slate-500">
                           ({summaryData.reassignedCount} existing duplicate(s) moved)
@@ -2636,7 +3043,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
 
                       <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-200/60 shadow-xs text-center">
                         <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block mb-1">
-                          New Leads Created
+                          New {typeLabel}s Created
                         </span>
                         <span className="text-2xl font-black text-emerald-600 font-mono">
                           {summaryData?.createdCount ?? 0}
@@ -2688,8 +3095,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                           rowNumber: inv.rowNumber,
                           type: 'invalid',
                           label: 'Invalid Record',
-                          name: raw['First Name'] || raw['Name'] || raw['First name'] || raw.firstName || '—',
-                          contact: raw['Contact Number'] || raw['Mobile No'] || raw['Phone Number'] || raw['Email'] || raw.mobileNo || raw.email || '—',
+                          name: raw['Client Name'] || raw['Client Name (added)'] || raw['First Name'] || raw['Name'] || raw['First name'] || raw.name || raw.firstName || '—',
+                          contact: raw['Phone'] || raw['Phone (added)'] || raw['Phone Number'] || raw['Contact Number'] || raw['Mobile No'] || raw.phone || raw.mobileNo || raw['Email'] || raw.email || '—',
                           reason: inv.errors.join('; '),
                         });
                       });
@@ -2700,8 +3107,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                           rowNumber: skp.rowNumber,
                           type: 'skipped',
                           label: 'Duplicate Skipped',
-                          name: raw['First Name'] || raw['Name'] || raw['First name'] || raw.firstName || '—',
-                          contact: raw['Contact Number'] || raw['Mobile No'] || raw['Phone Number'] || raw['Email'] || raw.mobileNo || raw.email || '—',
+                          name: raw['Client Name'] || raw['Client Name (added)'] || raw['First Name'] || raw['Name'] || raw['First name'] || raw.name || raw.firstName || '—',
+                          contact: raw['Phone'] || raw['Phone (added)'] || raw['Phone Number'] || raw['Contact Number'] || raw['Mobile No'] || raw.phone || raw.mobileNo || raw['Email'] || raw.email || '—',
                           reason: skp.reason || 'Duplicate phone or email',
                         });
                       });
@@ -2712,8 +3119,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                           rowNumber: fld.rowNumber,
                           type: 'failed',
                           label: 'Failed Record',
-                          name: raw['First Name'] || raw['Name'] || raw['First name'] || raw.firstName || '—',
-                          contact: raw['Contact Number'] || raw['Mobile No'] || raw['Phone Number'] || raw['Email'] || raw.mobileNo || raw.email || '—',
+                          name: raw['Client Name'] || raw['Client Name (added)'] || raw['First Name'] || raw['Name'] || raw['First name'] || raw.name || raw.firstName || '—',
+                          contact: raw['Phone'] || raw['Phone (added)'] || raw['Phone Number'] || raw['Contact Number'] || raw['Mobile No'] || raw.phone || raw.mobileNo || raw['Email'] || raw.email || '—',
                           reason: fld.reason || 'Processing failed',
                         });
                       });

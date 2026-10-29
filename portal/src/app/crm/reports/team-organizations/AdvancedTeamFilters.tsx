@@ -5,7 +5,8 @@ import { useState, useMemo } from "react";
 import CRMDateRangePicker from "@/components/crm/CRMDateRangePicker";
 
 export type AdvancedTeamFilter = {
-  dateRange: "today" | "this_week" | "this_month" | "custom";
+  /** Preset key (`this_month`, `all_time`, …) or `custom` with start/end dates. */
+  dateRange: string;
   customDateStart?: string;
   customDateEnd?: string;
   selectedTeams: string[];
@@ -60,33 +61,28 @@ export default function AdvancedTeamFilters({
     filter.dateRange !== "this_month",
   ].filter(Boolean).length;
 
-  const handleDateRangeChange = (range: { from: string; to: string } | null) => {
-    if (!range) {
-      onFilterChange({ ...filter, dateRange: "this_month", customDateStart: undefined, customDateEnd: undefined });
-      return;
-    }
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    
-    if (range.from === today && range.to === today) {
-      onFilterChange({ ...filter, dateRange: "today", customDateStart: undefined, customDateEnd: undefined });
-      return;
-    }
+  const dateWindow =
+    filter.dateRange === "custom" && filter.customDateStart && filter.customDateEnd
+      ? `${filter.customDateStart},${filter.customDateEnd}`
+      : filter.dateRange;
 
-    onFilterChange({ 
-      ...filter, 
-      dateRange: "custom", 
-      customDateStart: range.from, 
-      customDateEnd: range.to 
+  const handleWindowChange = (windowKey: string) => {
+    if (windowKey.includes(",")) {
+      const [from, to] = windowKey.split(",", 2);
+      onFilterChange({
+        ...filter,
+        dateRange: "custom",
+        customDateStart: from,
+        customDateEnd: to,
+      });
+      return;
+    }
+    onFilterChange({
+      ...filter,
+      dateRange: windowKey,
+      customDateStart: undefined,
+      customDateEnd: undefined,
     });
-  };
-
-  const getInitialLabel = () => {
-    if (filter.dateRange === "today") return "Today";
-    if (filter.dateRange === "this_week") return "This Week";
-    if (filter.dateRange === "this_month") return "This Month";
-    if (filter.dateRange === "custom" && filter.customDateStart) return `${filter.customDateStart} - ${filter.customDateEnd}`;
-    return "This Month";
   };
 
   return (
@@ -96,10 +92,10 @@ export default function AdvancedTeamFilters({
         <span className="text-sm font-bold text-[var(--text-main)]">Filters</span>
       </div>
 
-      <CRMDateRangePicker 
-        initialLabel={getInitialLabel()} 
-        onChange={handleDateRangeChange}
-        className="z-50" 
+      <CRMDateRangePicker
+        value={dateWindow}
+        onWindowChange={handleWindowChange}
+        className="z-50"
       />
 
       {/* Teams Dropdown */}

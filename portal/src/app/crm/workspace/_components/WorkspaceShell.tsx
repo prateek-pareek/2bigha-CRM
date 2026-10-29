@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { CrmEmptyState } from "@/components/crm/ui/CrmEmptyState";
 import { CrmPageHeader, CrmHeaderTools } from "@/components/crm/ui";
 import { CrmIcon } from "@/lib/crm/shared/icons";
+import CRMDateRangePicker from "@/components/crm/CRMDateRangePicker";
 import { workspaceSectionTitle } from "@/lib/crm/shared/dashboard-routes";
 import { CRM_BTN_ICON } from "@/lib/crm/ui";
 import {
@@ -568,22 +569,10 @@ export default function WorkspaceShell({ section, children }: WorkspaceShellProp
         description={sectionDescription}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex h-[38px] items-center gap-2 rounded-[5px] border border-[var(--border-color)] bg-white px-2.5 shadow-[var(--crm-shadow-input)]">
-              <CrmIcon.Calendar size={16} className="text-[var(--text-muted)]" aria-hidden />
-              <Dropdown
-                value={windowFilter}
-                onChange={(v) => setWindowFilter(v as WorkspaceWindowFilter)}
-                widthClass="min-w-[140px] border-0 shadow-none bg-transparent h-[34px]"
-                showCustomDateRange
-                options={[
-                  { value: "today", label: "Today" },
-                  { value: "yesterday", label: "Yesterday" },
-                  { value: "this_week", label: "This week" },
-                  { value: "this_month", label: "This month" },
-                  { value: "last_30_days", label: "Last 30 days" },
-                ]}
-              />
-            </div>
+            <CRMDateRangePicker
+              value={windowFilter}
+              onWindowChange={(windowKey) => setWindowFilter(windowKey as WorkspaceWindowFilter)}
+            />
             <div className="inline-flex h-[38px] items-center gap-1.5 rounded-[5px] border border-[var(--border-color)] bg-white px-2 shadow-[var(--crm-shadow-input)]">
               <span className="pl-1 text-[11px] font-medium text-[var(--text-muted)]">Compare</span>
               <Dropdown

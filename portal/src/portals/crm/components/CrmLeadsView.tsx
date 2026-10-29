@@ -479,6 +479,59 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       localStorage.setItem(effectiveViewModeKey, viewMode);
     }
   }, [viewMode, effectiveViewModeKey]);
+  const [hoveredLeadId, setHoveredLeadId] = useState<string | null>(null);
+  const hoverActionsTimerRef = useRef<number | null>(null);
+  const revealLeadActions = useCallback((leadId: string) => {
+    setHoveredLeadId(leadId);
+    if (hoverActionsTimerRef.current != null) window.clearTimeout(hoverActionsTimerRef.current);
+    hoverActionsTimerRef.current = window.setTimeout(() => {
+      hoverActionsTimerRef.current = null;
+      setHoveredLeadId((current) => (current === leadId ? null : current));
+    }, 5000);
+  }, []);
+  const [actionsAtEnd, setActionsAtEnd] = useState(false);
+  useEffect(() => {
+    if (viewMode !== 'list') return;
+    let scroll: HTMLElement | null = null;
+    let observer: ResizeObserver | null = null;
+    const update = () => {
+      const next = document.querySelector('.crm-leads-table')?.closest('.crm-table-scroll') as HTMLElement | null;
+      if (next && next !== scroll) {
+        scroll?.removeEventListener('scroll', update);
+        observer?.disconnect();
+        scroll = next;
+        scroll.addEventListener('scroll', update, { passive: true });
+        observer = new ResizeObserver(update);
+        observer.observe(scroll);
+        const table = scroll.querySelector('.crm-leads-table');
+        if (table) observer.observe(table);
+      }
+      if (!scroll) return;
+      const max = Math.max(0, scroll.scrollWidth - scroll.clientWidth);
+      const header = scroll.querySelector('thead th.crm-table-actions');
+      let reveal = 1;
+      if (header && max > 4) {
+        const scrollRect = scroll.getBoundingClientRect();
+        const headerRect = header.getBoundingClientRect();
+        const visible = Math.min(headerRect.right, scrollRect.right) - Math.max(headerRect.left, scrollRect.left);
+        reveal = headerRect.width > 0 ? Math.max(0, Math.min(1, visible / headerRect.width)) : 0;
+      }
+      scroll.style.setProperty('--crm-actions-reveal', reveal.toFixed(3));
+      const atEnd = reveal > 0.2;
+      setActionsAtEnd((current) => (current === atEnd ? current : atEnd));
+    };
+    update();
+    const retry = window.setInterval(update, 250);
+    const stopRetry = window.setTimeout(() => window.clearInterval(retry), 3000);
+    window.addEventListener('resize', update);
+    return () => {
+      window.clearInterval(retry);
+      window.clearTimeout(stopRetry);
+      scroll?.removeEventListener('scroll', update);
+      observer?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [viewMode]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [pipelines, setPipelines] = useState<any[]>([]);
@@ -2958,7 +3011,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
               <div className="crm-view-panel min-h-0 flex flex-1 flex-col gap-0 overflow-hidden">
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <CrmTableShell scrollClassName="crm-table-scroll custom-scrollbar overflow-x-auto flex-1">
-                  <CrmTable>
+                  <CrmTable className="crm-leads-table">
                     <thead>
                       <tr>
                         <th className="crm-table-check sticky top-0 z-10">
@@ -3026,9 +3079,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                             <span className="pointer-events-none">{col.label}</span>
                           </th>
                         ))}
-                        <th className="crm-table-actions sticky top-0 z-10 text-right text-[13px] font-semibold text-[#1f2020]">
-                          Action
-                        </th>
+                        <th className="crm-table-actions">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3042,6 +3093,21 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                               'group cursor-pointer transition-colors',
                               selectedIds.has(lead._id) && 'crm-table-row-selected',
                             )}
+                            onMouseEnter={() => revealLeadActions(lead._id)}
+                            onMouseLeave={(e) => {
+                              const next = e.relatedTarget;
+                              if (
+                                next instanceof Element &&
+                                next.closest(".crm-row-actions__hover-block, .crm-action-menu-panel, [data-radix-popper-content-wrapper]")
+                              ) {
+                                return;
+                              }
+                              if (hoverActionsTimerRef.current != null) {
+                                window.clearTimeout(hoverActionsTimerRef.current);
+                                hoverActionsTimerRef.current = null;
+                              }
+                              setHoveredLeadId((current) => (current === lead._id ? null : current));
+                            }}
                             onClick={() => router.push(getLeadUrl(lead._id))}
                           >
                             <td className="crm-table-check">
@@ -3054,7 +3120,15 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                             {visibleCols.map(col => <td key={col.key}>{renderCell(lead, col.key)}</td>)}
                             <td className="crm-table-actions">
                               <CrmRowQuickActions
-                                lingerMs={300}
+                                pinned={actionsAtEnd}
+                                active={!actionsAtEnd && hoveredLeadId === lead._id}
+                                onDismiss={() => {
+                                  if (hoverActionsTimerRef.current != null) {
+                                    window.clearTimeout(hoverActionsTimerRef.current);
+                                    hoverActionsTimerRef.current = null;
+                                  }
+                                  setHoveredLeadId((current) => (current === lead._id ? null : current));
+                                }}
                                 quick={
                                   <>
                                     {(lead.mobileNo || lead.phone) ? (
@@ -3105,7 +3179,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                                 }
                                 menu={
                                   <CrmTableActionMenu
-                                    menuAlign="left"
+                                    menuAlign="right"
                                     className="shrink-0"
                                     onView={() => router.push(getLeadUrl(lead._id, { readonly: true }))}
                                     onEdit={() => router.push(getLeadUrl(lead._id, { edit: true }))}

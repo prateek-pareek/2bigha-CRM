@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { cloneElement, isValidElement, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -299,9 +299,103 @@ type CrmTableActionMenuProps = {
   /** Opens the per-record field-change history (audit log) panel. */
   onUpdateHistory?: () => void;
   className?: string;
-  /** Which edge the dropdown panel hangs from. Use "left" when this menu sits near the left edge of the table (e.g. a leading Action column) so the panel doesn't overflow off-screen. Defaults to "right" (panel's right edge pinned to the trigger). */
+  /** Which edge the dropdown hangs from. "right" pins the panel to the trigger and opens it left, over the table. */
   menuAlign?: "left" | "right";
+  /** Fired after the menu opens or closes. Not called on the first render. */
+  onOpenChange?: (open: boolean) => void;
 };
+
+const ACTION_MENU_GAP = 4;
+const ACTION_MENU_PAD = 8;
+const ACTION_MENU_MIN_WIDTH = 220;
+/** Fixed theme-customizer gear sitting on the viewport's right edge. */
+const THEME_GEAR_WIDTH = 52;
+
+function clipsOverflow(value: string) {
+  return value === "auto" || value === "scroll" || value === "hidden" || value === "clip";
+}
+
+/** Nearest real clipper (table shell, not the row cell), intersected with the viewport. */
+function actionMenuBounds(trigger: HTMLElement) {
+  let top = ACTION_MENU_PAD;
+  let bottom = window.innerHeight - ACTION_MENU_PAD;
+  let left = ACTION_MENU_PAD;
+  let right = Math.min(window.innerWidth - ACTION_MENU_PAD, window.innerWidth - THEME_GEAR_WIDTH);
+  let lockedY = false;
+  let lockedX = false;
+
+  let node: HTMLElement | null = trigger.parentElement;
+  while (node && node !== document.body && (!lockedY || !lockedX)) {
+    const style = getComputedStyle(node);
+    const rect = node.getBoundingClientRect();
+    // Skip the action cell itself — it is too small to be the menu's box.
+    if (clipsOverflow(style.overflowY) && !lockedY && rect.height >= 120) {
+      top = Math.max(top, rect.top + ACTION_MENU_PAD);
+      bottom = Math.min(bottom, rect.bottom - ACTION_MENU_PAD);
+      lockedY = true;
+    }
+    if (clipsOverflow(style.overflowX) && !lockedX && rect.width >= 160) {
+      left = Math.max(left, rect.left + ACTION_MENU_PAD);
+      right = Math.min(right, rect.right - ACTION_MENU_PAD);
+      lockedX = true;
+    }
+    node = node.parentElement;
+  }
+
+  return { top, bottom, left, right };
+}
+
+function actionMenuStyle(
+  trigger: HTMLElement,
+  menu: HTMLElement,
+  align: "left" | "right",
+): CSSProperties | null {
+  const rect = trigger.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return null;
+
+  const bounds = actionMenuBounds(trigger);
+  // Row left the table — close instead of leaving the menu over the toolbar or pagination.
+  if (rect.bottom <= bounds.top + 2 || rect.top >= bounds.bottom - 2) return null;
+  if (rect.right <= bounds.left + 2 || rect.left >= window.innerWidth - 4) return null;
+
+  const naturalHeight = menu.scrollHeight || menu.offsetHeight || 40;
+  const width = Math.max(menu.scrollWidth, menu.offsetWidth, ACTION_MENU_MIN_WIDTH);
+  // A short table (1–2 rows) is smaller than the menu: the menu is a fixed-position portal,
+  // so let it use the viewport rather than squeezing it into a scrollbar.
+  const tableSpace = Math.max(40, bounds.bottom - bounds.top);
+  const fitsTable = naturalHeight <= tableSpace;
+  const vTop = fitsTable ? bounds.top : ACTION_MENU_PAD;
+  const vBottom = fitsTable ? bounds.bottom : window.innerHeight - ACTION_MENU_PAD;
+  const available = Math.max(40, vBottom - vTop);
+  const height = Math.min(naturalHeight, available);
+  const needsScroll = naturalHeight > available + 1;
+
+  // Keep every action inside the table: below the ⋮, then above, then shift to fit.
+  const belowTop = rect.bottom + ACTION_MENU_GAP;
+  const aboveTop = rect.top - ACTION_MENU_GAP - height;
+  let top: number;
+  if (belowTop + height <= vBottom) top = belowTop;
+  else if (aboveTop >= vTop) top = aboveTop;
+  else top = Math.max(vTop, vBottom - height);
+
+  // Open over the table, to the left of the ⋮, clear of the theme gear.
+  const limitRight = Math.min(bounds.right, window.innerWidth - THEME_GEAR_WIDTH);
+  let left = align === "left" ? rect.left : Math.min(rect.right, limitRight) - width;
+  if (align === "left" && rect.left + width > limitRight - 8) {
+    left = Math.min(rect.right, limitRight) - width;
+  }
+  left = Math.max(bounds.left, Math.min(left, Math.max(bounds.left, limitRight - width)));
+
+  return {
+    position: "fixed",
+    top,
+    left,
+    width,
+    maxHeight: needsScroll ? height : undefined,
+    zIndex: 200,
+    visibility: "visible",
+  };
+}
 
 /** Always-visible CRMS `action-icon btn-xs outline` ⋮ menu */
 export function CrmTableActionMenu({
@@ -322,19 +416,67 @@ export function CrmTableActionMenu({
   onAddFarm,
   className,
   menuAlign = "right",
+  onOpenChange,
 }: CrmTableActionMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({
+    position: "fixed",
+    visibility: "hidden",
+  });
+
+  const openedOnce = useRef(false);
+  useEffect(() => {
+    if (!openedOnce.current) {
+      openedOnce.current = true;
+      return;
+    }
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
+
+  const placeMenu = useCallback(() => {
+    const button = buttonRef.current;
+    const menu = menuRef.current;
+    if (!button || !menu) return;
+    const next = actionMenuStyle(button, menu, menuAlign);
+    if (!next) {
+      setOpen(false);
+      return;
+    }
+    setMenuStyle(next);
+  }, [menuAlign]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    placeMenu();
+    const onMove = () => placeMenu();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [open, placeMenu]);
 
   useEffect(() => {
     if (!open) return;
     const handleOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [open]);
 
   const runAndClose = (fn?: () => void) => (e: React.MouseEvent) => {
@@ -345,30 +487,32 @@ export function CrmTableActionMenu({
 
   return (
     <div ref={containerRef} className={cn("crm-table-action-menu relative inline-flex", className)}>
-      <div className="group/menu relative">
-        <button
-          type="button"
-          className="crm-table-action-btn inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)]"
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen((v) => !v);
-          }}
-          aria-label="Row actions"
-        >
-          <CrmIcon.DotsVertical size={12} />
-        </button>
-        {open ? (
-          <div
-            className={cn(
-              "absolute top-full z-40 mt-1 min-w-[140px] rounded-[5px] border border-[#e2e8f0] bg-white py-1 shadow-[var(--crm-shadow-raised)]",
-              menuAlign === "left" ? "left-0" : "right-0",
-            )}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <button
+        ref={buttonRef}
+        type="button"
+        className="crm-table-action-btn inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-[5px] border border-[#e2e8f0] bg-white text-[#1f2020] shadow-[0_4px_4px_0_rgba(219,219,219,0.25)]"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        aria-label="Row actions"
+        aria-expanded={open}
+      >
+        <CrmIcon.DotsVertical size={14} />
+      </button>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              style={menuStyle}
+              className="crm-action-menu-panel overflow-x-hidden overflow-y-auto rounded-[5px] border border-[#e2e8f0] bg-white py-1 shadow-[var(--crm-shadow-raised)]"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
             {onView ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onView)}
               >
                 <CrmIcon.Eye size={13} className="text-[#2f80ed]" />
@@ -378,7 +522,7 @@ export function CrmTableActionMenu({
             {onEdit ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onEdit)}
               >
                 <CrmIcon.Pencil size={13} className="text-[#2f80ed]" />
@@ -388,7 +532,7 @@ export function CrmTableActionMenu({
             {onEmail ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onEmail)}
               >
                 <CrmIcon.Mail size={13} className="text-[#2f80ed]" />
@@ -398,7 +542,7 @@ export function CrmTableActionMenu({
             {onCall ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onCall)}
               >
                 <CrmIcon.PhoneCall size={13} className="text-[#2f80ed]" />
@@ -408,7 +552,7 @@ export function CrmTableActionMenu({
             {onWhatsApp ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onWhatsApp)}
               >
                 <CrmNavIcon.WhatsApp size={13} className="text-[#25d366]" />
@@ -418,7 +562,7 @@ export function CrmTableActionMenu({
             {onNotes ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onNotes)}
               >
                 <CrmIcon.Activity size={13} className="text-[#2f80ed]" />
@@ -428,7 +572,7 @@ export function CrmTableActionMenu({
             {onSetActivity ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onSetActivity)}
               >
                 <CrmIcon.Target size={13} className="text-[#2f80ed]" />
@@ -438,7 +582,7 @@ export function CrmTableActionMenu({
             {onCallHistory ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onCallHistory)}
               >
                 <CrmIcon.Timer size={13} className="text-[#2f80ed]" />
@@ -448,7 +592,7 @@ export function CrmTableActionMenu({
             {onAddProperty ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onAddProperty)}
               >
                 <CrmNavIcon.Building size={13} className="text-[#2f80ed]" />
@@ -458,7 +602,7 @@ export function CrmTableActionMenu({
             {onAddFarm ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onAddFarm)}
               >
                 <CrmIcon.MapPin size={13} className="text-[#2f80ed]" />
@@ -468,7 +612,7 @@ export function CrmTableActionMenu({
             {onUpdateHistory ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onUpdateHistory)}
               >
                 <CrmIcon.GitBranch size={13} className="text-[#2f80ed]" />
@@ -478,7 +622,7 @@ export function CrmTableActionMenu({
             {onReassign ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onReassign)}
               >
                 <CrmIcon.Users size={13} className="text-[#2f80ed]" />
@@ -488,7 +632,7 @@ export function CrmTableActionMenu({
             {onTransfer ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onTransfer)}
               >
                 <CrmIcon.ArrowRight size={13} className="text-[#2f80ed]" />
@@ -498,7 +642,7 @@ export function CrmTableActionMenu({
             {onClone ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onClone)}
               >
                 <CrmIcon.Copy size={13} className="text-[#2f80ed]" />
@@ -508,16 +652,17 @@ export function CrmTableActionMenu({
             {onDelete ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-[#1f2020] hover:bg-[#f7f8f9]"
                 onClick={runAndClose(onDelete)}
               >
                 <CrmIcon.Trash size={13} className="text-[#ef1e1e]" />
                 Delete
               </button>
             ) : null}
-          </div>
-        ) : null}
-      </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -585,116 +730,83 @@ export function CrmHoverActionIcon({
   );
 }
 
-const ROW_ACTIONS_LINGER_MS = 250;
+const HOVER_BLOCK_GEAR = 52;
+
+type MenuWithOpenChange = ReactElement<{ onOpenChange?: (open: boolean) => void }>;
 
 type CrmRowQuickActionsProps = {
+  /** True while this lead row is hovered (parent clears it after five seconds or on leave). */
+  active?: boolean;
+  /** Table is scrolled to the horizontal end — icons sit in the Action column instead of the hover block. */
+  pinned?: boolean;
   /** Quick icons (Call / WhatsApp / Property / Farm). */
   quick: ReactNode;
-  /** Trailing ⋮ menu — shown in the end Action column. */
+  /** ⋮ menu. Edit and the other items open only after this is clicked. */
   menu: ReactNode;
-  /** How long the mid-scroll popup stays after mouse leaves (default 250ms). */
+  /** Unused. Visibility is capped at five seconds by the parent. */
   lingerMs?: number;
+  /** Called when the pointer leaves the block without opening the menu. */
+  onDismiss?: () => void;
   className?: string;
 };
 
+function isInside(node: Node | null, el: Element | null | undefined) {
+  return Boolean(node && el && el.contains(node));
+}
+
+/** Pointer moved onto the ⋮ menu or an icon tooltip — keep the hover block up. */
+function staysWithActions(node: Node | null) {
+  if (!(node instanceof Element)) return false;
+  return Boolean(
+    node.closest(".crm-action-menu-panel") ||
+    node.closest("[data-radix-popper-content-wrapper]"),
+  );
+}
+
 /**
- * Dual mode:
- * - Scrolled to table end (Action cell in view): normal table Action column (icons + ⋮).
- * - Mid-scroll / Action off-screen: hover popup with the 4 icons only (no mid-table Action rail).
+ * Leads row actions. The parent marks the hovered row for up to five seconds.
+ * Phone, WhatsApp, property, farm, and ⋮ then float as a small block.
+ * View / Edit and the rest open only after the ⋮ is clicked.
  */
 export function CrmRowQuickActions({
+  active = false,
+  pinned = false,
   quick,
   menu,
-  lingerMs = ROW_ACTIONS_LINGER_MS,
+  onDismiss,
   className,
 }: CrmRowQuickActionsProps) {
-  const [open, setOpen] = useState(false);
-  const [atEnd, setAtEnd] = useState(true);
-  const [popupStyle, setPopupStyle] = useState<CSSProperties | null>(null);
-  const hideTimerRef = useRef<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [blockStyle, setBlockStyle] = useState<CSSProperties | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const shown = !pinned && (active || menuOpen);
 
-  const clearHideTimer = useCallback(() => {
-    if (hideTimerRef.current != null) {
-      window.clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
-  }, []);
-
-  const show = useCallback(() => {
-    clearHideTimer();
-    setOpen(true);
-  }, [clearHideTimer]);
-
-  const scheduleHide = useCallback(() => {
-    clearHideTimer();
-    hideTimerRef.current = window.setTimeout(() => {
-      setOpen(false);
-      hideTimerRef.current = null;
-    }, lingerMs);
-  }, [clearHideTimer, lingerMs]);
-
-  useEffect(() => () => clearHideTimer(), [clearHideTimer]);
-
-  // Detect whether the Action cell is visible in the scroll viewport (table end).
-  useEffect(() => {
-    const root = rootRef.current;
-    const cell = root?.closest("td");
-    const scrollRoot = root?.closest(".crm-table-scroll") as HTMLElement | null;
-    if (!cell || !scrollRoot) return;
-
-    const update = (entry?: IntersectionObserverEntry) => {
-      if (entry) {
-        setAtEnd(entry.isIntersecting && entry.intersectionRatio >= 0.55);
-        return;
-      }
-      const cellRect = cell.getBoundingClientRect();
-      const rootRect = scrollRoot.getBoundingClientRect();
-      const visible =
-        cellRect.left < rootRect.right - 8 &&
-        cellRect.right > rootRect.left + 8 &&
-        cellRect.width > 0;
-      const mostlyVisible = visible && cellRect.left >= rootRect.left - 4;
-      setAtEnd(mostlyVisible);
-    };
-
-    const observer = new IntersectionObserver(
-      ([entry]) => update(entry),
-      { root: scrollRoot, threshold: [0, 0.25, 0.5, 0.55, 0.75, 1] },
-    );
-    observer.observe(cell);
-    update();
-    return () => observer.disconnect();
-  }, []);
-
-  // Position fixed popup against the visible right edge of the scroll area.
-  const syncPopupPosition = useCallback(() => {
-    const root = rootRef.current;
-    const row = root?.closest("tr");
-    const scrollRoot = root?.closest(".crm-table-scroll") as HTMLElement | null;
-    if (!row || !scrollRoot) {
-      setPopupStyle(null);
-      return;
-    }
+  const placeBlock = useCallback(() => {
+    const row = rootRef.current?.closest("tr");
+    if (!row) return;
     const rowRect = row.getBoundingClientRect();
-    const scrollRect = scrollRoot.getBoundingClientRect();
-    setPopupStyle({
+    if (rowRect.height < 2) return;
+    const scrollRoot = row.closest(".crm-table-scroll");
+    const scrollRight = scrollRoot?.getBoundingClientRect().right ?? window.innerWidth;
+    const right = Math.max(HOVER_BLOCK_GEAR + 8, window.innerWidth - Math.min(scrollRight, window.innerWidth) + 8);
+    setBlockStyle({
       position: "fixed",
       top: rowRect.top + rowRect.height / 2,
-      right: Math.max(12, window.innerWidth - scrollRect.right + 12),
+      right,
       transform: "translateY(-50%)",
-      zIndex: 40,
+      zIndex: 250,
     });
   }, []);
 
+  const handleMenuOpenChange = useCallback((next: boolean) => {
+    setMenuOpen(next);
+  }, []);
+
   useLayoutEffect(() => {
-    if (atEnd || !open) {
-      setPopupStyle(null);
-      return;
-    }
-    syncPopupPosition();
+    if (!shown) return;
+    placeBlock();
     const scrollRoot = rootRef.current?.closest(".crm-table-scroll");
-    const onMove = () => syncPopupPosition();
+    const onMove = () => placeBlock();
     scrollRoot?.addEventListener("scroll", onMove, { passive: true });
     window.addEventListener("resize", onMove);
     window.addEventListener("scroll", onMove, true);
@@ -703,68 +815,41 @@ export function CrmRowQuickActions({
       window.removeEventListener("resize", onMove);
       window.removeEventListener("scroll", onMove, true);
     };
-  }, [atEnd, open, syncPopupPosition]);
+  }, [placeBlock, shown]);
 
-  useEffect(() => {
-    const cell = rootRef.current;
-    const row = cell?.closest("tr");
-    if (!row) return;
+  const menuNode = isValidElement(menu)
+    ? cloneElement(menu as MenuWithOpenChange, { onOpenChange: handleMenuOpenChange })
+    : menu;
 
-    const onEnter = () => show();
-    const onLeave = (e: MouseEvent) => {
-      const next = e.relatedTarget as Node | null;
-      if (next && row.contains(next)) return;
-      // Keep open while moving onto the portaled popup
-      if (next && (next as Element).closest?.(".crm-row-actions__viewport-popup")) return;
-      scheduleHide();
-    };
-
-    row.addEventListener("mouseenter", onEnter);
-    row.addEventListener("mouseleave", onLeave);
-    return () => {
-      row.removeEventListener("mouseenter", onEnter);
-      row.removeEventListener("mouseleave", onLeave);
-    };
-  }, [show, scheduleHide]);
-
-  useEffect(() => {
-    const row = rootRef.current?.closest("tr");
-    if (!row) return;
-    row.classList.toggle("crm-row-actions-open", open && !atEnd);
-  }, [open, atEnd]);
+  const cluster = (
+    <>
+      <div className="crm-row-actions__inline">{quick}</div>
+      <div className="crm-row-actions__menu shrink-0">{menuNode}</div>
+    </>
+  );
 
   return (
-    <div
-      ref={rootRef}
-      className={cn(
-        "crm-row-actions inline-flex items-center justify-end gap-1",
-        atEnd ? "crm-row-actions--end" : "crm-row-actions--hover",
-        className,
-      )}
-      onClick={(e) => e.stopPropagation()}
-      onMouseEnter={show}
-      onMouseLeave={scheduleHide}
-    >
-      {/* End-of-table: icons live in the Action column */}
-      {atEnd ? <div className="crm-row-actions__inline">{quick}</div> : null}
-
-      {/* Mid-scroll: icons only as a hover popup */}
-      {!atEnd && open && popupStyle && typeof document !== "undefined"
+    <div ref={rootRef} className={cn("crm-row-actions crm-row-actions--pinned", className)} onClick={(e) => e.stopPropagation()}>
+      {cluster}
+      {!pinned && shown && blockStyle && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="crm-row-actions__viewport-popup"
-              style={popupStyle}
-              onMouseEnter={show}
-              onMouseLeave={scheduleHide}
+              className="crm-row-actions__hover-block"
+              style={blockStyle}
+              onMouseLeave={(e) => {
+                if (menuOpen) return;
+                const next = e.relatedTarget as Node | null;
+                const row = rootRef.current?.closest("tr");
+                if (isInside(next, row) || staysWithActions(next)) return;
+                onDismiss?.();
+              }}
               onClick={(e) => e.stopPropagation()}
             >
-              {quick}
+              {cluster}
             </div>,
             document.body,
           )
         : null}
-
-      <div className="crm-row-actions__menu shrink-0">{menu}</div>
     </div>
   );
 }

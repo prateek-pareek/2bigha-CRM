@@ -1,11 +1,12 @@
 "use client";
 
-import { X, Search, Filter } from "lucide-react";
+import { X, Filter } from "lucide-react";
 import { useState, useMemo } from "react";
 import CRMDateRangePicker from "@/components/crm/CRMDateRangePicker";
 
 export type AdvancedAgentFilter = {
-  dateRange: "today" | "this_week" | "this_month" | "custom";
+  /** Preset key (`this_month`, `all_time`, …) or `custom` with start/end dates. */
+  dateRange: string;
   customDateStart?: string;
   customDateEnd?: string;
   selectedAgents: string[];
@@ -68,34 +69,28 @@ export default function AdvancedReportFilters({
     filter.dateRange !== "this_month",
   ].filter(Boolean).length;
 
-  const handleDateRangeChange = (range: { from: string; to: string } | null) => {
-    if (!range) {
-      onFilterChange({ ...filter, dateRange: "this_month", customDateStart: undefined, customDateEnd: undefined });
-      return;
-    }
-    // Check if the range matches a standard preset exactly
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    
-    if (range.from === today && range.to === today) {
-      onFilterChange({ ...filter, dateRange: "today", customDateStart: undefined, customDateEnd: undefined });
-      return;
-    }
+  const dateWindow =
+    filter.dateRange === "custom" && filter.customDateStart && filter.customDateEnd
+      ? `${filter.customDateStart},${filter.customDateEnd}`
+      : filter.dateRange;
 
-    onFilterChange({ 
-      ...filter, 
-      dateRange: "custom", 
-      customDateStart: range.from, 
-      customDateEnd: range.to 
+  const handleWindowChange = (windowKey: string) => {
+    if (windowKey.includes(",")) {
+      const [from, to] = windowKey.split(",", 2);
+      onFilterChange({
+        ...filter,
+        dateRange: "custom",
+        customDateStart: from,
+        customDateEnd: to,
+      });
+      return;
+    }
+    onFilterChange({
+      ...filter,
+      dateRange: windowKey,
+      customDateStart: undefined,
+      customDateEnd: undefined,
     });
-  };
-
-  const getInitialLabel = () => {
-    if (filter.dateRange === "today") return "Today";
-    if (filter.dateRange === "this_week") return "This Week";
-    if (filter.dateRange === "this_month") return "This Month";
-    if (filter.dateRange === "custom" && filter.customDateStart) return `${filter.customDateStart} - ${filter.customDateEnd}`;
-    return "This Month";
   };
 
   return (
@@ -105,10 +100,10 @@ export default function AdvancedReportFilters({
         <span className="text-sm font-bold text-[var(--text-main)]">Filters</span>
       </div>
 
-      <CRMDateRangePicker 
-        initialLabel={getInitialLabel()} 
-        onChange={handleDateRangeChange}
-        className="z-50" 
+      <CRMDateRangePicker
+        value={dateWindow}
+        onWindowChange={handleWindowChange}
+        className="z-50"
       />
 
       {/* Agents Dropdown */}
@@ -201,22 +196,11 @@ export default function AdvancedReportFilters({
         </div>
       </div>
 
-      {/* Name Search */}
-      <div className="relative ml-auto hidden sm:block">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-        <input
-          type="text"
-          placeholder="Search agents..."
-          value={filter.searchTerm || ""}
-          onChange={(e) => onFilterChange({ ...filter, searchTerm: e.target.value })}
-          className="h-10 w-48 rounded-[3px] border border-[var(--border-color)] bg-[var(--surface-dim)] pl-8 pr-3 text-sm text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all"
-        />
-      </div>
-
+      {/* Name search lives in the page header (see page.tsx). */}
       {activeFilterCount > 0 && (
         <button
           onClick={onClearFilters}
-          className="h-10 flex items-center gap-1 px-3 ml-2 rounded-[3px] hover:bg-red-500/10 text-red-500 text-sm font-bold transition-colors"
+          className="h-10 flex items-center gap-1 px-3 ml-auto rounded-[3px] hover:bg-red-500/10 text-red-500 text-sm font-bold transition-colors"
         >
           <X size={14} /> Clear {activeFilterCount > 1 ? `(${activeFilterCount})` : ""}
         </button>
