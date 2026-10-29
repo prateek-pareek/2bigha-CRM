@@ -750,7 +750,9 @@ export default function ContactsPage() {
           onItemClick={(contact) => router.push(`/crm/contacts/${contact._id}`)}
         />
       ) : viewMode === 'grid' ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          {/* Cards scroll inside the page; pagination stays pinned below. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-0.5 custom-scrollbar">
           {loading ? (
             <CrmRecordCardSkeleton />
           ) : paginated.length === 0 ? (
@@ -822,6 +824,7 @@ export default function ContactsPage() {
               })}
             </CrmRecordCardGrid>
           )}
+          </div>
           <Pagination
             total={displayedTotal}
             page={page}
