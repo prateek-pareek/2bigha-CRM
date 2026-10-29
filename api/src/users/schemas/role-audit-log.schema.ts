@@ -24,6 +24,11 @@ export class RoleAuditLog {
       'role_deleted',
       'user_role_assigned',
       'ownership_changed',
+      'user_created',
+      'user_updated',
+      'user_deleted',
+      'user_invited',
+      'permission_created',
     ],
     index: true,
   })

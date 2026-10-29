@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import {
   getStoredUser,
   canManageCustomRoles,
+  isAdmin as isAdminUser,
 } from "@/lib/suite/auth";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   CRM_MODULE_EXTRA_PERMS,
   CRM_PERMISSION_MODULES,
@@ -66,6 +68,9 @@ const CRM_PM_ACTION_LABEL: Record<CrmPmAction, string> = {
   delete: "Delete",
 };
 
+/** Only an Admin may grant or remove these (enforced again by the API). */
+const ADMIN_ONLY_MODULES = new Set(["settings", "settings-users", "settings-roles", "settings-access-log"]);
+
 const CRM_MODULES = CRM_PERMISSION_MODULES.map((m) => ({
   id: m.id,
   label: m.label,
@@ -73,7 +78,9 @@ const CRM_MODULES = CRM_PERMISSION_MODULES.map((m) => ({
 
 export function CrmRolesSettings() {
   const user = getStoredUser();
-  const canManage = canManageCustomRoles(user);
+  const { hasAccess } = usePermissions();
+  const isAdmin = isAdminUser(user);
+  const canManage = canManageCustomRoles(user) || hasAccess("settings-roles:read");
   const [roles, setRoles] = useState<RoleDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -427,6 +434,7 @@ export function CrmRolesSettings() {
           {activeTab === "crm" && (
             <div className="space-y-2">
               {CRM_MODULES.map((mod) => {
+                const locked = ADMIN_ONLY_MODULES.has(mod.id) && !isAdmin;
                 const hasAny =
                   CRM_PM_ACTIONS.some((a) =>
                     form.crmPermissions.includes(`${mod.id}:${a}`),
@@ -439,10 +447,11 @@ export function CrmRolesSettings() {
                     key={mod.id}
                     className={`rounded-lg border p-3 ${
                       hasAny ? "border-primary/40 bg-primary-light/20" : "border-border"
-                    }`}
+                    } ${locked ? "pointer-events-none opacity-60" : ""}`}
+                    title={locked ? "Only an Admin can change this access" : undefined}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-text-main">{mod.label}</span>
+                      <span className="text-sm font-medium text-text-main">{mod.label}{ADMIN_ONLY_MODULES.has(mod.id) ? " (Admin only)" : ""}</span>
                       <div className="flex gap-1">
                         <button
                           type="button"

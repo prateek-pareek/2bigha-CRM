@@ -39,6 +39,11 @@ import {
   hasCrmAdminJwtBypass,
 } from '../shared/crm-admin-access.util';
 import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
+import {
+  LeadImportAssignment,
+  parseLeadImportAssignment,
+} from '../shared/lead-import-assignment.util';
+import type { LeadVertical } from '../shared/lead-import-normalize.util';
 
 @Controller('crm')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -843,7 +848,45 @@ export class CRMController {
     @Body('mapping') mappingJson?: string,
     @Body('duplicateStrategy') duplicateStrategy?: string,
     @Body('leadVertical') leadVertical?: string,
+    @Body('assignment') assignmentJson?: string,
     @Request() req?: any,
+  ) {
+    const opts = this.parseLeadImportRequest(file, mappingJson, leadVertical, assignmentJson);
+    return this.crmService.startImportFromExcel(
+      type,
+      file.buffer,
+      opts.mapping,
+      req?.user,
+      duplicateStrategy,
+      { defaultLeadVertical: opts.defaultLeadVertical, assignment: opts.assignment },
+    );
+  }
+
+  /** Dry-run: what an import with these options would do (new / duplicate / blocked / owner), no writes. */
+  @Post('import/leads/dry-run')
+  @Permissions('admin:manage', 'leads:import', 'leads:write', 'pm-leads:import', 'pm-leads:write')
+  @UseInterceptors(FileInterceptor('file'))
+  async previewLeadImport(
+    @UploadedFile() file: any,
+    @Body('mapping') mappingJson?: string,
+    @Body('duplicateStrategy') duplicateStrategy?: string,
+    @Body('leadVertical') leadVertical?: string,
+    @Body('assignment') assignmentJson?: string,
+    @Request() req?: any,
+  ) {
+    const opts = this.parseLeadImportRequest(file, mappingJson, leadVertical, assignmentJson);
+    return this.crmService.previewLeadImport(file.buffer, opts.mapping, req?.user, {
+      duplicateStrategy,
+      assignment: opts.assignment,
+      defaultLeadVertical: opts.defaultLeadVertical,
+    });
+  }
+
+  private parseLeadImportRequest(
+    file: any,
+    mappingJson?: string,
+    leadVertical?: string,
+    assignmentJson?: string,
   ) {
     if (!file?.buffer) {
       throw new BadRequestException('Upload a CSV or Excel file to import');
@@ -855,18 +898,17 @@ export class CRMController {
       throw new BadRequestException('Invalid column mapping');
     }
     // Blank "Lead Vertical" cells default to the board the import was started from.
-    const defaultLeadVertical =
+    const defaultLeadVertical: LeadVertical | undefined =
       leadVertical === 'property_management' || leadVertical === 'property_listing'
         ? leadVertical
         : undefined;
-    return this.crmService.startImportFromExcel(
-      type,
-      file.buffer,
-      mapping,
-      req?.user,
-      duplicateStrategy,
-      { defaultLeadVertical },
-    );
+    let assignment: LeadImportAssignment | undefined;
+    try {
+      assignment = parseLeadImportAssignment(assignmentJson);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+    return { mapping, defaultLeadVertical, assignment };
   }
 
   @Get('import/jobs/:jobId')
@@ -905,6 +947,8 @@ export class CRMController {
     body: {
       ownerName?: string;
       ids?: string[];
+      /** Assign every lead of one bulk import (the job id) instead of picking ids. */
+      importBatchId?: string;
     },
     @Request() req: any,
   ) {
@@ -912,6 +956,7 @@ export class CRMController {
       {
         ownerName: body?.ownerName,
         ids: body?.ids,
+        importBatchId: body?.importBatchId,
       },
       req.user,
     );
@@ -1072,6 +1117,14 @@ export class CRMController {
 
   // --- ROLE-BASED DASHBOARDS (CRM Role Dashboard Wireframe) ---
 
+  private parseIds(raw?: string): string[] {
+    return String(raw || '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 200);
+  }
+
   private isCallerAdmin(req: any): boolean {
     return (
       hasCrmAdminJwtBypass(req.user) || hasCrmAdminFromDbUser(req.crmDbUser)
@@ -1098,8 +1151,9 @@ export class CRMController {
   async getAdminDashboardMetrics(
     @Query('window') window: string = 'this_month',
     @Query('team') team?: string,
+    @Query('agents') agents?: string,
   ) {
-    return this.roleDashboardService.getAdminDashboard(window, team);
+    return this.roleDashboardService.getAdminDashboard(window, team, this.parseIds(agents));
   }
 
   /** Team-lead picker for the Admin (anyone with direct reports). */
@@ -1133,10 +1187,11 @@ export class CRMController {
     @Request() req: any,
     @Query('window') window: string = 'this_month',
     @Query('teamLead') teamLead?: string,
+    @Query('agents') agents?: string,
   ) {
     const self = String(req.user?.userId || req.user?._id || '');
     const teamLeadId = this.isCallerAdmin(req) && teamLead ? teamLead : self;
-    return this.roleDashboardService.getTeamDashboard(window, teamLeadId);
+    return this.roleDashboardService.getTeamDashboard(window, teamLeadId, this.parseIds(agents));
   }
 
   /**

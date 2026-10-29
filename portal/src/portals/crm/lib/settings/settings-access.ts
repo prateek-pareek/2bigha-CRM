@@ -22,8 +22,9 @@ export const CRM_SETTINGS_ITEMS: CrmSettingsItem[] = [
   { name: "Columns", href: "/crm/settings/columns", requiredPermission: "settings-columns:read" },
   { name: "Card Customizations", href: "/crm/settings/card-customization", requiredPermission: "settings-card-customization:read" },
   { name: "Currency", href: "/crm/settings/currency", requiredPermission: "settings-currency:read", superAdminOnly: true },
-  { name: "Users", href: "/crm/settings/users", requiredPermission: "settings:admin" },
-  { name: "Roles", href: "/crm/settings/roles", requiredPermission: "settings:admin" },
+  { name: "Users", href: "/crm/settings/users", requiredPermission: "settings-users:read" },
+  { name: "Roles", href: "/crm/settings/roles", requiredPermission: "settings-roles:read" },
+  { name: "Access Activity Log", href: "/crm/settings/access-log", requiredPermission: "settings-access-log:read" },
   { name: "Notifications & reminders", href: "/crm/settings/notifications", requiredPermission: "dashboard:read" },
   { name: "Integrations", href: "/crm/settings/integrations", requiredPermission: "settings-integrations:read" },
   { name: "2bigha platform sync", href: "/crm/settings/users?tab=twobigha-sync", requiredPermission: "settings:admin" },
@@ -35,11 +36,15 @@ export const CRM_SETTINGS_ITEMS: CrmSettingsItem[] = [
   { name: "Export History", href: "/crm/settings/export-history", requiredPermission: "admin:manage" },
 ];
 
+const EXCLUSIVE_SETTINGS_PERMISSIONS = new Set(["settings-access-log:read", "settings-users:read", "settings-roles:read"]);
+
 export function canAccessCrmSetting(
   hasAccess: (permission: string) => boolean,
   requiredPermission: string,
   opts?: { canViewCrmRevenue?: boolean; superAdminOnly?: boolean },
 ): boolean {
   if (opts?.superAdminOnly && !opts.canViewCrmRevenue) return false;
+  // Exclusive: the blanket settings:read must not expose who-changed-what; it needs an explicit ACL grant.
+  if (EXCLUSIVE_SETTINGS_PERMISSIONS.has(requiredPermission)) return hasAccess(requiredPermission);
   return hasAccess("settings:read") || hasAccess(requiredPermission);
 }

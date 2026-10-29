@@ -7,7 +7,7 @@
 export const suiteSidebarChrome = {
   rail: "suite-jira-sidebar suite-sidebar-rail",
   brand: "suite-sidebar-brand",
-  nav: "suite-sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 py-3",
+  nav: "suite-sidebar-nav min-h-0 flex-1 overflow-y-auto px-2 py-3",
   navProductLabel:
     "suite-sidebar-product-label mb-2 px-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted,#6b7280)]",
   navSection: "mb-1",

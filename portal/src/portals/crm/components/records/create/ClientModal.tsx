@@ -481,6 +481,18 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
                 />
               </div>
             </div>
+            <div>
+              <label className={LBL}>Status</label>
+              <select
+                className={SEL}
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="prospective">Prospective</option>
+              </select>
+            </div>
             <div className="sm:col-span-2">
               <CrmMultiEmailListField
                 key={`addl-${client?._id || "new"}-${(client?.additionalEmails || []).join(",")}`}

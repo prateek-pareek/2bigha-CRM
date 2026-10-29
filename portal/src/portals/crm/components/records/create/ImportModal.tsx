@@ -12,6 +12,13 @@ import { crmModalChrome } from '@/lib/crm/chrome';
 import { CrmButton } from '@/components/crm/ui';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import ImportAssignmentPanel, {
+  DEFAULT_IMPORT_ASSIGNMENT,
+  importAssignmentPayload,
+  importAssignmentProblem,
+  type ImportAssignmentValue,
+} from './ImportAssignmentPanel';
+import ImportDryRunCard from './ImportDryRunCard';
 import * as XLSX from 'xlsx';
 import { useCrmImportStore } from '@/stores/crmImportStore';
 import type { CrmImportEntityType } from '@/stores/crmImportStore';
@@ -340,6 +347,9 @@ function downloadClientsCsvTemplate() {
   downloadCsvTemplate(CLIENTS_TEMPLATE_HEADERS, CLIENTS_TEMPLATE_EXAMPLE, 'clients-import-template.csv');
 }
 
+/** Comparable form of a "Planning To Buy Land" value: "3-6 Months", "3–6_months" and "3 6 months" all match. */
+const planKey = (v: unknown) => String(v ?? '').toUpperCase().replace(/[\s_\-–—]+/g, '');
+
 export interface ParsedValidationRow {
   index: number;
   original: Record<string, any>;
@@ -363,6 +373,10 @@ export interface ImportSummaryData {
   skippedRows: { rowNumber: number; rowData?: any; reason: string }[];
   invalidRows: { rowNumber: number; rowData?: any; errors: string[] }[];
   error?: string;
+  /** Leads: how many imported/reassigned leads each owner received. */
+  assignedCounts?: Record<string, number>;
+  reassignedCount?: number;
+  batchId?: string;
 }
 
 export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVertical: defaultLeadVertical }: ImportModalProps) {
@@ -376,6 +390,20 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
 
   const [customMappings, setCustomMappings] = useState<{ id: string; label: string; column: string }[]>([]);
   const [duplicateStrategy, setDuplicateStrategy] = useState<ImportDuplicateStrategy>('merge');
+  const [assignment, setAssignment] = useState<ImportAssignmentValue>(DEFAULT_IMPORT_ASSIGNMENT);
+  const ownerAutoPicked = useRef(false);
+
+  // "Use owner column" only makes sense while a column is mapped to Lead Owner: pick it once
+  // when the file brings one, and fall back to "me" if the mapping is removed again.
+  const leadOwnerColumn = type === 'leads' ? mapping.leadOwner : undefined;
+  useEffect(() => {
+    if (leadOwnerColumn && !ownerAutoPicked.current) {
+      ownerAutoPicked.current = true;
+      setAssignment((a) => (a.mode === 'self' ? { ...a, mode: 'file' } : a));
+    } else if (!leadOwnerColumn) {
+      setAssignment((a) => (a.mode === 'file' ? { ...a, mode: 'self' } : a));
+    }
+  }, [leadOwnerColumn]);
   const [creatingCustomFields, setCreatingCustomFields] = useState(false);
 
   const [parsedRows, setParsedRows] = useState<Record<string, any>[]>([]);
@@ -479,6 +507,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
     if (!isOpen) {
       setStep('upload');
       setFile(null);
+      setAssignment(DEFAULT_IMPORT_ASSIGNMENT);
+      ownerAutoPicked.current = false;
       setHeaders([]);
       setMapping({});
       setCustomMappings([]);
@@ -781,12 +811,12 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
 
         // 10. Planning To Buy Land (Requirement 4 & 6.10)
         if (planningToBuyLand) {
-          const normPlan = planningToBuyLand.toUpperCase().replace(/[\s_-]+/g, ' ').trim();
+          const normPlan = planKey(planningToBuyLand);
           const allowedPlans = [
             'JUST EXPLORING', 'WITHIN 1 MONTH', '1–3 MONTHS', '1-3 MONTHS', '3–6 MONTHS', '3-6 MONTHS',
             'JUST_EXPLORING', 'WITHIN_1_MONTH', '1–3_MONTHS', '1-3_MONTHS', '3–6_MONTHS', '3-6_MONTHS'
           ];
-          if (!allowedPlans.includes(normPlan)) {
+          if (!allowedPlans.map(planKey).includes(normPlan)) {
             errors.push(`Invalid Planning To Buy Land "${planningToBuyLand}"`);
           }
         }
@@ -911,6 +941,13 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
     setValidationRows(newValidation);
   };
 
+  // Validation results are derived from the rows + mapping, so refresh them whenever the
+  // preview step is open and its rules/inputs change (never show a stale "Invalid" flag).
+  useEffect(() => {
+    if (step === 'validate') setValidationRows(runValidation());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, parsedRows, mapping, customMappings, picklistLeadCategories]);
+
   const handleGoToValidation = () => {
     const results = runValidation();
     setValidationRows(results);
@@ -967,6 +1004,27 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
     toast.success('Downloaded import issues report (.xlsx)');
   };
 
+  /** The cleaned, mapped rows as an .xlsx — what both the real import and the dry-run upload. */
+  const buildUploadFile = (importOnlyValid: boolean): File => {
+    const rows = (importOnlyValid ? validationRows.filter((r) => r.isValid) : validationRows).map((r) => {
+      const rowCopy = { ...r.original };
+      Object.entries(mapping).forEach(([crmKey, fileCol]) => {
+        if (fileCol && r.mapped[crmKey] !== undefined) {
+          rowCopy[fileCol] = r.mapped[crmKey];
+        }
+      });
+      return rowCopy;
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ImportData');
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const baseName = file?.name || 'import.xlsx';
+    return new File([wbout], importOnlyValid ? baseName.replace(/\.[^/.]+$/, '') + '_valid.xlsx' : baseName, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+  };
+
   const handleImport = async (importOnlyValid: boolean = false) => {
     if (!file) return;
     setUploading(true);
@@ -983,43 +1041,12 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
         errors: r.errors,
       }));
 
-    const getNormalizedRowData = (r: ParsedValidationRow) => {
-      const rowCopy = { ...r.original };
-      Object.entries(mapping).forEach(([crmKey, fileCol]) => {
-        if (fileCol && r.mapped[crmKey] !== undefined) {
-          rowCopy[fileCol] = r.mapped[crmKey];
-        }
-      });
-      return rowCopy;
-    };
-
-    let fileToSend: File = file;
-    if (importOnlyValid) {
-      const validRawRows = validationRows.filter((r) => r.isValid).map((r) => getNormalizedRowData(r));
-      if (validRawRows.length === 0) {
-        setError('No valid rows to import.');
-        setUploading(false);
-        return;
-      }
-      const ws = XLSX.utils.json_to_sheet(validRawRows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'ImportData');
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      fileToSend = new File([wbout], file.name.replace(/\.[^/.]+$/, '') + '_valid.xlsx', {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-    } else {
-      const allRawRows = validationRows.map((r) => getNormalizedRowData(r));
-      const ws = XLSX.utils.json_to_sheet(allRawRows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'ImportData');
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      fileToSend = new File([wbout], file.name, {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
+    if (importOnlyValid && !validationRows.some((r) => r.isValid)) {
+      setError('No valid rows to import.');
+      setUploading(false);
+      return;
     }
-
-    formData.append('file', fileToSend);
+    formData.append('file', buildUploadFile(importOnlyValid));
 
     const finalMapping = { ...mapping };
     for (const cm of customMappings) {
@@ -1049,6 +1076,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
     formData.append('duplicateStrategy', duplicateStrategy);
     if (type === 'leads' && defaultLeadVertical) {
       formData.append('leadVertical', defaultLeadVertical);
+    }
+    if (type === 'leads') {
+      formData.append('assignment', importAssignmentPayload(assignment));
     }
 
     setStep('summary');
@@ -1108,6 +1138,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                 skippedRows: job.skippedRows ?? [],
                 invalidRows: importOnlyValid ? invalidRowsList : [],
                 error: job.error,
+                assignedCounts: job.assignedCounts,
+                reassignedCount: job.reassignedCount,
+                batchId: job.batchId,
               });
 
               if (job.status === 'completed' || job.status === 'failed') {
@@ -1149,6 +1182,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
   );
   const hasDuplicateMapping = duplicateMappedColumns.size > 0;
 
+  const ownerColumnMapped = !!mapping.leadOwner;
+  const assignmentProblem = type === 'leads' ? importAssignmentProblem(assignment) : null;
+
   const validCount = validationRows.filter((r) => r.isValid).length;
   const invalidCount = validationRows.filter((r) => !r.isValid).length;
 
@@ -1163,7 +1199,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
     <CrmJiraPortal>
       <div className={`${crmModalChrome.overlay} flex items-center justify-center p-3 sm:p-6`}>
         <div className={crmModalChrome.backdrop} onClick={onClose} />
-        <div className={`${crmModalChrome.centerShell} max-w-4xl w-full h-[88vh] max-h-[54rem] crm-modal flex flex-col shadow-2xl rounded-2xl overflow-hidden bg-white border border-slate-200/80`}>
+        <div className={`${crmModalChrome.centerShell} max-w-6xl w-full h-[90vh] max-h-[56rem] crm-modal flex flex-col shadow-2xl rounded-2xl overflow-hidden bg-white border border-slate-200/80`}>
           
           {/* Header with Integrated Stepper */}
           <div className="px-6 py-4 border-b border-slate-200/80 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
@@ -1421,6 +1457,14 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                   </div>
                 </div>
 
+                {type === 'leads' && (
+                  <ImportAssignmentPanel
+                    value={assignment}
+                    onChange={setAssignment}
+                    ownerColumnMapped={ownerColumnMapped}
+                  />
+                )}
+
                 {/* Mapping Table */}
                 <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-xs">
                   <div className="px-5 py-3 border-b border-slate-200/80 bg-slate-50/80 flex items-center justify-between">
@@ -1564,7 +1608,22 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
             {/* STEP 3: PREVIEW & VALIDATION */}
             {step === 'validate' && (
               <div className="space-y-5 animate-in fade-in duration-300">
-                
+                {assignmentProblem && (
+                  <p className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                    <AlertCircle size={14} /> {assignmentProblem} Go back to Field Mapping to fix the assignment.
+                  </p>
+                )}
+                {type === 'leads' && validCount > 0 && (
+                  <ImportDryRunCard
+                    buildFile={() => buildUploadFile(false)}
+                    mapping={mapping}
+                    duplicateStrategy={duplicateStrategy}
+                    assignmentJson={importAssignmentPayload(assignment)}
+                    leadVertical={defaultLeadVertical}
+                    disabled={!!assignmentProblem}
+                  />
+                )}
+
                 {/* Metric Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="p-4 bg-white rounded-xl border border-slate-200/80 shadow-xs flex items-center gap-3">
@@ -1654,7 +1713,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                 <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-xs">
                   <div className="max-h-[380px] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50/90 border-b border-slate-200 sticky top-0 backdrop-blur-xs z-10">
+                      <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226_232_240)]">
                         <tr>
                           <th className="px-3 py-3 font-bold text-slate-500 w-10 text-center">#</th>
                           <th className="px-3 py-3 font-bold text-slate-500 w-20">Status</th>
@@ -1764,24 +1823,27 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-3 py-2.5">
+                                  <td className="px-3 py-2.5 min-w-[300px]">
                                     {row.isValid ? (
                                       <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
                                         <Check size={12} /> Ready
                                       </span>
                                     ) : (
-                                      <div className="flex flex-wrap gap-1">
-                                        {row.errors.map((err, i) => (
+                                      <div className="flex flex-col items-start gap-1">
+                                        {row.errors.slice(0, 2).map((err, i) => (
                                           <button
                                             key={i}
                                             type="button"
                                             onClick={() => setEditingRowIndex(row.index - 1)}
-                                            className="text-[10px] font-bold bg-rose-100 hover:bg-rose-200 text-rose-700 px-1.5 py-0.5 rounded transition-colors text-left cursor-pointer"
-                                            title="Click to fix issue"
+                                            className="max-w-[320px] line-clamp-2 break-words text-left text-[11px] leading-snug font-bold bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded-md transition-colors cursor-pointer"
+                                            title={`${err} — click to fix`}
                                           >
                                             {err} ✎
                                           </button>
                                         ))}
+                                        {row.errors.length > 2 && (
+                                          <span className="text-[10px] font-bold text-rose-500">+{row.errors.length - 2} more — click Fix</span>
+                                        )}
                                       </div>
                                     )}
                                   </td>
@@ -1809,23 +1871,27 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                                   <td className="px-4 py-2.5 text-slate-700 font-medium">
                                     {row.mapped.email || row.mapped.mobileNo || row.mapped.phone || '—'}
                                   </td>
-                                  <td className="px-4 py-2.5">
+                                  <td className="px-4 py-2.5 min-w-[300px]">
                                     {row.isValid ? (
                                       <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
                                         <Check size={12} /> Ready
                                       </span>
                                     ) : (
-                                      <div className="flex flex-wrap gap-1">
-                                        {row.errors.map((err, i) => (
+                                      <div className="flex flex-col items-start gap-1">
+                                        {row.errors.slice(0, 2).map((err, i) => (
                                           <button
                                             key={i}
                                             type="button"
                                             onClick={() => setEditingRowIndex(row.index - 1)}
-                                            className="text-[10px] font-bold bg-rose-100 hover:bg-rose-200 text-rose-700 px-1.5 py-0.5 rounded"
+                                            className="max-w-[320px] line-clamp-2 break-words text-left text-[11px] leading-snug font-bold bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded-md"
+                                            title={`${err} — click to fix`}
                                           >
                                             {err} ✎
                                           </button>
                                         ))}
+                                        {row.errors.length > 2 && (
+                                          <span className="text-[10px] font-bold text-rose-500">+{row.errors.length - 2} more — click Fix</span>
+                                        )}
                                       </div>
                                     )}
                                   </td>
@@ -2260,8 +2326,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
 
                               {(() => {
                                 const allowedPlans = ['Just Exploring', 'Within 1 Month', '1–3 Months', '3–6 Months'];
-                                const normPlan = currentMapped.planningToBuyLand ? currentMapped.planningToBuyLand.toUpperCase().replace(/[\s_-]+/g, ' ').trim() : '';
-                                const matchPlan = allowedPlans.find(p => p.toUpperCase().replace(/[\s_-]+/g, ' ').trim() === normPlan);
+                                const normPlan = planKey(currentMapped.planningToBuyLand);
+                                const matchPlan = allowedPlans.find(p => planKey(p) === normPlan);
                                 const isAllowed = !currentMapped.planningToBuyLand || !!matchPlan;
                                 const hasPlanError = currentRow.errors.some((err) => err.toLowerCase().includes('planning to buy land'));
 
@@ -2456,6 +2522,25 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
             {/* STEP 4: SUMMARY */}
             {step === 'summary' && (
               <div className="space-y-6 animate-in fade-in duration-300">
+                {summaryData?.status === 'completed' && Object.keys(summaryData.assignedCounts ?? {}).length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+                    <p className="text-xs font-bold text-slate-800">
+                      Lead assignment
+                      {(summaryData.reassignedCount ?? 0) > 0 && (
+                        <span className="ml-2 font-medium text-slate-500">
+                          ({summaryData.reassignedCount} existing duplicate(s) moved)
+                        </span>
+                      )}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {Object.entries(summaryData.assignedCounts ?? {}).map(([owner, n]) => (
+                        <span key={owner} className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                          {owner}: {n}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {summaryData?.status === 'processing' ? (
                   <div className="p-10 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col items-center justify-center text-center max-w-lg mx-auto space-y-4">
                     <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary animate-pulse">
@@ -2809,14 +2894,14 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                       <CrmButton
                         variant="secondary"
                         onClick={() => handleImport(false)}
-                        disabled={uploading}
+                        disabled={uploading || !!assignmentProblem}
                         loading={uploading}
                       >
                         Import All ({validationRows.length})
                       </CrmButton>
                       <CrmButton
                         onClick={() => handleImport(true)}
-                        disabled={uploading || validCount === 0}
+                        disabled={uploading || validCount === 0 || !!assignmentProblem}
                         loading={uploading}
                         leftIcon={<CheckCircle2 size={16} strokeWidth={2} />}
                       >
@@ -2826,7 +2911,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
                   ) : (
                     <CrmButton
                       onClick={() => handleImport(false)}
-                      disabled={uploading || validationRows.length === 0}
+                      disabled={uploading || validationRows.length === 0 || !!assignmentProblem}
                       loading={uploading}
                       rightIcon={!uploading ? <ChevronRight size={16} strokeWidth={2} /> : undefined}
                     >

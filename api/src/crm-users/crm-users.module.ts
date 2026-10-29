@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CRMUsersService } from './crm-users.service';
-import { CRMUsersController } from './crm-users.controller';
 import { TwoBighaAgentService } from './twobigha-agent.service';
 import { KommunoAgentService } from './kommuno-agent.service';
 import { CRMUser, CRMUserSchema } from './schemas/user.schema';
@@ -27,7 +26,8 @@ import { UsersModule } from '../users/users.module';
     ),
     TrashModule,
   ],
-  controllers: [CRMUsersController],
+  // Routes are served by crm/crm-users (same paths; this copy used to shadow it).
+  controllers: [],
   providers: [CRMUsersService, TwoBighaAgentService, KommunoAgentService],
   exports: [CRMUsersService, MongooseModule, KommunoAgentService],
 })

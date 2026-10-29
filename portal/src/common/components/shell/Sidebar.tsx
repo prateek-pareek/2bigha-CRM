@@ -108,9 +108,14 @@ import { suiteSidebarChrome } from '@/components/suite/shell/sidebar-chrome';
 
 const NAV_ICON_CLASS = 'h-3.5 w-3.5';
 /** Long labels wrap onto a second line instead of truncating with an ellipsis. */
+/** Expandable group headers (e.g. Reports & Analytics): one line, matching sub-item text size. */
+const NAV_PARENT_LABEL_CLASS = 'min-w-0 flex-1 whitespace-nowrap text-left leading-tight';
 const NAV_LABEL_CLASS = 'min-w-0 flex-1 text-left whitespace-normal break-words leading-tight';
 /** Lets a nav row grow past the fixed rail height when its label wraps. */
 const NAV_ITEM_WRAP_CLASS = 'h-auto min-h-10 py-1.5';
+/** Sub-menu leaf rows: one line, tighter, so labels like "Team Lead Dashboard" never wrap. */
+const NAV_SUB_ITEM_CLASS = 'h-9 min-h-0 gap-2 !px-2 py-0';
+const NAV_SUB_LABEL_CLASS = 'min-w-0 flex-1 truncate whitespace-nowrap text-left text-[13px] leading-tight';
 
 type NavIconComponent = ComponentType<{
     className?: string;
@@ -124,16 +129,22 @@ function SuiteNavIcon({
     active,
     iconBox,
     iconBoxActive,
+    compact,
 }: {
     Icon: NavIconComponent;
     active: boolean;
     iconBox: string;
     iconBoxActive: string;
+    /** Slightly smaller icon tile for single-line sub-menu rows. */
+    compact?: boolean;
 }) {
     return (
-        <span className={active ? iconBoxActive : iconBox} aria-hidden>
+        <span
+            className={cn(active ? iconBoxActive : iconBox, compact && '!h-7 !w-7 !min-w-7')}
+            aria-hidden
+        >
             <Icon
-                className={cn(NAV_ICON_CLASS, active ? 'text-white' : undefined)}
+                className={cn(NAV_ICON_CLASS, compact && '!h-3.5 !w-3.5', active ? 'text-white' : undefined)}
                 strokeWidth={active ? 2 : 1.75}
             />
         </span>
@@ -495,8 +506,8 @@ const crmGroups = [
         name: 'Settings',
         items: [
             { name: 'Settings', href: '/crm/settings', icon: CrmNavIcon.Settings, permission: 'settings:read' },
-            { name: 'Users & access', href: '/crm/settings/users', icon: CrmNavIcon.Users, permission: 'settings:admin' },
-            { name: 'Roles', href: '/crm/settings/roles', icon: CrmNavIcon.UsersGroup, permission: 'settings:admin' },
+            { name: 'Users & access', href: '/crm/settings/users', icon: CrmNavIcon.Users, permission: 'settings-users:read' },
+            { name: 'Roles', href: '/crm/settings/roles', icon: CrmNavIcon.UsersGroup, permission: 'settings-roles:read' },
             // { name: 'Subscriptions', href: '/crm/subscriptions', icon: CreditCard, permission: 'settings:admin' },
         ],
     },
@@ -1036,7 +1047,7 @@ export default function Sidebar({
                                                         toggleNavMenu(menuKey);
                                                     }}
                                                     className={cn(
-                                                        'crm-hs-nav-item w-full',
+                                                        'crm-hs-nav-item w-full !gap-1.5 !px-1',
                                                         navChrome.navItem,
                                                         !isCollapsed && NAV_ITEM_WRAP_CLASS,
                                                         (menuOpen || childActive) && !isCollapsed && openParentBg,
@@ -1054,7 +1065,7 @@ export default function Sidebar({
                                                     />
                                                     {!isCollapsed && (
                                                         <>
-                                                            <span className={NAV_LABEL_CLASS}>{item.name}</span>
+                                                            <span className={NAV_PARENT_LABEL_CLASS}>{item.name}</span>
                                                             {showAgentPill ? (
                                                                 <span className="inline-flex min-w-[16px] items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-black text-white">
                                                                     {agentPendingCount > 99 ? '99+' : agentPendingCount}
@@ -1076,7 +1087,7 @@ export default function Sidebar({
                                                         menuOpen && !isCollapsed && !locked ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                                                     )}
                                                 >
-                                                    <div className={cn('min-h-0 ml-3 space-y-0.5 border-l pl-2', subBorderCls)}>
+                                                    <div className={cn('min-h-0 ml-2 space-y-0.5 border-l pl-1.5', subBorderCls)}>
                                                         {(() => {
                                                             const leafHrefs = children.flatMap((c) => {
                                                                 if (
@@ -1250,7 +1261,7 @@ export default function Sidebar({
                                                                         className={cn(
                                                                             'crm-hs-nav-item',
                                                                             navChrome.navItem,
-                                                                            NAV_ITEM_WRAP_CLASS,
+                                                                            NAV_SUB_ITEM_CLASS,
                                                                             childIsActive && navChrome.navItemActive,
                                                                             childLocked && navChrome.navItemLocked,
                                                                             !childIsActive && !childLocked && idleNavText,
@@ -1261,8 +1272,9 @@ export default function Sidebar({
                                                                             active={!!childIsActive}
                                                                             iconBox={iconBox}
                                                                             iconBoxActive={iconBoxActive}
+                                                                            compact
                                                                         />
-                                                                        <span className={NAV_LABEL_CLASS}>{child.name}</span>
+                                                                        <span className={NAV_SUB_LABEL_CLASS} title={child.name}>{child.name}</span>
                                                                         {childAgentPill ? (
                                                                             <span className="ml-auto inline-flex min-w-[16px] items-center justify-center rounded-full bg-violet-600 px-1 text-[9px] font-black text-white">
                                                                                 {agentPendingCount > 99 ? '99+' : agentPendingCount}

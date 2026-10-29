@@ -80,6 +80,33 @@ export class ClientsController {
     });
   }
 
+  /** Every duplicate cluster with a suggested master (admin only). */
+  @Get('clients/duplicates/groups')
+  @Permissions('clients:edit')
+  duplicateGroups(@Request() req: any) {
+    return this.clientsService.listDuplicateGroups(req.user);
+  }
+
+  /** Merge many duplicate clusters at once (admin only). */
+  @Post('clients/duplicates/merge-bulk')
+  @Permissions('clients:edit')
+  mergeDuplicateGroups(
+    @Body() body: { groups: Array<{ masterId: string; duplicateIds: string[] }> },
+    @Request() req: any,
+  ) {
+    return this.clientsService.mergeDuplicateGroups(body?.groups || [], req.user);
+  }
+
+  /** Merge duplicate clients into one master record (admin only). */
+  @Post('clients/duplicates/merge')
+  @Permissions('clients:edit')
+  mergeDuplicates(
+    @Body() body: { masterId: string; duplicateIds: string[] },
+    @Request() req: any,
+  ) {
+    return this.clientsService.mergeClients(body?.masterId, body?.duplicateIds || [], req.user);
+  }
+
   // ── 2bigha platform-user (Client) sync — Create & Fetch ──────────────────
   // Sync-health rollup for the Settings → 2bigha Sync hub. Declared before
   // the ':id' routes so 'twobigha' is never captured as a client id.

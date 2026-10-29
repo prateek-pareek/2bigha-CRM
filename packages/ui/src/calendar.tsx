@@ -30,7 +30,7 @@ export function Calendar({
         month: cn("flex flex-col gap-2", defaultClassNames.month),
 
         month_caption: cn(
-          "flex h-10 w-full items-center justify-center px-10 mb-1",
+          "flex h-8 w-full items-center justify-center px-8 mb-1",
           defaultClassNames.month_caption
         ),
         caption_label: cn("text-sm font-semibold text-text-main hidden", defaultClassNames.caption_label),
@@ -38,24 +38,24 @@ export function Calendar({
         dropdowns: cn("flex items-center gap-1", defaultClassNames.dropdowns),
         dropdown_root: cn("relative", defaultClassNames.dropdown_root),
         dropdown: cn(
-          "h-8 rounded-md border border-border bg-card px-2 pr-6 text-sm font-semibold text-text-main",
+          "h-7 rounded-md border border-border bg-card px-2 text-xs font-semibold text-text-main",
           "outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary",
           "cursor-pointer appearance-none transition-colors hover:border-border",
           defaultClassNames.dropdown
         ),
 
         nav: cn(
-          "absolute inset-x-0 top-0 flex items-center justify-between px-1 h-10",
+          "absolute inset-x-0 top-0 flex items-center justify-between h-8",
           defaultClassNames.nav
         ),
         button_previous: cn(
-          "inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card",
+          "inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card",
           "text-muted-foreground transition-all hover:bg-surface-hover hover:border-border hover:text-text-main",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30",
           defaultClassNames.button_previous
         ),
         button_next: cn(
-          "inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card",
+          "inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card",
           "text-muted-foreground transition-all hover:bg-surface-hover hover:border-border hover:text-text-main",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30",
           defaultClassNames.button_next
@@ -64,17 +64,17 @@ export function Calendar({
         month_grid: cn("w-full border-collapse", defaultClassNames.month_grid),
         weekdays: cn("flex mb-1", defaultClassNames.weekdays),
         weekday: cn(
-          "w-9 text-center text-xs font-semibold uppercase tracking-widest text-muted-foreground",
+          "w-8 text-center text-[11px] font-medium text-muted-foreground",
           defaultClassNames.weekday
         ),
         week: cn("flex w-full mt-0.5", defaultClassNames.week),
 
         day: cn(
-          "relative flex h-9 w-9 items-center justify-center p-0 text-center",
+          "relative flex h-8 w-8 items-center justify-center p-0 text-center",
           defaultClassNames.day
         ),
         day_button: cn(
-          "inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
+          "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium",
           "text-text-main transition-all duration-150",
           "hover:bg-primary/10 hover:text-primary",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
@@ -91,6 +91,10 @@ export function Calendar({
         hidden: cn("invisible", defaultClassNames.hidden),
         selected: cn("", defaultClassNames.selected),
         ...classNames,
+      }}
+      formatters={{
+        formatWeekdayName: (date) => date.toLocaleDateString("en-US", { weekday: "short" }),
+        ...props.formatters,
       }}
       components={{
         Chevron: ({ className: chClass, orientation, ...rest }) => {

@@ -21,6 +21,26 @@ export type ClientDuplicateCandidate = {
   additionalEmails?: string[] | null;
   phone?: string | null;
   whatsappNumber?: string | null;
+  twobighaUserId?: string | null;
+  createdAt?: Date | string | null;
+};
+
+export type ClientDuplicateGroup = {
+  group: number;
+  /** Union of why members match each other. */
+  reasons: ClientDuplicateReason[];
+  /** True when members only share a name (no common email / phone) — riskier to auto-merge. */
+  nameOnly: boolean;
+  /** Suggested record to keep: richest data first, then oldest. */
+  masterId: string;
+  members: Array<{
+    _id: string;
+    name: string;
+    email: string;
+    phone: string;
+    createdAt: string | null;
+    hasTwobighaUser: boolean;
+  }>;
 };
 
 export type ClientDuplicateMatch = {
@@ -186,6 +206,51 @@ export class ClientDuplicateIndex {
     });
   }
 
+  /** Every duplicate cluster with a suggested master (most complete record, then oldest). */
+  groups(): ClientDuplicateGroup[] {
+    const byGroup = new Map<number, string[]>();
+    for (const [id, g] of this.groupOf) {
+      const list = byGroup.get(g);
+      if (list) list.push(id);
+      else byGroup.set(g, [id]);
+    }
+    const score = (r: ClientDuplicateCandidate) =>
+      (r.twobighaUserId ? 8 : 0) +
+      (String(r.email || '').trim() ? 4 : 0) +
+      (String(r.phone || '').trim() ? 2 : 0) +
+      (clientNameKey(r.name) ? 1 : 0);
+    const time = (r: ClientDuplicateCandidate) => {
+      const t = r.createdAt ? new Date(r.createdAt as any).getTime() : NaN;
+      return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+    };
+    const out: ClientDuplicateGroup[] = [];
+    for (const [group, ids] of [...byGroup.entries()].sort((a, b) => a[0] - b[0])) {
+      const rows = ids.map((id) => this.rows.get(id)!);
+      rows.sort((a, b) => score(b) - score(a) || time(a) - time(b));
+      const reasons = new Set<ClientDuplicateReason>();
+      for (const r of rows) {
+        for (const m of this.findMatches(r, String(r._id))) {
+          for (const reason of m.reasons) reasons.add(reason);
+        }
+      }
+      out.push({
+        group,
+        reasons: sortReasons(reasons),
+        nameOnly: !reasons.has('email') && !reasons.has('phone'),
+        masterId: String(rows[0]._id),
+        members: rows.map((r) => ({
+          _id: String(r._id),
+          name: String(r.name || ''),
+          email: String(r.email || ''),
+          phone: String(r.phone || ''),
+          createdAt: r.createdAt ? new Date(r.createdAt as any).toISOString() : null,
+          hasTwobighaUser: !!r.twobighaUserId,
+        })),
+      });
+    }
+    return out;
+  }
+
   /** Duplicate info for an indexed record, or null when it has no duplicates. */
   infoFor(id: string): ClientDuplicateInfo | null {
     const group = this.groupOf.get(id);
@@ -205,7 +270,7 @@ export class ClientDuplicateIndex {
 
 /** Fields to project when loading clients into a `ClientDuplicateIndex`. */
 export const CLIENT_DUPLICATE_PROJECTION =
-  '_id name email additionalEmails phone whatsappNumber';
+  '_id name email additionalEmails phone whatsappNumber twobighaUserId createdAt';
 
 /** Same cap as the admin lead/contact duplicate scan. */
 export const CLIENT_DUPLICATE_SCAN_LIMIT = 25_000;

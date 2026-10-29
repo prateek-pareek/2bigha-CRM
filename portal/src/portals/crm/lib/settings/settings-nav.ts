@@ -180,6 +180,12 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         icon: Database,
       },
       {
+        name: "Access Activity Log",
+        description: "Who created or changed users, roles and permissions.",
+        href: "/crm/settings/access-log",
+        icon: ClipboardList,
+      },
+      {
         name: "Audit",
         description: "Sales activity stream and system audit trail.",
         href: "/crm/settings/audit-logs",

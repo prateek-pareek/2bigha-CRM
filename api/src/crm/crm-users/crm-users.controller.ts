@@ -18,6 +18,29 @@ import { RbacGuard } from './rbac.guard';
 import { Permissions } from './permissions.decorator';
 import { UserConfig, UserConfigDocument } from './schemas/user-config.schema';
 import { HrmsOutboundService } from '../integrations/hrms/hrms-outbound.service';
+import { RoleAuditLogService } from '../../users/role-audit-log.service';
+import { ForbiddenException } from '@nestjs/common';
+import { hasCrmAdminFromDbUser, hasCrmAdminJwtBypass } from '../shared/crm-admin-access.util';
+import { collectRolePermissionNames } from '../shared/crm-role-permissions.util';
+
+/** Access to Settings, Users & access, Roles and the activity log can only be granted/revoked by an Admin. */
+const ADMIN_ONLY_GRANT_PREFIXES = ['settings:', 'settings-users:', 'settings-roles:', 'settings-access-log:'];
+const adminOnlyGrants = (names: string[]) =>
+  names.filter((n) => ADMIN_ONLY_GRANT_PREFIXES.some((p) => n.startsWith(p))).sort();
+
+const SENSITIVE_KEYS = new Set(['password', 'inviteToken', 'token', 'refreshToken', 'apiKey', 'secret']);
+
+/** Strips secrets and mongoose internals so the activity log only keeps access-relevant fields. */
+function auditSnapshot(doc: any): Record<string, unknown> | undefined {
+  if (!doc) return undefined;
+  const plain = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(plain)) {
+    if (SENSITIVE_KEYS.has(k) || k === '__v') continue;
+    out[k] = v;
+  }
+  return JSON.parse(JSON.stringify(out));
+}
 
 @Controller('crm-users')
 @UseGuards(AuthGuard('jwt'), RbacGuard)
@@ -27,7 +50,41 @@ export class CRMUsersController {
     @InjectModel(UserConfig.name, 'crmConnection')
     private userConfigModel: Model<UserConfigDocument>,
     private readonly hrmsOutbound: HrmsOutboundService,
+    private readonly accessAudit: RoleAuditLogService,
   ) {}
+
+  /** Rejects non-admins who add or remove Settings / Users / Roles grants. Unchanged sets pass (the UI resubmits them). */
+  private assertAdminOnlyGrantsUnchanged(req: any, nextNames: string[], prevNames: string[]) {
+    if (hasCrmAdminJwtBypass(req?.user) || hasCrmAdminFromDbUser(req?.crmDbUser)) return;
+    if (JSON.stringify(adminOnlyGrants(nextNames)) !== JSON.stringify(adminOnlyGrants(prevNames))) {
+      throw new ForbiddenException('Only an Admin can grant or remove access to Settings, Users & access and Roles.');
+    }
+  }
+
+  /** "Name (Role)" so the log shows which role made the change. */
+  private actorOf(req: any) {
+    const u = req?.user || {};
+    const name = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.name || u.email;
+    return { userId: u.userId ?? u._id, firstName: [name, u.role ? `(${u.role})` : ''].filter(Boolean).join(' ') };
+  }
+
+  /**
+   * Who changed what in Users & Roles. Visible to Admin/CEO (management bypass) and to anyone
+   * granted `settings-access-log:read` in the access control list.
+   */
+  @Get('access-activity')
+  @Permissions('settings-access-log:read')
+  accessActivity(@Query() query: any) {
+    return this.accessAudit.list({
+      targetType: query.targetType,
+      action: query.action,
+      actor: query.actor,
+      from: query.from,
+      to: query.to,
+      page: Number(query.page) || 1,
+      pageSize: Number(query.pageSize) || 50,
+    });
+  }
 
   @Get('list')
   findAllList() {
@@ -47,26 +104,36 @@ export class CRMUsersController {
   }
 
   @Get()
-  @Permissions('settings:admin')
+  @Permissions('settings-users:read')
   findAll() {
     return this.usersService.findAllIncludingPending();
   }
 
   @Post()
-  @Permissions('settings:admin')
-  create(@Body() dto: any) {
+  @Permissions('settings-users:write')
+  async create(@Body() dto: any, @Request() req: any) {
     this.hrmsOutbound.assertCrmUserManagementAllowed('add');
-    return this.usersService.create(dto);
+    this.assertAdminOnlyGrantsUnchanged(req, collectRolePermissionNames(dto), []);
+    const created: any = await this.usersService.create(dto);
+    await this.accessAudit.log({
+      actor: this.actorOf(req),
+      action: 'user_created',
+      targetType: 'CrmUser',
+      targetId: created?._id,
+      targetLabel: created?.email ?? dto?.email,
+      after: auditSnapshot(created),
+    });
+    return created;
   }
 
   @Get('roles')
-  @Permissions('settings:admin')
+  @Permissions('settings-roles:read', 'settings-users:read')
   findAllRoles() {
     return this.usersService.findAllRoles();
   }
 
   @Get('permissions')
-  @Permissions('settings:admin')
+  @Permissions('settings-roles:read', 'settings-users:read')
   findAllPermissions() {
     return this.usersService.findAllPermissions();
   }
@@ -132,57 +199,129 @@ export class CRMUsersController {
   }
 
   @Get(':id')
-  @Permissions('settings:admin')
+  @Permissions('settings-users:read')
   findOne(@Param('id') id: string) {
     return this.usersService.findById(id);
   }
 
   @Put(':id')
-  @Permissions('settings:admin')
-  update(@Param('id') id: string, @Body() dto: any) {
-    return this.usersService.update(id, dto);
+  @Permissions('settings-users:edit')
+  async update(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    const before: any = await this.usersService.findById(id).catch(() => null);
+    if (Array.isArray(dto?.permissions) || Array.isArray(dto?.crmPermissions)) {
+      this.assertAdminOnlyGrantsUnchanged(
+        req,
+        collectRolePermissionNames(dto),
+        collectRolePermissionNames(before ? { permissions: before.permissions, crmPermissions: before.crmPermissions } : {}),
+      );
+    }
+    const beforeSnap = auditSnapshot(before);
+    const updated: any = await this.usersService.update(id, dto);
+    await this.accessAudit.log({
+      actor: this.actorOf(req),
+      action: 'user_updated',
+      targetType: 'CrmUser',
+      targetId: id,
+      targetLabel: updated?.email ?? before?.email,
+      before: beforeSnap,
+      after: auditSnapshot(updated),
+    });
+    return updated;
   }
 
   @Delete(':id')
-  @Permissions('settings:admin')
-  remove(@Param('id') id: string) {
+  @Permissions('settings-users:delete')
+  async remove(@Param('id') id: string, @Request() req: any) {
     this.hrmsOutbound.assertCrmUserManagementAllowed('remove');
-    return this.usersService.delete(id);
+    const before: any = await this.usersService.findById(id).catch(() => null);
+    const result = await this.usersService.delete(id);
+    await this.accessAudit.log({
+      actor: this.actorOf(req),
+      action: 'user_deleted',
+      targetType: 'CrmUser',
+      targetId: id,
+      targetLabel: before?.email,
+      before: auditSnapshot(before),
+    });
+    return result;
   }
 
   @Post('roles')
-  @Permissions('settings:admin')
-  createRole(@Body() dto: any) {
-    return this.usersService.createRole(dto);
+  @Permissions('settings-roles:write')
+  async createRole(@Body() dto: any, @Request() req: any) {
+    this.assertAdminOnlyGrantsUnchanged(req, collectRolePermissionNames(dto), []);
+    const created = await this.usersService.createRole(dto);
+    await this.accessAudit.log({
+      actor: this.actorOf(req),
+      action: 'role_created',
+      targetType: 'UserRole',
+      targetId: created?._id ?? created?.id,
+      targetLabel: created?.name ?? dto?.name,
+      after: auditSnapshot(created),
+    });
+    return created;
   }
 
   @Put('roles/:id')
-  @Permissions('settings:admin')
-  updateRole(@Param('id') id: string, @Body() dto: any) {
-    return this.usersService.updateRole(id, dto);
+  @Permissions('settings-roles:edit')
+  async updateRole(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    const before = await this.usersService.findRoleById(id).catch(() => null);
+    if (Array.isArray(dto?.permissions) || Array.isArray(dto?.crmPermissions)) {
+      this.assertAdminOnlyGrantsUnchanged(req, collectRolePermissionNames(dto), collectRolePermissionNames(before));
+    }
+    const updated = await this.usersService.updateRole(id, dto);
+    await this.accessAudit.log({
+      actor: this.actorOf(req),
+      action: 'role_updated',
+      targetType: 'UserRole',
+      targetId: id,
+      targetLabel: updated?.name ?? before?.name,
+      before: auditSnapshot(before),
+      after: auditSnapshot(updated),
+    });
+    return updated;
   }
 
   @Delete('roles/:id')
-  @Permissions('settings:admin')
-  deleteRole(@Param('id') id: string) {
-    return this.usersService.deleteRole(id);
+  @Permissions('settings-roles:delete')
+  async deleteRole(@Param('id') id: string, @Request() req: any) {
+    const before = await this.usersService.findRoleById(id).catch(() => null);
+    const result = await this.usersService.deleteRole(id);
+    await this.accessAudit.log({
+      actor: this.actorOf(req),
+      action: 'role_deleted',
+      targetType: 'UserRole',
+      targetId: id,
+      targetLabel: before?.name,
+      before: auditSnapshot(before),
+    });
+    return result;
   }
 
   @Post('invite')
-  @Permissions('settings:admin')
-  inviteMember(@Body() body: { email: string; roleId: string }) {
+  @Permissions('settings-users:write')
+  async inviteMember(@Body() body: { email: string; roleId: string }, @Request() req: any) {
     this.hrmsOutbound.assertCrmUserManagementAllowed('add');
-    return this.usersService.inviteUser(body.email, body.roleId);
+    const invited: any = await this.usersService.inviteUser(body.email, body.roleId);
+    await this.accessAudit.log({
+      actor: this.actorOf(req),
+      action: 'user_invited',
+      targetType: 'CrmUser',
+      targetId: invited?._id,
+      targetLabel: body.email,
+      after: { email: body.email, roleId: body.roleId },
+    });
+    return invited;
   }
 
   @Post('permissions')
-  @Permissions('settings:admin')
+  @Permissions('settings-roles:write')
   createPermission(@Body() dto: any) {
     return this.usersService.createPermission(dto);
   }
 
   @Post(':id/kommuno-sync')
-  @Permissions('settings:admin')
+  @Permissions('settings-users:edit')
   syncToKommuno(@Param('id') id: string) {
     return this.usersService.syncAgentToKommuno(id);
   }

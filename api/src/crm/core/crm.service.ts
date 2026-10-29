@@ -77,6 +77,11 @@ import {
 } from '../shared/crm-record-id.util';
 import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
 import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
+import { leadVisibilityFilter } from '../shared/crm-lead-visibility.util';
+import {
+  createRoundRobin,
+  LeadImportAssignment,
+} from '../shared/lead-import-assignment.util';
 import {
   leadModuleFilter,
   roleAllowsLead,
@@ -153,6 +158,14 @@ import { CRMUsersService } from '../crm-users/crm-users.service';
 
 type ImportDuplicateStrategy = 'create' | 'skip' | 'merge' | 'replace';
 type ImportRowOutcome = 'created' | 'merged' | 'replaced' | 'skipped';
+type LeadImportOptions = {
+  defaultLeadVertical?: LeadVertical;
+  assignment?: LeadImportAssignment;
+  /** Owner labels of `assignment.assignees`, resolved + policy-checked before the job starts. */
+  assigneeLabels?: string[];
+};
+/** Rows per import — the job runs in-process, so very large files must be split. */
+const MAX_IMPORT_ROWS = 10_000;
 
 @Injectable()
 export class CRMService {
@@ -463,6 +476,10 @@ export class CRMService {
       existingClientCount: number;
       /** Rows whose Role column wasn't OWNER/AGENT/USER — defaulted to USER. */
       invalidRoleCount: number;
+      /** Lead imports: leads handed to each owner label (new leads + reassigned duplicates). */
+      assignedCounts: Record<string, number>;
+      /** Lead imports: existing duplicates whose owner was changed (`reassignExisting`). */
+      reassignedCount: number;
       duplicateStrategy: ImportDuplicateStrategy;
       failedRows: { rowNumber: number; rowData?: any; reason: string }[];
       skippedRows: { rowNumber: number; rowData?: any; reason: string }[];
@@ -2565,6 +2582,14 @@ export class CRMService {
   }
 
   // --- Leads ---
+  /** hot/warm/cold (case-insensitive); blank → null (clear). Anything else is rejected. */
+  private normalizeLeadTemperature(raw: unknown): 'hot' | 'warm' | 'cold' | null {
+    const t = String(raw ?? '').trim().toLowerCase();
+    if (!t) return null;
+    if (t === 'hot' || t === 'warm' || t === 'cold') return t;
+    throw new BadRequestException('leadTemperature must be hot, warm or cold.');
+  }
+
   async createLead(dto: any, user?: any): Promise<Lead> {
     if (!canViewCrmRevenue(user)) {
       delete dto.annualRevenue;
@@ -2627,6 +2652,9 @@ export class CRMService {
     }
     if (typeof dto.leadCategory === 'string') {
       dto.leadCategory = dto.leadCategory.trim() || undefined;
+    }
+    if (dto.leadTemperature !== undefined) {
+      dto.leadTemperature = this.normalizeLeadTemperature(dto.leadTemperature) ?? undefined;
     }
     if (typeof dto.group === 'string') {
       dto.group = dto.group.trim() || undefined;
@@ -3119,7 +3147,7 @@ export class CRMService {
     );
     const skip = (page - 1) * pageSize;
     const outreachSelect =
-      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType leadVertical opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt role whatsappNumber address state pincode planningToBuyLand firstCallResponse lastCallAt callbackScheduledAt currentSubscriptionPlan image';
+      '_id firstName lastName email organization status stage callStatus pipeline createdAt leadType leadVertical opportunitySourcePlatform opportunityListingUrl platformClientLabel platformEngagementStatus platformLastEngagedAt jobTitle leadOwner createdBy createdByName customFields mobileNo phone recordId relatedService twitterHandle clientId leadCategory leadTemperature group notes source nextFollowUpAt leadIntents leadIntentFollowUpAt role whatsappNumber address state pincode planningToBuyLand firstCallResponse lastCallAt callbackScheduledAt currentSubscriptionPlan image';
     const [data, count] = await Promise.all([
       this.leadModel
         .find(filter)
@@ -3255,6 +3283,10 @@ export class CRMService {
       if (dto.leadVertical !== 'property_management' && dto.leadVertical !== 'property_listing') {
         delete dto.leadVertical;
       }
+    }
+    if (dto.leadTemperature !== undefined) {
+      // null clears the rating ("not rated").
+      dto.leadTemperature = this.normalizeLeadTemperature(dto.leadTemperature);
     }
     let pendingIntentUpdate: { intents: string[]; followUpAt?: Date } | null = null;
     if (dto.leadIntentFollowUpAt !== undefined && dto.leadIntents === undefined) {
@@ -5801,7 +5833,7 @@ export class CRMService {
    * Reassign leadOwner for selected leads (same ownership model as segments assign).
    */
   async bulkAssignLeads(
-    body: { ownerName?: string; ids?: string[] },
+    body: { ownerName?: string; ids?: string[]; importBatchId?: string },
     user?: any,
   ) {
     const ownerName = String(body?.ownerName || '').trim();
@@ -5811,10 +5843,11 @@ export class CRMService {
     }
 
     const maxAssign = 2000;
+    const batchId = String(body?.importBatchId || '').trim();
     const oids = (body?.ids || [])
       .map((raw) => this.toObjectIdSafe(String(raw || '').trim()))
       .filter((o): o is Types.ObjectId => !!o);
-    if (!oids.length) {
+    if (!oids.length && !batchId) {
       throw new BadRequestException('Select at least one lead');
     }
     if (oids.length > maxAssign) {
@@ -5829,7 +5862,10 @@ export class CRMService {
     const assignee = await this.assignmentPolicy.assertAssignee(tier, user, ownerName);
     const ownerLabel = assignee.label || ownerName;
 
-    const clauses: Record<string, unknown>[] = [{ _id: { $in: oids } }];
+    // A whole import batch ("assign everything I just imported") or an explicit id selection.
+    const clauses: Record<string, unknown>[] = [
+      batchId && !oids.length ? { importBatchId: batchId } : { _id: { $in: oids } },
+    ];
     if (tier === 'own') {
       clauses.push(this.leadOwnershipFilter(user));
     }
@@ -5908,7 +5944,7 @@ export class CRMService {
 
     return {
       ownerName: ownerLabel,
-      requested: oids.length,
+      requested: oids.length || previousOwners.length,
       matched: result.matchedCount ?? 0,
       modified: result.modifiedCount ?? 0,
     };
@@ -6352,6 +6388,230 @@ export class CRMService {
     return XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
   }
 
+  /**
+   * Dry-run of a lead import: classifies every row (new / duplicate / blocked / invalid /
+   * owner not allowed) and shows how many leads each owner would get — writes nothing.
+   * Uses the same mapping, matching, visibility and owner rules as the real import.
+   */
+  async previewLeadImport(
+    buffer: Buffer,
+    mapping: Record<string, string> | undefined,
+    user: any,
+    opts: {
+      duplicateStrategy?: string;
+      assignment?: LeadImportAssignment;
+      defaultLeadVertical?: LeadVertical;
+    } = {},
+  ) {
+    if (!mapping) throw new BadRequestException('Map the file columns first');
+    const rows = this.parseExcelToRows(buffer);
+    if (!rows.length) throw new BadRequestException('The file has no data rows to import');
+    if (rows.length > MAX_IMPORT_ROWS) {
+      throw new BadRequestException(
+        `A file can hold at most ${MAX_IMPORT_ROWS} rows (this one has ${rows.length}) — split it and import in parts`,
+      );
+    }
+    const strategy = this.normalizeImportDuplicateStrategy(opts.duplicateStrategy);
+    const assignment = opts.assignment;
+    const labels = await this.resolveImportAssignees(assignment, user);
+    const tier = assignment?.mode === 'file' ? this.assignmentPolicy.requireTier('leads', user) : null;
+    const nextRoundRobin =
+      assignment?.mode === 'round_robin' && labels.length ? createRoundRobin(labels) : null;
+    const importerLabel = this.repOwnerLabelFromUser(user);
+    const visibilityScope = leadVisibilityFilter(user);
+
+    const ownerChecks = new Map<string, Promise<string>>();
+    const ownerForRow = async (fileOwnerRaw: unknown): Promise<string> => {
+      switch (assignment?.mode) {
+        case 'single':
+          return labels[0];
+        case 'round_robin':
+          return nextRoundRobin!();
+        case 'file': {
+          const raw = String(fileOwnerRaw ?? '').trim();
+          if (!raw) {
+            if (assignment.fallbackToSelf) return importerLabel;
+            throw new Error('Lead Owner is blank');
+          }
+          const key = raw.toLowerCase();
+          if (!ownerChecks.has(key)) {
+            ownerChecks.set(
+              key,
+              this.assignmentPolicy.assertAssignee(tier!, user, raw).then((a) => a.label || raw),
+            );
+          }
+          try {
+            return await ownerChecks.get(key)!;
+          } catch (e) {
+            if (assignment.fallbackToSelf) return importerLabel;
+            throw new Error(`Lead Owner "${raw}" is not allowed: ${(e as Error).message}`);
+          }
+        }
+        default:
+          return importerLabel;
+      }
+    };
+
+    type Outcome =
+      | 'new'
+      | 'duplicate_skip'
+      | 'duplicate_merge'
+      | 'duplicate_replace'
+      | 'blocked'
+      | 'invalid'
+      | 'owner_error';
+    const summary: Record<Outcome, number> = {
+      new: 0,
+      duplicate_skip: 0,
+      duplicate_merge: 0,
+      duplicate_replace: 0,
+      blocked: 0,
+      invalid: 0,
+      owner_error: 0,
+    };
+    const plannedByOwner: Record<string, number> = {};
+    const plan = (label: string) => {
+      plannedByOwner[label] = (plannedByOwner[label] || 0) + 1;
+    };
+    const issues: { rowNumber: number; outcome: Outcome; reason: string }[] = [];
+    const seenInFile = new Map<string, number>();
+    let inFileDuplicates = 0;
+    const ISSUE_CAP = 300;
+
+    let rowNumber = 0;
+    for (const row of rows) {
+      rowNumber++;
+      let outcome: Outcome = 'new';
+      let reason = '';
+      try {
+        const { mappedData, customFields } = this.mapImportRowFields(row, mapping);
+        normalizeLeadImportRow(mappedData, { defaultLeadVertical: opts.defaultLeadVertical });
+        if (!hasAtLeastOneContactOrPortalListing(mappedData)) {
+          throw new BadRequestException('Add at least one of email, phone or a valid listing URL');
+        }
+        const fileOwnerRaw = mappedData.leadOwner;
+        delete mappedData.leadOwner;
+
+        const keys: string[] = [];
+        for (const f of ['mobileNo', 'phone', 'whatsappNumber'] as const) {
+          const d = normalizePhoneDigits(String(mappedData[f] || ''));
+          if (d.length >= 7) keys.push(`p:${d.slice(-10)}`);
+        }
+        const em = normalizeEmail(String(mappedData.email || ''));
+        if (em) keys.push(`e:${em}`);
+        const firstSeenAt = keys.map((k) => seenInFile.get(k)).find((n) => n !== undefined);
+
+        const existing = await this.findExistingLeadForImport(mappedData, customFields);
+        const dup = existing || firstSeenAt !== undefined;
+        if (!dup || strategy === 'create') {
+          outcome = 'new';
+          if (dup) reason = 'Duplicate will still be created (strategy: create duplicates)';
+        } else if (existing && visibilityScope) {
+          const visible = await this.leadModel.exists({
+            $and: [{ _id: existing._id }, visibilityScope],
+          } as Record<string, any>);
+          if (!visible) {
+            outcome = 'blocked';
+            reason = 'Matches a lead outside your access — it will be skipped';
+          }
+        }
+        if (dup && strategy !== 'create' && outcome !== 'blocked') {
+          outcome =
+            strategy === 'skip'
+              ? 'duplicate_skip'
+              : strategy === 'merge'
+                ? 'duplicate_merge'
+                : 'duplicate_replace';
+          const where =
+            firstSeenAt !== undefined && !existing
+              ? `duplicate of row ${firstSeenAt} in this file`
+              : `existing lead${existing?.leadOwner ? ` owned by ${existing.leadOwner}` : ''}`;
+          reason = `Matches ${where}`;
+        }
+
+        // Owner the lead would get (new leads; duplicates only when they are reassigned).
+        if (outcome === 'new' || (assignment?.reassignExisting && outcome.startsWith('duplicate_') && outcome !== 'duplicate_skip')) {
+          plan(await ownerForRow(fileOwnerRaw));
+        }
+        if (outcome !== 'blocked') for (const k of keys) if (!seenInFile.has(k)) seenInFile.set(k, rowNumber);
+        if (firstSeenAt !== undefined) inFileDuplicates++;
+      } catch (err) {
+        const msg = (err as Error).message || 'Invalid row';
+        outcome = msg.startsWith('Lead Owner') ? 'owner_error' : 'invalid';
+        reason = msg;
+      }
+      summary[outcome]++;
+      if ((outcome !== 'new' || reason) && issues.length < ISSUE_CAP) {
+        issues.push({ rowNumber, outcome, reason });
+      }
+    }
+
+    return {
+      total: rows.length,
+      duplicateStrategy: strategy,
+      summary,
+      inFileDuplicates,
+      plannedByOwner,
+      issues,
+      issuesTruncated: issues.length >= ISSUE_CAP,
+    };
+  }
+
+  /** Applies the column mapping to one file row (shared by the real import and the dry-run). */
+  private mapImportRowFields(
+    row: Record<string, unknown>,
+    mapping?: Record<string, string>,
+  ): { mappedData: any; customFields: Record<string, string> } {
+    const mappedData: any = {};
+    const customFields: Record<string, string> = {};
+
+    // Use mapping if provided, otherwise fallback to heuristics
+    if (mapping) {
+      Object.entries(mapping).forEach(([crmField, fileCol]) => {
+        // Blank cells mean "not provided": copying "" would bypass schema defaults
+        // and fail enum fields (callStatus, leadVertical, role, …).
+        if (fileCol && !isBlankImportValue(row[fileCol])) {
+          if (crmField.startsWith('cf_')) {
+            customFields[crmField.replace('cf_', '')] = String(row[fileCol]);
+          } else {
+            mappedData[crmField] = row[fileCol];
+          }
+        }
+      });
+    }
+
+    if (
+      mappedData.additionalEmails !== undefined &&
+      mappedData.additionalEmails !== null &&
+      mappedData.additionalEmails !== ''
+    ) {
+      // Imported as one CSV cell (comma/semicolon-separated) — split into the string[] the schema expects.
+      const primary = String(mappedData.email ?? '')
+        .trim()
+        .toLowerCase();
+      const seen = new Set<string>();
+      const parsed: string[] = [];
+      for (const raw of String(mappedData.additionalEmails).split(/[,;]/)) {
+        const trimmed = raw.trim();
+        if (!trimmed || !trimmed.includes('@')) continue;
+        const lower = trimmed.toLowerCase();
+        if (primary && lower === primary) continue;
+        if (seen.has(lower)) continue;
+        seen.add(lower);
+        parsed.push(trimmed);
+      }
+      mappedData.additionalEmails = parsed;
+    }
+
+    for (const phoneField of ['mobileNo', 'phone', 'whatsappNumber'] as const) {
+      const v = mappedData[phoneField];
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        mappedData[phoneField] = this.sanitizePhone(v);
+      }
+    }
+    return { mappedData, customFields };
+  }
+
   private pruneOldImportJobs(): void {
     const cutoff = Date.now() - CRMService.IMPORT_JOB_TTL_MS;
     for (const [id, job] of this.importJobs) {
@@ -6359,16 +6619,50 @@ export class CRMService {
     }
   }
 
-  startImportFromExcel(
+  /**
+   * Checks the requested lead assignment against the importer's RBAC tier *before* any row
+   * is written: a Team Lead / Manager can only pick members of their own team, an own-tier
+   * assigner only users of their workspace. Returns the owner labels to store.
+   */
+  private async resolveImportAssignees(
+    assignment: LeadImportAssignment | undefined,
+    user?: any,
+  ): Promise<string[]> {
+    if (!assignment || assignment.mode === 'self') return [];
+    const tier = this.assignmentPolicy.requireTier('leads', user);
+    if (assignment.mode === 'file') return [];
+    const labels: string[] = [];
+    for (const ref of assignment.assignees) {
+      const a = await this.assignmentPolicy.assertAssignee(tier, user, ref);
+      if (!labels.includes(a.label || ref)) labels.push(a.label || ref);
+    }
+    return labels;
+  }
+
+  async startImportFromExcel(
     type: string,
     buffer: Buffer,
     mapping?: Record<string, string>,
     user?: any,
     duplicateStrategy?: string,
-    options: { defaultLeadVertical?: LeadVertical } = {},
-  ): { jobId: string; total: number } {
+    options: LeadImportOptions = {},
+  ): Promise<{ jobId: string; total: number }> {
     this.pruneOldImportJobs();
     const jsonData = this.parseExcelToRows(buffer);
+    if (!jsonData.length) {
+      throw new BadRequestException('The file has no data rows to import');
+    }
+    if (jsonData.length > MAX_IMPORT_ROWS) {
+      throw new BadRequestException(
+        `A file can hold at most ${MAX_IMPORT_ROWS} rows (this one has ${jsonData.length}) — split it and import in parts`,
+      );
+    }
+    if (type === 'leads' && options.assignment) {
+      options = {
+        ...options,
+        assigneeLabels: await this.resolveImportAssignees(options.assignment, user),
+      };
+    }
     const jobId = `imp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const strategy = this.normalizeImportDuplicateStrategy(duplicateStrategy);
     this.importJobs.set(jobId, {
@@ -6385,6 +6679,8 @@ export class CRMService {
       createdCount: 0,
       existingClientCount: 0,
       invalidRoleCount: 0,
+      assignedCounts: {},
+      reassignedCount: 0,
       duplicateStrategy: strategy,
       failedRows: [],
       skippedRows: [],
@@ -6431,6 +6727,9 @@ export class CRMService {
       createdCount: job.createdCount,
       existingClientCount: job.existingClientCount,
       invalidRoleCount: job.invalidRoleCount,
+      assignedCounts: job.assignedCounts,
+      reassignedCount: job.reassignedCount,
+      batchId: job.id,
       duplicateStrategy: job.duplicateStrategy,
       failedRows: job.failedRows || [],
       skippedRows: job.skippedRows || [],
@@ -6447,11 +6746,74 @@ export class CRMService {
     user?: any,
     jobId?: string,
     duplicateStrategy: ImportDuplicateStrategy = 'merge',
-    options: { defaultLeadVertical?: LeadVertical } = {},
+    options: LeadImportOptions = {},
   ): Promise<{ count: number }> {
     const jsonData = this.parseExcelToRows(buffer);
     const job = jobId ? this.importJobs.get(jobId) : undefined;
     if (job) job.total = jsonData.length;
+
+    // --- Lead ownership for this import (see lead-import-assignment.util.ts) ---
+    const assignment = type === 'leads' ? options.assignment : undefined;
+    const importerLabel = this.repOwnerLabelFromUser(user);
+    const assignTier =
+      assignment && assignment.mode === 'file'
+        ? this.assignmentPolicy.requireTier('leads', user)
+        : null;
+    const nextRoundRobinOwner =
+      assignment?.mode === 'round_robin' && options.assigneeLabels?.length
+        ? createRoundRobin(options.assigneeLabels)
+        : null;
+    const fileOwnerCache = new Map<string, Promise<string>>();
+    /** Owner label for one lead row; throws a readable reason when the row may not be given that owner. */
+    const pickLeadOwner = async (fileOwnerRaw: unknown): Promise<string> => {
+      switch (assignment?.mode) {
+        case 'single':
+          return options.assigneeLabels![0];
+        case 'round_robin':
+          return nextRoundRobinOwner!();
+        case 'file': {
+          const raw = String(fileOwnerRaw ?? '').trim();
+          const fallback = () => {
+            if (assignment.fallbackToSelf) return importerLabel;
+            return null;
+          };
+          if (!raw) {
+            const fb = fallback();
+            if (fb) return fb;
+            throw new Error('Lead Owner is blank — fill it in, or choose another assignment option');
+          }
+          const key = raw.toLowerCase();
+          if (!fileOwnerCache.has(key)) {
+            fileOwnerCache.set(
+              key,
+              this.assignmentPolicy
+                .assertAssignee(assignTier!, user, raw)
+                .then((a) => a.label || raw),
+            );
+          }
+          try {
+            return await fileOwnerCache.get(key)!;
+          } catch (e) {
+            const fb = fallback();
+            if (fb) return fb;
+            throw new Error(
+              `Lead Owner "${raw}" ${
+                (e as Error)?.message?.includes('team')
+                  ? 'is not in your team — you can only assign leads to your own team members'
+                  : (e as Error)?.message || 'cannot be assigned'
+              }`,
+            );
+          }
+        }
+        default:
+          return importerLabel;
+      }
+    };
+    const visibilityScope = type === 'leads' ? leadVisibilityFilter(user) : null;
+    const importedThisRun = new Set<string>();
+    const noteAssigned = (label: string) => {
+      if (job && label) job.assignedCounts[label] = (job.assignedCounts[label] || 0) + 1;
+    };
 
     // One pipeline lookup per vertical per import, not per row.
     const pipelineByVertical = new Map<LeadVertical, any>();
@@ -6478,59 +6840,9 @@ export class CRMService {
     for (const row of jsonData) {
       rowIndex++;
       let rowOutcome: ImportRowOutcome | 'failed' = 'failed';
+      let rowSkipReason: string | undefined;
       try {
-        const mappedData: any = {};
-        const customFields: Record<string, string> = {};
-
-        // Use mapping if provided, otherwise fallback to heuristics
-        if (mapping) {
-          Object.entries(mapping).forEach(([crmField, fileCol]) => {
-            // Blank cells mean "not provided": copying "" would bypass schema defaults
-            // and fail enum fields (callStatus, leadVertical, role, …).
-            if (fileCol && !isBlankImportValue(row[fileCol])) {
-              if (crmField.startsWith('cf_')) {
-                customFields[crmField.replace('cf_', '')] = String(
-                  row[fileCol],
-                );
-              } else {
-                mappedData[crmField] = row[fileCol];
-              }
-            }
-          });
-        }
-
-        if (
-          mappedData.additionalEmails !== undefined &&
-          mappedData.additionalEmails !== null &&
-          mappedData.additionalEmails !== ''
-        ) {
-          // Imported as one CSV cell (comma/semicolon-separated) — split into the string[] the schema expects.
-          const primary = String(mappedData.email ?? '')
-            .trim()
-            .toLowerCase();
-          const seen = new Set<string>();
-          const parsed: string[] = [];
-          for (const raw of String(mappedData.additionalEmails).split(/[,;]/)) {
-            const trimmed = raw.trim();
-            if (!trimmed || !trimmed.includes('@')) continue;
-            const lower = trimmed.toLowerCase();
-            if (primary && lower === primary) continue;
-            if (seen.has(lower)) continue;
-            seen.add(lower);
-            parsed.push(trimmed);
-          }
-          mappedData.additionalEmails = parsed;
-        }
-
-        if (mappedData.mobileNo !== undefined && mappedData.mobileNo !== null && String(mappedData.mobileNo).trim() !== '') {
-          mappedData.mobileNo = this.sanitizePhone(mappedData.mobileNo);
-        }
-        if (mappedData.phone !== undefined && mappedData.phone !== null && String(mappedData.phone).trim() !== '') {
-          mappedData.phone = this.sanitizePhone(mappedData.phone);
-        }
-        if (mappedData.whatsappNumber !== undefined && mappedData.whatsappNumber !== null && String(mappedData.whatsappNumber).trim() !== '') {
-          mappedData.whatsappNumber = this.sanitizePhone(mappedData.whatsappNumber);
-        }
+        const { mappedData, customFields } = this.mapImportRowFields(row, mapping);
 
         if (type === 'leads') {
           if (!mapping) {
@@ -6610,12 +6922,34 @@ export class CRMService {
               ? String(mappedData.recordId).trim()
               : null;
           delete mappedData.recordId;
+          // The owner cell is consumed here: merge/replace must never overwrite an
+          // existing lead's owner straight from the file (that skipped the team check).
+          const fileOwnerRaw = mappedData.leadOwner;
+          delete mappedData.leadOwner;
           const existingLead = await this.findExistingLeadForImport(
             mappedData,
             customFields,
           );
-          if (existingLead && duplicateStrategy === 'skip') {
+          // A duplicate the importer cannot see (another team's lead) is never merged
+          // into / overwritten — it would leak and alter data outside their scope.
+          let existingOutsideAccess = false;
+          if (
+            existingLead &&
+            duplicateStrategy !== 'create' &&
+            visibilityScope &&
+            !importedThisRun.has(String(existingLead._id))
+          ) {
+            existingOutsideAccess = !(await this.leadModel.exists({
+              $and: [{ _id: existingLead._id }, visibilityScope],
+            } as Record<string, any>));
+          }
+          if (existingLead && (duplicateStrategy === 'skip' || existingOutsideAccess)) {
             rowOutcome = 'skipped';
+            rowSkipReason = existingOutsideAccess
+              ? 'A lead with this phone/email already exists outside your access (owned by another team) — ask a manager to handle it'
+              : importedThisRun.has(String(existingLead._id))
+                ? 'Duplicate of an earlier row in this file'
+                : 'Duplicate record skipped (existing lead with matching phone or email)';
           } else if (
             existingLead &&
             (duplicateStrategy === 'merge' || duplicateStrategy === 'replace')
@@ -6648,11 +6982,16 @@ export class CRMService {
               (existingLead.associatedOrganizations as unknown[]) || [],
               leadOrgId ? [leadOrgId] : [],
             );
+            // Resolved before any write so a disallowed owner fails the row untouched.
+            const reassignTo = assignment?.reassignExisting
+              ? await pickLeadOwner(fileOwnerRaw)
+              : undefined;
             await this.leadModel.updateOne(
               { _id: existingLead._id },
               {
                 $set: {
                   ...scalarPatch,
+                  ...(reassignTo ? { leadOwner: reassignTo } : {}),
                   customFields: mergedCf,
                   associatedOrganizations: orgIds
                     .filter((id) => Types.ObjectId.isValid(id))
@@ -6662,6 +7001,10 @@ export class CRMService {
             );
             const refreshed = await this.leadModel.findById(existingLead._id).lean().exec();
             if (refreshed) await this.syncContactFromLeadSafe(refreshed);
+            if (reassignTo) {
+              noteAssigned(reassignTo);
+              if (job) job.reassignedCount++;
+            }
             rowOutcome =
               duplicateStrategy === 'merge' ? 'merged' : 'replaced';
           } else {
@@ -6669,14 +7012,18 @@ export class CRMService {
               entity: 'lead',
               merged: { ...mappedData },
             });
-            const isFullAdmin = this.isCrmWorkspaceAdmin(user);
-            const importedLeadOwner = (!isFullAdmin || !mappedData.leadOwner) && user
-              ? this.repOwnerLabelFromUser(user)
-              : mappedData.leadOwner;
+            // With explicit assignment options the owner is policy-checked (team scope etc.);
+            // without them keep the legacy rule: admins may use the file's owner, others own it.
+            const importedLeadOwner = assignment
+              ? await pickLeadOwner(fileOwnerRaw)
+              : (!this.isCrmWorkspaceAdmin(user) || isBlankImportValue(fileOwnerRaw)) && user
+                ? importerLabel
+                : String(fileOwnerRaw).trim();
             const importedLead = await this.leadModel.create({
               ...mappedData,
               customFields,
               leadOwner: importedLeadOwner,
+              importBatchId: jobId,
               createdBy: user ? new Types.ObjectId(String(user.userId ?? user._id)) : undefined,
               createdByName: user && (user.firstName || user.lastName)
                 ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
@@ -6687,6 +7034,8 @@ export class CRMService {
                 leadRequestedRid,
               ),
             });
+            importedThisRun.add(String(importedLead._id));
+            noteAssigned(importedLeadOwner);
             const leadObj = importedLead.toObject
               ? importedLead.toObject()
               : importedLead;
@@ -7082,7 +7431,9 @@ export class CRMService {
               job.skippedRows.push({
                 rowNumber: rowIndex,
                 rowData: row,
-                reason: `Duplicate record skipped (existing lead with matching phone or email)`,
+                reason:
+                  rowSkipReason ||
+                  `Duplicate record skipped (existing lead with matching phone or email)`,
               });
             }
           } else {
@@ -7133,12 +7484,37 @@ export class CRMService {
       job.failedCount = Math.max(0, jsonData.length - handled);
     }
 
-    if (user && count > 0) {
-      // Log a single activity for the import session
-      // We don't have a single entity to relate this to, but we can log it as an audit event
-      // The AuditLogInterceptor already handles the audit log.
-      // For HubSpot-like feed, we might want to log it if it was for a specific organization,
-      // but bulk imports are usually general.
+    if (type === 'leads' && job && Object.keys(job.assignedCounts).length) {
+      await this.bustCrmCache('leads');
+      // One notification per assignee (not per lead) for leads someone else handed them.
+      for (const [label, n] of Object.entries(job.assignedCounts)) {
+        if (label === importerLabel) continue;
+        void this.crmNotify
+          .notify({
+            event: 'lead_assigned',
+            title: 'Leads assigned to you',
+            message: `${n} imported lead(s) were assigned to you.`,
+            recipient: { label },
+            link: '/crm/leads',
+            metadata: { link: '/crm/leads', action: 'import_assign', count: n },
+            type: 'LEAD_ASSIGNED',
+          })
+          .catch((err) =>
+            console.error('[CRMService] Import assign notify failed:', err?.message || err),
+          );
+      }
+      if (assignment && assignment.mode !== 'self') {
+        await this.roleAuditLog
+          .log({
+            actor: user,
+            action: 'ownership_changed',
+            targetType: 'Lead',
+            targetLabel: `Import ${jobId}: ${count} lead(s) assigned (${assignment.mode})`,
+            before: {},
+            after: { importBatchId: jobId, assignedCounts: job.assignedCounts },
+          })
+          .catch(() => null);
+      }
     }
     return { count };
   }

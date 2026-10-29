@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Calendar, ChevronDown, Clock, Check } from 'lucide-react';
 import { cn } from "@/lib/utils";
@@ -77,7 +77,7 @@ export default function CRMDateRangePicker({
   const [customTo, setCustomTo] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, maxHeight: 520 });
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -92,14 +92,17 @@ export default function CRMDateRangePicker({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setMenuPos(null);
+      return;
+    }
     const updatePosition = () => {
       const el = containerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
       const pad = 12;
-      const menuWidth = 256;
+      const menuWidth = 224;
       const spaceBelow = window.innerHeight - r.bottom - pad;
       const spaceAbove = r.top - pad;
       const openUp = spaceBelow < 420 && spaceAbove > spaceBelow;
@@ -186,22 +189,22 @@ export default function CRMDateRangePicker({
         createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9999] w-56 sm:w-64 bg-card rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] shadow-[var(--crm-shadow-raised)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
-          style={{ top: menuPos.top, left: menuPos.left, maxHeight: menuPos.maxHeight }}
+          className="fixed z-[9999] w-56 bg-card rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] shadow-[var(--crm-shadow-raised)] overflow-hidden flex flex-col"
+          style={menuPos ? { top: menuPos.top, left: menuPos.left, maxHeight: menuPos.maxHeight } : { top: 0, left: 0, visibility: "hidden" }}
         >
-          <div className="p-3 sm:p-4 border-b border-border/40 bg-surface-dim/30 shrink-0">
-            <span className="text-xs font-black text-text-muted pl-1">Filter by Period</span>
+          <div className="px-3 py-2 border-b border-border/40 bg-surface-dim/30 shrink-0">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Filter by Period</span>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-            <div className="py-1 sm:py-2">
+            <div className="py-1">
               {PREDEFINED_RANGES.map((range) => (
                 <button
                   key={range.label}
                   type="button"
                   onClick={() => handleSelectRange(range)}
                   className={cn(
-                    "w-full px-3 sm:px-5 py-2 text-left text-xs sm:text-sm font-bold transition-all flex items-center justify-between group",
+                    "w-full px-3 py-1.5 text-left text-xs font-semibold transition-all flex items-center justify-between group",
                     selectedLabel === range.label ? "bg-primary/5 text-primary" : "text-text-main hover:bg-surface-dim"
                   )}
                 >
@@ -212,7 +215,7 @@ export default function CRMDateRangePicker({
             </div>
           </div>
 
-          <div className="p-3 sm:p-4 border-t border-border/40 bg-surface-dim/30 space-y-2 sm:space-y-3 shrink-0">
+          <div className="p-3 border-t border-border/40 bg-surface-dim/30 space-y-2 sm:space-y-3 shrink-0">
             <div className="flex items-center gap-2 mb-1">
               <Clock size={12} className="text-text-muted" />
               <span className="text-xs font-black text-text-muted">Custom Range</span>

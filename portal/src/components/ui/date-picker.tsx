@@ -103,7 +103,7 @@ export function DatePickerField({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-auto border-border bg-popover p-4 shadow-xl rounded-xl z-[99999] theme-crm-hubspot"
+          className="w-auto border-border bg-popover p-3 shadow-xl rounded-lg z-[99999] theme-crm-hubspot"
           align="start"
         >
           <Calendar

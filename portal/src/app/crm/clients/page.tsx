@@ -39,6 +39,7 @@ import {
 import { CrmIcon } from '@/lib/crm/shared/icons';
 import { CRM_LIST_PAGE } from '@/lib/crm/ui';
 
+const ClientDuplicatesModal = dynamic(() => import('@/components/crm/records/create/ClientDuplicatesModal'), { ssr: false });
 const ImportModal = dynamic(() => import('@/components/crm/records/create/ImportModal'), { ssr: false });
 
 interface Client {
@@ -91,14 +92,21 @@ function duplicateTooltip(info: ClientDuplicateInfo): string {
   return `Duplicate group ${info.group} (${info.groupSize} records)\n${lines.join('\n')}`;
 }
 
-function DuplicateBadge({ info }: { info: ClientDuplicateInfo }) {
+function DuplicateBadge({ info, onMerge }: { info: ClientDuplicateInfo; onMerge?: () => void }) {
+  const className =
+    'inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900';
+  if (!onMerge) {
+    return <span title={duplicateTooltip(info)} className={className}>Duplicate ×{info.groupSize}</span>;
+  }
   return (
-    <span
-      title={duplicateTooltip(info)}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+    <button
+      type="button"
+      title={`${duplicateTooltip(info)}\n\nClick to merge the others into this record`}
+      onClick={(e) => { e.stopPropagation(); onMerge(); }}
+      className={`${className} cursor-pointer hover:bg-amber-200`}
     >
-      Duplicate ×{info.groupSize}
-    </span>
+      Duplicate ×{info.groupSize} · Merge
+    </button>
   );
 }
 
@@ -174,6 +182,7 @@ export default function ClientsPage() {
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isDuplicatesOpen, setIsDuplicatesOpen] = useState(false);
   const { hasAccess, isAdmin, isLoaded } = usePermissions();
 
   useEffect(() => {
@@ -256,6 +265,34 @@ export default function ClientsPage() {
     }
   };
 
+  const handleMergeDuplicates = async (client: Client) => {
+    const others = client.duplicateInfo?.matches ?? [];
+    if (!others.length) return;
+    const names = others.map((m) => `• ${m.name || 'Unnamed'}${m.email ? ` (${m.email})` : ''}`).join('\n');
+    if (!window.confirm(`Keep "${client.name}" and merge these duplicates into it?\n\n${names}\n\nThe duplicates are moved to trash; their activities, emails and links are kept on this record.`)) return;
+    try {
+      await crmApi.post('/crm/clients/duplicates/merge', {
+        masterId: client._id,
+        duplicateIds: others.map((m) => m._id),
+      });
+      await fetchClients();
+    } catch (err: any) {
+      window.alert(err?.response?.data?.message || 'Failed to merge duplicate clients.');
+    }
+  };
+
+  const handleStatusChange = async (client: Client, status: string) => {
+    if (status === client.status) return;
+    const previous = client.status;
+    setClients((prev) => prev.map((c) => (c._id === client._id ? { ...c, status } : c)));
+    try {
+      await crmApi.patch(`/crm/clients/${client._id}`, { status });
+    } catch (err: any) {
+      setClients((prev) => prev.map((c) => (c._id === client._id ? { ...c, status: previous } : c)));
+      window.alert(err?.response?.data?.message || 'Failed to update client status.');
+    }
+  };
+
   const visibleCols = columns.filter(c => c.visible);
 
   const paginated = useMemo(
@@ -295,13 +332,31 @@ export default function ClientsPage() {
           <CrmListPersonCell
             name={client.name}
             initials={initials}
-            trailing={client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} /> : undefined}
+            trailing={client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} onMerge={() => void handleMergeDuplicates(client)} /> : undefined}
           />
         );
       }
       case 'email': return <CrmListMutedText className="crm-cell-wrap block">{clientDisplayEmail(client) || '—'}</CrmListMutedText>;
       case 'phone': return <CrmListMutedText className="crm-cell-wrap block">{clientDisplayPhone(client) || '—'}</CrmListMutedText>;
-      case 'status': return <CrmListStatusBadge label={client.status || '—'} />;
+      case 'status':
+        if (!hasAccess('clients:edit')) return <CrmListStatusBadge label={client.status || '—'} />;
+        return (
+          <span className="relative inline-flex items-center" onClick={(e) => e.stopPropagation()}>
+            <CrmListStatusBadge label={client.status || '—'} className="pr-4" />
+            <select
+              aria-label={`Status for ${client.name}`}
+              title="Change status"
+              value={client.status || 'active'}
+              onChange={(e) => void handleStatusChange(client, e.target.value)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="prospective">Prospective</option>
+            </select>
+            <span className="pointer-events-none absolute right-1 text-[9px] text-white">▾</span>
+          </span>
+        );
       case 'createdAt': return (
         <CrmListMutedText>
           {client.createdAt ? new Date(client.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
@@ -407,6 +462,15 @@ export default function ClientsPage() {
                 {duplicateSummary.groups === 1 ? 'group' : 'groups'}).
               </span>
               <span>Highlighted rows share a name, email or phone. Exports include a duplicate column.</span>
+              {hasAccess('clients:edit') && (
+                <button
+                  type="button"
+                  onClick={() => setIsDuplicatesOpen(true)}
+                  className="ml-auto shrink-0 rounded-[var(--crm-radius-ui)] bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700"
+                >
+                  Manage duplicates
+                </button>
+              )}
             </div>
           )}
 
@@ -453,7 +517,7 @@ export default function ClientsPage() {
                           footerLeft={
                             <div className="flex items-center gap-1.5">
                               <CrmListStatusBadge label={client.status || '—'} />
-                              {client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} /> : null}
+                              {client.duplicateInfo ? <DuplicateBadge info={client.duplicateInfo} onMerge={() => void handleMergeDuplicates(client)} /> : null}
                             </div>
                           }
                           footerRight={
@@ -581,6 +645,11 @@ export default function ClientsPage() {
       {isImportModalOpen && (
         <ImportModal isOpen onClose={() => setIsImportModalOpen(false)} onSuccess={fetchClients} type="clients" />
       )}
+      <ClientDuplicatesModal
+        isOpen={isDuplicatesOpen}
+        onClose={() => setIsDuplicatesOpen(false)}
+        onMerged={() => void fetchClients()}
+      />
       <ClientModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
