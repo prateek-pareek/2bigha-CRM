@@ -12,7 +12,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (+ sharp musl binary for Alpine runtime)
-RUN npm install && \
+RUN npm ci && \
     npm install @img/sharp-linuxmusl-x64@0.34.5 --no-save
 
 # Copy source code
