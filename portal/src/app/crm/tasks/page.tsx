@@ -1172,7 +1172,7 @@ export default function TasksPage() {
                                         onClick={() => { setEditingTask(task); setIsEditingForm(false); }}
                                     >
                                         <td className="px-3 py-2 font-medium !whitespace-normal break-words min-w-[180px] max-w-[360px]">{task.title}</td>
-                                        <td className="px-3 py-2">{taskPersonLabel(task.assignee as TaskPerson) || '—'}</td>
+                                        <td className="px-3 py-2">{taskPersonLabel(task.assignee as TaskPerson, task.metadata?.assigneeName || task.metadata?.pmAssigneeName) || '—'}</td>
                                         <td className="px-3 py-2">
                                             {isTaskEscalated(task)
                                                 ? 'Escalated'
@@ -1219,7 +1219,7 @@ export default function TasksPage() {
                                     </p>
                                     <p className="mt-1 text-sm font-semibold">{task.title}</p>
                                     <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                        {taskPersonLabel(task.assignee as TaskPerson) || 'Unassigned'} · {task.metadata?.priority || 'Medium'}
+                                        {taskPersonLabel(task.assignee as TaskPerson, task.metadata?.assigneeName || task.metadata?.pmAssigneeName) || 'Unassigned'} ·{task.metadata?.priority || 'Medium'}
                                     </p>
                                 </button>
                             ))}
@@ -1392,7 +1392,7 @@ export default function TasksPage() {
                                             ? 'Overdue'
                                             : normalizeTaskStatus(editingTask.status)],
                                     ['Reporter', taskPersonLabel(editingTask.author as TaskPerson) || '—'],
-                                    ['Assignee', taskPersonLabel(editingTask.assignee as TaskPerson) || 'Unassigned'],
+                                    ['Assignee', taskPersonLabel(editingTask.assignee as TaskPerson, editingTask.metadata?.assigneeName || editingTask.metadata?.pmAssigneeName) || 'Unassigned'],
                                 ].map(([label, value]) => (
                                     <div key={label} className="min-w-0 space-y-1 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--surface-dim)] p-3">
                                         <p className="text-xs font-semibold text-[var(--text-muted)]">{label}</p>

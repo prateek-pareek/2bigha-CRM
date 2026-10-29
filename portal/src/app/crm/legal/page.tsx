@@ -95,6 +95,8 @@ export default function LegalCasesPage() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  /** 2bigha read-through still in flight (runs after the CRM cases, bounded by its timeout). */
+  const [twoBighaLoading, setTwoBighaLoading] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<LegalCase | null>(null);
   const [filters, setFilters] = useState<FilterCriteria[]>([]);
@@ -158,6 +160,7 @@ export default function LegalCasesPage() {
       if (controller.signal.aborted) return;
 
       // Live 2bigha GraphQL properties read-through (best-effort, bounded by a timeout)
+      setTwoBighaLoading(true);
       const timeoutId = setTimeout(() => controller.abort(), TWOBIGHA_READ_THROUGH_TIMEOUT_MS);
       try {
         const propRes = await fetch(
@@ -201,6 +204,8 @@ export default function LegalCasesPage() {
         }
       } finally {
         clearTimeout(timeoutId);
+        // A newer request owns the flag once it has replaced this one.
+        if (casesFetchAbortRef.current === controller) setTwoBighaLoading(false);
       }
     },
     [deferredSearch],
@@ -532,7 +537,15 @@ export default function LegalCasesPage() {
           />
 
           <div className="flex-1 overflow-auto custom-scrollbar">
-            {loading ? (
+            {/* CRM cases already on screen — 2bigha rows will append; say so instead of blocking. */}
+            {!loading && twoBighaLoading && cases.length > 0 ? (
+              <div className="flex items-center gap-2 px-4 py-2 text-xs text-text-muted">
+                <Loader2 size={13} className="animate-spin" /> Loading 2bigha cases…
+              </div>
+            ) : null}
+            {/* Keep the spinner while nothing is on screen yet and 2bigha may still add rows,
+                so "No legal cases found" only shows once both sources have answered. */}
+            {loading || (twoBighaLoading && cases.length === 0) ? (
               <div className="w-full h-64 flex items-center justify-center">
                 <Loader2 size={40} className="animate-spin text-text-muted" />
               </div>

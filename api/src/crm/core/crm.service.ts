@@ -375,6 +375,73 @@ export class CRMService {
     return isMongoObjectIdString(value) ? new Types.ObjectId(value) : undefined;
   }
 
+  /**
+   * Display name/email for task assignee ids. `resolveTaskAssigneeRef` can store either an
+   * HRMS user id or (when the person has no HRMS account) a CRM user id, so check both.
+   */
+  private async lookupTaskAssigneeNames(
+    ids: string[],
+  ): Promise<Map<string, { name: string; email?: string }>> {
+    const out = new Map<string, { name: string; email?: string }>();
+    const valid = [...new Set(ids.map((id) => String(id || '').trim()))].filter((id) =>
+      isMongoObjectIdString(id),
+    );
+    if (!valid.length) return out;
+    const label = (u: { firstName?: string; lastName?: string; fullName?: string; email?: string }) =>
+      [u.firstName, u.lastName].filter(Boolean).join(' ').trim() ||
+      String(u.fullName || '').trim() ||
+      (u.email ? String(u.email).split('@')[0] : '');
+
+    const hrms = await this.hrmsUserModel
+      .find({ _id: { $in: valid.map((id) => new Types.ObjectId(id)) } })
+      .select('firstName lastName fullName email')
+      .lean()
+      .exec();
+    for (const u of hrms as any[]) {
+      const name = label(u);
+      if (name) out.set(String(u._id), { name, email: u.email || undefined });
+    }
+    const missing = valid.filter((id) => !out.has(id));
+    if (missing.length) {
+      for (const u of await this.crmUsersService.findDisplayByIds(missing)) {
+        const name = label(u);
+        if (name) out.set(u._id, { name, email: u.email || undefined });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Task responses populate `assignee` from HRMS users only, so tasks assigned to a CRM-only
+   * user come back with `assignee: null` (blank avatar on the card). For those, put the CRM
+   * user's name into `metadata.assigneeName` — the card's existing fallback. In-memory only.
+   */
+  private async fillUnresolvedTaskAssignees(docs: Array<any | null | undefined>): Promise<void> {
+    const pending: Array<{ doc: any; rawId: string }> = [];
+    for (const doc of docs) {
+      if (!doc || doc.type !== 'Task' || doc.assignee != null) continue;
+      if (typeof doc.populated !== 'function') continue;
+      const raw = doc.populated('assignee');
+      if (!raw) continue;
+      const meta = doc.metadata && typeof doc.metadata === 'object' ? doc.metadata : {};
+      if (meta.assigneeName) continue;
+      pending.push({ doc, rawId: String(raw) });
+    }
+    if (!pending.length) return;
+    try {
+      const names = await this.lookupTaskAssigneeNames(pending.map((p) => p.rawId));
+      for (const { doc, rawId } of pending) {
+        const hit = names.get(rawId);
+        if (!hit) continue;
+        const meta = doc.metadata && typeof doc.metadata === 'object' ? doc.metadata : {};
+        doc.set('metadata', { ...meta, assigneeName: hit.name, assigneeEmail: meta.assigneeEmail || hit.email });
+      }
+    } catch (err) {
+      // Labels are cosmetic — never fail a task read over them.
+      console.warn('[CRMService] task assignee name backfill failed:', err);
+    }
+  }
+
   private notifySalesAgent(event: {
     trigger:
       | 'lead_created'
@@ -4879,6 +4946,18 @@ export class CRMService {
       if (resolved) dto.assignee = resolved;
       else delete dto.assignee;
     }
+    // Store the assignee's name on the task so cards can label it even when the
+    // assignee isn't an HRMS user (HRMS populate returns null for CRM-only ids).
+    if (dto.type === 'Task' && dto.assignee) {
+      try {
+        const hit = (await this.lookupTaskAssigneeNames([String(dto.assignee)])).get(String(dto.assignee));
+        if (hit) {
+          dto.metadata = { ...(dto.metadata || {}), assigneeName: hit.name, assigneeEmail: hit.email };
+        }
+      } catch {
+        /* label is cosmetic — never block task creation */
+      }
+    }
     const activity = await new this.activityModel(dto).save();
 
     if (dto.type === 'Call') {
@@ -4971,6 +5050,7 @@ export class CRMService {
       .populate({ path: 'author', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
       .populate({ path: 'assignee', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
       .exec();
+    await this.fillUnresolvedTaskAssignees([full]);
     return full ?? activity;
   }
 
@@ -5266,6 +5346,7 @@ export class CRMService {
         .populate({ path: 'assignee', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
         .sort({ createdAt: -1 })
         .exec();
+      await this.fillUnresolvedTaskAssignees(activities);
 
       // One physical inbound email can be logged on a lead plus its related contact.
       // Rollup intentionally returns all related records, so collapse only inbound-email
@@ -5437,6 +5518,25 @@ export class CRMService {
       });
     }
 
+    // Keep the stored assignee label in step with the actual assignee (the client may
+    // resend an older metadata copy, so derive it here rather than trusting the payload).
+    if (existing.type === 'Task' && prevAssignee !== nextAssignee) {
+      if (nextAssignee) {
+        try {
+          const hit = (await this.lookupTaskAssigneeNames([nextAssignee])).get(nextAssignee);
+          if (hit) {
+            nextMeta.assigneeName = hit.name;
+            nextMeta.assigneeEmail = hit.email;
+          }
+        } catch {
+          /* label is cosmetic — never block the update */
+        }
+      } else {
+        delete nextMeta.assigneeName;
+        delete nextMeta.assigneeEmail;
+      }
+    }
+
     patch.metadata = nextMeta;
 
     const updated = await this.activityModel
@@ -5444,6 +5544,7 @@ export class CRMService {
       .populate({ path: 'author', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
       .populate({ path: 'assignee', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
       .exec();
+    await this.fillUnresolvedTaskAssignees([updated]);
 
     const shouldNotifyReassign =
       existing.type === 'Task' &&
@@ -5523,6 +5624,12 @@ export class CRMService {
     }
 
     let result: any;
+    // Join only the parts that exist — a template string would print "undefined" for a missing last name.
+    const convertedName =
+      [lead.firstName, lead.lastName].map((p) => String(p ?? '').trim()).filter(Boolean).join(' ') ||
+      (lead.email || '').trim() ||
+      String((lead as any).mobileNo || lead.phone || '').trim() ||
+      'Unknown';
     if (dto.type === 'contact') {
       const email = (lead.email || '').trim();
       let contact: any;
@@ -5589,7 +5696,7 @@ export class CRMService {
       result = { type: 'contact', entity: contact };
     } else if (dto.type === 'organization') {
       const org = await this.organizationModel.create({
-        name: lead.organization || `${lead.firstName} ${lead.lastName}`,
+        name: lead.organization || convertedName,
         website: lead.website,
         territory: lead.territory,
         industry: lead.industry,
@@ -5620,7 +5727,7 @@ export class CRMService {
             lead.customFields,
           );
           const patch: Record<string, unknown> = {
-            name: `${lead.firstName} ${lead.lastName}`,
+            name: convertedName,
             email,
           };
           if (phone) patch.phone = phone;
@@ -5636,7 +5743,7 @@ export class CRMService {
       if (!client) {
         const cfNew = this.mergeCustomFieldsMaps(undefined, lead.customFields);
         client = await this.clientModel.create({
-          name: `${lead.firstName} ${lead.lastName}`,
+          name: convertedName,
           email: email || undefined,
           phone,
           status: 'active',

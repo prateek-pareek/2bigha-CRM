@@ -226,6 +226,8 @@ function PropertyListingsPageContent() {
   // Only the newest request may write rows/total/loading — an older, slower response
   // (previous bucket, page or filter) must not overwrite them or clear the spinner early.
   const loadSeqRef = useRef(0);
+  /** Latest `load` for the error toast's Retry (the toast outlives the closure that showed it). */
+  const loadRef = useRef<() => Promise<void>>(async () => {});
 
   const load = useCallback(async () => {
     const seq = ++loadSeqRef.current;
@@ -281,11 +283,15 @@ function PropertyListingsPageContent() {
       if (isStale()) return;
       setListings(data.data);
       setTotal(data.total);
-    } catch {
+    } catch (err: any) {
       if (isStale()) return;
       setListings([]);
       setTotal(0);
-      toast.error("Failed to load property listings");
+      const timedOut = err?.code === "ECONNABORTED" || err?.code === "ETIMEDOUT";
+      toast.error(
+        timedOut ? "2Bigha is taking too long to respond" : "Failed to load property listings",
+        { action: { label: "Retry", onClick: () => void loadRef.current() } },
+      );
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -314,6 +320,7 @@ function PropertyListingsPageContent() {
   }, [bucket]);
 
   useEffect(() => {
+    loadRef.current = load;
     void load();
   }, [load]);
 

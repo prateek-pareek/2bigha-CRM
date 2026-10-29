@@ -110,12 +110,12 @@ const NAV_ICON_CLASS = 'h-3.5 w-3.5';
 /** Long labels wrap onto a second line instead of truncating with an ellipsis. */
 /** Expandable group headers (e.g. Reports & Analytics): one line, matching sub-item text size. */
 const NAV_PARENT_LABEL_CLASS = 'min-w-0 flex-1 whitespace-nowrap text-left leading-tight';
-const NAV_LABEL_CLASS = 'min-w-0 flex-1 text-left whitespace-normal break-words leading-tight';
+const NAV_LABEL_CLASS = 'min-w-0 flex-1 text-left whitespace-normal break-words [overflow-wrap:anywhere] leading-tight';
 /** Lets a nav row grow past the fixed rail height when its label wraps. */
 const NAV_ITEM_WRAP_CLASS = 'h-auto min-h-10 py-1.5';
-/** Sub-menu leaf rows: one line, tighter, so labels like "Team Lead Dashboard" never wrap. */
-const NAV_SUB_ITEM_CLASS = 'h-9 min-h-0 gap-2 !px-2 py-0';
-const NAV_SUB_LABEL_CLASS = 'min-w-0 flex-1 truncate whitespace-nowrap text-left text-[13px] leading-tight';
+/** Sub-menu leaf rows: tighter, one line when the label fits; long labels (e.g. "2bigha Verification Queue") wrap instead of truncating. */
+const NAV_SUB_ITEM_CLASS = 'h-auto min-h-9 gap-2 !px-2 py-1';
+const NAV_SUB_LABEL_CLASS = 'min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere] text-left text-[13px] leading-tight';
 
 type NavIconComponent = ComponentType<{
     className?: string;
@@ -1083,11 +1083,11 @@ export default function Sidebar({
                                                 </button>
                                                 <div
                                                     className={cn(
-                                                        'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+                                                        'grid grid-cols-[minmax(0,1fr)] overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
                                                         menuOpen && !isCollapsed && !locked ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                                                     )}
                                                 >
-                                                    <div className={cn('min-h-0 ml-2 space-y-0.5 border-l pl-1.5', subBorderCls)}>
+                                                    <div className={cn('min-h-0 min-w-0 ml-2 space-y-0.5 border-l pl-1.5', subBorderCls)}>
                                                         {(() => {
                                                             const leafHrefs = children.flatMap((c) => {
                                                                 if (
@@ -1161,13 +1161,13 @@ export default function Sidebar({
                                                                         </button>
                                                                         <div
                                                                             className={cn(
-                                                                                'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+                                                                                'grid grid-cols-[minmax(0,1fr)] overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
                                                                                 nestedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                                                                             )}
                                                                         >
                                                                             <div
                                                                                 className={cn(
-                                                                                    'min-h-0 ml-3 space-y-0.5 border-l pl-2',
+                                                                                    'min-h-0 min-w-0 ml-3 space-y-0.5 border-l pl-2',
                                                                                     subBorderCls,
                                                                                 )}
                                                                             >
