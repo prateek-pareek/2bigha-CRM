@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useDeferredValue, useMemo } from 'react';
+import { toast } from 'sonner';
+import { downloadServerExport } from '@/lib/crm/export/list-export';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Search, Plus, UserCheck, MoreHorizontal, Settings2, GripVertical, X, Check, Trash2, Mail, Phone, LayoutGrid, List, Calendar, Upload, Loader2, Download } from 'lucide-react';
@@ -240,26 +242,16 @@ export default function ClientsPage() {
 
   const handleExport = async () => {
     setExporting(true);
-    const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/export/clients`, {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}` }
+      // Same search + filters as the list on screen.
+      const params = buildCrmListSearchParams({
+        search: deferredSearch,
+        filters: apiFilters,
       });
-      if (res.ok) {
-        const csvContent = await res.text();
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `clients_export_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    } catch (error) {
-      console.error('Export error:', error);
+      await downloadServerExport('clients', params);
+      toast.success('Clients exported');
+    } catch (error: any) {
+      toast.error(error?.message || 'Export failed');
     } finally {
       setExporting(false);
     }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ListExportButton } from '@/components/crm/ui/ListExportButton';
+import { exportDate, exportPerson } from '@/lib/crm/export/list-export';
 import { FileText, Search, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from '@/lib/crm/config';
@@ -140,6 +142,23 @@ export default function NotesPage() {
         icon={<StickyNote className="h-4 w-4" />}
         actions={
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+            <ListExportButton<Note>
+              module="notes"
+              fileName="notes"
+              sheetName="Notes"
+              permissions={["activities:export"]}
+              getRows={() => filteredNotes}
+              filters={{
+                search: search.trim() || undefined,
+                filters: filters.length ? filters : undefined,
+              }}
+              columns={[
+                { header: "Title", value: (n) => n.title || "" },
+                { header: "Note", value: (n) => (n.content || "").replace(/<[^>]*>?/gm, "").trim() },
+                { header: "Author", value: (n) => exportPerson(n.author) },
+                { header: "Created at", value: (n) => exportDate(n.createdAt) },
+              ]}
+            />
             <span className="rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2 font-medium">
               Archive · {totalNotes}
             </span>

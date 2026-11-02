@@ -789,6 +789,13 @@ export class CRMController {
     @Param('type') type: string,
     @Query('ids') ids?: string,
     @Query('pipelineId') pipelineId?: string,
+    @Query('search') search?: string,
+    @Query('filters') filters?: string,
+    @Query('mine') mine?: string,
+    @Query('lastActivity') lastActivity?: string,
+    @Query('emailOpenMode') emailOpenMode?: string,
+    @Query('emailOpenDays') emailOpenDays?: string,
+    @Query('emailReply') emailReply?: string,
     @Request() req?: any,
     @Res({ passthrough: true }) res?: Response,
   ) {
@@ -801,15 +808,40 @@ export class CRMController {
       {
         ids: parsedIds,
         pipelineId,
+        search,
+        filters: parseCrmFiltersQuery(filters),
+        mine: mine === '1' || mine === 'true',
+        emailEngagement: parseCrmEmailEngagementQuery({
+          lastActivity,
+          emailOpenMode,
+          emailOpenDays,
+          emailReply,
+        }),
       },
       req?.user,
     );
+    const safeType = String(type || 'export').replace(/[^a-z0-9-]/gi, '');
     res?.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res?.setHeader(
       'Content-Disposition',
-      `attachment; filename="${type}_export.csv"`,
+      `attachment; filename="${safeType}_export.csv"`,
     );
-    return csv;
+    // UTF-8 BOM so Excel shows ₹ / Hindi text correctly.
+    return `\uFEFF${csv}`;
+  }
+
+  /** Permission + quota gate and Export History entry for exports built in the browser. */
+  @Post('export/log')
+  logClientExport(
+    @Body() body: { module?: string; rowCount?: number; filters?: Record<string, unknown> },
+    @Request() req: any,
+  ) {
+    return this.crmService.authorizeClientExport(
+      String(body?.module || ''),
+      Number(body?.rowCount) || 0,
+      body?.filters,
+      req.user,
+    );
   }
 
   @Post('import/preview')

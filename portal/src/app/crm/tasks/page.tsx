@@ -22,6 +22,8 @@ import ActivityLogger, { CrmPortalUserOption, formatCrmUserLabel } from '@/compo
 import { usePermissions } from '@/hooks/usePermissions';
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
+import { ListExportButton } from '@/components/crm/ui/ListExportButton';
+import { exportDate } from '@/lib/crm/export/list-export';
 import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
 import {
@@ -1013,6 +1015,42 @@ export default function TasksPage() {
                                 <input type="checkbox" checked={teamScope} onChange={(e) => setTeamScope(e.target.checked)} className="cursor-pointer" />
                             </label>
                         </div>
+                        <ListExportButton<Task>
+                            module="tasks"
+                            fileName="tasks"
+                            sheetName="Tasks"
+                            permissions={['activities:export']}
+                            getRows={() => filteredTasks}
+                            filters={{
+                                search: search.trim() || undefined,
+                                mineOnly: mineOnly || undefined,
+                                teamScope: teamScope || undefined,
+                                lane: laneFilter !== 'all' ? laneFilter : undefined,
+                                filters: filters.length ? filters : undefined,
+                            }}
+                            columns={[
+                                { header: 'Title', value: (t) => t.title },
+                                {
+                                    header: 'Status',
+                                    value: (t) =>
+                                        isTaskEscalated(t) ? 'Escalated' : isTaskOverdue(t) ? 'Overdue' : normalizeTaskStatus(t.status),
+                                },
+                                { header: 'Priority', value: (t) => t.metadata?.priority || 'Medium' },
+                                { header: 'Due date', value: (t) => exportDate(t.metadata?.dueDate) },
+                                {
+                                    header: 'Assignee',
+                                    value: (t) =>
+                                        taskPersonLabel(
+                                            t.assignee as TaskPerson,
+                                            t.metadata?.assigneeName || t.metadata?.pmAssigneeName,
+                                        ),
+                                },
+                                { header: 'Reporter', value: (t) => taskPersonLabel(t.author as TaskPerson) },
+                                { header: 'Related to', value: (t) => t.relatedType || '' },
+                                { header: 'Description', value: (t) => (t.content || '').replace(/<[^>]*>?/gm, '').trim() },
+                                { header: 'Created at', value: (t) => exportDate(t.createdAt) },
+                            ]}
+                        />
                         <CrmButton
                             variant="primary"
                             onClick={() => { setDefaultColumnForNew('Open'); setIsCreating(true); }}

@@ -1,6 +1,8 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState, useEffect, useRef, Suspense, useCallback } from 'react';
+import { toast } from 'sonner';
+import { downloadServerExport } from '@/lib/crm/export/list-export';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Plus, Building2, MoreHorizontal, Settings2, GripVertical, X, Check, Trash2, ChevronDown, Mail, Upload } from 'lucide-react';
@@ -199,6 +201,31 @@ function OrganizationsPageContent() {
     [lastActivityFilter],
   );
 
+  const [exporting, setExporting] = useState(false);
+
+  /** Export exactly what the list shows: same search, complete filter rules and email activity. */
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const activeFilters = filters.filter((f) => {
+        const op = String(f.operator || '');
+        if (['is_empty', 'is_not_empty', 'is_checked', 'is_not_checked'].includes(op)) return true;
+        return String(f.value ?? '').trim().length > 0;
+      });
+      const params = buildCrmListSearchParams({
+        search: normalizedSearch,
+        filters: activeFilters,
+        emailEngagement,
+      });
+      await downloadServerExport('organizations', params);
+      toast.success('Companies exported');
+    } catch (error: any) {
+      toast.error(error?.message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const fetchOrgs = useCallback(async () => {
     setLoading(true);
     try {
@@ -365,6 +392,9 @@ function OrganizationsPageContent() {
      <CrmHeaderTools
        canImport={hasAccess('admin:manage')}
        onImport={() => setIsImportOpen(true)}
+       canExport={hasAccess('organizations:export')}
+       onExport={() => void handleExport()}
+       exporting={exporting}
        onRefresh={() => void fetchOrgs()}
        trailing={
          viewMode === 'list' ? (

@@ -1,6 +1,8 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { ListExportButton } from "@/components/crm/ui/ListExportButton";
+import { exportDate, fetchAllPages } from "@/lib/crm/export/list-export";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -211,8 +213,9 @@ function VisitsPageContent() {
     setPage(1);
   }, [tab, status, category, searchTerm, datePreset, reportFilter]);
 
-  const visibleVisits = useMemo(() => {
-    let rows = visits;
+  /** Search + "has report" filters for field visits (shared by the table and Export). */
+  const applyVisitFilters = useCallback((input: FieldVisit[]) => {
+    let rows = input;
     if (searchTerm && tab === "visits") {
       const q = searchTerm.toLowerCase();
       rows = rows.filter((row) => {
@@ -230,7 +233,44 @@ function VisitsPageContent() {
     if (reportFilter === "yes") rows = rows.filter((row) => Boolean(row.report?.status));
     if (reportFilter === "no") rows = rows.filter((row) => !row.report?.status);
     return rows;
-  }, [visits, searchTerm, tab, reportFilter]);
+  }, [searchTerm, tab, reportFilter]);
+
+  const visibleVisits = useMemo(() => applyVisitFilters(visits), [applyVisitFilters, visits]);
+
+  /** All rows of the active tab matching the current filters (every page, capped). */
+  const loadExportRows = useCallback(async (): Promise<Array<FieldVisit | VisitRequest>> => {
+    if (tab === "visits") {
+      const range = dateRange(datePreset);
+      const all = await fetchAllPages<FieldVisit>(
+        async (p) => {
+          const result = await fetchAllFieldVisits({
+            page: p,
+            limit: 50,
+            status: status || undefined,
+            visitCategory: category || undefined,
+            startDate: range.startDate,
+            endDate: range.endDate,
+          });
+          return { data: result.data?.rows || [], total: result.data?.meta?.total };
+        },
+        { maxRows: 5000 },
+      );
+      return applyVisitFilters(all);
+    }
+    return fetchAllPages<VisitRequest>(
+      async (p) => {
+        const result = await fetchAllVisitRequests({
+          page: p,
+          limit: 50,
+          status: status || undefined,
+          purpose: category || undefined,
+          searchTerm: searchTerm || undefined,
+        });
+        return { data: result.data?.rows || [], total: result.data?.meta?.total };
+      },
+      { maxRows: 5000 },
+    );
+  }, [tab, datePreset, status, category, searchTerm, applyVisitFilters]);
 
   const total = tab === "visits" ? visitMeta.total : requestMeta.total;
   const filtersActive = Boolean(status || category || datePreset || reportFilter || searchTerm);
@@ -279,7 +319,63 @@ function VisitsPageContent() {
           { label: "Property Listings", href: "/crm/property-listings?bucket=pm" },
           { label: "Visit tracking" },
         ]}
-        actions={<CrmHeaderTools onRefresh={() => void load()} canExport={false} canImport={false} />}
+        actions={
+          <CrmHeaderTools
+            leading={
+              <ListExportButton<any>
+                key={tab}
+                module="visits"
+                fileName={tab === "visits" ? "field_visits" : "visit_requests"}
+                sheetName={tab === "visits" ? "Field visits" : "Visit requests"}
+                permissions={["visits:export"]}
+                getRows={loadExportRows}
+                filters={{
+                  tab,
+                  status: status || undefined,
+                  category: category || undefined,
+                  search: searchTerm || undefined,
+                  date: datePreset || undefined,
+                  report: reportFilter || undefined,
+                }}
+                columns={
+                  tab === "visits"
+                    ? [
+                        { header: "Visit ID", value: (v: FieldVisit) => v.id },
+                        { header: "Property", value: (v: FieldVisit) => propertyLabel(v.property) },
+                        { header: "City", value: (v: FieldVisit) => v.property?.city || "" },
+                        { header: "Category", value: (v: FieldVisit) => formatVisitCategory(v.visitCategory) },
+                        { header: "Status", value: (v: FieldVisit) => formatVisitStatus(v.status) },
+                        { header: "Field agent", value: (v: FieldVisit) => personName(v.agentAssigned) },
+                        { header: "Owner", value: (v: FieldVisit) => personName(v.owner) },
+                        { header: "Scheduled at", value: (v: FieldVisit) => exportDate(v.scheduledAt) },
+                        { header: "Checked in", value: (v: FieldVisit) => exportDate(v.checkInAt) },
+                        { header: "Checked out", value: (v: FieldVisit) => exportDate(v.checkOutAt) },
+                        { header: "Duration (min)", value: (v: FieldVisit) => v.durationMinutes ?? "" },
+                        { header: "Report", value: (v: FieldVisit) => v.report?.status || "No report" },
+                        { header: "Notes", value: (v: FieldVisit) => v.notes || "" },
+                      ]
+                    : [
+                        { header: "Request ID", value: (r: VisitRequest) => r.id },
+                        { header: "Property", value: (r: VisitRequest) => propertyLabel(r.property) },
+                        { header: "City", value: (r: VisitRequest) => r.property?.city || "" },
+                        { header: "Purpose", value: (r: VisitRequest) => formatVisitCategory(r.visitCategory) },
+                        { header: "Status", value: (r: VisitRequest) => formatVisitStatus(r.visitRequestStatus) },
+                        { header: "Requested by", value: (r: VisitRequest) => personName(r.requestedBy) },
+                        { header: "Owner", value: (r: VisitRequest) => personName(r.owner) },
+                        { header: "Preferred date", value: (r: VisitRequest) => exportDate(r.preferredDate) },
+                        { header: "Preferred slot", value: (r: VisitRequest) => r.preferredTimeSlot || "" },
+                        { header: "Description", value: (r: VisitRequest) => r.description || "" },
+                        { header: "Status reason", value: (r: VisitRequest) => r.statusReason || "" },
+                        { header: "Requested on", value: (r: VisitRequest) => exportDate(r.createdAt) },
+                      ]
+                }
+              />
+            }
+            onRefresh={() => void load()}
+            canExport={false}
+            canImport={false}
+          />
+        }
         className="mb-3"
       />
 

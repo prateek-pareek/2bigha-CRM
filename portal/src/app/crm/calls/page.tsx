@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
+import { ListExportButton } from '@/components/crm/ui/ListExportButton';
+import { exportDate, exportPerson } from '@/lib/crm/export/list-export';
 import { History } from 'lucide-react';
 import { toast } from 'sonner';
 import { CRM_API_URL } from '@/lib/crm/config';
@@ -103,9 +105,34 @@ export default function CallsPage() {
  { label: 'Calls' },
  ]}
  actions={
+ <div className="flex flex-wrap items-center gap-2">
+ <ListExportButton<Call>
+ module="calls"
+ fileName="calls"
+ sheetName="Calls"
+ permissions={['activities:export']}
+ getRows={() => filteredCalls}
+ filters={{ filters: filters.length ? filters : undefined }}
+ columns={[
+ { header: 'Title', value: (c) => c.title || '' },
+ { header: 'Direction', value: (c) => c.metadata?.type || '' },
+ { header: 'Status', value: (c) => c.metadata?.status || '' },
+ {
+ header: 'Duration (min)',
+ value: (c) =>
+ typeof c.metadata?.duration === 'number' ? Math.round((c.metadata.duration / 60) * 10) / 10 : '',
+ },
+ { header: 'From', value: (c) => c.metadata?.from || '' },
+ { header: 'To', value: (c) => c.metadata?.to || '' },
+ { header: 'Notes', value: (c) => (c.content || '').replace(/<[^>]*>?/gm, '').trim() },
+ { header: 'Logged by', value: (c) => exportPerson(c.author) },
+ { header: 'Created at', value: (c) => exportDate(c.createdAt) },
+ ]}
+ />
  <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
  <History size={14} className="text-[var(--primary)]" />
  Engagement Feed
+ </div>
  </div>
  }
  />

@@ -76,7 +76,11 @@ import {
   assignUniqueRecordId,
   isMongoObjectIdString,
 } from '../shared/crm-record-id.util';
-import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
+import {
+  hasCrmAdminJwtBypass,
+  hasCrmFullDataAccess,
+} from '../shared/crm-admin-access.util';
+import { CLIENT_EXPORT_PERMISSIONS, csvCell } from '../shared/crm-export.util';
 import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
 import { leadVisibilityFilter } from '../shared/crm-lead-visibility.util';
 import {
@@ -6036,6 +6040,14 @@ export class CRMService {
     options?: {
       ids?: string[];
       pipelineId?: string;
+      /** Same search box text the list uses. */
+      search?: string;
+      /** Same filter criteria the list uses (`filters` query param). */
+      filters?: CrmFilterCriterion[];
+      /** "Only mine" toggle on the leads / contacts lists. */
+      mine?: boolean;
+      /** Email activity filter on the leads / contacts / organizations lists. */
+      emailEngagement?: CrmEmailEngagementListFilter | null;
     },
     user?: any,
   ): Promise<string> {
@@ -6044,7 +6056,10 @@ export class CRMService {
     // type, so enforce `${type}:export` here where the type is known. Admins /
     // full-data-access roles bypass.
     const exportModuleKey = String(type || '').trim();
-    if (exportModuleKey && !hasCrmFullDataAccess(user)) {
+    if (!['leads', 'contacts', 'clients', 'organizations'].includes(exportModuleKey)) {
+      throw new BadRequestException('Invalid export type');
+    }
+    if (!hasCrmFullDataAccess(user)) {
       const perms = this.crmPermissionSet(user);
       if (
         !perms.has(`${exportModuleKey}:export`) &&
@@ -6067,17 +6082,36 @@ export class CRMService {
     const pipelineId = isMongoObjectIdString(pipelineIdCandidate)
       ? pipelineIdCandidate
       : '';
+    const search = String(options?.search || '').trim();
+    const criteria = Array.isArray(options?.filters) ? options!.filters : [];
+    const and = (
+      base: Record<string, unknown>,
+      extra: Record<string, unknown>,
+    ): Record<string, unknown> =>
+      Object.keys(base).length ? { $and: [base, extra] } : extra;
 
-    switch (type) {
-      case 'leads':
+    switch (exportModuleKey) {
+      case 'leads': {
+        // Same visibility as the leads list — agents only get the leads they can see.
+        let filter = this.leadExportScopeFilter(user);
+        if (selectedObjectIds.length) {
+          filter = and(filter, { _id: { $in: selectedObjectIds } });
+        } else if (pipelineId) {
+          filter = and(filter, { pipeline: pipelineId });
+        }
+        filter = this.appendCrmTextSearchFilter(filter, search, [
+          'firstName',
+          'lastName',
+          'email',
+          'source',
+          'leadCategory',
+          'createdByName',
+        ]);
+        if (criteria.length) filter = appendCrmListFilters(filter, criteria, 'leads');
+        if (options?.mine && user) filter = and(filter, this.leadOwnershipFilter(user));
+        filter = await this.applyListEmailEngagement(filter, 'leads', options?.emailEngagement);
         data = await this.leadModel
-          .find(
-            selectedObjectIds.length
-              ? { _id: { $in: selectedObjectIds } }
-              : pipelineId
-              ? { pipeline: pipelineId }
-              : {},
-          )
+          .find(filter)
           .sort({ createdAt: -1 })
           .limit(CRM_MAX_EXPORT_ROWS)
           .maxTimeMS(CRM_LIST_MAX_TIME_MS)
@@ -6093,13 +6127,31 @@ export class CRMService {
           'createdAt',
         ];
         break;
-      case 'contacts':
+      }
+      case 'contacts': {
+        // Same visibility as the contacts list.
+        let filter: Record<string, unknown> =
+          user && !this.canReadAllModuleData('contacts', user)
+            ? this.contactOwnershipFilter(user)
+            : {};
+        if (user && !this.canReadModule('clients', user)) {
+          filter = and(filter, { source: { $ne: 'client' } });
+        }
+        if (selectedObjectIds.length) {
+          filter = and(filter, { _id: { $in: selectedObjectIds } });
+        }
+        filter = this.appendCrmTextSearchFilter(filter, search, [
+          'firstName',
+          'lastName',
+          'email',
+          'phone',
+          'jobTitle',
+        ]);
+        if (criteria.length) filter = appendCrmListFilters(filter, criteria, 'contacts');
+        if (options?.mine && user) filter = and(filter, this.contactOwnershipFilter(user));
+        filter = await this.applyListEmailEngagement(filter, 'contacts', options?.emailEngagement);
         data = await this.contactModel
-          .find(
-            selectedObjectIds.length
-              ? { _id: { $in: selectedObjectIds } }
-              : {},
-          )
+          .find(filter)
           .sort({ createdAt: -1 })
           .limit(CRM_MAX_EXPORT_ROWS)
           .maxTimeMS(CRM_LIST_MAX_TIME_MS)
@@ -6115,7 +6167,12 @@ export class CRMService {
           'createdAt',
         ];
         break;
+      }
       case 'clients': {
+        // The clients list itself is admin-only — export follows the same rule.
+        if (!hasCrmAdminJwtBypass(user)) {
+          throw new ForbiddenException('Client export is restricted to administrators.');
+        }
         const dupIndex = new ClientDuplicateIndex(
           (await this.clientModel
             .find({}, CLIENT_DUPLICATE_PROJECTION)
@@ -6123,12 +6180,18 @@ export class CRMService {
             .lean()
             .exec()) as any[],
         );
+        let filter: Record<string, unknown> = selectedObjectIds.length
+          ? { _id: { $in: selectedObjectIds } }
+          : {};
+        if (search) {
+          const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+          filter = and(filter, {
+            $or: [{ name: re }, { email: re }, { additionalEmails: re }],
+          });
+        }
+        if (criteria.length) filter = appendCrmListFilters(filter, criteria, 'clients');
         const rows = await this.clientModel
-          .find(
-            selectedObjectIds.length
-              ? { _id: { $in: selectedObjectIds } }
-              : {},
-          )
+          .find(filter)
           .populate('organization', 'name')
           .sort({ createdAt: -1 })
           .limit(CRM_MAX_EXPORT_ROWS)
@@ -6175,29 +6238,111 @@ export class CRMService {
         ];
         break;
       }
-      default:
-        throw new Error('Invalid export type');
+      case 'organizations': {
+        let filter: Record<string, unknown> = selectedObjectIds.length
+          ? { _id: { $in: selectedObjectIds } }
+          : {};
+        filter = this.appendCrmTextSearchFilter(filter, search, [
+          'name',
+          'email',
+          'industry',
+          'website',
+          'territory',
+        ]);
+        if (criteria.length) {
+          filter = appendCrmListFilters(filter, criteria, 'organizations');
+        }
+        filter = await this.applyListEmailEngagement(
+          filter,
+          'organizations',
+          options?.emailEngagement,
+        );
+        data = await this.organizationModel
+          .find(filter)
+          .sort({ createdAt: -1 })
+          .limit(CRM_MAX_EXPORT_ROWS)
+          .maxTimeMS(CRM_LIST_MAX_TIME_MS)
+          .lean();
+        headers = [
+          '_id',
+          'recordId',
+          'name',
+          'industry',
+          'email',
+          'phone',
+          'website',
+          'territory',
+          'noOfEmployees',
+          // Revenue is redacted in the list for users who may not view it — same here.
+          ...(canViewCrmRevenue(user) ? ['annualRevenue'] : []),
+          'address',
+          'createdAt',
+        ];
+        break;
+      }
     }
 
     const csvRows = [
       headers.join(','), // Header row
       ...data.map((row) =>
-        headers
-          .map((fieldName) => {
-            const value = row[fieldName] || '';
-            const escaped = ('' + value).replace(/"/g, '""');
-            return `"${escaped}"`;
-          })
-          .join(','),
+        headers.map((fieldName) => csvCell(row[fieldName])).join(','),
       ),
     ];
 
-    await this.exportQuotaService.logExport(user, type, data.length, {
+    await this.exportQuotaService.logExport(user, exportModuleKey, data.length, {
       ids: options?.ids,
       pipelineId: options?.pipelineId,
+      search: search || undefined,
+      filters: criteria.length ? criteria : undefined,
+      mine: options?.mine || undefined,
+      emailEngagement: options?.emailEngagement || undefined,
     });
 
     return csvRows.join('\r\n');
+  }
+
+  /**
+   * Client-side list exports (tasks, properties, visits, …) build the file in the browser
+   * from rows the user can already see. This gate enforces the module's export permission
+   * and the daily quota, and records the export in Export History.
+   */
+  async authorizeClientExport(
+    module: string,
+    rowCount: number,
+    filters: Record<string, unknown> | undefined,
+    user?: any,
+  ): Promise<{ ok: true }> {
+    const key = String(module || '').trim();
+    const allowed = CLIENT_EXPORT_PERMISSIONS[key];
+    if (!allowed) throw new BadRequestException('Unknown export module');
+    if (!hasCrmFullDataAccess(user)) {
+      const perms = this.crmPermissionSet(user);
+      if (!perms.has('admin:manage') && !allowed.some((p) => perms.has(p))) {
+        throw new ForbiddenException(`You do not have permission to export ${key}.`);
+      }
+    }
+    const count = Math.max(0, Math.min(Number(rowCount) || 0, CRM_MAX_EXPORT_ROWS));
+    await this.exportQuotaService.checkQuota(user?.userId);
+    await this.exportQuotaService.logExport(user, key, count, {
+      source: 'list',
+      ...(filters && typeof filters === 'object' ? filters : {}),
+    });
+    return { ok: true };
+  }
+
+  /** Lead visibility used by the leads list (pipeline lock, own-vs-team scope, workspace). */
+  private leadExportScopeFilter(user?: any): Record<string, unknown> {
+    const parts: Record<string, unknown>[] = [];
+    if (!this.isCrmWorkspaceAdmin(user) && user?.assignedLeadsPipeline) {
+      parts.push({ pipeline: user.assignedLeadsPipeline });
+    }
+    const canReadAll =
+      this.canReadAllModuleData('leads', user) || this.canReadTeamModuleData('leads', user);
+    if (!canReadAll) parts.push(this.leadOwnershipFilter(user));
+    const moduleFilter = leadModuleFilter(user?.crmDbUser);
+    if (Object.keys(moduleFilter).length) parts.push(moduleFilter);
+    if (!parts.length) return {};
+    return parts.length === 1 ? parts[0] : { $and: parts };
   }
 
   private normalizeImportDuplicateStrategy(raw?: string): ImportDuplicateStrategy {
