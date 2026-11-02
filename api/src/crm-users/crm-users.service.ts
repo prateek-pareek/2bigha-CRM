@@ -64,6 +64,11 @@ const CANONICAL_CRM_PERMISSIONS: {
   },
   { name: 'clients:delete', module: 'crm', description: 'Remove clients' },
   {
+    name: 'clients:bulk_delete',
+    module: 'crm',
+    description: 'Select and delete many clients at once',
+  },
+  {
     name: 'workflows:delete',
     module: 'crm',
     description: 'Remove automation workflows',

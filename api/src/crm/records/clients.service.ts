@@ -16,6 +16,8 @@ import {
 } from '../associations/schemas/crm-association.schema';
 import { normalizeEmail, normalizePhoneDigits } from '../shared/crm-person-identifiers.util';
 
+const BULK_DELETE_MAX = 500;
+
 const CLIENT_ASSOC_KEYS = [
   'associatedLeads',
   'associatedOrganizations',
@@ -131,7 +133,8 @@ export class ClientsService {
       perms.includes('clients:read:all') ||
       perms.includes('clients:write') ||
       perms.includes('clients:edit') ||
-      perms.includes('clients:delete')
+      perms.includes('clients:delete') ||
+      perms.includes('clients:bulk_delete')
     );
   }
 
@@ -676,13 +679,12 @@ export class ClientsService {
     return { counts, total: rows.length, items: rows };
   }
 
+  /**
+   * Client list. Route access is the `clients:read` grant; admins (and holders of
+   * `clients:read:all` / write / edit / delete) see every client, everyone else only
+   * the clients assigned to them.
+   */
   async findAll(query: any = {}, actor?: any): Promise<any> {
-    if (!hasCrmAdminJwtBypass(actor)) {
-      throw new ForbiddenException(
-        'Client list is restricted to administrators.',
-      );
-    }
-
     const page = Math.max(1, parseInt(String(query.page || 1), 10) || 1);
     const limit = Math.min(
       Math.max(
@@ -730,6 +732,18 @@ export class ClientsService {
         .exec(),
       this.clientModel.countDocuments(filter),
     ]);
+
+    // Duplicate matches expose other clients' names / emails / phones, so they are
+    // only attached for actors who may see every client.
+    if (!this.canManageAllClients(actor)) {
+      return {
+        data: data.map((doc: any) => (typeof doc.toObject === 'function' ? doc.toObject() : doc)),
+        total,
+        page,
+        pageSize: limit,
+        duplicateSummary: null,
+      };
+    }
 
     const index = await this.loadDuplicateIndex();
     const annotated = data.map((doc: any) => {
@@ -811,6 +825,14 @@ export class ClientsService {
     const updated = await this.clientModel
       .findByIdAndUpdate(id, patch, { new: true })
       .exec();
+    if (updated && patch.assignedTo !== undefined) {
+      // Open tasks created from this client follow its (new) owner.
+      const before = normalizeObjectIdArray((existing as any).assignedTo).map(String);
+      const after = normalizeObjectIdArray(patch.assignedTo).map(String);
+      if (after.length && (before.length !== after.length || before.some((b, i) => b !== after[i]))) {
+        await this.crmService.syncRecordTasksToOwner('Client', [id], after[0], user);
+      }
+    }
     if (updated) {
       const assocMap: Array<{
         key: (typeof CLIENT_ASSOC_KEYS)[number];
@@ -881,5 +903,29 @@ export class ClientsService {
     return this.clientModel
       .findByIdAndUpdate(id, softDeleteUpdate(deletedBy), { new: true })
       .exec();
+  }
+
+  /** Soft-delete many clients at once (recoverable from Trash). */
+  async bulkDelete(ids: string[], deletedBy?: string) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new BadRequestException('Select at least one client to delete');
+    }
+    if (ids.length > BULK_DELETE_MAX) {
+      throw new BadRequestException(`You can delete at most ${BULK_DELETE_MAX} clients at a time`);
+    }
+    const oids = ids
+      .filter((id) => typeof id === 'string' && Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (oids.length === 0) {
+      throw new BadRequestException('No valid client ids supplied');
+    }
+    const result = await this.clientModel
+      .updateMany({ _id: { $in: oids } }, softDeleteUpdate(deletedBy))
+      .exec();
+    return {
+      requested: ids.length,
+      modifiedCount: result.modifiedCount,
+      deletedCount: result.modifiedCount,
+    };
   }
 }

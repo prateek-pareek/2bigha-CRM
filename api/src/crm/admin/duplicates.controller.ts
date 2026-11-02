@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Request,
   Body,
   Query,
   UseGuards,
@@ -39,12 +40,14 @@ export class DuplicatesController {
       masterId: string;
       duplicateIds: string[];
     },
+    @Request() req: any,
   ) {
     const t = (body?.entityType || 'lead').toLowerCase();
     if (t === 'contact') {
       return this.duplicatesService.mergeContacts(
         body.masterId,
         body.duplicateIds || [],
+        req.user,
       );
     }
     return this.duplicatesService.mergeLeads(

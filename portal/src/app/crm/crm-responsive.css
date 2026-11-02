@@ -1,0 +1,173 @@
+/*
+ * Global small-screen layer for the CRM (tablet + mobile).
+ * Every rule lives inside a max-width query, so desktop (>= 1024px) is untouched.
+ * Loaded after crm-hubspot.css so it can tighten its desktop-first rules.
+ */
+
+/* ── Tablet and below ─────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  html,
+  body {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  [data-crm-app] img,
+  [data-crm-app] video,
+  [data-crm-app] canvas,
+  [data-crm-app] svg.recharts-surface {
+    max-width: 100%;
+  }
+
+  /* Wide list/table surfaces scroll sideways inside their own panel, not the page */
+  [data-crm-app] .crm-view-panel,
+  [data-crm-app] .crm-list-content,
+  [data-crm-app] .crm-list-page > div {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-crm-app] .crm-list-page table,
+  [data-crm-app] .crm-table {
+    min-width: 640px;
+  }
+
+  [data-crm-app] .overflow-x-auto,
+  [data-crm-app] .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Toolbars, filter bars and tab strips wrap instead of overflowing */
+  [data-crm-app] .crm-list-toolbar,
+  [data-crm-app] .crm-list-toolbar > div,
+  [data-crm-app] .crm-filter-panel {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  [data-crm-app] .crm-list-subtabs,
+  [data-crm-app] [role="tablist"] {
+    max-width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  [data-crm-app] .crm-list-subtabs::-webkit-scrollbar,
+  [data-crm-app] [role="tablist"]::-webkit-scrollbar {
+    display: none;
+  }
+  [data-crm-app] [role="tablist"] > * {
+    flex-shrink: 0;
+  }
+
+  /* Floating panels (chat drawer, popovers, menus) never exceed the viewport */
+  [data-radix-popper-content-wrapper] {
+    max-width: calc(100vw - 16px) !important;
+  }
+  [data-radix-popper-content-wrapper] > * {
+    max-width: calc(100vw - 16px);
+  }
+  [data-crm-app] .fixed[class*="w-["],
+  [data-crm-app] .fixed[class*="w-80"],
+  [data-crm-app] .fixed[class*="w-96"] {
+    max-width: calc(100vw - 16px);
+  }
+}
+
+/* ── Mobile ───────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Tighter page gutters */
+  [data-crm-app] .crm-app-main {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Fixed multi-column grids stack down to two columns (calendar/7-col grids excluded) */
+  [data-crm-app] .grid.grid-cols-3,
+  [data-crm-app] .grid.grid-cols-4,
+  [data-crm-app] .grid.grid-cols-5,
+  [data-crm-app] .grid.grid-cols-6,
+  [data-crm-app] .grid.grid-cols-8,
+  [data-crm-app] .grid.grid-cols-10 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Grid/flex children may shrink below their content width (zero specificity so min-w-* utilities still win) */
+  :where([data-crm-app] .grid, [data-crm-app] .flex) > * {
+    min-width: 0;
+  }
+
+  /* Two-pane record layouts (main + sidebar) become a single column */
+  [data-crm-app] .crm-record-sidebar,
+  [data-crm-app] .crm-record-sidebar-group {
+    max-width: 100%;
+  }
+
+  /* Dialogs and sheets fit the screen */
+  [role="dialog"],
+  [role="alertdialog"] {
+    max-width: calc(100vw - 1rem) !important;
+    max-height: 92dvh !important;
+  }
+  [role="dialog"].fixed,
+  [role="alertdialog"].fixed {
+    overflow-y: auto;
+  }
+  [data-crm-app] .crm-modal {
+    max-width: calc(100vw - 1rem);
+    max-height: 92dvh;
+  }
+
+  /* Stack dialog footers and form action rows */
+  [role="dialog"] [class*="justify-end"][class*="gap"]:not([class*="flex-col"]) {
+    flex-wrap: wrap;
+  }
+
+  /* 16px inputs stop iOS Safari zooming the page on focus */
+  [data-crm-app] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  [data-crm-app] select,
+  [data-crm-app] textarea,
+  [role="dialog"] input:not([type="checkbox"]):not([type="radio"]),
+  [role="dialog"] select,
+  [role="dialog"] textarea {
+    font-size: 16px !important;
+  }
+
+  /* Comfortable touch targets for compact icon buttons */
+  [data-crm-app] .crm-table-action-btn,
+  [data-crm-app] .crm-header-icon {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  /* Header: keep actions on-screen */
+  [data-crm-app] .crm-app-header {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  /* Kanban columns are a touch narrower so the next column peeks in */
+  [data-crm-app] .crm-kanban-column {
+    min-width: 260px;
+    max-width: 85vw;
+  }
+
+  /* Let wide headings and long values wrap */
+  [data-crm-app] h1,
+  [data-crm-app] h2,
+  [data-crm-app] h3 {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ── Small phones ─────────────────────────────────────────────── */
+@media (max-width: 420px) {
+  [data-crm-app] .grid.grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-crm-app] .crm-app-main {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}

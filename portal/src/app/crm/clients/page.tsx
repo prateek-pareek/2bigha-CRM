@@ -17,6 +17,7 @@ import { buildCrmListSearchParams, mergeDateRangeFilter } from '@/lib/crm/list-q
 import CRMDateRangePicker from '@/components/crm/records/forms/CRMDateRangePicker';
 import crmApi from '@/lib/crm/api';
 import { CrmPropertyManagerModal } from '@/components/crm/records/detail/CrmPropertyManagerModal';
+import { CrmBulkDeleteConfirmModal } from '@/components/crm/records/detail/CrmBulkDeleteConfirmModal';
 import {
   CrmPageHeader,
   CrmCountBadge,
@@ -31,6 +32,7 @@ import {
   CrmListStatusBadge,
   CrmListMutedText,
   CrmTableActionMenu,
+  CrmTableCheck,
   CrmRecordCardGrid,
   CrmRecordCard,
   CrmRecordCardSkeleton,
@@ -184,13 +186,19 @@ export default function ClientsPage() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isDuplicatesOpen, setIsDuplicatesOpen] = useState(false);
   const { hasAccess, isAdmin, isLoaded } = usePermissions();
+  // Admins always; anyone else with the Clients "View" permission (role-wise or person-wise).
+  const canBulkDelete = isAdmin || hasAccess('clients:bulk_delete' as any);
+  const canViewPage = isAdmin || hasAccess('clients:read');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isAdmin) {
+    if (!canViewPage) {
       router.replace('/unauthorized?module=crm-clients');
     }
-  }, [isLoaded, isAdmin, router]);
+  }, [isLoaded, canViewPage, router]);
 
   const needsClientFullList = viewMode === 'calendar';
   const apiFilters = useMemo(
@@ -230,9 +238,14 @@ export default function ClientsPage() {
   }, []);
 
   useEffect(() => {
-    if (!isLoaded || !isAdmin) return;
+    if (!isLoaded || !canViewPage) return;
     void fetchClients();
-  }, [fetchClients, isLoaded, isAdmin]);
+  }, [fetchClients, isLoaded, canViewPage]);
+
+  // Selection is per result set — drop it when the query changes.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page, pageSize, deferredSearch, apiFilters, viewMode]);
 
   useEffect(() => {
     setPage(1);
@@ -262,6 +275,30 @@ export default function ClientsPage() {
       console.error('Export error:', error);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDeleting(true);
+    try {
+      await crmApi.post('/crm/clients/bulk-delete', { ids: Array.from(selectedIds) });
+      setSelectedIds(new Set());
+      setShowConfirmDelete(false);
+      await fetchClients();
+    } catch (err: any) {
+      window.alert(err?.response?.data?.message || 'Failed to delete the selected clients.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -304,6 +341,17 @@ export default function ClientsPage() {
   );
 
   const paginationTotal = needsClientFullList ? clients.length : serverTotal;
+
+  const isAllPaginatedSelected = paginated.length > 0 && paginated.every((c) => selectedIds.has(c._id));
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isAllPaginatedSelected) paginated.forEach((c) => next.delete(c._id));
+      else paginated.forEach((c) => next.add(c._id));
+      return next;
+    });
+  };
 
   const handleToggleDraft = (key: string) => {
     setDraftColumns(prev => prev.map(c => c.key === key ? { ...c, visible: !c.visible } : c));
@@ -366,7 +414,7 @@ export default function ClientsPage() {
     }
   }
 
-  if (!isLoaded || !isAdmin) return null;
+  if (!isLoaded || !canViewPage) return null;
 
   return (
     <div className={CRM_LIST_PAGE}>
@@ -383,11 +431,18 @@ export default function ClientsPage() {
             actions={
               <CrmHeaderTools
                 leading={
-                  hasAccess("clients:read") ? (
-                    <CrmButton variant="secondary" onClick={() => router.push('/client-portals')}>
-                      Client Portals
-                    </CrmButton>
-                  ) : null
+                  <>
+                    {canBulkDelete && selectedIds.size > 0 && (
+                      <CrmButton variant="danger" onClick={() => setShowConfirmDelete(true)} leftIcon={<CrmIcon.Trash size={14} />}>
+                        Delete {selectedIds.size}
+                      </CrmButton>
+                    )}
+                    {hasAccess("clients:read") ? (
+                      <CrmButton variant="secondary" onClick={() => router.push('/client-portals')}>
+                        Client Portals
+                      </CrmButton>
+                    ) : null}
+                  </>
                 }
                 canExport={hasAccess("clients:export")}
                 onExport={handleExport}
@@ -554,6 +609,15 @@ export default function ClientsPage() {
                   <CrmTable>
                     <thead>
                       <tr>
+                        {canBulkDelete && (
+                          <th className="crm-table-check sticky top-0 z-10">
+                            <CrmTableCheck
+                              checked={isAllPaginatedSelected}
+                              onChange={toggleSelectAll}
+                              ariaLabel={isAllPaginatedSelected ? 'Deselect all' : 'Select all'}
+                            />
+                          </th>
+                        )}
                         {visibleCols.map(col => (
                           <th key={col.key} className="sticky top-0 z-10">{col.label}</th>
                         ))}
@@ -566,6 +630,7 @@ export default function ClientsPage() {
                       {loading ? (
                         [1, 2, 3, 4, 5].map(i => (
                           <tr key={i} className="animate-pulse">
+                            {canBulkDelete && <td className="crm-table-check" />}
                             {visibleCols.map(c => (
                               <td key={c.key}><div className="h-4 bg-slate-100 rounded-lg w-3/4" /></td>
                             ))}
@@ -574,7 +639,7 @@ export default function ClientsPage() {
                         ))
                       ) : paginated.length === 0 ? (
                         <tr>
-                          <td colSpan={visibleCols.length + 1} className="py-20 text-center text-sm font-medium text-[#707070]">
+                          <td colSpan={visibleCols.length + (canBulkDelete ? 2 : 1)} className="py-20 text-center text-sm font-medium text-[#707070]">
                             No clients found
                           </td>
                         </tr>
@@ -582,11 +647,20 @@ export default function ClientsPage() {
                         <tr
                           key={client._id}
                           className={`group cursor-pointer transition-colors ${
-                            client.duplicateInfo ? 'crm-table-row-duplicate' : ''
-                          }`}
+                            selectedIds.has(client._id) ? 'crm-table-row-selected' : ''
+                          } ${client.duplicateInfo ? 'crm-table-row-duplicate' : ''}`}
                           title={client.duplicateInfo ? duplicateTooltip(client.duplicateInfo) : undefined}
                           onClick={() => router.push(`/crm/clients/${client._id}`)}
                         >
+                          {canBulkDelete && (
+                            <td className="crm-table-check">
+                              <CrmTableCheck
+                                checked={selectedIds.has(client._id)}
+                                onChange={() => toggleSelect(client._id)}
+                                ariaLabel={selectedIds.has(client._id) ? 'Deselect client' : 'Select client'}
+                              />
+                            </td>
+                          )}
                           {visibleCols.map(col => (
                             <td key={col.key}>
                               {renderCell(client, col.key)}
@@ -641,6 +715,23 @@ export default function ClientsPage() {
           ))}
         </div>
       </CrmPropertyManagerModal>
+
+      <CrmBulkDeleteConfirmModal
+        isOpen={showConfirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+        onConfirm={handleBulkDelete}
+        title="Delete selected clients?"
+        loading={isDeleting}
+        description={
+          <>
+            You are about to move{' '}
+            <span className="font-medium text-[var(--error)]">
+              {selectedIds.size} {selectedIds.size === 1 ? 'client' : 'clients'}
+            </span>{' '}
+            to Trash. Admins can restore them from Trash.
+          </>
+        }
+      />
 
       {isImportModalOpen && (
         <ImportModal isOpen onClose={() => setIsImportModalOpen(false)} onSuccess={fetchClients} type="clients" />

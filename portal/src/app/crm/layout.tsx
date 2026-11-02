@@ -9,6 +9,7 @@ import CrmPrefetch from "@/components/crm/shell/CrmPrefetch";
 import { CrmThemeCustomizer } from "@/components/crm/ui/CrmThemeCustomizer";
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 import "@/app/crm/crm-hubspot.css";
+import "@/app/crm/crm-responsive.css";
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { setBrowserTabIcon } from "@/lib/browser-tab-brand";

@@ -199,7 +199,7 @@ const crmGroups = [
         items: [
             { name: 'Leads', href: '/crm/leads', icon: Users, permission: 'leads:read' },
             { name: 'PM Leads', href: '/crm/pm/leads', icon: Users, permission: 'pm-leads:read' },
-            { name: 'Clients', href: '/crm/clients', icon: UserCheck, permission: 'clients:read', adminOnly: true },
+            { name: 'Clients', href: '/crm/clients', icon: UserCheck, permission: 'clients:read' },
             { name: 'Deals', href: '/crm/deals', icon: Handshake, permission: 'deals:read' },
         ],
     },
@@ -538,7 +538,10 @@ export default function Sidebar({
                 {suiteNavGroups.map((group, groupIdx) => {
                     const normalizedItems = group.items;
                     const filteredItems = normalizedItems.filter((item) => {
-                        if ('adminOnly' in item && item.adminOnly && !isAdmin) return false;
+                        if ('adminOnly' in item && item.adminOnly && !isAdmin) {
+                            const delegated = 'adminOrPermission' in item && item.adminOrPermission;
+                            if (!delegated || !hasAccess(item.adminOrPermission as any)) return false;
+                        }
                         return hasAccess(item.permission);
                     });
                     if (filteredItems.length === 0) return null;
