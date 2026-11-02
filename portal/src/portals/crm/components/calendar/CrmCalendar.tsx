@@ -9,6 +9,7 @@ import {
   EventCalendar,
   type EventCalendarCreatePayload,
   type EventCalendarDayBadges,
+  type EventCalendarLink,
   type KitCalendarEvent,
 } from "@mathionix/ui/kit/event-calendar";
 
@@ -33,7 +34,34 @@ type CrmCalendarApiEvent = {
   assigneeName?: string;
   /** Lead / Client the task was created from. */
   linkedRecord?: { type?: string; id?: string; name?: string };
+  type?: string;
+  relatedTo?: string | { _id?: string } | null;
+  relatedType?: string;
 };
+
+type RelatedRef = {
+  relatedTo?: string | { _id?: string } | null;
+  relatedType?: string;
+  linkedRecord?: { type?: string; id?: string };
+};
+
+const RELATED_ROUTES: Record<string, { path: string; label: string }> = {
+  lead: { path: "/crm/leads", label: "Open lead" },
+  client: { path: "/crm/clients", label: "Open client" },
+  contact: { path: "/crm/contacts", label: "Open contact" },
+  organization: { path: "/crm/organizations", label: "Open organization" },
+  propertylisting: { path: "/crm/property-listings", label: "Open property" },
+};
+
+/** "Open task" plus a link to the lead / client / … the task belongs to. */
+function taskLinks(taskId: string, ref: RelatedRef): EventCalendarLink[] {
+  const links: EventCalendarLink[] = [{ label: "Open task", href: `/crm/tasks?task=${taskId}` }];
+  const rel = ref.relatedTo;
+  const id = ref.linkedRecord?.id || (typeof rel === "string" ? rel : rel?._id);
+  const route = RELATED_ROUTES[String(ref.linkedRecord?.type || ref.relatedType || "").toLowerCase()];
+  if (id && route) links.push({ label: route.label, href: `${route.path}/${id}` });
+  return links;
+}
 
 type CalendarConnections = {
   google: boolean;
@@ -70,6 +98,7 @@ function toKitEvent(e: CrmCalendarApiEvent): KitCalendarEvent | null {
     reminderMessage: e.metadata?.reminderMessage,
     escalated: Boolean(e.metadata?.escalated),
     escalateAt: e.metadata?.autoEscalate && e.metadata?.escalateAt ? e.metadata.escalateAt : undefined,
+    links: !e.metadata?.externalSource && e.type === "Task" ? taskLinks(e._id, e) : undefined,
   };
 }
 
@@ -111,7 +140,19 @@ export function CrmCalendar() {
       const res = await api.get("/crm/calendar-events/escalations");
       const badges: EventCalendarDayBadges = {};
       for (const d of Array.isArray(res.data) ? res.data : []) {
-        badges[d.date] = { escalated: d.escalated || 0, scheduled: d.scheduled || 0 };
+        badges[d.date] = {
+          escalated: d.escalated || 0,
+          scheduled: d.scheduled || 0,
+          items: (d.tasks || []).map(
+            (t: { id: string; title: string; kind: "escalated" | "scheduled"; at: string } & RelatedRef) => ({
+              id: t.id,
+              title: t.title,
+              kind: t.kind,
+              at: t.at,
+              links: taskLinks(t.id, t),
+            }),
+          ),
+        };
       }
       setDayBadges(badges);
     } catch (e) {

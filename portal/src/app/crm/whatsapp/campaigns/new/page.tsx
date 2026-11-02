@@ -293,6 +293,20 @@ export default function NewWhatsAppCampaignPage() {
       toast.error("Header Media URL is required for this template type");
       return;
     }
+    if (hasMediaHeader && !attachBrochure) {
+      // WhatsApp fetches this link itself, so it must be a public file URL (not this app's own page / localhost).
+      let host = "";
+      try {
+        const u = new URL(mediaUrl.trim());
+        host = u.protocol === "https:" || u.protocol === "http:" ? u.hostname : "";
+      } catch {
+        host = "";
+      }
+      if (!host || host === "localhost" || host === "127.0.0.1") {
+        toast.error("Header Media URL must be a public link to the image / file (e.g. https://…/banner.jpg)");
+        return;
+      }
+    }
     if (!recipients.length) {
       toast.error("Add at least one recipient");
       return;
@@ -541,6 +555,8 @@ export default function NewWhatsAppCampaignPage() {
                 </label>
                 <input
                   value={mediaUrl}
+                  name="wa-header-media-url"
+                  autoComplete="off"
                   onChange={(e) => setMediaUrl(e.target.value)}
                   placeholder="e.g. https://example.com/image.jpg"
                   className="h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -552,6 +568,8 @@ export default function NewWhatsAppCampaignPage() {
                 </label>
                 <input
                   value={mediaFilename}
+                  name="wa-header-media-filename"
+                  autoComplete="off"
                   onChange={(e) => setMediaFilename(e.target.value)}
                   placeholder="e.g. banner.jpg"
                   className="h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"

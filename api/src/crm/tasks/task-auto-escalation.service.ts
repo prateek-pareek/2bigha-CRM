@@ -17,6 +17,8 @@ export type TaskEscalationDay = {
     title: string;
     kind: 'escalated' | 'scheduled';
     at: string;
+    relatedTo?: string;
+    relatedType?: string;
   }>;
 };
 
@@ -175,6 +177,12 @@ export class TaskAutoEscalationService {
     return true;
   }
 
+  private related(t: any) {
+    return t.relatedTo
+      ? { relatedTo: String(t.relatedTo), relatedType: t.relatedType }
+      : {};
+  }
+
   /**
    * Per-day calendar roll-up: tasks that were escalated on a date and tasks still
    * scheduled to auto-escalate on a date. Days are bucketed in the CRM timezone.
@@ -208,7 +216,7 @@ export class TaskAutoEscalationService {
           'metadata.escalated': true,
           ...range('metadata.escalatedAt'),
         })
-        .select('title metadata.escalatedAt')
+        .select('title relatedTo relatedType metadata.escalatedAt')
         .lean()
         .exec(),
       this.activityModel
@@ -219,7 +227,7 @@ export class TaskAutoEscalationService {
           'metadata.escalated': { $ne: true },
           ...range('metadata.escalateAt'),
         })
-        .select('title metadata.escalateAt')
+        .select('title relatedTo relatedType metadata.escalateAt')
         .lean()
         .exec(),
     ]);
@@ -239,14 +247,14 @@ export class TaskAutoEscalationService {
       if (!at) continue;
       const d = bucket(at);
       d.escalated += 1;
-      d.tasks.push({ id: String(t._id), title: t.title, kind: 'escalated', at });
+      d.tasks.push({ id: String(t._id), title: t.title, kind: 'escalated', at, ...this.related(t) });
     }
     for (const t of scheduled as any[]) {
       const at = t.metadata?.escalateAt;
       if (!at) continue;
       const d = bucket(at);
       d.scheduled += 1;
-      d.tasks.push({ id: String(t._id), title: t.title, kind: 'scheduled', at });
+      d.tasks.push({ id: String(t._id), title: t.title, kind: 'scheduled', at, ...this.related(t) });
     }
     return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
