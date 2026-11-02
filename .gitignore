@@ -3,6 +3,7 @@ node_modules/
 package-lock.json
 # Portal Docker build requires a committed lockfile for `npm ci` on the VPS
 !portal/package-lock.json
+!api/package-lock.json
 yarn.lock
 pnpm-lock.yaml
 

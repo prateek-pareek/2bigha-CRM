@@ -434,6 +434,9 @@ export async function fetchTwoBighaProperties(params: {
     data?: any[];
     meta?: { total?: number };
   } | null>("/crm/property-listings/twobigha/properties", {
+    // Backend caps the 2bigha call itself (~10s query + ~3s photos); this only guards
+    // against a hung connection so the page's loading skeleton can't stay up forever.
+    timeout: 30_000,
     params: {
       page: params.page,
       limit: params.limit,

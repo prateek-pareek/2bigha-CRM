@@ -3,6 +3,9 @@
  * Clients converted from leads used to copy only `lead.phone`, but leads usually keep
  * the number in `mobileNo`, so many clients ended up with no phone on file.
  *
+ * Also repairs client names saved as "First undefined" / "First null" — lead conversion
+ * used to build the name with a template string, which printed a missing last name.
+ *
  * Dry run (default, writes nothing):
  *   npm run backfill:client-contact
  * Apply:
@@ -24,6 +27,19 @@ const cleanPhone = (v: unknown) => {
   const s = isBlank(v) ? '' : String(v).trim();
   return s ? formatIndianPhoneWithCountryCode(s) || undefined : undefined;
 };
+/** Whole-word, lowercase "undefined"/"null" left behind by `${first} ${last}` with a missing part. */
+const BROKEN_NAME_TOKEN = /(^|\s)(undefined|null)(?=\s|$)/;
+const stripBrokenNameTokens = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter((part) => part !== 'undefined' && part !== 'null')
+    .join(' ')
+    .trim();
+const personName = (l: any) =>
+  [l?.firstName, l?.lastName]
+    .map((p) => String(p ?? '').trim())
+    .filter((p) => p && p !== 'undefined' && p !== 'null')
+    .join(' ');
 
 async function main() {
   await mongoose.connect(MONGO_URI);
@@ -38,6 +54,7 @@ async function main() {
       { email: { $exists: false } },
       { phone: { $in: [null, ''] } },
       { phone: { $exists: false } },
+      { name: { $regex: BROKEN_NAME_TOKEN.source } },
     ],
   });
 
@@ -45,6 +62,7 @@ async function main() {
   let updated = 0;
   let emailFilled = 0;
   let phoneFilled = 0;
+  let nameFixed = 0;
 
   for await (const c of cursor) {
     scanned++;
@@ -52,9 +70,21 @@ async function main() {
     const linked = leadIds.length
       ? await leads.find({ $or: [{ _id: { $in: leadIds } }, { clientId: c._id }] }).toArray()
       : await leads.find({ clientId: c._id }).toArray();
-    if (!linked.length) continue;
 
     const set: Record<string, string> = {};
+
+    // Name repair needs no linked lead: dropping the stray token is enough on its own.
+    const currentName = String(c.name || '');
+    if (BROKEN_NAME_TOKEN.test(currentName)) {
+      const repaired =
+        stripBrokenNameTokens(currentName) ||
+        linked.map(personName).find(Boolean) ||
+        String(c.email || '').trim() ||
+        'Unknown';
+      if (repaired !== currentName) set.name = repaired;
+    }
+
+    if (!linked.length && !Object.keys(set).length) continue;
 
     if (isBlank(c.email)) {
       for (const l of linked) {
@@ -86,13 +116,16 @@ async function main() {
     updated++;
     if (set.email) emailFilled++;
     if (set.phone) phoneFilled++;
+    if (set.name) nameFixed++;
     console.log(`${APPLY ? 'UPDATE' : 'WOULD UPDATE'} client ${c._id} (${c.name}):`, set);
     if (APPLY) await clients.updateOne({ _id: c._id }, { $set: set });
   }
 
   console.log(
-    `\nScanned ${scanned} clients missing email/phone; ${APPLY ? 'updated' : 'would update'} ${updated} ` +
-      `(email: ${emailFilled}, phone: ${phoneFilled}).${APPLY ? '' : ' Re-run with --apply to write.'}`,
+    `\nScanned ${scanned} clients missing email/phone or with a broken name; ` +
+      `${APPLY ? 'updated' : 'would update'} ${updated} ` +
+      `(email: ${emailFilled}, phone: ${phoneFilled}, name: ${nameFixed}).` +
+      `${APPLY ? '' : ' Re-run with --apply to write.'}`,
   );
   await mongoose.disconnect();
 }
