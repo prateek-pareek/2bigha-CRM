@@ -1573,6 +1573,27 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
         return;
       }
 
+      // Export permission + daily quota check, and an Export History entry.
+      const logRes = await fetch(`${CRM_API_URL}/crm/export/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          module: isPm ? 'pm-leads' : 'leads',
+          rowCount: exportLeads.length,
+          filters: {
+            format,
+            selected: selectedIds.size > 0 || undefined,
+            search: debouncedSearch || undefined,
+            filters: apiFilters?.length ? apiFilters : undefined,
+          },
+        }),
+      });
+      if (!logRes.ok) {
+        const err = await logRes.json().catch(() => ({}));
+        toast.error(err?.message || 'You are not allowed to export leads');
+        return;
+      }
+
       const cols =
         visibleCols.length > 0
           ? visibleCols

@@ -77,6 +77,12 @@ export class CrmRemindersController {
     return this.service.markDone(id, req.user);
   }
 
+  @Patch(':id/cancel')
+  @Permissions('leads:write', 'tasks:write')
+  cancel(@Param('id') id: string, @Request() req: any) {
+    return this.service.cancel(id, req.user);
+  }
+
   @Patch(':id/reschedule')
   @Permissions('leads:write', 'tasks:write')
   reschedule(

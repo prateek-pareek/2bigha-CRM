@@ -104,6 +104,8 @@ export type EventCalendarProps = {
   /** Tasks escalated / due to auto-escalate on each date. */
   dayBadges?: EventCalendarDayBadges;
   onCreateEvent?: (payload: EventCalendarCreatePayload) => void | Promise<void>;
+  /** Remove the reminder from an internal (non-synced) event. */
+  onClearReminder?: (eventId: string) => void | Promise<void>;
   className?: string;
 };
 
@@ -133,8 +135,10 @@ export function EventCalendar({
   sync,
   dayBadges,
   onCreateEvent,
+  onClearReminder,
   className,
 }: EventCalendarProps) {
+  const [clearingReminder, setClearingReminder] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [activeFilters, setActiveFilters] = useState<Set<EventCalendarSidebarFilter>>(
@@ -850,6 +854,32 @@ export function EventCalendar({
                       <p className="mt-0.5 text-[var(--text-muted)]">
                         {selectedEvent.reminderMessage}
                       </p>
+                    ) : null}
+                    {onClearReminder && !selectedEvent.externalSource ? (
+                      <button
+                        type="button"
+                        disabled={clearingReminder}
+                        className="mt-1 text-xs font-semibold text-rose-600 hover:underline disabled:opacity-50"
+                        onClick={async () => {
+                          const ev = selectedEvent;
+                          setClearingReminder(true);
+                          try {
+                            await onClearReminder(ev.id);
+                            setSelectedEvent({
+                              ...ev,
+                              reminderAt: undefined,
+                              reminderType: undefined,
+                              reminderMessage: undefined,
+                            });
+                          } catch {
+                            // Host surfaces the error.
+                          } finally {
+                            setClearingReminder(false);
+                          }
+                        }}
+                      >
+                        {clearingReminder ? "Clearing…" : "Clear reminder"}
+                      </button>
                     ) : null}
                   </div>
                 ) : null}

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ListExportButton } from "@/components/crm/ui/ListExportButton";
+import { exportDate } from "@/lib/crm/export/list-export";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -180,12 +182,35 @@ export default function CrmSegmentsPage() {
         ]}
         icon={<Layers className="h-4 w-4" />}
         actions={
-          <CrmButton
-            onClick={() => setCreateOpen(true)}
-            leftIcon={<Plus className="h-4 w-4" />}
-          >
-            New segment
-          </CrmButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <ListExportButton<CrmSegment>
+              module="segments"
+              fileName="segments"
+              sheetName="Segments"
+              permissions={["leads:export"]}
+              getRows={() => filtered}
+              filters={{
+                search: search.trim() || undefined,
+                type: typeFilter !== "all" ? typeFilter : undefined,
+              }}
+              columns={[
+                { header: "Name", value: (s) => s.name },
+                { header: "Type", value: (s) => s.listType },
+                { header: "Description", value: (s) => s.description || "" },
+                { header: "Leads", value: (s) => s.leadCount ?? 0 },
+                { header: "Contacts", value: (s) => s.contactCount ?? 0 },
+                { header: "Members", value: (s) => s.memberCount ?? (s.leadCount ?? 0) + (s.contactCount ?? 0) },
+                { header: "Created at", value: (s) => exportDate(s.createdAt) },
+                { header: "Updated at", value: (s) => exportDate(s.updatedAt) },
+              ]}
+            />
+            <CrmButton
+              onClick={() => setCreateOpen(true)}
+              leftIcon={<Plus className="h-4 w-4" />}
+            >
+              New segment
+            </CrmButton>
+          </div>
         }
       />
 

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ListExportButton } from "@/components/crm/ui/ListExportButton";
+import { exportDate } from "@/lib/crm/export/list-export";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -131,13 +133,39 @@ export default function EmailCampaignsPage() {
           { label: "Email campaigns" },
         ]}
         actions={
-          <CrmButton
-            variant="primary"
-            onClick={() => router.push("/crm/campaigns/new")}
-            leftIcon={<Plus className="h-4 w-4" />}
-          >
-            New campaign
-          </CrmButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <ListExportButton<EmailCampaign>
+              module="campaigns"
+              fileName="email_campaigns"
+              sheetName="Campaigns"
+              permissions={["outreach:export"]}
+              getRows={() => campaigns}
+              filters={{
+                search: search.trim() || undefined,
+                status: statusFilter !== "all" ? statusFilter : undefined,
+              }}
+              columns={[
+                { header: "Name", value: (c) => c.name },
+                { header: "Status", value: (c) => c.status },
+                { header: "Subject", value: (c) => c.subject || "" },
+                { header: "Recipients", value: (c) => c.totalRecipients ?? c.recipients?.length ?? 0 },
+                { header: "Sent", value: (c) => c.sentCount ?? 0 },
+                { header: "Failed", value: (c) => c.failedCount ?? 0 },
+                { header: "Scheduled at", value: (c) => exportDate(c.scheduledAt) },
+                { header: "Started at", value: (c) => exportDate(c.startedAt) },
+                { header: "Completed at", value: (c) => exportDate(c.completedAt) },
+                { header: "Last error", value: (c) => c.lastError || "" },
+                { header: "Created at", value: (c) => exportDate(c.createdAt) },
+              ]}
+            />
+            <CrmButton
+              variant="primary"
+              onClick={() => router.push("/crm/campaigns/new")}
+              leftIcon={<Plus className="h-4 w-4" />}
+            >
+              New campaign
+            </CrmButton>
+          </div>
         }
       />
 

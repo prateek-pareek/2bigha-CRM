@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { ListExportButton } from "@/components/crm/ui/ListExportButton";
+import { exportDate } from "@/lib/crm/export/list-export";
 import { createPortal } from "react-dom";
 import { Loader2, Package, Pencil, Plus, Search, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -250,15 +252,34 @@ export default function CrmServicesPage() {
               What we offer and keywords to use in outreach, proposals, and search — visible to everyone with CRM access.
             </p>
           </div>
-          {canManage && (
-            <button
-              type="button"
-              onClick={openCreate}
-              className="inline-flex items-center gap-2 rounded-md bg-[var(--hs-link)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--hs-link-hover)] transition-colors shadow-sm shrink-0"
-            >
-              <Plus size={15} /> Add service
-            </button>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <ListExportButton<ServiceRow>
+              module="services"
+              fileName="services"
+              sheetName="Services"
+              permissions={["services:export"]}
+              getRows={() => filtered}
+              filters={{ search: search.trim() || undefined }}
+              columns={[
+                { header: "Service", value: (s) => s.name },
+                { header: "Summary", value: (s) => s.summary || "" },
+                { header: "Description", value: (s) => s.description || "" },
+                { header: "Keywords", value: (s) => (s.keywords || []).join(", ") },
+                { header: "Active", value: (s) => (s.isActive === false ? "No" : "Yes") },
+                { header: "Sort order", value: (s) => s.sortOrder ?? "" },
+                { header: "Updated at", value: (s) => exportDate(s.updatedAt) },
+              ]}
+            />
+            {canManage && (
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--hs-link)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--hs-link-hover)] transition-colors shadow-sm shrink-0"
+              >
+                <Plus size={15} /> Add service
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-5 relative max-w-md">

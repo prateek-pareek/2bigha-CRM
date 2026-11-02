@@ -21,6 +21,16 @@ export class AuditLogInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    // Property Management actions write their own detailed audit entries
+    // (module "property-management") via PropertyHistoryService — skip the generic copy.
+    const path = String(url || '').split('?')[0];
+    if (
+      /\/crm\/property-listings\/[^/]+\/(pm\/|sold-status|history)/.test(path) ||
+      /\/crm\/property-listings\/approval-decision$/.test(path)
+    ) {
+      return next.handle();
+    }
+
     return next.handle().pipe(
       tap(async (response) => {
         const module = this.getModuleFromUrl(url);

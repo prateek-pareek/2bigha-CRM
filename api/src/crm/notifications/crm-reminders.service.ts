@@ -373,6 +373,27 @@ export class CrmRemindersService {
     return reminder;
   }
 
+  /** Remove (cancel) a reminder so it never fires again. */
+  async cancel(id: string, user?: any) {
+    const selfId = this.userOid(user);
+    if (!selfId) throw new ForbiddenException('Unauthorized');
+    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Invalid id');
+
+    const reminder = await this.reminderModel.findById(id).exec();
+    if (!reminder) throw new NotFoundException('Reminder not found');
+
+    const isOwner =
+      String(reminder.createdBy) === String(selfId) ||
+      String(reminder.assigneeUserId || '') === String(selfId);
+    if (!isOwner && !hasCrmFullDataAccess(user)) {
+      throw new ForbiddenException('Not allowed');
+    }
+
+    reminder.status = 'CANCELLED';
+    await reminder.save();
+    return reminder;
+  }
+
   async reschedule(
     id: string,
     body: { scheduledAt?: string; recurrence?: string },

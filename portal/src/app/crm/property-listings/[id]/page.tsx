@@ -49,9 +49,9 @@ import {
 } from "@/lib/crm/property-listings/third-party-api";
 import PmWorkflowPanel from "@/components/crm/property-listings/PmWorkflowPanel";
 import PropertyVisitHistoryPanel from "@/components/crm/property-listings/PropertyVisitHistoryPanel";
+import PropertyStatusHistoryPanel from "@/components/crm/property-listings/PropertyStatusHistoryPanel";
 import ActivePropertyPlanCard from "@/components/crm/property-listings/ActivePropertyPlanCard";
 import PmPaymentHistorySection from "@/components/crm/subscriptions/PmPaymentHistorySection";
-import PmActivityLogSection from "@/components/crm/subscriptions/PmActivityLogSection";
 import { fetchPmPayments } from "@/lib/crm/subscriptions/backend-api";
 import type { PmPaymentRecord } from "@/lib/crm/subscriptions/types";
 import ManagedPropertySummaryCard from "@/components/crm/property-listings/ManagedPropertySummaryCard";
@@ -608,12 +608,13 @@ export default function PropertyListingDetailPage() {
               </CrmSectionCard>
             ) : null}
             {isPm ? (
-              <CrmSectionCard title="PM activity log">
-                <PmActivityLogSection
-                  leadId={listing.leadId}
-                  propertyListingId={id}
-                />
-              </CrmSectionCard>
+              // Replaces the old "PM activity log" card — its events are merged into this timeline.
+              <PropertyStatusHistoryPanel
+                propertyKey={listing._id}
+                propertyTitle={listing.title}
+                currentStage={listing.pmStage}
+                refreshSignal={listing}
+              />
             ) : null}
 
             {/* Land & Regulatory Details */}

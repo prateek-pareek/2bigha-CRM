@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ListExportButton } from "@/components/crm/ui/ListExportButton";
+import { exportDate } from "@/lib/crm/export/list-export";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Search, Pencil, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -140,12 +142,28 @@ export default function GroupsPage() {
         bordered={false}
         breadcrumbs={[{ label: "Home", href: "/crm" }, { label: "Leads", href: "/crm/leads" }, { label: "Groups" }]}
         actions={
-          canManage ? (
-            <CrmButton type="button" onClick={openCreate} className="gap-1.5">
-              <Plus size={14} />
-              New group
-            </CrmButton>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            <ListExportButton<GroupRow>
+              module="groups"
+              fileName="lead_groups"
+              sheetName="Groups"
+              permissions={["leads:export"]}
+              getRows={() => groups}
+              filters={{ search: search.trim() || undefined }}
+              columns={[
+                { header: "Group", value: (g) => g.label },
+                { header: "Leads", value: (g) => g.leadCount ?? 0 },
+                { header: "Created by", value: (g) => g.createdByName || "" },
+                { header: "Active", value: (g) => (g.isActive === false ? "No" : "Yes") },
+              ]}
+            />
+            {canManage ? (
+              <CrmButton type="button" onClick={openCreate} className="gap-1.5">
+                <Plus size={14} />
+                New group
+              </CrmButton>
+            ) : null}
+          </div>
         }
       />
 

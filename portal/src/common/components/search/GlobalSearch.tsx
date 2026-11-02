@@ -8,11 +8,14 @@ import {
   Building2,
   Loader2,
   ArrowRight,
+  Home,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   crmSearchHasResults,
   fetchCrmSearch,
+  propertySearchLocation,
+  searchResultPhone,
   type CrmSearchResults,
 } from "@/lib/crm/search-api";
 import { useGlobalSearchQuery } from "@/lib/hooks/useGlobalSearchQuery";
@@ -43,7 +46,7 @@ export default function GlobalSearch() {
   const [placeholder, setPlaceholder] = useState("Search…");
   useEffect(() => {
     const update = () => {
-      setPlaceholder(window.innerWidth < 640 ? "Search…" : "Search companies, contacts, leads…");
+      setPlaceholder(window.innerWidth < 640 ? "Search…" : "Search leads, clients, properties, phone numbers…");
     };
     update();
     window.addEventListener('resize', update);
@@ -139,8 +142,13 @@ export default function GlobalSearch() {
                 render={(l) => (
                   <ResultItem
                     key={l._id}
-                    title={`${l.firstName || ""} ${l.lastName || ""}`.trim()}
-                    sub={l.email}
+                    title={
+                      `${l.firstName || ""} ${l.lastName || ""}`.trim() ||
+                      searchResultPhone(l) ||
+                      l.email ||
+                      "Lead"
+                    }
+                    sub={[l.email, searchResultPhone(l)].filter(Boolean).join(" · ")}
                     onClick={() => navigateTo(`/crm/leads/${l._id}`)}
                   />
                 )}
@@ -199,7 +207,7 @@ export default function GlobalSearch() {
                           {c.firstName} {c.lastName}
                         </div>
                         <div className="text-xs text-text-muted font-medium truncate">
-                          {c.email || "No email"}
+                          {[c.email, searchResultPhone(c)].filter(Boolean).join(" · ") || "No email"}
                         </div>
                       </div>
                     </button>
@@ -229,7 +237,39 @@ export default function GlobalSearch() {
                           {cl.name}
                         </div>
                         <div className="text-xs text-text-muted font-medium truncate">
-                          {cl.email || "No email"}
+                          {[cl.email, searchResultPhone(cl)].filter(Boolean).join(" · ") || "No email"}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {typedResults.properties && typedResults.properties.length > 0 ? (
+              <div className="p-2 last:border-0">
+                <h3 className="px-4 py-2 text-xs font-black text-text-muted uppercase tracking-[0.2em] opacity-40">
+                  Properties
+                </h3>
+                <div className="space-y-1">
+                  {typedResults.properties.map((p) => (
+                    <button
+                      key={p._id}
+                      type="button"
+                      onClick={() => navigateTo(`/crm/property-listings/${p._id}`)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-dim rounded-2xl transition-all group"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100/50">
+                        <Home size={16} />
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="text-sm font-bold text-text-main group-hover:text-primary transition-colors truncate">
+                          {p.title || "Property"}
+                        </div>
+                        <div className="text-xs text-text-muted font-medium truncate">
+                          {[propertySearchLocation(p), p.contactName, p.contactPhone]
+                            .filter(Boolean)
+                            .join(" · ") || "No location"}
                         </div>
                       </div>
                     </button>
