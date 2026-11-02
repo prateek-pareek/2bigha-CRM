@@ -27,19 +27,45 @@ interface AuditLogUser {
 
 interface AuditLog {
   _id: string;
-  user: AuditLogUser;
+  /** Absent for system-detected events (e.g. a stage changed directly in 2bigha). */
+  user?: AuditLogUser | null;
   action: string;
   module: string;
   description: string;
   createdAt: string;
   entityId?: string;
+  /** External record key (2bigha `pm_…` id / slug) when there is no CRM ObjectId. */
+  entityKey?: string;
+  entityName?: string;
+  actorName?: string;
   changes?: Record<string, unknown>;
   ipAddress?: string;
 }
 
-function recordHref(module: string | undefined, entityId: string | undefined): string | null {
-  if (!entityId) return null;
+const MODULE_LABELS: Record<string, string> = {
+  'property-management': 'Property Management',
+  'property-listings': 'Property listings',
+};
+
+function moduleLabel(module: string): string {
+  return MODULE_LABELS[module?.toLowerCase()] || module?.replace(/-/g, ' ') || '';
+}
+
+function actorDisplay(log: AuditLog): string {
+  const u = log.user;
+  if (u && (u.firstName || u.lastName || u.email)) {
+    return `${u.firstName || u.email?.split('@')[0] || ''} ${u.lastName || ''}`.trim();
+  }
+  return log.actorName || 'System';
+}
+
+function recordHref(module: string | undefined, entityId: string | undefined, entityKey?: string): string | null {
   const m = (module || '').toLowerCase();
+  if (m === 'property-management' || m === 'property-listings') {
+    const key = entityKey || entityId;
+    return key ? `/crm/property-listings/${encodeURIComponent(key)}` : null;
+  }
+  if (!entityId) return null;
   if (m === 'leads' || m === 'lead') return `/crm/leads/${entityId}`;
   if (m === 'contacts' || m === 'contact') return `/crm/contacts/${entityId}`;
   if (m === 'clients' || m === 'client') return `/crm/clients/${entityId}`;
@@ -121,10 +147,18 @@ function AuditLogsPageInner() {
     router.replace(`/crm/settings/audit-logs${q}`);
   };
 
+  // Keep the module filter in step with `?module=` (e.g. the "Property Management audit" settings link).
+  const moduleParam = searchParams.get('module')?.trim() || '';
+  useEffect(() => {
+    if (moduleParam) setFilterModule(moduleParam);
+  }, [moduleParam]);
+
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterModule, setFilterModule] = useState<string>('all');
+  const [filterModule, setFilterModule] = useState<string>(
+    () => searchParams.get('module')?.trim() || 'all',
+  );
   const [filterAction, setFilterAction] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -197,7 +231,15 @@ function AuditLogsPageInner() {
     fetchLogs();
   }, []);
 
-  const moduleOptions = ['all', ...Array.from(new Set(logs.map((l) => l.module).filter(Boolean))).sort()];
+  const moduleOptions = [
+    'all',
+    ...Array.from(
+      new Set([
+        ...logs.map((l) => l.module).filter(Boolean),
+        ...(filterModule !== 'all' ? [filterModule] : []),
+      ]),
+    ).sort(),
+  ];
   const actionOptions = ['all', ...Array.from(new Set(logs.map((l) => l.action).filter(Boolean))).sort()];
 
   const filteredLogs = logs.filter((log) => {
@@ -207,6 +249,9 @@ function AuditLogsPageInner() {
       (log.module?.toLowerCase() || '').includes(search.toLowerCase()) ||
       (log.action?.toLowerCase() || '').includes(search.toLowerCase()) ||
       (log.entityId || '').toLowerCase().includes(search.toLowerCase()) ||
+      (log.entityKey || '').toLowerCase().includes(search.toLowerCase()) ||
+      (log.entityName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (log.actorName || '').toLowerCase().includes(search.toLowerCase()) ||
       (log.ipAddress || '').includes(search) ||
       changeText.includes(search.toLowerCase()) ||
       `${log.user?.firstName || ''} ${log.user?.lastName || ''}`.toLowerCase().includes(search.toLowerCase()) ||
@@ -304,7 +349,7 @@ function AuditLogsPageInner() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" className="inline-flex items-center gap-1.5 h-8 px-3 bg-white border border-[var(--border-color)] rounded-md text-sm text-[var(--text-muted)] font-semibold hover:bg-[var(--background)] transition-colors">
-                Module: {filterModule === 'all' ? 'All' : filterModule}
+                Module: {filterModule === 'all' ? 'All' : moduleLabel(filterModule)}
                 <ChevronDown size={13} />
               </button>
             </DropdownMenuTrigger>
@@ -314,7 +359,7 @@ function AuditLogsPageInner() {
               <DropdownMenuRadioGroup value={filterModule} onValueChange={setFilterModule}>
                 {moduleOptions.map((m) => (
                   <DropdownMenuRadioItem key={m} value={m}>
-                    {m === 'all' ? 'All modules' : m}
+                    {m === 'all' ? 'All modules' : moduleLabel(m)}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
@@ -368,10 +413,11 @@ function AuditLogsPageInner() {
           ) : (
             filteredLogs.map((log) => {
               const style = getActionStyle(log.action);
-              const href = recordHref(log.module, log.entityId);
+              const href = recordHref(log.module, log.entityId, log.entityKey);
               const changeRows = flattenChanges(log.changes);
               const isExpanded = expandedId === log._id;
-              const hasDetails = changeRows.length > 0 || !!log.entityId;
+              const recordKey = log.entityKey || log.entityId;
+              const hasDetails = changeRows.length > 0 || !!recordKey;
 
               return (
                 <div
@@ -386,8 +432,7 @@ function AuditLogsPageInner() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <span className="text-sm font-semibold text-[var(--text-main)]">
-                          {log.user?.firstName || log.user?.email?.split('@')[0] || 'Unknown'}{' '}
-                          {log.user?.lastName || ''}
+                          {actorDisplay(log)}
                         </span>
                         <span className="text-[var(--border-color)]">·</span>
                         <span className={`px-1.5 py-0.5 rounded-md text-xs font-semibold uppercase tracking-wide ${style.badge}`}>
@@ -395,8 +440,16 @@ function AuditLogsPageInner() {
                         </span>
                         <span className="text-[var(--border-color)]">·</span>
                         <span className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">
-                          {log.module?.replace(/-/g, ' ')}
+                          {moduleLabel(log.module)}
                         </span>
+                        {log.entityName ? (
+                          <>
+                            <span className="text-[var(--border-color)]">·</span>
+                            <span className="text-xs font-semibold text-[var(--text-main)] truncate max-w-[220px]" title={log.entityName}>
+                              {log.entityName}
+                            </span>
+                          </>
+                        ) : null}
                       </div>
 
                       <p className="text-sm text-[var(--text-muted)] leading-relaxed">{log.description}</p>
@@ -409,9 +462,9 @@ function AuditLogsPageInner() {
                         {log.ipAddress ? (
                           <span>IP {log.ipAddress}</span>
                         ) : null}
-                        {log.entityId ? (
-                          <span className="font-mono truncate max-w-[200px]" title={log.entityId}>
-                            ID {log.entityId}
+                        {recordKey ? (
+                          <span className="font-mono truncate max-w-[200px]" title={recordKey}>
+                            ID {recordKey}
                           </span>
                         ) : null}
                         {href ? (
@@ -419,7 +472,7 @@ function AuditLogsPageInner() {
                             href={href}
                             className="inline-flex items-center gap-0.5 text-[var(--hs-link)] font-semibold hover:underline"
                           >
-                            View record
+                            {log.module === 'property-management' ? 'View property' : 'View record'}
                             <ExternalLink size={11} />
                           </Link>
                         ) : null}

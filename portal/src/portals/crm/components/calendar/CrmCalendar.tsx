@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/lib/crm/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   EventCalendar,
   type EventCalendarCreatePayload,
@@ -215,6 +216,39 @@ export function CrmCalendar() {
     }
   };
 
+  const handleClearReminder = async (eventId: string) => {
+    try {
+      await api.patch(`/crm/activities/${eventId}`, {
+        metadata: {
+          reminderAt: null,
+          reminderType: null,
+          reminderMessage: null,
+          reminderDisabled: true,
+        },
+      });
+      setInternalEvents((prev) =>
+        prev.map((e) =>
+          e._id === eventId
+            ? {
+                ...e,
+                metadata: {
+                  ...e.metadata,
+                  reminderAt: undefined,
+                  reminderType: undefined,
+                  reminderMessage: undefined,
+                },
+              }
+            : e,
+        ),
+      );
+      toast.success("Reminder cleared");
+    } catch (err) {
+      console.error("Failed to clear reminder", err);
+      toast.error("Could not clear reminder");
+      throw err;
+    }
+  };
+
   const notices = (
     <>
       {oauthNotice ? (
@@ -250,6 +284,7 @@ export function CrmCalendar() {
       creating={creating}
       notices={notices}
       onCreateEvent={handleCreate}
+      onClearReminder={handleClearReminder}
       sync={{
         enabled: canSyncCalendar,
         googleConnected: hasGoogleConnected,

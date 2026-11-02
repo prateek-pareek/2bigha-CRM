@@ -16,6 +16,11 @@ import { CRMModule } from '../crm.module';
 import { PropertyListingExpiryCronService } from './property-listing-expiry-cron.service';
 import { SubscriptionPlanExpiryCronService } from '../subscriptions/subscription-plan-expiry-cron.service';
 import { LegalCase, LegalCaseSchema } from '../records/schemas/legal-case.schema';
+import {
+  PropertyHistory,
+  PropertyHistorySchema,
+} from './schemas/property-history.schema';
+import { PropertyHistoryService } from './property-history.service';
 
 @Module({
   imports: [
@@ -30,6 +35,7 @@ import { LegalCase, LegalCaseSchema } from '../records/schemas/legal-case.schema
       [
         { name: PropertyListing.name, schema: PropertyListingSchema },
         { name: LegalCase.name, schema: LegalCaseSchema },
+        { name: PropertyHistory.name, schema: PropertyHistorySchema },
       ],
       'crmConnection',
     ),
@@ -37,6 +43,7 @@ import { LegalCase, LegalCaseSchema } from '../records/schemas/legal-case.schema
   controllers: [PropertyListingsController, PropertyShareController],
   providers: [
     PropertyListingsService,
+    PropertyHistoryService,
     TwoBighaPropertyService,
     TwoBighaPmAssignmentService,
     TwoBighaPmCreateService,
@@ -44,6 +51,6 @@ import { LegalCase, LegalCaseSchema } from '../records/schemas/legal-case.schema
     PropertyListingExpiryCronService,
     SubscriptionPlanExpiryCronService,
   ],
-  exports: [PropertyListingsService],
+  exports: [PropertyListingsService, PropertyHistoryService],
 })
 export class PropertyListingsModule {}

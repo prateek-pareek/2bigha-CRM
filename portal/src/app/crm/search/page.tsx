@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Building2,
+  Home,
   Loader2,
   Search,
   User,
@@ -19,6 +20,8 @@ import {
 import {
   crmSearchHasResults,
   fetchCrmSearch,
+  propertySearchLocation,
+  searchResultPhone,
   type CrmSearchResults,
 } from "@/lib/crm/search-api";
 
@@ -64,6 +67,7 @@ function CrmSearchPageContent() {
   const [visibleContacts, setVisibleContacts] = useState(INITIAL_VISIBLE);
   const [visibleOrgs, setVisibleOrgs] = useState(INITIAL_VISIBLE);
   const [visibleClients, setVisibleClients] = useState(INITIAL_VISIBLE);
+  const [visibleProperties, setVisibleProperties] = useState(INITIAL_VISIBLE);
 
   const runSearch = useCallback(async (q: string, signal?: AbortSignal) => {
     if (q.length < 2) {
@@ -108,24 +112,28 @@ function CrmSearchPageContent() {
     setVisibleContacts(INITIAL_VISIBLE);
     setVisibleOrgs(INITIAL_VISIBLE);
     setVisibleClients(INITIAL_VISIBLE);
+    setVisibleProperties(INITIAL_VISIBLE);
   }, [queryFromUrl]);
 
   const leads = results?.leads ?? [];
   const contacts = results?.contacts ?? [];
   const organizations = results?.organizations ?? [];
   const clients = results?.clients ?? [];
+  const properties = results?.properties ?? [];
 
   const totalCount = useMemo(
     () =>
       leads.length +
       contacts.length +
       organizations.length +
-      clients.length,
+      clients.length +
+      properties.length,
     [
       leads.length,
       contacts.length,
       organizations.length,
       clients.length,
+      properties.length,
     ],
   );
 
@@ -144,8 +152,8 @@ function CrmSearchPageContent() {
             Search CRM
           </h1>
           <p className="text-sm text-text-muted">
-            Find leads, contacts, companies, and clients across your
-            workspace.
+            Find leads, contacts, companies, clients, and properties by name,
+            email, or phone number.
           </p>
         </div>
 
@@ -158,7 +166,7 @@ function CrmSearchPageContent() {
             type="search"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Search by name, email, company…"
+            placeholder="Search by name, email, phone, property…"
             autoComplete="off"
             spellCheck={false}
             className="w-full rounded-full border border-border bg-white py-3.5 pl-12 pr-28 text-sm text-text-main shadow-[var(--crm-shadow-card)] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"
@@ -230,8 +238,13 @@ function CrmSearchPageContent() {
                 <SearchCard
                   key={l._id}
                   href={`/crm/leads/${l._id}`}
-                  title={`${l.firstName || ""} ${l.lastName || ""}`.trim() || "Lead"}
-                  subtitle={[l.email, l.organization, l.status]
+                  title={
+                    `${l.firstName || ""} ${l.lastName || ""}`.trim() ||
+                    searchResultPhone(l) ||
+                    l.email ||
+                    "Lead"
+                  }
+                  subtitle={[l.email, searchResultPhone(l), l.organization, l.status]
                     .filter(Boolean)
                     .join(" · ")}
                   accent="#ffa201"
@@ -253,7 +266,7 @@ function CrmSearchPageContent() {
                   key={c._id}
                   href={`/crm/contacts/${c._id}`}
                   title={`${c.firstName || ""} ${c.lastName || ""}`.trim() || "Contact"}
-                  subtitle={c.email || "No email"}
+                  subtitle={[c.email, searchResultPhone(c)].filter(Boolean).join(" · ") || "No email"}
                   accent="#27ae60"
                 />
               ))}
@@ -293,8 +306,32 @@ function CrmSearchPageContent() {
                   key={cl._id}
                   href={`/crm/clients/${cl._id}`}
                   title={cl.name || "Client"}
-                  subtitle={cl.email || "No email"}
+                  subtitle={[cl.email, searchResultPhone(cl)].filter(Boolean).join(" · ") || "No email"}
                   accent="#2f80ed"
+                />
+              ))}
+            </SearchSection>
+          ) : null}
+
+          {properties.length > 0 ? (
+            <SearchSection
+              title="Properties"
+              icon={<Home size={16} className="text-amber-600" />}
+              total={properties.length}
+              visible={visibleProperties}
+              onShowMore={() => setVisibleProperties((v) => v + INCREMENT)}
+            >
+              {properties.slice(0, visibleProperties).map((p) => (
+                <SearchCard
+                  key={p._id}
+                  href={`/crm/property-listings/${p._id}`}
+                  title={p.title || "Property"}
+                  subtitle={
+                    [propertySearchLocation(p), p.contactName, p.contactPhone]
+                      .filter(Boolean)
+                      .join(" · ") || "No location"
+                  }
+                  accent="#f2994a"
                 />
               ))}
             </SearchSection>

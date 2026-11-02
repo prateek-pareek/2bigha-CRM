@@ -49,6 +49,8 @@ export type CrmTask = {
     markedOverdue?: boolean;
     assigneeName?: string;
     pmAssigneeName?: string;
+    /** Raw assignee id when `assignee` couldn't be populated (CRM-only user). */
+    assigneeId?: string;
   };
   author?: CrmPortalUserOption | string;
   assignee?: CrmPortalUserOption | string;
@@ -58,6 +60,10 @@ function personId(p: CrmPortalUserOption | string | undefined): string {
   if (!p) return "";
   if (typeof p === "string") return p;
   return taskAssigneeOptionValue(p);
+}
+
+function taskAssigneeId(task: CrmTask): string {
+  return personId(task.assignee as CrmPortalUserOption) || String(task.metadata?.assigneeId || "");
 }
 
 export function normalizeTaskStatus(status?: string): string {
@@ -107,7 +113,7 @@ export function TaskDetailBody({
   const [comment, setComment] = useState("");
   const [checklistTitle, setChecklistTitle] = useState("");
   const [escalateTo, setEscalateTo] = useState("");
-  const [reassignTo, setReassignTo] = useState(personId(task.assignee as CrmPortalUserOption));
+  const [reassignTo, setReassignTo] = useState(taskAssigneeId(task));
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<"reassign" | "escalate" | "comment" | "checklist" | null>(null);
 
@@ -121,8 +127,8 @@ export function TaskDetailBody({
   );
 
   useEffect(() => {
-    setReassignTo(personId(task.assignee as CrmPortalUserOption));
-  }, [task._id, task.assignee]);
+    setReassignTo(taskAssigneeId(task));
+  }, [task._id, task.assignee, task.metadata?.assigneeId]);
 
   useEffect(() => {
     if (!flash) return;

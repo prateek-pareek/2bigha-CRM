@@ -427,6 +427,9 @@ export class CRMService {
       const raw = doc.populated('assignee');
       if (!raw) continue;
       const meta = doc.metadata && typeof doc.metadata === 'object' ? doc.metadata : {};
+      // Expose the stored id so edit forms keep the real assignee instead of starting
+      // at "Unassigned" (and wiping the assignee on the next save).
+      doc.set('metadata', { ...meta, assigneeId: String(raw) });
       if (meta.assigneeName) continue;
       pending.push({ doc, rawId: String(raw) });
     }
@@ -5535,10 +5538,17 @@ export class CRMService {
           /* label is cosmetic — never block the update */
         }
       } else {
+        // Clear every stored assignee label — cards fall back to pmAssigneeName.
         delete nextMeta.assigneeName;
         delete nextMeta.assigneeEmail;
+        delete nextMeta.pmAssigneeName;
+        delete nextMeta.assigneeSource;
+        delete nextMeta.assigneeRole;
+        delete nextMeta.twobighaAdminId;
       }
     }
+    // In-memory read hint only — never persist it.
+    delete nextMeta.assigneeId;
 
     patch.metadata = nextMeta;
 

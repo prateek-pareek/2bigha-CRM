@@ -95,11 +95,14 @@ export default function ActivityLogger({
     initialData?.status || initialData?.metadata?.status || (statuses && statuses.length > 0 ? statuses[0] : 'Open')
   );
   const [reporterId, setReporterId] = useState(() => crmUserRefId(initialData?.author));
-  const [assigneeId, setAssigneeId] = useState(() => crmUserRefId(initialData?.assignee));
+  // CRM-only assignees come back unpopulated (`assignee: null`); the API then puts the id in metadata.
+  const initialAssigneeId =
+    crmUserRefId(initialData?.assignee) || String(initialData?.metadata?.assigneeId || '');
+  const [assigneeId, setAssigneeId] = useState(() => initialAssigneeId);
 
   const taskEditId = initialData?._id;
   const authorSync = crmUserRefId(initialData?.author);
-  const assigneeSync = crmUserRefId(initialData?.assignee);
+  const assigneeSync = initialAssigneeId;
 
   useEffect(() => {
     setReporterId(authorSync);
@@ -167,7 +170,9 @@ export default function ActivityLogger({
         const isEdit = !!initialData?._id;
         if (reporterId) payload.author = reporterId;
         const picked = crmUsers.find((u) => taskAssigneeOptionValue(u) === assigneeId || u._id === assigneeId);
-        if (assigneeId) {
+        if (isEdit && assigneeId === assigneeSync) {
+          // Assignee untouched — don't resend it (avoids wiping assignees the form couldn't resolve).
+        } else if (assigneeId) {
           payload.assignee = assigneeId;
           if (picked) {
             payload.metadata.assigneeSource = picked.source || 'crm';
