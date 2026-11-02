@@ -63,6 +63,7 @@ const EXTRA_PERMS: Array<{ name: string; module: string; description: string }> 
   { name: 'leads:export', module: 'leads', description: 'Export / download leads CSV' },
   { name: 'contacts:export', module: 'contacts', description: 'Export / download contacts CSV' },
   { name: 'clients:export', module: 'clients', description: 'Export / download clients CSV' },
+  { name: 'clients:bulk_delete', module: 'clients', description: 'Select and delete many clients at once' },
   { name: 'organizations:export', module: 'organizations', description: 'Export / download organizations CSV' },
   // §13.2 assign action — reassign / transfer record ownership.
   { name: 'leads:assign', module: 'leads', description: 'Assign / transfer lead ownership' },

@@ -67,6 +67,10 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
   clients: [
     { perm: 'clients:import', label: 'Import clients (upload)' },
     { perm: 'clients:export', label: 'Export / download clients CSV' },
+    {
+      perm: 'clients:bulk_delete',
+      label: 'Bulk delete — select and delete many clients (Admin by default)',
+    },
   ],
   contacts: [
     { perm: 'contacts:export', label: 'Export / download contacts CSV' },
@@ -147,6 +151,7 @@ export const GLOBAL_PERMISSION_KEYS = new Set([
   'pm-leads:export',
   'clients:import',
   'clients:export',
+  'clients:bulk_delete',
   'contacts:export',
   'organizations:export',
   'legal:assign',

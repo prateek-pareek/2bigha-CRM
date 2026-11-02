@@ -142,6 +142,17 @@ export default function LeadDetailPage() {
     } catch (err) { console.error(err); }
   };
 
+  // A task created from this lead may have assigned the lead — refresh the owner card.
+  useEffect(() => {
+    const onOwnerChanged = (e: Event) => {
+      const d = (e as CustomEvent).detail as { relatedType?: string; relatedTo?: string } | undefined;
+      if (d?.relatedType === 'Lead') void fetchLead();
+    };
+    window.addEventListener('crm:record-owner-changed', onOwnerChanged);
+    return () => window.removeEventListener('crm:record-owner-changed', onOwnerChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordId]);
+
   const fetchActivities = async () => {
     const token = localStorage.getItem('token');
     try {

@@ -1,0 +1,14 @@
+First Name,Last Name,Email,Mobile No,Phone,Job Title,Organization / Company name
+Amit,Verma,amit.verma@dupetest.com,9810000001,,Manager,Acme Realty
+A.,Verma,AMIT.VERMA@dupetest.com,,,Executive,Acme Realty
+Neha,Roy,neha.roy@dupetest.com,9876543210,,Architect,Skyline Infra
+Neha,R,neha.r@dupetest.com,+91 98765 43210,,Designer,Skyline Infra
+Rahul,Sharma,rahul.sharma@dupetest.com,9810000003,,Director,Prime Estates
+rahul,SHARMA,,,,,
+Sonia,Gupta,sonia.g1@dupetest.com,,,Broker,Gupta Associates
+Sonia,Gupta,sonia.g2@dupetest.com,,,Broker,Gupta Associates
+Vikas,Jain,,,,Sales,Acme Realty
+Vikas,Jain,,,,Sales,Globex Properties
+Priya,,,,,Intern,Acme Realty
+Priya,,,,,Intern,Globex Properties
+Karan,Malhotra,karan.m@dupetest.com,9810000009,,CEO,Malhotra Group

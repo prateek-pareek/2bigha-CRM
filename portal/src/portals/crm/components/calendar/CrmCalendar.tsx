@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   EventCalendar,
   type EventCalendarCreatePayload,
+  type EventCalendarDayBadges,
   type KitCalendarEvent,
 } from "@mathionix/ui/kit/event-calendar";
 
@@ -22,9 +23,15 @@ type CrmCalendarApiEvent = {
     reminderAt?: string;
     reminderType?: "follow_up" | "custom";
     reminderMessage?: string;
+    escalated?: boolean;
+    autoEscalate?: boolean;
+    escalateAt?: string | null;
   };
   status?: string;
   authorName?: string;
+  assigneeName?: string;
+  /** Lead / Client the task was created from. */
+  linkedRecord?: { type?: string; id?: string; name?: string };
 };
 
 type CalendarConnections = {
@@ -36,10 +43,23 @@ type CalendarConnections = {
 function toKitEvent(e: CrmCalendarApiEvent): KitCalendarEvent | null {
   const dueDate = e.metadata?.dueDate;
   if (!dueDate) return null;
+  // Tasks created from a lead / client: show who it is for and which record it belongs to.
+  const context = [
+    e.linkedRecord?.name
+      ? `${e.linkedRecord.type || "Record"}: ${e.linkedRecord.name}`
+      : e.linkedRecord?.type
+        ? `${e.linkedRecord.type} task`
+        : "",
+    e.assigneeName ? `Assigned to ${e.assigneeName}` : "",
+    e.authorName && e.assigneeName && e.authorName !== e.assigneeName
+      ? `Created by ${e.authorName}`
+      : "",
+  ].filter(Boolean);
+  const content = [e.content, context.join(" · ")].filter(Boolean).join("\n");
   return {
     id: e._id,
     title: e.title,
-    content: e.content,
+    content: content || undefined,
     dueDate,
     category: e.metadata?.eventCategory,
     externalSource: e.metadata?.externalSource,
@@ -47,6 +67,8 @@ function toKitEvent(e: CrmCalendarApiEvent): KitCalendarEvent | null {
     reminderAt: e.metadata?.reminderAt,
     reminderType: e.metadata?.reminderType,
     reminderMessage: e.metadata?.reminderMessage,
+    escalated: Boolean(e.metadata?.escalated),
+    escalateAt: e.metadata?.autoEscalate && e.metadata?.escalateAt ? e.metadata.escalateAt : undefined,
   };
 }
 
@@ -69,6 +91,7 @@ export function CrmCalendar() {
   const [syncing, setSyncing] = useState(false);
   const [startingOAuth, setStartingOAuth] = useState<"gmail" | "outlook" | null>(null);
   const [creating, setCreating] = useState(false);
+  const [dayBadges, setDayBadges] = useState<EventCalendarDayBadges>({});
 
   const events = useMemo(() => {
     const mapped = [...internalEvents, ...externalEvents]
@@ -80,6 +103,19 @@ export function CrmCalendar() {
   const fetchInternalEvents = async () => {
     const res = await api.get("/crm/calendar-events");
     if (res.data) setInternalEvents(res.data);
+  };
+
+  const fetchEscalations = async () => {
+    try {
+      const res = await api.get("/crm/calendar-events/escalations");
+      const badges: EventCalendarDayBadges = {};
+      for (const d of Array.isArray(res.data) ? res.data : []) {
+        badges[d.date] = { escalated: d.escalated || 0, scheduled: d.scheduled || 0 };
+      }
+      setDayBadges(badges);
+    } catch (e) {
+      console.error("Failed to load task escalations", e);
+    }
   };
 
   const fetchConnections = async () => {
@@ -157,7 +193,7 @@ export function CrmCalendar() {
     const load = async () => {
       try {
         setLoading(true);
-        await Promise.all([fetchInternalEvents(), fetchConnections()]);
+        await Promise.all([fetchInternalEvents(), fetchConnections(), fetchEscalations()]);
         await syncExternalCalendar();
       } catch (e) {
         console.error("Failed to load calendar", e);
@@ -249,6 +285,7 @@ export function CrmCalendar() {
       loading={loading}
       creating={creating}
       notices={notices}
+      dayBadges={dayBadges}
       onCreateEvent={handleCreate}
       sync={{
         enabled: canSyncCalendar,

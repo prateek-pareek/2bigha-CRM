@@ -16,6 +16,7 @@ import { BulkEmailToolbarButton } from '@/components/crm/email/composer/BulkEmai
 import { buildBulkEmailRecipients } from '@/lib/crm/bulk-email';
 import Pagination from '@/components/suite/shell/Pagination';
 import { usePermissions } from '@/hooks/usePermissions';
+import crmApi from '@/lib/crm/api';
 import { CRM_API_URL } from '@/lib/crm/config';
 import {
   crmCacheKeys,
@@ -59,6 +60,15 @@ import { CrmIcon, CrmNavIcon } from '@/lib/crm/shared/icons';
 import { CRM_LIST_PAGE, CRM_MENU_ITEM, CRM_TOOLBAR_SELECT } from '@/lib/crm/ui';
 
 const ImportModal = dynamic(() => import('@/components/crm/records/create/ImportModal'), { ssr: false });
+const ContactDuplicatesModal = dynamic(() => import('@/components/crm/records/create/ContactDuplicatesModal'), { ssr: false });
+
+interface ContactDuplicateSummary {
+  records: number;
+  groups: number;
+  byContactId: Record<string, { group: number; groupSize: number; reasons: ('name' | 'email' | 'phone')[] }>;
+}
+
+const DUPLICATE_REASON_LABELS = { email: 'email', phone: 'phone', name: 'name' } as const;
 
 interface Contact {
   _id: string;
@@ -152,6 +162,26 @@ export default function ContactsPage() {
   const [filterProperties, setFilterProperties] = useState<FilterProperty[]>([]);
   const { hasAccess, isAdmin, user } = usePermissions();
   const canWrite = hasAccess('contacts:write');
+  // Admins always; anyone else with the Contacts "Delete" permission (role-wise or person-wise).
+  const canDelete = isAdmin || hasAccess('contacts:delete');
+  const canManageDuplicates = canWrite && isAdmin;
+  const [duplicateSummary, setDuplicateSummary] = useState<ContactDuplicateSummary | null>(null);
+  const [isDuplicatesOpen, setIsDuplicatesOpen] = useState(false);
+
+  const fetchDuplicateSummary = useCallback(async () => {
+    if (!canManageDuplicates) return;
+    try {
+      const { data } = await crmApi.get('/crm/contact-duplicates/summary');
+      setDuplicateSummary(data?.records > 0 ? data : null);
+    } catch {
+      // Highlighting is an enhancement; the list works without it.
+      setDuplicateSummary(null);
+    }
+  }, [canManageDuplicates]);
+
+  useEffect(() => {
+    void fetchDuplicateSummary();
+  }, [fetchDuplicateSummary]);
   // Mirrors POST /crm/import/:type, which accepts contacts:import OR contacts:write.
   const canImport =
     hasAccess('contacts:import') ||
@@ -348,15 +378,31 @@ export default function ContactsPage() {
     setIsDeleting(true);
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/contacts/bulk-delete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ ids: Array.from(selectedIds) })
-      });
-      if (res.ok) {
+      const ids = Array.from(selectedIds);
+      // POST /contacts/bulk-delete is admin:manage on the API; the per-record
+      // DELETE accepts contacts:delete, so non-admins delete one by one.
+      const ok = isAdmin
+        ? (
+            await fetch(`${CRM_API_URL}/crm/contacts/bulk-delete`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ ids })
+            })
+          ).ok
+        : (
+            await Promise.all(
+              ids.map((id) =>
+                fetch(`${CRM_API_URL}/crm/contacts/${id}`, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${token}` },
+                }),
+              ),
+            )
+          ).every((r) => r.ok);
+      if (ok) {
         setSelectedIds(new Set());
         setShowConfirmDelete(false);
         invalidateCrmAfterMutation('contacts', 'workspace', 'attention');
@@ -624,7 +670,7 @@ export default function ContactsPage() {
             <CrmHeaderTools
               leading={
               <>
-                {selectedIds.size > 0 && isAdmin && (
+                {selectedIds.size > 0 && canDelete && (
                   <CrmButton variant="danger" onClick={() => setShowConfirmDelete(true)} leftIcon={<CrmIcon.Trash size={14} />}>
                     Delete {selectedIds.size}
                   </CrmButton>
@@ -685,6 +731,26 @@ export default function ContactsPage() {
           </div>
         }
       />
+
+      {duplicateSummary && (
+        <div
+          role="status"
+          className="mt-1.5 flex items-center gap-2 rounded-[var(--crm-radius-ui)] border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          <span className="font-semibold">
+            {duplicateSummary.records} contacts look like duplicates ({duplicateSummary.groups}{' '}
+            {duplicateSummary.groups === 1 ? 'group' : 'groups'}).
+          </span>
+          <span>Highlighted rows share an email or phone, or have the same name with no conflicting details.</span>
+          <button
+            type="button"
+            onClick={() => setIsDuplicatesOpen(true)}
+            className="ml-auto shrink-0 rounded-[var(--crm-radius-ui)] bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700"
+          >
+            Manage duplicates
+          </button>
+        </div>
+      )}
 
       <CrmListToolbar
         filter={
@@ -802,7 +868,7 @@ export default function ContactsPage() {
                             : undefined
                         }
                         onDelete={
-                          isAdmin
+                          canDelete
                             ? () => { setSelectedIds(new Set([contact._id])); setShowConfirmDelete(true); }
                             : undefined
                         }
@@ -910,7 +976,13 @@ export default function ContactsPage() {
                 ) : paginated.map(contact => (
                   <tr
                     key={contact._id}
-                    className={`group cursor-pointer transition-colors ${selectedIds.has(contact._id) ? 'crm-table-row-selected' : ''}`}
+                    className={`group cursor-pointer transition-colors ${selectedIds.has(contact._id) ? 'crm-table-row-selected' : ''} ${duplicateSummary?.byContactId[contact._id] ? 'crm-table-row-duplicate' : ''}`}
+                    title={(() => {
+                      const d = duplicateSummary?.byContactId[contact._id];
+                      return d
+                        ? `Duplicate group ${d.group} (${d.groupSize} records) — matched on ${d.reasons.map((r) => DUPLICATE_REASON_LABELS[r]).join(', ')}`
+                        : undefined;
+                    })()}
                     onClick={() => router.push(`/crm/contacts/${contact._id}`)}
                   >
                     <td className="crm-table-check">
@@ -949,7 +1021,7 @@ export default function ContactsPage() {
                             : undefined
                         }
                         onDelete={
-                          isAdmin ? () => { setSelectedIds(new Set([contact._id])); setShowConfirmDelete(true); } : undefined
+                          canDelete ? () => { setSelectedIds(new Set([contact._id])); setShowConfirmDelete(true); } : undefined
                         }
                       />
                     </td>
@@ -1071,6 +1143,16 @@ export default function ContactsPage() {
       />
       {isImportModalOpen && (
         <ImportModal isOpen onClose={() => setIsImportModalOpen(false)} type="contacts" onSuccess={fetchContacts} />
+      )}
+      {canManageDuplicates && (
+        <ContactDuplicatesModal
+          isOpen={isDuplicatesOpen}
+          onClose={() => setIsDuplicatesOpen(false)}
+          onMerged={() => {
+            void fetchContacts({ force: true });
+            void fetchDuplicateSummary();
+          }}
+        />
       )}
       <SendEmailModal
         isOpen={!!emailContact}

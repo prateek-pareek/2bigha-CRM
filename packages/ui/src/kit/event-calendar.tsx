@@ -59,7 +59,14 @@ export type KitCalendarEvent = {
   reminderAt?: string;
   reminderType?: "follow_up" | "custom";
   reminderMessage?: string;
+  /** Task already moved to the Escalated lane. */
+  escalated?: boolean;
+  /** ISO datetime the task auto-escalates (or did). */
+  escalateAt?: string;
 };
+
+/** Per-day escalation counts keyed by yyyy-MM-dd. */
+export type EventCalendarDayBadges = Record<string, { escalated: number; scheduled: number }>;
 
 export type EventCalendarCreatePayload = {
   title: string;
@@ -94,6 +101,8 @@ export type EventCalendarProps = {
   /** Banner / alert content above the toolbar (OAuth notices, sync errors, …) */
   notices?: ReactNode;
   sync?: EventCalendarSyncProps;
+  /** Tasks escalated / due to auto-escalate on each date. */
+  dayBadges?: EventCalendarDayBadges;
   onCreateEvent?: (payload: EventCalendarCreatePayload) => void | Promise<void>;
   className?: string;
 };
@@ -101,8 +110,12 @@ export type EventCalendarProps = {
 const EXTERNAL_CHIP =
   "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-200";
 
+const ESCALATED_CHIP =
+  "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/50 dark:bg-rose-500/15 dark:text-rose-200";
+
 function eventChipClass(ev: KitCalendarEvent) {
   if (ev.externalSource) return EXTERNAL_CHIP;
+  if (ev.escalated) return ESCALATED_CHIP;
   return eventCalendarCategoryMeta(normalizeEventCalendarCategory(ev.category)).chipClass;
 }
 
@@ -118,6 +131,7 @@ export function EventCalendar({
   description = "Meetings, follow-ups, and synced external events",
   notices,
   sync,
+  dayBadges,
   onCreateEvent,
   className,
 }: EventCalendarProps) {
@@ -568,6 +582,26 @@ export function EventCalendar({
                     >
                       {format(day, "d")}
                     </span>
+                    {dayBadges?.[dateStr] ? (
+                      <div className="mb-1 flex flex-wrap gap-1">
+                        {dayBadges[dateStr].escalated > 0 ? (
+                          <span
+                            className="rounded-full bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold leading-none text-white"
+                            title={`${dayBadges[dateStr].escalated} task(s) escalated`}
+                          >
+                            {dayBadges[dateStr].escalated} escalated
+                          </span>
+                        ) : null}
+                        {dayBadges[dateStr].scheduled > 0 ? (
+                          <span
+                            className="rounded-full border border-amber-400 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold leading-none text-amber-800"
+                            title={`${dayBadges[dateStr].scheduled} task(s) will auto-escalate`}
+                          >
+                            {dayBadges[dateStr].scheduled} to escalate
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="flex flex-col gap-1 overflow-hidden">
                       {dayEvents.slice(0, 3).map((ev, idx) => (
                         <button
@@ -754,6 +788,20 @@ export function EventCalendar({
                     {format(new Date(selectedEvent.dueDate), "h:mm a")}
                   </p>
                 </div>
+                {selectedEvent.escalated || selectedEvent.escalateAt ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                      Escalation
+                    </p>
+                    <p className="mt-1 text-[var(--text-main)]">
+                      {selectedEvent.escalated
+                        ? "Escalated"
+                        : selectedEvent.escalateAt
+                          ? `Auto-escalates ${format(new Date(selectedEvent.escalateAt), "EEE, MMM d, yyyy h:mm a")}`
+                          : ""}
+                    </p>
+                  </div>
+                ) : null}
                 {selectedEvent.externalSource ? (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">

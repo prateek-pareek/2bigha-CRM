@@ -45,6 +45,11 @@ export type CrmTask = {
     pmRole?: string;
     pmPipeline?: boolean;
     escalated?: boolean;
+    /** Auto-escalation deadline: the task moves to Escalated when this passes. */
+    autoEscalate?: boolean;
+    escalateAt?: string | null;
+    escalatedAt?: string;
+    autoEscalated?: boolean;
     /** Explicitly marked overdue from Column / board (not only past due date). */
     markedOverdue?: boolean;
     assigneeName?: string;
@@ -69,14 +74,9 @@ export function normalizeTaskStatus(status?: string): string {
 
 export function isTaskOverdue(task: CrmTask): boolean {
   if (normalizeTaskStatus(task.status) === "Done") return false;
-  if (task.metadata?.markedOverdue) return true;
-  const due = task.metadata?.dueDate;
-  if (!due) return false;
-  const dueDate = new Date(due);
-  if (Number.isNaN(dueDate.getTime())) return false;
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  return dueDate.getTime() < startOfToday.getTime();
+  // Lane follows the status the user chose — a past due date alone never moves a task
+  // out of Open / In Progress (priority is a separate field and never affects lanes).
+  return Boolean(task.metadata?.markedOverdue);
 }
 
 /** Yesterday ISO for forcing a task into the Overdue lane. */
@@ -98,17 +98,31 @@ export function TaskDetailBody({
   crmUsers,
   onPatch,
   canManageTeam,
+  canEditEscalation,
 }: {
   task: CrmTask;
   crmUsers: CrmPortalUserOption[];
   onPatch: (payload: Record<string, unknown>) => Promise<void>;
   canManageTeam?: boolean;
+  /** Admin / team lead / manager only — mirrors the API check. */
+  canEditEscalation?: boolean;
 }) {
   const [comment, setComment] = useState("");
   const [checklistTitle, setChecklistTitle] = useState("");
   const [escalateTo, setEscalateTo] = useState("");
   const [reassignTo, setReassignTo] = useState(personId(task.assignee as CrmPortalUserOption));
   const [busy, setBusy] = useState(false);
+  const toLocalInput = (iso?: string | null) => {
+    const d = iso ? new Date(iso) : null;
+    if (!d || Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const [escalateAtInput, setEscalateAtInput] = useState(toLocalInput(task.metadata?.escalateAt));
+  useEffect(() => {
+    setEscalateAtInput(toLocalInput(task.metadata?.escalateAt));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task._id, task.metadata?.escalateAt]);
   const [flash, setFlash] = useState<"reassign" | "escalate" | "comment" | "checklist" | null>(null);
 
   const checklist = task.metadata?.checklist || [];
@@ -161,6 +175,59 @@ export function TaskDetailBody({
           {task.metadata.escalated ? " · Escalated" : ""}
         </p>
       ) : null}
+
+      <section className="space-y-2 rounded-[var(--radius-md)] border border-[var(--border-color)] p-3">
+        <h3 className="text-xs font-semibold text-[var(--text-muted)]">Auto-escalation</h3>
+        {task.metadata?.escalated && task.metadata?.escalatedAt ? (
+          <p className="text-sm text-amber-700">
+            {task.metadata.autoEscalated ? "Auto-escalated" : "Escalated"} on{" "}
+            {new Date(task.metadata.escalatedAt).toLocaleString()}
+          </p>
+        ) : task.metadata?.autoEscalate && task.metadata?.escalateAt ? (
+          <p className="text-sm text-[var(--text-main)]">
+            Escalates to manager at {new Date(task.metadata.escalateAt).toLocaleString()}
+          </p>
+        ) : (
+          <p className="text-sm text-[var(--text-muted)]">Not scheduled.</p>
+        )}
+        {canEditEscalation && !task.metadata?.escalated ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <input
+              type="datetime-local"
+              className="h-9 min-w-0 flex-1 rounded-md border border-[var(--border-color)] bg-transparent px-2 text-sm"
+              value={escalateAtInput}
+              disabled={busy}
+              onChange={(e) => setEscalateAtInput(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={busy || !escalateAtInput}
+              className="h-9 shrink-0 rounded-md bg-[var(--primary)] px-3 text-xs font-semibold text-white disabled:opacity-50"
+              onClick={() =>
+                void run({
+                  metadata: { autoEscalate: true, escalateAt: new Date(escalateAtInput).toISOString() },
+                })
+              }
+            >
+              Save
+            </button>
+            {task.metadata?.autoEscalate ? (
+              <button
+                type="button"
+                disabled={busy}
+                className="h-9 shrink-0 rounded-md border border-[var(--border-color)] px-3 text-xs font-semibold disabled:opacity-50"
+                onClick={() => void run({ metadata: { autoEscalate: false, escalateAt: null } })}
+              >
+                Turn off
+              </button>
+            ) : null}
+          </div>
+        ) : !canEditEscalation ? (
+          <p className="text-xs text-[var(--text-muted)]">
+            Only a team lead, manager or admin can change the escalation time.
+          </p>
+        ) : null}
+      </section>
 
       <div className="space-y-2">
         <h3 className="text-xs font-semibold text-[var(--text-muted)]">Description</h3>

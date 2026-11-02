@@ -76,7 +76,12 @@ import {
   assignUniqueRecordId,
   isMongoObjectIdString,
 } from '../shared/crm-record-id.util';
-import { hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
+import { canManageTaskEscalation, hasCrmFullDataAccess } from '../shared/crm-admin-access.util';
+import {
+  TASK_ESCALATION_KEYS,
+  escalationDeadlineChanged,
+  normalizeTaskEscalationMeta,
+} from '../tasks/task-escalation.util';
 import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
 import { leadVisibilityFilter } from '../shared/crm-lead-visibility.util';
 import {
@@ -151,6 +156,11 @@ import { TwoBighaLeadService } from '../records/twobigha-lead.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { CrmNotifyService } from '../notifications/crm-notify.service';
 import {
+  CrmRecordTasksService,
+  isRecordTaskType,
+  type RecordTaskPlan,
+} from '../tasks/crm-record-tasks.service';
+import {
   describeNextFollowUpSend,
   formatFollowUpAbsoluteWhen,
   formatFollowUpRelativeWhen,
@@ -219,6 +229,7 @@ export class CRMService {
     private readonly crmNotify: CrmNotifyService,
     private readonly crmUsersService: CRMUsersService,
     private readonly assignmentPolicy: CrmAssignmentPolicyService,
+    private readonly recordTasks: CrmRecordTasksService,
     @InjectModel(ReportSchedule.name, 'crmConnection')
     private reportScheduleModel?: Model<ReportScheduleDocument>,
   ) { }
@@ -267,12 +278,14 @@ export class CRMService {
     activityId?: string;
     relatedTo?: unknown;
     relatedType?: string;
+    /** Deep link; defaults to the tasks board. */
+    link?: string;
   }) {
     const event =
       opts.type === 'CRM_TASK_ESCALATED' || opts.type === 'CRM_TASK_REASSIGNED'
         ? 'task_reassigned'
         : 'task_assigned';
-    const link = '/crm/tasks';
+    const link = opts.link || '/crm/tasks';
     await this.crmNotify.notify({
       event,
       title: opts.title,
@@ -3304,6 +3317,7 @@ export class CRMService {
         throw new ForbiddenException('You can only edit your assigned leads.');
       }
     }
+    let resolvedOwnerHrmsId: string | undefined;
     // Changing the owner is a reassignment, not an edit — `leads:write` alone never allows it.
     if (
       oldLead &&
@@ -3314,6 +3328,7 @@ export class CRMService {
       const tier = this.assignmentPolicy.requireTier('leads', user);
       const assignee = await this.assignmentPolicy.assertAssignee(tier, user, String(dto.leadOwner || ''));
       dto.leadOwner = assignee.label || dto.leadOwner;
+      if (assignee.hrmsId) resolvedOwnerHrmsId = String(assignee.hrmsId);
     }
     if (user) {
       assertCrmPipelineScopedUpdate(user, {
@@ -3484,6 +3499,15 @@ export class CRMService {
         before: { leadOwner: (oldLead as any).leadOwner },
         after: { leadOwner: dto.leadOwner },
       });
+      // Open tasks created from this lead follow the new owner.
+      if (String(dto.leadOwner || '').trim()) {
+        await this.syncRecordTasksToOwner(
+          'Lead',
+          [updated._id],
+          resolvedOwnerHrmsId || dto.leadOwner,
+          user,
+        );
+      }
       const leadLabel =
         `${updated.firstName || ''} ${updated.lastName || ''}`.trim() || 'a lead';
       const link = `/crm/leads/${updated._id}`;
@@ -4720,7 +4744,86 @@ export class CRMService {
     };
   }
 
-  async createActivity(dto: any, user?: any): Promise<Activity> {
+  /**
+   * Hand a Lead/Client over to the person a task was assigned to. A lead goes through
+   * `updateLead` so RBAC, audit log, cache bust and "lead assigned" notifications all apply.
+   * Open tasks of the record then follow the new owner (`updateLead` / client path sync them).
+   */
+  private async applyRecordOwnerFromTask(plan: RecordTaskPlan, user: any): Promise<void> {
+    if (!plan.ownerChange || !plan.assigneeId) return;
+    if (plan.record.type === 'Lead') {
+      await this.updateLead(
+        String(plan.record.id),
+        { leadOwner: String(plan.assigneeId) },
+        user,
+      );
+      return;
+    }
+    await this.recordTasks.applyClientOwner(plan.record, plan.assigneeId, user);
+    await this.recordTasks.syncOpenTasksToOwner({
+      relatedType: 'Client',
+      recordIds: [plan.record.id],
+      newOwner: String(plan.assigneeId),
+      actor: user,
+    });
+  }
+
+  /** Picker data for creating a task from a lead / client (who may be assigned, owner, rights). */
+  async getRecordTaskContext(relatedType: string, relatedTo: string, user: any) {
+    const type = relatedType === 'Client' ? 'Client' : relatedType === 'Lead' ? 'Lead' : null;
+    if (!type) throw new BadRequestException('relatedType must be Lead or Client');
+    const rid = await this.resolveActivityRelatedTo(relatedTo, type);
+    if (!rid) throw new BadRequestException('Invalid record');
+    return this.recordTasks.getContext(type, String(rid), user);
+  }
+
+  /**
+   * Reassign a client from its detail page. Same authority rules as assigning a task on the
+   * client (admin: anyone, Team Lead / Manager: within their team); open tasks follow.
+   */
+  async reassignClient(id: string, assigneeRef: string, user: any) {
+    const rid = await this.resolveActivityRelatedTo(id, 'Client');
+    if (!rid) throw new BadRequestException('Invalid client');
+    const record = await this.recordTasks.loadRecord('Client', String(rid));
+    const plan = await this.recordTasks.planAssignment(record, assigneeRef, user, {
+      allowDefault: false,
+    });
+    if (!plan.assigneeId) throw new BadRequestException('Pick an assignee from the user list.');
+    if (!plan.ownerChange) {
+      return { assignedTo: String(plan.assigneeId), assigneeName: plan.assigneeLabel, changed: false };
+    }
+    await this.applyRecordOwnerFromTask(plan, user);
+    await this.roleAuditLog.log({
+      actor: user,
+      action: 'ownership_changed',
+      targetType: 'Client',
+      targetId: rid,
+      targetLabel: record.name,
+      before: { assignedTo: record.ownerIds },
+      after: { assignedTo: [String(plan.assigneeId)] },
+    });
+    return { assignedTo: String(plan.assigneeId), assigneeName: plan.assigneeLabel, changed: true };
+  }
+
+  /** Called when a lead/client owner changes outside the task flow — tasks follow the owner. */
+  async syncRecordTasksToOwner(
+    relatedType: 'Lead' | 'Client',
+    recordIds: Array<string | Types.ObjectId>,
+    newOwner: unknown,
+    actor?: any,
+  ): Promise<void> {
+    try {
+      await this.recordTasks.syncOpenTasksToOwner({ relatedType, recordIds, newOwner, actor });
+    } catch (err: any) {
+      console.error('[CRMService] Task owner sync failed:', err?.message || err);
+    }
+  }
+
+  async createActivity(
+    dto: any,
+    user?: any,
+    opts?: { enforceRecordTaskRules?: boolean },
+  ): Promise<Activity> {
     dto = this.normalizeScheduledActivityMetadata(dto);
     if (dto.type === 'Task') {
       dto.status = this.normalizeTaskStatus(dto.status);
@@ -4733,6 +4836,7 @@ export class CRMService {
           if (meta.isCalendarEvent !== false) meta.isCalendarEvent = true;
         }
       }
+      normalizeTaskEscalationMeta(meta, { requireFuture: true });
       if (!Array.isArray(meta.checklist)) meta.checklist = [];
       if (!Array.isArray(meta.comments)) meta.comments = [];
       if (!Array.isArray(meta.activityLog)) meta.activityLog = [];
@@ -4754,6 +4858,48 @@ export class CRMService {
         throw new BadRequestException('Invalid relatedTo');
       }
       dto.relatedTo = rid;
+    }
+
+    // Tasks created from a Lead / Client: only the owner can be assigned (or, for a fresh /
+    // reassigned record, someone the caller may hand it to) and the record owner follows.
+    let recordPlan: RecordTaskPlan | null = null;
+    if (
+      opts?.enforceRecordTaskRules &&
+      user &&
+      dto.type === 'Task' &&
+      dto.relatedTo &&
+      isRecordTaskType(dto.relatedType)
+    ) {
+      const record = await this.recordTasks.loadRecord(
+        dto.relatedType,
+        String(dto.relatedTo),
+      );
+      recordPlan = await this.recordTasks.planAssignment(record, dto.assignee, user, {
+        allowDefault: true,
+      });
+      dto.assignee = recordPlan.assigneeId ? String(recordPlan.assigneeId) : '';
+      const meta = { ...(dto.metadata || {}) };
+      meta.syncAssignee = true;
+      meta.linkedRecord = {
+        type: record.type,
+        id: String(record.id),
+        name: record.name,
+      };
+      meta.assignedById = String(user?.userId || user?._id || '');
+      meta.assignedByName = this.actorLabel(user);
+      if (recordPlan.assigneeId) {
+        meta.assigneeName = recordPlan.assigneeLabel;
+        meta.assigneeEmail = recordPlan.assigneeEmail;
+      }
+      this.appendTaskLog(meta, {
+        action: 'linked',
+        detail: `Created from ${record.type.toLowerCase()} ${record.name}${
+          recordPlan.assigneeLabel ? ` · assigned to ${recordPlan.assigneeLabel}` : ''
+        }`,
+        actorId: meta.assignedById,
+        actorName: meta.assignedByName,
+      });
+      dto.metadata = meta;
     }
 
     // ENTERPRISE-GRADE TAGGING (Involved Entities)
@@ -4884,6 +5030,16 @@ export class CRMService {
     }
     const activity = await new this.activityModel(dto).save();
 
+    if (recordPlan?.ownerChange) {
+      try {
+        await this.applyRecordOwnerFromTask(recordPlan, user);
+      } catch (err) {
+        // Roll the task back so a refused reassignment never leaves a half-linked task behind.
+        await this.activityModel.deleteOne({ _id: activity._id }).exec();
+        throw err;
+      }
+    }
+
     if (dto.type === 'Call') {
       const callLeadIds = uniqueInvolved.filter((i) => i.type === 'Lead').map((i) => i.id);
       if (dto.relatedTo && (dto.relatedType === 'Lead' || !dto.relatedType)) {
@@ -4919,20 +5075,38 @@ export class CRMService {
           const notify = assignee?.email || assignee?._id ? assignee : author;
           if (!notify) return;
           const isTaskAssignee = Boolean(assignee?._id);
+          const creatorId = String(user?.userId || user?._id || '');
+          // Assigning a task to yourself needs no notification; a senior assigning it does.
+          if (recordPlan && isTaskAssignee && creatorId && String(assignee._id) === creatorId) {
+            return;
+          }
+          const creatorName = this.actorLabel(user);
+          const due = populated.metadata?.dueDate
+            ? new Date(populated.metadata.dueDate)
+            : null;
+          const dueText =
+            due && !Number.isNaN(due.getTime())
+              ? ` Due ${due.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}.`
+              : '';
+          const linked = recordPlan
+            ? ` on ${recordPlan.record.type.toLowerCase()} ${recordPlan.record.name}`
+            : '';
           await this.notifyTaskRecipient({
             recipientId: String(notify._id || ''),
             email: notify.email,
             title: isTaskAssignee
               ? `Task assigned: ${populated.title || 'Task'}`
               : `CRM ${populated.type}: ${populated.title || 'New item'}`,
-            message:
-              isTaskAssignee && (author?.fullName || author?.firstName)
+            message: recordPlan && isTaskAssignee
+              ? `${creatorName} assigned you a task${linked}.${dueText}`
+              : isTaskAssignee && (author?.fullName || author?.firstName)
                 ? `${author.fullName || [author.firstName, author.lastName].filter(Boolean).join(' ')} assigned you a task.`
                 : populated.content || `You have a new ${populated.type} in CRM.`,
             type: 'CRM_TASK_ASSIGNED',
             activityId: String(populated._id),
             relatedTo: populated.relatedTo,
             relatedType: populated.relatedType,
+            link: recordPlan ? recordPlan.record.link : undefined,
           });
         } catch (err) {
           console.error('[CRMService] Task create notify failed:', err);
@@ -5314,7 +5488,11 @@ export class CRMService {
     id: string,
     dto: any,
     user?: any,
-    opts?: { skipReassignNotify?: boolean; forceNotifyReassign?: boolean },
+    opts?: {
+      skipReassignNotify?: boolean;
+      forceNotifyReassign?: boolean;
+      enforceRecordTaskRules?: boolean;
+    },
   ): Promise<Activity | null> {
     if (!id.match(/^[0-9a-fA-F]{24}$/)) return null;
     const existing = await this.activityModel.findById(id).exec();
@@ -5342,6 +5520,39 @@ export class CRMService {
       isMongoObjectIdString(patch.author)
     ) {
       patch.author = new Types.ObjectId(patch.author);
+    }
+    // Re-assigning a task that was created from a Lead / Client: same rules as on create, and the
+    // record owner (plus the record's other open tasks) follows the new assignee.
+    let recordPlan: RecordTaskPlan | null = null;
+    if (
+      opts?.enforceRecordTaskRules &&
+      user &&
+      existing.type === 'Task' &&
+      isRecordTaskType(existing.relatedType) &&
+      existing.relatedTo &&
+      patch.assignee !== undefined
+    ) {
+      const rawNext = patch.assignee == null ? '' : String(patch.assignee);
+      const prevId = existing.assignee ? String(existing.assignee) : '';
+      const probe = rawNext
+        ? await this.assignmentPolicy.resolveAssignee(
+            rawNext.replace(/^(twobigha:|crm:)/, ''),
+          )
+        : null;
+      const nextId = probe?.hrmsId ? String(probe.hrmsId) : '';
+      if (rawNext && !nextId) {
+        throw new BadRequestException('Pick an assignee from the user list.');
+      }
+      if (nextId !== prevId) {
+        const record = await this.recordTasks.loadRecord(
+          existing.relatedType,
+          String(existing.relatedTo),
+        );
+        recordPlan = await this.recordTasks.planAssignment(record, rawNext, user, {
+          allowDefault: false,
+        });
+        patch.assignee = recordPlan.assigneeId ? String(recordPlan.assigneeId) : '';
+      }
     }
     if (patch.assignee === '') patch.assignee = null;
     else if (typeof patch.assignee === 'string') {
@@ -5374,6 +5585,31 @@ export class CRMService {
 
     const actorId = String(user?.userId || user?._id || '');
     const actorName = this.actorLabel(user);
+
+    if (
+      existing.type === 'Task' &&
+      patch.metadata &&
+      typeof patch.metadata === 'object' &&
+      TASK_ESCALATION_KEYS.some((k) => k in patch.metadata)
+    ) {
+      normalizeTaskEscalationMeta(nextMeta);
+      if (escalationDeadlineChanged(prevMeta, nextMeta)) {
+        if (!canManageTaskEscalation(user)) {
+          throw new ForbiddenException(
+            'Only a team lead, manager or admin can change the auto-escalation date and time.',
+          );
+        }
+        normalizeTaskEscalationMeta(nextMeta, { requireFuture: true });
+        this.appendTaskLog(nextMeta, {
+          action: 'escalation_rescheduled',
+          detail: nextMeta.autoEscalate
+            ? `Auto-escalation set for ${nextMeta.escalateAt}`
+            : 'Auto-escalation turned off',
+          actorId,
+          actorName,
+        });
+      }
+    }
 
     if (commentBody.trim()) {
       const comments = Array.isArray(nextMeta.comments) ? [...nextMeta.comments] : [];
@@ -5440,6 +5676,13 @@ export class CRMService {
       });
     }
 
+    if (recordPlan?.assigneeId) {
+      nextMeta.assigneeName = recordPlan.assigneeLabel;
+      nextMeta.assigneeEmail = recordPlan.assigneeEmail;
+    } else if (recordPlan) {
+      delete nextMeta.assigneeName;
+      delete nextMeta.assigneeEmail;
+    }
     patch.metadata = nextMeta;
 
     const updated = await this.activityModel
@@ -5448,13 +5691,31 @@ export class CRMService {
       .populate({ path: 'assignee', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
       .exec();
 
+    if (recordPlan?.ownerChange) {
+      try {
+        await this.applyRecordOwnerFromTask(recordPlan, user);
+      } catch (err) {
+        // The record refused the new owner — put the task back so the two never disagree.
+        await this.activityModel
+          .updateOne(
+            { _id: id },
+            { $set: { assignee: existing.assignee ?? null, metadata: existing.metadata } },
+          )
+          .exec();
+        throw err;
+      }
+    }
+
     const shouldNotifyReassign =
       existing.type === 'Task' &&
       prevAssignee !== nextAssignee &&
       nextAssignee &&
-      !opts?.skipReassignNotify;
+      !opts?.skipReassignNotify &&
+      // Re-assigning a task to yourself needs no notification.
+      !(recordPlan && nextAssignee === actorId);
     if (shouldNotifyReassign || (opts?.forceNotifyReassign && nextAssignee)) {
       const assignee = updated?.assignee as any;
+      const rec = nextMeta.linkedRecord as { type?: string; id?: string; name?: string } | undefined;
       void this.notifyTaskRecipient({
         recipientId: nextAssignee,
         email: assignee?.email,
@@ -5463,12 +5724,35 @@ export class CRMService {
           : `Task reassigned: ${updated?.title || existing.title || 'Task'}`,
         message: nextMeta.escalated
           ? `${actorName} escalated a task to you.`
-          : `${actorName} reassigned a task to you.`,
+          : `${actorName} reassigned a task to you${rec?.name ? ` on ${String(rec.type || 'record').toLowerCase()} ${rec.name}` : ''}.`,
         type: nextMeta.escalated ? 'CRM_TASK_ESCALATED' : 'CRM_TASK_REASSIGNED',
         activityId: id,
         relatedTo: updated?.relatedTo || existing.relatedTo,
         relatedType: updated?.relatedType || existing.relatedType,
+        link: recordPlan?.record.link,
       });
+    }
+    // The previous assignee should know the task moved away from them.
+    if (
+      recordPlan &&
+      existing.type === 'Task' &&
+      prevAssignee &&
+      prevAssignee !== nextAssignee &&
+      prevAssignee !== actorId &&
+      !nextMeta.escalated &&
+      !opts?.skipReassignNotify
+    ) {
+      void this.crmNotify
+        .notify({
+          event: 'task_reassigned',
+          title: `Task reassigned: ${updated?.title || existing.title || 'Task'}`,
+          message: `${actorName} moved this task ${nextAssignee ? 'to someone else' : 'to unassigned'}.`,
+          recipient: { userId: prevAssignee },
+          link: '/crm/tasks',
+          metadata: { link: '/crm/tasks', activityId: id },
+          type: 'CRM_TASK_REASSIGNED',
+        })
+        .catch(() => null);
     }
 
     return updated;
@@ -5783,6 +6067,14 @@ export class CRMService {
       .exec();
 
     await this.bustCrmCache('leads');
+
+    // Open tasks of those leads follow the new owner.
+    await this.syncRecordTasksToOwner(
+      'Lead',
+      previousOwners.map((l: any) => l._id),
+      assignee.hrmsId ? String(assignee.hrmsId) : ownerLabel,
+      user,
+    );
 
     await this.roleAuditLog.log({
       actor: user,
@@ -7552,7 +7844,12 @@ export class CRMService {
   }
 
   // --- Calendar ---
-  async getCalendarEvents(start?: string, end?: string, owner?: string): Promise<any> {
+  async getCalendarEvents(
+    start?: string,
+    end?: string,
+    owner?: string,
+    user?: any,
+  ): Promise<any> {
     const scheduledConditions: any[] = [
       {
         type: { $in: ['Task', 'Meeting'] },
@@ -7578,14 +7875,44 @@ export class CRMService {
         ],
       });
     }
+    // Calendar is personal: you see tasks/meetings you created or that are assigned to you.
+    // Team Leads / Managers also see their direct reports'; full-access roles see everything.
+    if (user && !hasCrmFullDataAccess(user)) {
+      const selfId = this.userObjectId(user);
+      const people: Types.ObjectId[] = selfId ? [selfId] : [];
+      if (this.canReadTeamModuleData('leads', user)) {
+        const { ids } = await this.teamMemberIdsAndNames(user);
+        people.push(...ids);
+      }
+      filter.$and.push({
+        $or: [{ author: { $in: people } }, { assignee: { $in: people } }],
+      });
+    }
     const rows = await this.activityModel
       .find(filter)
+      .populate({ path: 'assignee', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
+      .populate({ path: 'author', model: this.hrmsUserModel, select: 'firstName lastName email fullName' })
       .sort({ 'metadata.dueDate': 1, createdAt: 1 })
       .lean()
       .exec();
 
+    const personName = (u: any): string | undefined =>
+      u && typeof u === 'object'
+        ? [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.fullName || u.email
+        : undefined;
     const normalized = rows
       .map((row: any) => this.normalizeScheduledActivityMetadata(row))
+      .map((row: any) => ({
+        ...row,
+        assigneeName: personName(row.assignee),
+        authorName: personName(row.author),
+        assigneeId: row.assignee?._id ? String(row.assignee._id) : undefined,
+        linkedRecord: row.metadata?.linkedRecord
+          ? row.metadata.linkedRecord
+          : row.relatedTo && (row.relatedType === 'Lead' || row.relatedType === 'Client')
+            ? { type: row.relatedType, id: String(row.relatedTo) }
+            : undefined,
+      }))
       .filter((row: any) => Boolean(row.metadata?.dueDate));
     const startMs = start ? new Date(start).getTime() : null;
     const endMs = end ? new Date(end).getTime() : null;

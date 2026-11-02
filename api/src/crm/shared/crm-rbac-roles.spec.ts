@@ -49,7 +49,7 @@ describe('CRM role catalog (Roles Overview)', () => {
   });
 
   it('gives no role except Super Admin any admin-level grant', () => {
-    const adminLevel = /^(admin:|settings:|.*:export$|.*:read:all$|leads:delete$|contacts:delete$)/;
+    const adminLevel = /^(admin:|settings:|.*:export$|.*:read:all$|leads:delete$|contacts:delete$|clients:delete$|clients:bulk_delete$)/;
     for (const r of CRM_ROLE_SEEDS.filter((x) => x.key !== 'super_admin')) {
       expect(r.workspaceModule).not.toBe('ALL');
       expect(r.crmPermissions.filter((p) => adminLevel.test(p))).toEqual([]);
