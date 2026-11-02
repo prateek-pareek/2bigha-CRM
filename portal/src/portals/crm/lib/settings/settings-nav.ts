@@ -191,6 +191,12 @@ export const CRM_SETTINGS_SECTIONS: CrmSettingsNavSection[] = [
         href: "/crm/settings/audit-logs",
         icon: Shield,
       },
+      {
+        name: "Property Management audit",
+        description: "Status changes and PM actions on every managed property.",
+        href: "/crm/settings/audit-logs?module=property-management",
+        icon: Building2,
+      },
       /* Disabled for now, not needed yet. Re-enable by uncommenting.
       {
         name: "Wiki",

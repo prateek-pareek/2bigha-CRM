@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useDeferredValue, useMemo } from 'react';
+import { toast } from 'sonner';
+import { downloadServerExport } from '@/lib/crm/export/list-export';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Search, Plus, UserCheck, MoreHorizontal, Settings2, GripVertical, X, Check, Trash2, Mail, Phone, LayoutGrid, List, Calendar, Upload, Loader2, Download } from 'lucide-react';
@@ -49,6 +51,8 @@ interface Client {
   name: string;
   email: string;
   phone: string;
+  whatsappNumber?: string;
+  additionalEmails?: string[];
   status: string;
   organization?: {
     _id: string;
@@ -56,6 +60,18 @@ interface Client {
   };
   createdAt?: string;
   duplicateInfo?: ClientDuplicateInfo;
+}
+
+/** Primary email, else the first additional one — many records only carry the latter. */
+function clientDisplayEmail(c: Client): string {
+  const primary = String(c.email || '').trim();
+  if (primary) return primary;
+  return (c.additionalEmails || []).map((e) => String(e || '').trim()).find(Boolean) || '';
+}
+
+/** Phone, else the WhatsApp number (often the only number on 2bigha-synced clients). */
+function clientDisplayPhone(c: Client): string {
+  return String(c.phone || '').trim() || String(c.whatsappNumber || '').trim();
 }
 
 type ClientDuplicateReason = 'name' | 'email' | 'phone';
@@ -239,26 +255,16 @@ export default function ClientsPage() {
 
   const handleExport = async () => {
     setExporting(true);
-    const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/export/clients`, {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}` }
+      // Same search + filters as the list on screen.
+      const params = buildCrmListSearchParams({
+        search: deferredSearch,
+        filters: apiFilters,
       });
-      if (res.ok) {
-        const csvContent = await res.text();
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `clients_export_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    } catch (error) {
-      console.error('Export error:', error);
+      await downloadServerExport('clients', params);
+      toast.success('Clients exported');
+    } catch (error: any) {
+      toast.error(error?.message || 'Export failed');
     } finally {
       setExporting(false);
     }
@@ -370,8 +376,8 @@ export default function ClientsPage() {
           />
         );
       }
-      case 'email': return <CrmListMutedText className="crm-cell-wrap block">{client.email || '—'}</CrmListMutedText>;
-      case 'phone': return <CrmListMutedText className="crm-cell-wrap block">{client.phone || '—'}</CrmListMutedText>;
+      case 'email': return <CrmListMutedText className="crm-cell-wrap block">{clientDisplayEmail(client) || '—'}</CrmListMutedText>;
+      case 'phone': return <CrmListMutedText className="crm-cell-wrap block">{clientDisplayPhone(client) || '—'}</CrmListMutedText>;
       case 'status':
         if (!hasAccess('clients:edit')) return <CrmListStatusBadge label={client.status || '—'} />;
         return (
@@ -548,12 +554,12 @@ export default function ClientsPage() {
                           actions={
                             <CrmTableActionMenu
                               onEdit={() => router.push(`/crm/clients/${client._id}`)}
-                              onEmail={client.email ? () => setEmailClient(client) : undefined}
+                              onEmail={clientDisplayEmail(client) ? () => setEmailClient(client) : undefined}
                             />
                           }
                           meta={[
-                            { key: 'email', icon: <CrmIcon.Mail size={15} />, label: client.email || '—' },
-                            { key: 'phone', icon: <CrmIcon.Phone size={15} />, label: client.phone || '—' },
+                            { key: 'email', icon: <CrmIcon.Mail size={15} />, label: clientDisplayEmail(client) || '—' },
+                            { key: 'phone', icon: <CrmIcon.Phone size={15} />, label: clientDisplayPhone(client) || '—' },
                           ]}
                           footerLeft={
                             <div className="flex items-center gap-1.5">
@@ -655,7 +661,7 @@ export default function ClientsPage() {
                           <td className="crm-table-actions">
                             <CrmTableActionMenu
                               onEdit={() => router.push(`/crm/clients/${client._id}`)}
-                              onEmail={client.email ? () => setEmailClient(client) : undefined}
+                              onEmail={clientDisplayEmail(client) ? () => setEmailClient(client) : undefined}
                             />
                           </td>
                         </tr>
@@ -737,7 +743,7 @@ export default function ClientsPage() {
       <SendEmailModal
         isOpen={!!emailClient}
         onClose={() => setEmailClient(null)}
-        recipientEmail={emailClient?.email || ''}
+        recipientEmail={emailClient ? clientDisplayEmail(emailClient) : ''}
         recipientName={emailClient ? emailClient.name : ''}
         module="clients"
         entityId={emailClient?._id}

@@ -1,6 +1,8 @@
 "use client";
 
 import { useDeferredValue, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
+import { downloadServerExport } from '@/lib/crm/export/list-export';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Search, Plus, MoreHorizontal, Download, Loader2, Upload, Settings2, X, Check, ChevronDown, User, Mail, LayoutGrid, List, Calendar as CalendarIcon, GripVertical, Trash2, RefreshCw, ArrowDown, ArrowUp } from 'lucide-react';
@@ -579,25 +581,21 @@ export default function ContactsPage() {
 
   const handleExport = async () => {
     setExporting(true);
-    const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${CRM_API_URL}/crm/export/contacts`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      // Same search / filters / "my contacts" / email activity as the list on screen;
+      // ticked rows only when a selection exists.
+      const params = buildCrmListSearchParams({
+        search: debouncedSearch,
+        filters,
+        emailEngagement,
+        extra: { mine: showMyContactsOnly ? '1' : undefined },
       });
-      if (res.ok) {
-        const csvContent = await res.text();
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `contacts_export_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    } catch (error) {
-      console.error('Export error:', error);
+      await downloadServerExport('contacts', params, {
+        ids: selectedIds.size > 0 ? Array.from(selectedIds) : undefined,
+      });
+      toast.success(selectedIds.size > 0 ? `Exported ${selectedIds.size} selected contacts` : 'Contacts exported');
+    } catch (error: any) {
+      toast.error(error?.message || 'Export failed');
     } finally {
       setExporting(false);
     }
@@ -816,7 +814,9 @@ export default function ContactsPage() {
           onItemClick={(contact) => router.push(`/crm/contacts/${contact._id}`)}
         />
       ) : viewMode === 'grid' ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          {/* Cards scroll inside the page; pagination stays pinned below. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-0.5 custom-scrollbar">
           {loading ? (
             <CrmRecordCardSkeleton />
           ) : paginated.length === 0 ? (
@@ -888,6 +888,7 @@ export default function ContactsPage() {
               })}
             </CrmRecordCardGrid>
           )}
+          </div>
           <Pagination
             total={displayedTotal}
             page={page}

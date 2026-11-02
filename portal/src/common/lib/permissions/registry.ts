@@ -81,6 +81,7 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
   ],
   inbox: [{ perm: 'inbox:connect', label: 'Connect email accounts' }],
   legal: [
+    { perm: 'legal:export', label: 'Export / download legal cases' },
     {
       perm: 'legal:move_pipeline',
       label: 'Move between pipelines / board stage',
@@ -90,10 +91,12 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     { perm: 'legal:status', label: 'Read-only legal status on own leads (2Bigha / PM hand-off)' },
   ],
   'property-listings': [
+    { perm: 'property-listings:export', label: 'Export / download property listings' },
     { perm: 'property-listings:approve', label: 'Approve listings' },
     { perm: 'property-listings:feature', label: 'Mark properties as Featured' },
   ],
   'approval-queue': [
+    { perm: 'approval-queue:export', label: 'Export / download the approval queue' },
     { perm: 'approval-queue:approve', label: 'Approve pending items' },
     { perm: 'approval-queue:reject', label: 'Reject pending items' },
   ],
@@ -106,6 +109,7 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     { perm: 'quotations:send', label: 'Send quotations to clients' },
   ],
   visits: [
+    { perm: 'visits:export', label: 'Export / download visits' },
     { perm: 'visits:schedule', label: 'Schedule visits' },
     { perm: 'visits:complete', label: 'Mark visits as complete' },
   ],
@@ -113,7 +117,12 @@ export const CRM_MODULE_EXTRA_PERMS: Record<
     { perm: 'ivr-service:configure', label: 'Configure IVR settings' },
     { perm: 'ivr-service:manage', label: 'Manage IVR queues & rules' },
   ],
-  activities: [{ perm: 'ivr:call', label: 'Place IVR calls & see own call logs' }],
+  activities: [
+    { perm: 'ivr:call', label: 'Place IVR calls & see own call logs' },
+    { perm: 'activities:export', label: 'Export / download tasks, notes & calls' },
+  ],
+  services: [{ perm: 'services:export', label: 'Export / download the services catalog' }],
+  outreach: [{ perm: 'outreach:export', label: 'Export / download campaigns' }],
   dashboard: [{ perm: 'team:read', label: 'Team hierarchy view (direct reports)' }],
 };
 
@@ -154,6 +163,13 @@ export const GLOBAL_PERMISSION_KEYS = new Set([
   'clients:bulk_delete',
   'contacts:export',
   'organizations:export',
+  'activities:export',
+  'property-listings:export',
+  'approval-queue:export',
+  'visits:export',
+  'legal:export',
+  'services:export',
+  'outreach:export',
   'legal:assign',
   'inbox:connect',
   'legal:move_pipeline',

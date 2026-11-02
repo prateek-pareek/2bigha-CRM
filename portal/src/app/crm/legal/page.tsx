@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { ListExportButton } from '@/components/crm/ui/ListExportButton';
+import { exportDate } from '@/lib/crm/export/list-export';
 import { Loader2, Trash2, GitBranch, Calendar, Tag, User, Building2 } from 'lucide-react';
 import LegalCaseCreatePanel from '@/components/crm/records/create/LegalCaseCreatePanel';
 import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
@@ -95,6 +97,8 @@ export default function LegalCasesPage() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  /** 2bigha read-through still in flight (runs after the CRM cases, bounded by its timeout). */
+  const [twoBighaLoading, setTwoBighaLoading] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<LegalCase | null>(null);
   const [filters, setFilters] = useState<FilterCriteria[]>([]);
@@ -158,6 +162,7 @@ export default function LegalCasesPage() {
       if (controller.signal.aborted) return;
 
       // Live 2bigha GraphQL properties read-through (best-effort, bounded by a timeout)
+      setTwoBighaLoading(true);
       const timeoutId = setTimeout(() => controller.abort(), TWOBIGHA_READ_THROUGH_TIMEOUT_MS);
       try {
         const propRes = await fetch(
@@ -201,6 +206,8 @@ export default function LegalCasesPage() {
         }
       } finally {
         clearTimeout(timeoutId);
+        // A newer request owns the flag once it has replaced this one.
+        if (casesFetchAbortRef.current === controller) setTwoBighaLoading(false);
       }
     },
     [deferredSearch],
@@ -448,15 +455,51 @@ export default function LegalCasesPage() {
             actions={
               <CrmHeaderTools
                 leading={
-                  selectedIds.size > 0 && hasAccess('legal:delete') ? (
-                    <CrmButton
-                      variant="danger"
-                      onClick={() => setShowConfirmDelete(true)}
-                      leftIcon={<CrmIcon.Trash size={14} />}
-                    >
-                      Delete {selectedIds.size}
-                    </CrmButton>
-                  ) : null
+                  <>
+                    <ListExportButton<LegalCase>
+                      module="legal"
+                      fileName="legal_cases"
+                      sheetName="Legal cases"
+                      permissions={['legal:export']}
+                      label={selectedIds.size > 0 ? `Export ${selectedIds.size}` : 'Export'}
+                      getRows={() =>
+                        selectedIds.size > 0
+                          ? filteredCases.filter((c) => selectedIds.has(c._id))
+                          : filteredCases
+                      }
+                      filters={{
+                        pipeline: selectedPipeline?.name || undefined,
+                        search: deferredSearch || undefined,
+                        filters: apiFilters.length ? apiFilters : undefined,
+                        selected: selectedIds.size > 0 ? selectedIds.size : undefined,
+                      }}
+                      columns={[
+                        { header: 'Record ID', value: (c) => c.recordId || c._id },
+                        { header: 'Title', value: (c) => c.title },
+                        { header: 'Case type', value: (c) => String(c.caseType || '').replace(/_/g, ' ') },
+                        { header: 'Stage', value: (c) => c.stage },
+                        { header: 'Priority', value: (c) => c.priority },
+                        { header: 'Counterparty', value: (c) => c.counterpartyName || '' },
+                        { header: 'Contract value', value: (c) => (typeof c.contractValue === 'number' ? c.contractValue : '') },
+                        { header: 'Currency', value: (c) => c.currency || '' },
+                        { header: 'Jurisdiction', value: (c) => c.jurisdiction || '' },
+                        { header: 'Case owner', value: (c) => c.caseOwner || '' },
+                        { header: 'Start date', value: (c) => exportDate(c.startDate) },
+                        { header: 'Expiry date', value: (c) => exportDate(c.expiryDate) },
+                        { header: 'Description', value: (c) => c.description || '' },
+                        { header: 'Created at', value: (c) => exportDate(c.createdAt) },
+                      ]}
+                    />
+                    {selectedIds.size > 0 && hasAccess('legal:delete') ? (
+                      <CrmButton
+                        variant="danger"
+                        onClick={() => setShowConfirmDelete(true)}
+                        leftIcon={<CrmIcon.Trash size={14} />}
+                      >
+                        Delete {selectedIds.size}
+                      </CrmButton>
+                    ) : null}
+                  </>
                 }
                 onRefresh={() => void fetchCasesList(selectedPipelineId)}
               />
@@ -532,7 +575,15 @@ export default function LegalCasesPage() {
           />
 
           <div className="flex-1 overflow-auto custom-scrollbar">
-            {loading ? (
+            {/* CRM cases already on screen — 2bigha rows will append; say so instead of blocking. */}
+            {!loading && twoBighaLoading && cases.length > 0 ? (
+              <div className="flex items-center gap-2 px-4 py-2 text-xs text-text-muted">
+                <Loader2 size={13} className="animate-spin" /> Loading 2bigha cases…
+              </div>
+            ) : null}
+            {/* Keep the spinner while nothing is on screen yet and 2bigha may still add rows,
+                so "No legal cases found" only shows once both sources have answered. */}
+            {loading || (twoBighaLoading && cases.length === 0) ? (
               <div className="w-full h-64 flex items-center justify-center">
                 <Loader2 size={40} className="animate-spin text-text-muted" />
               </div>

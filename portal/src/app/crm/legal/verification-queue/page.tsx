@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Clock3, Scale, ShieldCheck } from "lucide-react";
@@ -98,10 +98,19 @@ function TwoBighaLegalVerificationQueuePageContent() {
     [router, searchParams],
   );
 
+  // Only the newest request may write rows or end the skeleton — an older, slower one
+  // (previous tab/page, or the mount-time bucket before the saved one is applied) is ignored.
+  const loadSeqRef = useRef(0);
+  /** Latest `load` for the error toast's Retry (the toast outlives the closure that showed it). */
+  const loadRef = useRef<() => Promise<void>>(async () => {});
+
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
     setLoading(true);
     try {
       const result = await fetchTwoBighaLegalVerificationQueue(bucket, { page, limit: pageSize });
+      if (isStale()) return;
       if (!result) {
         setConfigured(false);
         setRows([]);
@@ -111,14 +120,25 @@ function TwoBighaLegalVerificationQueuePageContent() {
       setConfigured(true);
       setRows(result.data || []);
       setTotal(result.meta?.total ?? result.data?.length ?? 0);
-    } catch {
-      toast.error("Failed to load the legal verification queue");
+    } catch (err: any) {
+      if (isStale()) return;
+      setRows([]);
+      setTotal(0);
+      const timedOut =
+        err?.code === "ECONNABORTED" || err?.code === "ETIMEDOUT" || err?.response?.status === 504;
+      toast.error(
+        timedOut
+          ? "2Bigha is taking too long to respond"
+          : "Failed to load the legal verification queue",
+        { action: { label: "Retry", onClick: () => void loadRef.current() } },
+      );
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [bucket, page, pageSize]);
 
   useEffect(() => {
+    loadRef.current = load;
     void load();
   }, [load]);
 

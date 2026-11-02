@@ -23,6 +23,8 @@ import ActivityLogger, { CrmPortalUserOption, formatCrmUserLabel } from '@/compo
 import { usePermissions } from '@/hooks/usePermissions';
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
+import { ListExportButton } from '@/components/crm/ui/ListExportButton';
+import { exportDate } from '@/lib/crm/export/list-export';
 import CRMFilterBar from '@/components/crm/segments/CRMFilterBar';
 import { applyFilters, FilterCriteria, FilterProperty } from '@/lib/crm/filter-config';
 import {
@@ -1060,6 +1062,42 @@ export default function TasksPage() {
                                 <input type="checkbox" checked={teamScope} onChange={(e) => setTeamScope(e.target.checked)} className="cursor-pointer" />
                             </label>
                         </div>
+                        <ListExportButton<Task>
+                            module="tasks"
+                            fileName="tasks"
+                            sheetName="Tasks"
+                            permissions={['activities:export']}
+                            getRows={() => filteredTasks}
+                            filters={{
+                                search: search.trim() || undefined,
+                                mineOnly: mineOnly || undefined,
+                                teamScope: teamScope || undefined,
+                                lane: laneFilter !== 'all' ? laneFilter : undefined,
+                                filters: filters.length ? filters : undefined,
+                            }}
+                            columns={[
+                                { header: 'Title', value: (t) => t.title },
+                                {
+                                    header: 'Status',
+                                    value: (t) =>
+                                        isTaskEscalated(t) ? 'Escalated' : isTaskOverdue(t) ? 'Overdue' : normalizeTaskStatus(t.status),
+                                },
+                                { header: 'Priority', value: (t) => t.metadata?.priority || 'Medium' },
+                                { header: 'Due date', value: (t) => exportDate(t.metadata?.dueDate) },
+                                {
+                                    header: 'Assignee',
+                                    value: (t) =>
+                                        taskPersonLabel(
+                                            t.assignee as TaskPerson,
+                                            t.metadata?.assigneeName || t.metadata?.pmAssigneeName,
+                                        ),
+                                },
+                                { header: 'Reporter', value: (t) => taskPersonLabel(t.author as TaskPerson) },
+                                { header: 'Related to', value: (t) => t.relatedType || '' },
+                                { header: 'Description', value: (t) => (t.content || '').replace(/<[^>]*>?/gm, '').trim() },
+                                { header: 'Created at', value: (t) => exportDate(t.createdAt) },
+                            ]}
+                        />
                         <CrmButton
                             variant="primary"
                             onClick={() => { setDefaultColumnForNew('Open'); setIsCreating(true); }}
@@ -1219,7 +1257,7 @@ export default function TasksPage() {
                                         onClick={() => { setEditingTask(task); setIsEditingForm(false); }}
                                     >
                                         <td className="px-3 py-2 font-medium !whitespace-normal break-words min-w-[180px] max-w-[360px]">{task.title}</td>
-                                        <td className="px-3 py-2">{taskPersonLabel(task.assignee as TaskPerson) || '—'}</td>
+                                        <td className="px-3 py-2">{taskPersonLabel(task.assignee as TaskPerson, task.metadata?.assigneeName || task.metadata?.pmAssigneeName) || '—'}</td>
                                         <td className="px-3 py-2">
                                             {isTaskEscalated(task)
                                                 ? 'Escalated'
@@ -1266,7 +1304,7 @@ export default function TasksPage() {
                                     </p>
                                     <p className="mt-1 text-sm font-semibold">{task.title}</p>
                                     <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                        {taskPersonLabel(task.assignee as TaskPerson) || 'Unassigned'} · {task.metadata?.priority || 'Medium'}
+                                        {taskPersonLabel(task.assignee as TaskPerson, task.metadata?.assigneeName || task.metadata?.pmAssigneeName) || 'Unassigned'} ·{task.metadata?.priority || 'Medium'}
                                     </p>
                                 </button>
                             ))}
@@ -1440,7 +1478,7 @@ export default function TasksPage() {
                                             ? 'Overdue'
                                             : normalizeTaskStatus(editingTask.status)],
                                     ['Reporter', taskPersonLabel(editingTask.author as TaskPerson) || '—'],
-                                    ['Assignee', taskPersonLabel(editingTask.assignee as TaskPerson) || 'Unassigned'],
+                                    ['Assignee', taskPersonLabel(editingTask.assignee as TaskPerson, editingTask.metadata?.assigneeName || editingTask.metadata?.pmAssigneeName) || 'Unassigned'],
                                 ].map(([label, value]) => (
                                     <div key={label} className="min-w-0 space-y-1 rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--surface-dim)] p-3">
                                         <p className="text-xs font-semibold text-[var(--text-muted)]">{label}</p>

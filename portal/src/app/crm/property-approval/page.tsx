@@ -1,6 +1,8 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { ListExportButton } from "@/components/crm/ui/ListExportButton";
+import { exportDate, fetchAllPages } from "@/lib/crm/export/list-export";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
@@ -164,8 +166,9 @@ function PropertyApprovalQueuePageContent() {
     void load();
   }, [load]);
 
-  const filteredRows = useMemo(() => {
-    let list = rows;
+  /** Search / type / status filters (shared by the table and Export). */
+  const applyQueueFilters = useCallback((input: ApprovalQueueProperty[]) => {
+    let list = input;
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       list = list.filter((r) => {
@@ -191,7 +194,21 @@ function PropertyApprovalQueuePageContent() {
       list = list.filter((r) => (r.property.status || "").toLowerCase() === statusFilter.toLowerCase());
     }
     return list;
-  }, [rows, search, typeFilter, statusFilter]);
+  }, [search, typeFilter, statusFilter]);
+
+  const filteredRows = useMemo(() => applyQueueFilters(rows), [applyQueueFilters, rows]);
+
+  /** Whole queue for this tab (all pages, capped), with the on-screen filters applied. */
+  const loadExportRows = useCallback(async () => {
+    const all = await fetchAllPages(
+      async (p) => {
+        const result = await fetchApprovalQueue(bucket, { page: p, limit: 50 });
+        return { data: result?.data || [], total: result?.meta?.total };
+      },
+      { maxRows: 5000 },
+    );
+    return applyQueueFilters(all);
+  }, [bucket, applyQueueFilters]);
 
   const handleApprove = async (id: string) => {
     try {
@@ -299,7 +316,47 @@ function PropertyApprovalQueuePageContent() {
           { label: "Home", href: "/crm/workspace/summary" },
           { label: "Property Approval Queue" },
         ]}
-        actions={<CrmHeaderTools onRefresh={() => void load()} />}
+        actions={
+          <CrmHeaderTools
+            leading={
+              <ListExportButton<ApprovalQueueProperty>
+                module="property-approval"
+                fileName={`approval_queue_${bucket}`}
+                sheetName="Approval queue"
+                permissions={["property-listings:export", "approval-queue:export"]}
+                getRows={loadExportRows}
+                filters={{
+                  bucket,
+                  search: search.trim() || undefined,
+                  type: typeFilter !== "all" ? typeFilter : undefined,
+                  status: statusFilter !== "all" ? statusFilter : undefined,
+                }}
+                columns={[
+                  { header: "ID", value: (r) => r.property.id },
+                  { header: "Title", value: (r) => r.property.title || r.property.propertyName || "" },
+                  { header: "Type", value: (r) => r.property.propertyType || r.property.category || "" },
+                  { header: "Status", value: (r) => r.property.status || "" },
+                  { header: "Approval", value: (r) => r.property.approvalStatus || "" },
+                  { header: "Approval message", value: (r) => r.property.approvalMessage || "" },
+                  { header: "Price", value: (r) => (typeof r.property.price === "number" ? r.property.price : "") },
+                  {
+                    header: "Area",
+                    value: (r) => [r.property.area, r.property.areaUnit].filter(Boolean).join(" "),
+                  },
+                  { header: "Address", value: (r) => r.property.address || "" },
+                  { header: "City", value: (r) => r.property.city || "" },
+                  { header: "District", value: (r) => r.property.district || "" },
+                  { header: "State", value: (r) => r.property.state || "" },
+                  { header: "Khasra no.", value: (r) => r.property.khasraNumber || "" },
+                  { header: "Owner", value: (r) => r.property.ownerName || "" },
+                  { header: "Owner phone", value: (r) => r.property.ownerPhone || "" },
+                  { header: "Submitted on", value: (r) => exportDate(r.property.createdAt) },
+                ]}
+              />
+            }
+            onRefresh={() => void load()}
+          />
+        }
         className="mb-3"
       />
 

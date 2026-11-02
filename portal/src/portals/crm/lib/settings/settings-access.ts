@@ -29,6 +29,11 @@ export const CRM_SETTINGS_ITEMS: CrmSettingsItem[] = [
   { name: "Integrations", href: "/crm/settings/integrations", requiredPermission: "settings-integrations:read" },
   { name: "2bigha platform sync", href: "/crm/settings/users?tab=twobigha-sync", requiredPermission: "settings:admin" },
   { name: "Audit", href: "/crm/settings/audit-logs", requiredPermission: "settings-audit-logs:read" },
+  {
+    name: "Property Management audit",
+    href: "/crm/settings/audit-logs?module=property-management",
+    requiredPermission: "settings-audit-logs:read",
+  },
   { name: "Wiki", href: "/crm/settings/wiki", requiredPermission: "settings-wiki:read" },
   { name: "Duplicate Management", href: "/crm/settings/duplicates", requiredPermission: "settings-duplicates:read" },
   { name: "Trash", href: "/crm/settings/trash", requiredPermission: "admin:manage" },

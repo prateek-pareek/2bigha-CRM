@@ -52,3 +52,15 @@ export function toTextSearchString(query: string): string {
     .map((t) => (t.includes('@') || /[-+]/.test(t) ? `"${t.replace(/"/g, '')}"` : t))
     .join(' ');
 }
+
+/**
+ * Phone-style query (digits with optional + - ( ) . spaces) → regex that matches the
+ * number however it was stored ("+91 98765-43210", "9876543210", …). Uses the last
+ * 10 digits when a country/trunk prefix is typed. Returns null for non-phone queries.
+ */
+export function buildPhoneDigitsRegex(query: string): RegExp | null {
+  const compact = normalizeSearchQuery(query).replace(/[\s\-().+]/g, '');
+  if (!/^\d{4,15}$/.test(compact)) return null;
+  const digits = compact.length > 10 ? compact.slice(-10) : compact;
+  return new RegExp(digits.split('').join('[\\s\\-().]*'));
+}

@@ -30,11 +30,78 @@ import {
   PmScheduleVisitDto,
   PmVisitStatusDto,
 } from './dto/pm-workflow.dto';
+import {
+  PropertyHistoryInput,
+  PropertyHistoryService,
+} from './property-history.service';
+
+const PM_ROLE_LABEL: Record<string, string> = {
+  manager: 'Regional Manager',
+  legal: 'Legal Manager',
+  field: 'Field Agent',
+};
+
+/** PM stage from an action / live-status result (listing doc or `{ listing }`). */
+function pmStageOf(result: any): string | undefined {
+  const s = result?.pmStage ?? result?.listing?.pmStage;
+  return typeof s === 'string' && s.trim() ? s.trim() : undefined;
+}
+
+function propertyTitleOf(result: any): string | undefined {
+  const x = result?.listing ?? result;
+  const t = x?.title || x?.propertyName;
+  return typeof t === 'string' && t.trim() ? t.trim() : undefined;
+}
+
+function formatWhen(value?: string): string | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
+type HistoryDescription = Omit<PropertyHistoryInput, 'propertyKey' | 'fromStage'>;
 
 @Controller('crm/property-listings')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class PropertyListingsController {
-  constructor(private readonly listingsService: PropertyListingsService) {}
+  constructor(
+    private readonly listingsService: PropertyListingsService,
+    private readonly history: PropertyHistoryService,
+  ) {}
+
+  /**
+   * Run a PM action, then record it in the property's history (and the CRM audit log)
+   * with the stage before -> after. Only successful actions are recorded.
+   */
+  private async track<T>(
+    propertyKey: string,
+    req: any,
+    run: () => Promise<T>,
+    describe: (result: T) => HistoryDescription,
+  ): Promise<T> {
+    const fromStage = await this.history.lastStage(propertyKey).catch(() => undefined);
+    const result = await run();
+    try {
+      await this.history.record(
+        {
+          propertyKey,
+          propertyTitle: propertyTitleOf(result),
+          toStage: pmStageOf(result),
+          ...describe(result),
+          fromStage,
+        },
+        req?.user,
+      );
+    } catch {
+      /* history is best-effort */
+    }
+    return result;
+  }
 
   @Post('twobigha/upload-image-proxy')
   @Permissions('property-listings:write')
@@ -250,7 +317,18 @@ export class PropertyListingsController {
     @Request() req: any,
     @Body() body: { id: string; status: 'Approved' | 'Rejected'; message?: string },
   ) {
-    return this.listingsService.decideApproval(body.id, body.status, body.message, req.user?.userId);
+    return this.track(
+      String(body?.id || ''),
+      req,
+      () => this.listingsService.decideApproval(body.id, body.status, body.message, req.user?.userId),
+      () => ({
+        action: 'approval_decision',
+        label: `Listing ${String(body.status || '').toLowerCase() || 'reviewed'}`,
+        detail: body.message || undefined,
+        auditAction: body.status === 'Rejected' ? 'reject' : 'approve',
+        meta: { approvalStatus: body.status },
+      }),
+    );
   }
 
   /** Manual retry for a listing whose last sync to 2bigha failed (or is still mock-only). */
@@ -266,15 +344,47 @@ export class PropertyListingsController {
   updateSoldStatus(
     @Param('id') id: string,
     @Body() body: { isSold: boolean },
+    @Request() req: any,
   ) {
-    return this.listingsService.updateSoldStatus(id, Boolean(body.isSold));
+    const isSold = Boolean(body?.isSold);
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.updateSoldStatus(id, isSold),
+      () => ({
+        action: 'sold_status',
+        label: isSold ? 'Marked as Sold' : 'Marked as Available',
+        auditAction: 'status',
+        meta: { status: isSold ? 'Sold' : 'Available' },
+      }),
+    );
   }
 
   /** Live PM aggregated status read-through for Stages 3-6. */
   @Get(':id/pm/live-status')
   @Permissions('property-listings:read')
-  getLivePmStatus(@Param('id') id: string) {
-    return this.listingsService.getLivePmStatus(id);
+  async getLivePmStatus(@Param('id') id: string) {
+    const result = await this.listingsService.getLivePmStatus(id);
+    // Catch stage changes made directly in 2bigha since the last recorded event.
+    await this.history.syncStage(id, pmStageOf(result), propertyTitleOf(result));
+    return result;
+  }
+
+  /** Status & history timeline for one property (works for 2bigha-only ids too). */
+  @Get(':id/history')
+  @Permissions('property-listings:read')
+  getHistory(@Param('id') id: string, @Query('limit') limit?: string) {
+    return this.history.list(id, limit ? Number(limit) : undefined);
+  }
+
+  @Post(':id/history/note')
+  @Permissions('property-listings:write')
+  addHistoryNote(
+    @Param('id') id: string,
+    @Body() body: { text?: string; propertyTitle?: string },
+    @Request() req: any,
+  ) {
+    return this.history.addNote(id, String(body?.text || ''), req.user, body?.propertyTitle);
   }
 
   /** Drill into full visit report details by reportId. */
@@ -286,61 +396,173 @@ export class PropertyListingsController {
 
   @Post(':id/pm/assign')
   @Permissions('property-listings:write', 'leads:write')
-  assignPmStaff(@Param('id') id: string, @Body() body: AssignPmStaffDto) {
-    return this.listingsService.assignPmStaff(id, {
-      role: body.role,
-      source: body.source,
-      id: body.id,
-      name: body.name,
-    });
+  assignPmStaff(@Param('id') id: string, @Body() body: AssignPmStaffDto, @Request() req: any) {
+    return this.track(
+      id,
+      req,
+      () =>
+        this.listingsService.assignPmStaff(id, {
+          role: body.role,
+          source: body.source,
+          id: body.id,
+          name: body.name,
+        }),
+      (result: any) => ({
+        action: 'pm_staff_assigned',
+        label: `${PM_ROLE_LABEL[body.role] || 'Staff'} assigned: ${body.name || body.id}`,
+        detail: result?.skippedReason || undefined,
+        auditAction: 'assign',
+        meta: { role: body.role, assignee: body.name || body.id },
+      }),
+    );
   }
 
   @Post(':id/pm/unassign')
   @Permissions('property-listings:write', 'leads:write')
-  unassignPmStaff(@Param('id') id: string, @Body() body: UnassignPmStaffDto) {
-    return this.listingsService.unassignPmStaff(id, body.role);
+  unassignPmStaff(@Param('id') id: string, @Body() body: UnassignPmStaffDto, @Request() req: any) {
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.unassignPmStaff(id, body.role),
+      () => ({
+        action: 'pm_staff_unassigned',
+        label: `${PM_ROLE_LABEL[body.role] || 'Staff'} removed`,
+        auditAction: 'unassign',
+        meta: { role: body.role },
+      }),
+    );
   }
 
   @Post(':id/pm/legal/start')
   @Permissions('property-listings:write', 'leads:write')
-  startPmLegal(@Param('id') id: string, @Body() body: PmLegalActionDto) {
-    return this.listingsService.startPmLegalVerification(id, body);
+  startPmLegal(@Param('id') id: string, @Body() body: PmLegalActionDto, @Request() req: any) {
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.startPmLegalVerification(id, body),
+      () => ({
+        action: 'pm_legal_started',
+        label: 'Legal verification started',
+        detail: body?.summary || undefined,
+        auditAction: 'start',
+      }),
+    );
   }
 
   @Put(':id/pm/legal/checklist')
   @Permissions('property-listings:write', 'leads:write')
-  updatePmLegalChecklist(@Param('id') id: string, @Body() body: PmLegalChecklistDto) {
-    return this.listingsService.updatePmLegalChecklist(id, body);
+  updatePmLegalChecklist(@Param('id') id: string, @Body() body: PmLegalChecklistDto, @Request() req: any) {
+    const items = Array.isArray(body?.checklist) ? body.checklist : [];
+    const done = items.filter((i) => i?.checked).length;
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.updatePmLegalChecklist(id, body),
+      () => ({
+        action: 'pm_legal_checklist',
+        label: 'Legal checklist updated',
+        detail: `${done} of ${items.length} item${items.length === 1 ? '' : 's'} checked`,
+        auditAction: 'update',
+        meta: { checked: done, total: items.length },
+      }),
+    );
   }
 
   @Post(':id/pm/legal/complete')
   @Permissions('property-listings:write', 'leads:write')
-  completePmLegal(@Param('id') id: string, @Body() body: PmLegalActionDto) {
-    return this.listingsService.completePmLegalVerification(id, body);
+  completePmLegal(@Param('id') id: string, @Body() body: PmLegalActionDto, @Request() req: any) {
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.completePmLegalVerification(id, body),
+      () => ({
+        action: 'pm_legal_completed',
+        label: 'Legal verification completed',
+        detail: body?.summary || undefined,
+        auditAction: 'complete',
+      }),
+    );
   }
 
   @Post(':id/pm/visit/schedule')
   @Permissions('property-listings:write', 'leads:write')
-  schedulePmVisit(@Param('id') id: string, @Body() body: PmScheduleVisitDto) {
-    return this.listingsService.schedulePmFieldVisit(id, body);
+  schedulePmVisit(@Param('id') id: string, @Body() body: PmScheduleVisitDto, @Request() req: any) {
+    const when = formatWhen(body?.scheduledAt);
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.schedulePmFieldVisit(id, body),
+      () => ({
+        action: 'pm_visit_scheduled',
+        label: 'Field visit scheduled',
+        detail:
+          [when ? `For ${when}` : '', body?.notes || body?.description || '']
+            .filter(Boolean)
+            .join(' — ') || undefined,
+        auditAction: 'schedule',
+        meta: { scheduledAt: body?.scheduledAt, visitCategory: body?.visitCategory },
+      }),
+    );
   }
 
   @Post(':id/pm/visit/status')
   @Permissions('property-listings:write', 'leads:write')
-  setPmVisitStatus(@Param('id') id: string, @Body() body: PmVisitStatusDto) {
-    return this.listingsService.setPmFieldVisitStatus(id, body);
+  setPmVisitStatus(@Param('id') id: string, @Body() body: PmVisitStatusDto, @Request() req: any) {
+    const statusLabel =
+      body?.status === 'Complete'
+        ? 'completed'
+        : body?.status === 'Cancel'
+          ? 'cancelled'
+          : 'set to pending';
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.setPmFieldVisitStatus(id, body),
+      () => ({
+        action: 'pm_visit_status',
+        label: `Field visit ${statusLabel}`,
+        detail: body?.notes || undefined,
+        auditAction: 'status',
+        meta: { visitStatus: body?.status },
+      }),
+    );
   }
 
   @Post(':id/pm/visit/report/submit')
   @Permissions('property-listings:write', 'leads:write')
-  submitPmVisitReport(@Param('id') id: string) {
-    return this.listingsService.submitPmVisitReport(id);
+  submitPmVisitReport(@Param('id') id: string, @Request() req: any) {
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.submitPmVisitReport(id),
+      () => ({
+        action: 'pm_visit_report_submitted',
+        label: 'Visit report submitted',
+        auditAction: 'submit',
+      }),
+    );
   }
 
   @Post(':id/pm/visit/report/review')
   @Permissions('property-listings:write', 'leads:write')
-  reviewPmVisitReport(@Param('id') id: string, @Body() body: PmReviewReportDto) {
-    return this.listingsService.reviewPmVisitReport(id, body);
+  reviewPmVisitReport(@Param('id') id: string, @Body() body: PmReviewReportDto, @Request() req: any) {
+    const decision = String(body?.decision || 'Reviewed');
+    const when = body?.reschedule ? formatWhen(body?.scheduledAt) : undefined;
+    return this.track(
+      id,
+      req,
+      () => this.listingsService.reviewPmVisitReport(id, body),
+      () => ({
+        action: 'pm_visit_report_reviewed',
+        label: `Visit report ${decision.toLowerCase()}`,
+        detail:
+          [body?.rejectionReason, body?.reschedule ? `Visit rescheduled${when ? ` for ${when}` : ''}` : '']
+            .filter(Boolean)
+            .join(' — ') || undefined,
+        auditAction: 'review',
+        meta: { decision, reschedule: Boolean(body?.reschedule) },
+      }),
+    );
   }
 
   /** Read-only hand-off: PM property views associated legal cases (legal status snapshot only). */

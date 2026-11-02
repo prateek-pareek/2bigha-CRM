@@ -1,6 +1,8 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ListExportButton } from "@/components/crm/ui/ListExportButton";
+import { exportDate, fetchAllPages, type ListExportColumn } from "@/lib/crm/export/list-export";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, Building2, Home, IndianRupee, Landmark, ShieldCheck, Sprout, TrendingUp, X } from "lucide-react";
 import { toast } from "sonner";
@@ -76,6 +78,40 @@ const BUCKET_KEY = "crm_property_listings_bucket_v1";
 /** Keep list/kanban payloads modest so production never mounts thousands of cards. */
 const LISTING_PAGE_SIZES = [10, 25, 50];
 const LISTING_PAGE_SIZE_MAX = 50;
+/** 2bigha answers ~one page every few seconds — cap browser exports of live sources. */
+const PROPERTY_EXPORT_MAX_ROWS = 5000;
+
+const PROPERTY_EXPORT_COLUMNS: ListExportColumn<PropertyListingRecord>[] = [
+  { header: "ID", value: (l) => l.twobighaPropertyId || l.userPropertyId || l._id },
+  { header: "Title", value: (l) => l.title },
+  { header: "Type", value: (l) => l.propertyType || l.category || "" },
+  { header: "Listed for", value: (l) => l.listedFor || "" },
+  { header: "Status", value: (l) => l.status || "" },
+  { header: "Approval", value: (l) => l.approvalStatus || "" },
+  { header: "Price", value: (l) => (typeof l.price === "number" ? l.price : "") },
+  { header: "Currency", value: (l) => l.currency || "INR" },
+  {
+    header: "Area",
+    value: (l) =>
+      l.areaValue != null ? `${l.areaValue}${l.areaUnit ? ` ${l.areaUnit}` : ""}` : l.areaSqft != null ? `${l.areaSqft} Sq. Ft` : "",
+  },
+  { header: "Village", value: (l) => l.village || "" },
+  { header: "Tehsil", value: (l) => l.tehsil || "" },
+  { header: "District", value: (l) => l.district || "" },
+  { header: "City", value: (l) => l.city || "" },
+  { header: "State", value: (l) => l.state || "" },
+  { header: "Address", value: (l) => l.address || "" },
+  { header: "Khasra no.", value: (l) => l.khasraNumber || "" },
+  { header: "Contact name", value: (l) => l.contactName || "" },
+  { header: "Contact phone", value: (l) => l.contactPhone || "" },
+  { header: "Contact email", value: (l) => l.contactEmail || "" },
+  { header: "PM plan", value: (l) => l.pmPlan || "" },
+  { header: "PM stage", value: (l) => l.pmStage || "" },
+  { header: "Regional Manager", value: (l) => l.rmAssigneeName || "" },
+  { header: "Legal Manager", value: (l) => l.legalAssigneeName || "" },
+  { header: "Field Agent", value: (l) => l.fieldAssigneeName || "" },
+  { header: "Listed on", value: (l) => exportDate(l.listedDate) },
+];
 
 const STREAM_TABS: { value: PropertyRecordBucket; label: string }[] = [
   { value: "properties", label: "Properties" },
@@ -226,6 +262,8 @@ function PropertyListingsPageContent() {
   // Only the newest request may write rows/total/loading — an older, slower response
   // (previous bucket, page or filter) must not overwrite them or clear the spinner early.
   const loadSeqRef = useRef(0);
+  /** Latest `load` for the error toast's Retry (the toast outlives the closure that showed it). */
+  const loadRef = useRef<() => Promise<void>>(async () => {});
 
   const load = useCallback(async () => {
     const seq = ++loadSeqRef.current;
@@ -281,11 +319,15 @@ function PropertyListingsPageContent() {
       if (isStale()) return;
       setListings(data.data);
       setTotal(data.total);
-    } catch {
+    } catch (err: any) {
       if (isStale()) return;
       setListings([]);
       setTotal(0);
-      toast.error("Failed to load property listings");
+      const timedOut = err?.code === "ECONNABORTED" || err?.code === "ETIMEDOUT";
+      toast.error(
+        timedOut ? "2Bigha is taking too long to respond" : "Failed to load property listings",
+        { action: { label: "Retry", onClick: () => void loadRef.current() } },
+      );
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -314,6 +356,7 @@ function PropertyListingsPageContent() {
   }, [bucket]);
 
   useEffect(() => {
+    loadRef.current = load;
     void load();
   }, [load]);
 
@@ -436,8 +479,9 @@ function PropertyListingsPageContent() {
     }
   };
 
-  const sortedListings = useMemo(() => {
-    let result = [...listings];
+  /** Client-side view filters + sort for marketplace tabs (shared by the table and Export). */
+  const applyViewFilters = useCallback((rows: PropertyListingRecord[]) => {
+    let result = [...rows];
     if (statusFilter !== "all") {
       // 2bigha MANAGED rows map to "Managed"; the API serves them for the "Under Offer" filter.
       result = result.filter(
@@ -464,7 +508,75 @@ function PropertyListingsPageContent() {
       result.sort((a, b) => (b.areaValue || 0) - (a.areaValue || 0));
     }
     return result;
-  }, [listings, marketplace, statusFilter, approvalFilter, typeFilter, legalStatusFilter, sortBy]);
+  }, [marketplace, statusFilter, approvalFilter, typeFilter, legalStatusFilter, sortBy]);
+
+  const sortedListings = useMemo(() => applyViewFilters(listings), [applyViewFilters, listings]);
+
+  /**
+   * Every row matching the current tab + filters (not just this page), loaded from the same
+   * sources as the table. 2bigha is slow, so live sources stop at PROPERTY_EXPORT_MAX_ROWS.
+   */
+  const loadExportRows = useCallback(async (): Promise<PropertyListingRecord[]> => {
+    const searchTerm = search.trim() || undefined;
+    const limit = LISTING_PAGE_SIZE_MAX;
+    let rows: PropertyListingRecord[];
+    if (bucket === "farm") {
+      rows = await fetchAllPages(
+        async (p) => {
+          const { data, total: t } = await fetchTwoBighaFarms({
+            page: p,
+            limit,
+            searchTerm,
+            approvalStatus: approvalFilter !== "all" ? approvalFilter : undefined,
+          });
+          return { data: data.map(mapTwoBighaFarmToRecord), total: t };
+        },
+        { maxRows: PROPERTY_EXPORT_MAX_ROWS },
+      );
+    } else if (bucket === "properties") {
+      rows = await fetchAllPages(
+        async (p) => {
+          const { data, total: t } = await fetchTwoBighaProperties({
+            page: p,
+            limit,
+            searchTerm,
+            status: statusFilter !== "all" ? statusFilter : undefined,
+            approvalStatus: approvalFilter !== "all" ? approvalFilter : undefined,
+            priceOrder: sortBy === "price_asc" ? "ASC" : sortBy === "price_desc" ? "DESC" : undefined,
+            newlyCreated: sortBy === "newest" ? true : undefined,
+          });
+          return { data: data.map((raw) => mapTwoBighaPropertyToRecord(raw)), total: t };
+        },
+        { maxRows: PROPERTY_EXPORT_MAX_ROWS },
+      );
+    } else {
+      rows = await fetchAllPages(
+        async (p) => {
+          const res = await fetchThirdPartyPropertyListings({
+            page: p,
+            pageSize: limit,
+            search: searchTerm,
+            pmStage: !marketplace && pmStageFilter !== "all" ? pmStageFilter : undefined,
+            listingBucket: bucket,
+            pmPlan: !marketplace && pmPlanFilter !== "all" ? pmPlanFilter : undefined,
+          });
+          return { data: res.data, total: res.total };
+        },
+        { maxRows: PROPERTY_EXPORT_MAX_ROWS },
+      );
+    }
+    return marketplace ? applyViewFilters(rows) : rows;
+  }, [
+    search,
+    bucket,
+    marketplace,
+    statusFilter,
+    approvalFilter,
+    sortBy,
+    pmStageFilter,
+    pmPlanFilter,
+    applyViewFilters,
+  ]);
 
   // Marketplace views render `sortedListings` (client-side filters applied); the count,
   // pagination and empty state must follow the rows actually shown, not the raw page.
@@ -500,6 +612,25 @@ function PropertyListingsPageContent() {
         ]}
         actions={
           <CrmHeaderTools
+            leading={
+              <ListExportButton<PropertyListingRecord>
+                module="property-listings"
+                fileName={bucket === "farm" ? "farms" : bucket === "pm" ? "property_management" : "properties"}
+                sheetName={bucket === "farm" ? "Farms" : bucket === "pm" ? "Property Management" : "Properties"}
+                permissions={["property-listings:export"]}
+                getRows={loadExportRows}
+                filters={{
+                  bucket,
+                  search: search.trim() || undefined,
+                  status: statusFilter !== "all" ? statusFilter : undefined,
+                  approval: approvalFilter !== "all" ? approvalFilter : undefined,
+                  type: typeFilter !== "all" ? typeFilter : undefined,
+                  pmStage: pmStageFilter !== "all" ? pmStageFilter : undefined,
+                  pmPlan: pmPlanFilter !== "all" ? pmPlanFilter : undefined,
+                }}
+                columns={PROPERTY_EXPORT_COLUMNS}
+              />
+            }
             onRefresh={() => {
               void load();
               void loadStats();

@@ -123,6 +123,21 @@ export default function CrmRecordRemindersPanel({
     }
   };
 
+  const remove = async (id: string) => {
+    if (!window.confirm("Remove this reminder?")) return;
+    try {
+      const res = await fetch(`${CRM_API_URL}/crm/reminders/${id}/cancel`, {
+        method: "PATCH",
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast.success("Reminder removed");
+      void load();
+    } catch {
+      toast.error("Could not remove reminder");
+    }
+  };
+
   const reschedule = async (id: string, next: string) => {
     try {
       const scheduledAt = new Date(next).toISOString();
@@ -287,6 +302,13 @@ export default function CrmRecordRemindersPanel({
                 className="ml-2 mt-1 text-[10px] font-medium text-[var(--text-muted)]"
               >
                 Reschedule
+              </button>
+              <button
+                type="button"
+                onClick={() => void remove(r._id)}
+                className="ml-2 mt-1 text-[10px] font-medium text-rose-600"
+              >
+                Remove
               </button>
             </li>
           ))}
