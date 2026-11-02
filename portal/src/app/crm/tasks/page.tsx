@@ -490,6 +490,23 @@ export default function TasksPage() {
         }
     };
 
+    // Deep link from the calendar: /crm/tasks?task=<id> opens that task once the list has loaded.
+    const deepLinkedTaskRef = useRef<string | null>(
+        typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('task') : null,
+    );
+    useEffect(() => {
+        const id = deepLinkedTaskRef.current;
+        if (!id || tasks.length === 0) return;
+        const hit = tasks.find((t) => t._id === id);
+        if (hit) {
+            setEditingTask(hit);
+            setIsEditingForm(false);
+        } else {
+            toast.error('That task is not in your current view (try Team view)');
+        }
+        deepLinkedTaskRef.current = null;
+    }, [tasks]);
+
     const handleRefresh = async () => {
         setRefreshing(true);
         try {

@@ -30,6 +30,66 @@ function normalizeWaId(waId: string): string {
   return String(waId || '').replace(/\D/g, '');
 }
 
+/** Same public image the inbox uses when an image-header template has no file. */
+const DEFAULT_HEADER_IMAGE =
+  'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800';
+
+/** Meta language code. AiSensy labels generic English as "English", which is `en`. */
+function toWhatsAppLanguageCode(lang?: string): string {
+  const raw = String(lang || '').trim();
+  if (!raw) return 'en';
+  const key = raw.toLowerCase().replace(/-/g, '_');
+  const map: Record<string, string> = {
+    english: 'en',
+    'english (us)': 'en_US',
+    'english (uk)': 'en_GB',
+    en: 'en',
+    en_us: 'en_US',
+    en_gb: 'en_GB',
+    hindi: 'hi',
+    hi: 'hi',
+    hi_in: 'hi',
+  };
+  if (map[key]) return map[key];
+  const parts = key.split('_');
+  if (parts.length === 2 && parts[1].length === 2) {
+    return `${parts[0]}_${parts[1].toUpperCase()}`;
+  }
+  return parts[0];
+}
+
+/**
+ * Synced rows store `en_US` for AiSensy's "English", but this WABA registers
+ * that language as `en`. Try `en` first, then `en_US`, and stop on any error
+ * that is not a missing translation.
+ */
+function languageCandidates(lang?: string): string[] {
+  const primary = toWhatsAppLanguageCode(lang);
+  if (primary === 'en' || primary === 'en_US') return ['en', 'en_US'];
+  return [primary];
+}
+
+function isLanguageMismatch(error?: string): boolean {
+  return /does not exist in the translation|132001/i.test(String(error || ''));
+}
+
+/** WhatsApp must be able to download header media. Local CRM pages cannot. */
+function usablePublicMediaUrl(url?: string): string | undefined {
+  const raw = String(url || '').trim();
+  if (!raw) return undefined;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local')) {
+      return undefined;
+    }
+    return raw;
+  } catch {
+    return undefined;
+  }
+}
+
 @Injectable()
 export class WhatsAppCampaignsService {
   private readonly logger = new Logger(WhatsAppCampaignsService.name);
@@ -48,17 +108,30 @@ export class WhatsAppCampaignsService {
   private async getAiSensyConfig(): Promise<{
     apiKey: string;
     sourceLabel?: string;
+    projectId?: string;
+    projectApiPassword?: string;
   }> {
     const config = await this.integrationModel
       .findOne({ type: 'whatsapp' })
       .lean()
       .exec();
-    if (!config?.apiKey || !config?.isActive || config.provider !== 'aisensy') {
+    const apiKey = String(config?.apiKey || '').trim();
+    const projectId = String(config?.aisensyProjectId || '').trim();
+    const projectApiPassword = String(config?.aisensyProjectApiPassword || '').trim();
+    const hasProjectApi = !!(projectId && projectApiPassword);
+    // Template sync and inbox sends authenticate with the Project API.
+    // The legacy Campaign API key is optional once those credentials exist.
+    if ((!apiKey && !hasProjectApi) || !config?.isActive || config.provider !== 'aisensy') {
       throw new BadRequestException(
         'AiSensy is not configured as the active WhatsApp provider — set it up under Settings → Integrations → WhatsApp first.',
       );
     }
-    return { apiKey: config.apiKey, sourceLabel: config.sourceLabel };
+    return {
+      apiKey,
+      sourceLabel: config.sourceLabel,
+      projectId: projectId || undefined,
+      projectApiPassword: projectApiPassword || undefined,
+    };
   }
 
   async findAll(userId: string, query?: { status?: string; search?: string }) {
@@ -320,6 +393,18 @@ export class WhatsAppCampaignsService {
     if (!['draft', 'scheduled', 'failed'].includes(doc.status)) {
       throw new BadRequestException(`Cannot launch a campaign in status "${doc.status}".`);
     }
+    // A failed run leaves every recipient `failed`. executeCampaign only
+    // sends `pending` rows, so a relaunch has to put them back in the queue.
+    if (doc.status === 'failed') {
+      for (const recipient of doc.recipients) {
+        if (recipient.status !== 'failed') continue;
+        recipient.status = 'pending';
+        recipient.errorMessage = undefined;
+      }
+      doc.failedCount = 0;
+      doc.completedAt = undefined;
+      doc.markModified('recipients');
+    }
     doc.status = 'sending';
     doc.startedAt = new Date();
     doc.lastError = undefined;
@@ -396,7 +481,19 @@ export class WhatsAppCampaignsService {
    */
   private async executeCampaign(campaignId: string): Promise<void> {
     const config = await this.getAiSensyConfig();
-    const client = new AiSensyClient(config.apiKey);
+    const hasProjectApi = !!(config.projectId && config.projectApiPassword);
+    // Project API is the same credential pair that syncs templates. The
+    // legacy Campaign API (`backend.aisensy.com`) rejects that key with
+    // "Unauthorized", which is what failed recipient rows were showing.
+    const client = new AiSensyClient(
+      config.apiKey,
+      hasProjectApi
+        ? {
+            projectId: config.projectId as string,
+            projectApiPassword: config.projectApiPassword as string,
+          }
+        : undefined,
+    );
 
     let doc = await this.campaignModel.findById(campaignId).exec();
     if (!doc) throw new NotFoundException('Campaign not found');
@@ -416,21 +513,55 @@ export class WhatsAppCampaignsService {
       if (!target) continue;
 
       try {
-        const result = await client.sendCampaignMessage({
-          destination: target.waId,
-          campaignName: doc.aisensyCampaignName,
-          userName: target.name,
-          source: config.sourceLabel,
-          templateParams: target.templateParams,
-          media: doc.mediaUrl ? {
-            url: doc.mediaUrl,
-            filename: doc.mediaFilename || 'file'
-          } : undefined
-        });
+        const header = (template.components || []).find(
+          (c: any) => String(c?.type || '').toUpperCase() === 'HEADER',
+        );
+        const headerFormat = String(header?.format || '').toUpperCase();
+        let mediaUrl = usablePublicMediaUrl(doc.mediaUrl);
+        if (!mediaUrl && headerFormat === 'IMAGE') mediaUrl = DEFAULT_HEADER_IMAGE;
+        const mediaType =
+          headerFormat === 'VIDEO'
+            ? 'video'
+            : headerFormat === 'DOCUMENT'
+              ? 'document'
+              : headerFormat === 'IMAGE'
+                ? 'image'
+                : undefined;
+        const filename =
+          doc.mediaFilename && !String(doc.mediaFilename).includes('://')
+            ? doc.mediaFilename
+            : mediaType === 'document'
+              ? 'file.pdf'
+              : 'header.jpg';
+
+        // Project API sends by the approved WhatsApp template name.
+        // The legacy Campaign API sends by the AiSensy campaign name.
+        const campaignName = hasProjectApi
+          ? String(template.name || doc.templateName || doc.aisensyCampaignName)
+          : doc.aisensyCampaignName;
+
+        let result: { success: boolean; raw?: any; error?: string } = {
+          success: false,
+          error: 'Send failed',
+        };
+        for (const language of languageCandidates(template.language)) {
+          result = await client.sendCampaignMessage({
+            destination: target.waId,
+            campaignName,
+            userName: target.name,
+            source: config.sourceLabel,
+            language,
+            templateParams: target.templateParams,
+            mediaType,
+            media: mediaUrl ? { url: mediaUrl, filename } : undefined,
+          });
+          if (result.success || !isLanguageMismatch(result.error)) break;
+        }
         if (result.success) {
           target.status = 'sent';
           target.sentAt = new Date();
-          target.providerMessageId = result.raw?.messageId ? String(result.raw.messageId) : undefined;
+          const wamid = result.raw?.messages?.[0]?.id || result.raw?.messageId;
+          target.providerMessageId = wamid ? String(wamid) : undefined;
           doc.sentCount += 1;
 
           // Log campaign message into chat history
@@ -450,8 +581,8 @@ export class WhatsAppCampaignsService {
               sentBy: doc.createdBy,
               module: 'whatsapp-campaigns',
               entityId: doc._id,
-              mediaUrl: doc.mediaUrl,
-              mediaFilename: doc.mediaFilename,
+              mediaUrl,
+              mediaFilename: filename,
               rawPayload: result.raw,
               templateName: template.name,
             });
@@ -462,6 +593,9 @@ export class WhatsAppCampaignsService {
           target.status = 'failed';
           target.errorMessage = result.error || 'Send failed';
           doc.failedCount += 1;
+          this.logger.warn(
+            `Campaign ${campaignId} send to ${target.waId} failed: ${target.errorMessage}`,
+          );
         }
       } catch (e: any) {
         target.status = 'failed';

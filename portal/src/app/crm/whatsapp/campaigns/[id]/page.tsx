@@ -93,7 +93,7 @@ export default function WhatsAppCampaignDetailPage() {
     return () => clearInterval(interval);
   }, [campaign?.status, load]);
 
-  const runAction = async (action: "pause" | "resume" | "cancel") => {
+  const runAction = async (action: "pause" | "resume" | "cancel" | "launch") => {
     setBusy(true);
     const token = localStorage.getItem("token");
     try {
@@ -107,7 +107,9 @@ export default function WhatsAppCampaignDetailPage() {
         return;
       }
       setCampaign(data);
-      toast.success(`Campaign ${action === "resume" ? "resumed" : action + "d"}`);
+      const done =
+        action === "resume" ? "resumed" : action === "launch" ? "launched" : `${action}d`;
+      toast.success(`Campaign ${done}`);
     } catch {
       toast.error(`Failed to ${action} campaign`);
     } finally {
@@ -151,6 +153,11 @@ export default function WhatsAppCampaignDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {campaign.status === "failed" && (
+            <CrmButton variant="primary" disabled={busy} onClick={() => void runAction("launch")} className="h-10 gap-2 bg-emerald-600 hover:bg-emerald-700">
+              <Play size={14} /> Retry
+            </CrmButton>
+          )}
           {campaign.status === "sending" && (
             <CrmButton variant="secondary" disabled={busy} onClick={() => void runAction("pause")} className="h-10 gap-2 border-slate-200">
               <Pause size={14} /> Pause
