@@ -110,7 +110,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           # GITHUB_TOKEN is only valid for this run - fine here since the pull
           # happens synchronously, right after the push, in the same run.
-          envs: GHCR_TOKEN,GHCR_ACTOR
+          envs: GHCR_TOKEN,GHCR_ACTOR,HRMS_API_URL,HRMS_PORTAL_URL,HRMS_WEBHOOK_SECRET,HRMS_SYNC_PLACEHOLDER_PASSWORD
           script: |
             set -e
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
@@ -146,6 +146,20 @@ jobs:
             # (which still holds JWT_SECRET, MONGO_URI, APP_DOMAIN, etc).
             export BACKEND_IMAGE="${{ needs.build-and-push.outputs.backend_image }}"
             export FRONTEND_IMAGE="${{ needs.build-and-push.outputs.frontend_image }}"
+            # HRMS <-> CRM sync, from GitHub (Variables: HRMS_API_URL, HRMS_PORTAL_URL;
+            # Secrets: HRMS_WEBHOOK_SECRET, HRMS_SYNC_PLACEHOLDER_PASSWORD). Exported only
+            # when set, so an unset value falls back to the VPS .env instead of blanking it.
+            # HRMS_API_URL is the HRMS origin - the backend appends /api/webhooks/crm itself,
+            # so a trailing "/api" is stripped here.
+            if [ -n "$HRMS_API_URL" ]; then
+              hrms_url="${HRMS_API_URL%/}"
+              export HRMS_API_URL="${hrms_url%/api}"
+            else
+              unset HRMS_API_URL
+            fi
+            if [ -n "$HRMS_PORTAL_URL" ]; then export HRMS_PORTAL_URL="${HRMS_PORTAL_URL%/}"; else unset HRMS_PORTAL_URL; fi
+            [ -n "$HRMS_WEBHOOK_SECRET" ] || unset HRMS_WEBHOOK_SECRET
+            [ -n "$HRMS_SYNC_PLACEHOLDER_PASSWORD" ] || unset HRMS_SYNC_PLACEHOLDER_PASSWORD
             docker compose pull backend frontend
             # --remove-orphans drops any container for a service no longer
             # active in the current COMPOSE_FILE list (e.g. the bundled mongodb
@@ -157,3 +171,8 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_ACTOR: ${{ github.actor }}
+          # HRMS <-> CRM sync (repository or "production" environment settings).
+          HRMS_API_URL: ${{ vars.HRMS_API_URL }}
+          HRMS_PORTAL_URL: ${{ vars.HRMS_PORTAL_URL }}
+          HRMS_WEBHOOK_SECRET: ${{ secrets.HRMS_WEBHOOK_SECRET }}
+          HRMS_SYNC_PLACEHOLDER_PASSWORD: ${{ varss.HRMS_SYNC_PLACEHOLDER_PASSWORD }}
