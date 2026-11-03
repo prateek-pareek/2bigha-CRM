@@ -540,6 +540,55 @@ export class WhatsAppCampaignsService {
           ? String(template.name || doc.templateName || doc.aisensyCampaignName)
           : doc.aisensyCampaignName;
 
+        // Map templateParams into structured Meta components for Project API
+        let metaComponents: any[] | undefined = undefined;
+        if (Array.isArray(template.components) && Array.isArray(target.templateParams) && target.templateParams.length > 0) {
+          const comps: any[] = [];
+          let paramIdx = 0;
+          for (const comp of template.components) {
+            const compType = String(comp?.type || '').toUpperCase();
+            if (compType === 'HEADER' && String(comp?.format || 'TEXT').toUpperCase() === 'TEXT') {
+              const matches = (comp.text || '').match(/\{\{\s*\d+\s*\}\}/g);
+              if (matches && matches.length > 0) {
+                const headerParams = [];
+                for (let i = 0; i < matches.length; i++) {
+                  headerParams.push({ type: 'text', text: String(target.templateParams[paramIdx++] ?? '') });
+                }
+                comps.push({ type: 'header', parameters: headerParams });
+              }
+            } else if (compType === 'BODY') {
+              const cleanBodyText = (comp.text || '').replace(/(\s*\|\s*\[[^\]]+\])+$/g, '').trim();
+              const matches = cleanBodyText.match(/\{\{\s*\d+\s*\}\}/g);
+              if (matches && matches.length > 0) {
+                const bodyParams = [];
+                for (let i = 0; i < matches.length; i++) {
+                  bodyParams.push({ type: 'text', text: String(target.templateParams[paramIdx++] ?? '') });
+                }
+                comps.push({ type: 'body', parameters: bodyParams });
+              }
+            } else if (compType === 'BUTTONS' && Array.isArray(comp.buttons)) {
+              comp.buttons.forEach((btn, btnIdx) => {
+                if (String(btn?.type || '').toUpperCase() === 'URL') {
+                  const matches = (btn.url || '').match(/\{\{\s*\d+\s*\}\}/g);
+                  if (matches && matches.length > 0) {
+                    const btnParams = [];
+                    for (let i = 0; i < matches.length; i++) {
+                      btnParams.push({ type: 'text', text: String(target.templateParams[paramIdx++] ?? '') });
+                    }
+                    comps.push({
+                      type: 'button',
+                      sub_type: 'url',
+                      index: String(btnIdx),
+                      parameters: btnParams,
+                    });
+                  }
+                }
+              });
+            }
+          }
+          if (comps.length > 0) metaComponents = comps;
+        }
+
         let result: { success: boolean; raw?: any; error?: string } = {
           success: false,
           error: 'Send failed',
@@ -552,6 +601,7 @@ export class WhatsAppCampaignsService {
             source: config.sourceLabel,
             language,
             templateParams: target.templateParams,
+            components: metaComponents,
             mediaType,
             media: mediaUrl ? { url: mediaUrl, filename } : undefined,
           });

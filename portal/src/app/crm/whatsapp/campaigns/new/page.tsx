@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Loader2, Plus, Search, User, X, Building2, ExternalLink, RefreshCw, Paperclip } from "lucide-react";
+import { ChevronLeft, Loader2, Plus, Search, User, X, Building2, ExternalLink, RefreshCw, Paperclip, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { CrmButton } from "@/components/crm/ui";
 import WhatsAppNavTabs from "@/components/crm/whatsapp/WhatsAppNavTabs";
 import type { WhatsAppTemplateRecord } from "@/components/crm/whatsapp/types";
-import { extractSlots } from "@/lib/crm/whatsapp/template-variables";
+import { extractSlots, type VariableSlot } from "@/lib/crm/whatsapp/template-variables";
 import { generatePropertyBrochurePdf } from "@/lib/crm/whatsapp/property-share-api";
 import {
   fetchTwoBighaProperties,
@@ -41,6 +41,9 @@ export default function NewWhatsAppCampaignPage() {
   const [templateId, setTemplateId] = useState("");
   const [loadingTemplates, setLoadingTemplates] = useState(true);
 
+  // Campaign-level default template variable values
+  const [templateParamValues, setTemplateParamValues] = useState<Record<string, string>>({});
+
   const [leadSearch, setLeadSearch] = useState("");
   const [leadResults, setLeadResults] = useState<LeadSearchResult[]>([]);
   const [searchingLeads, setSearchingLeads] = useState(false);
@@ -66,21 +69,13 @@ export default function NewWhatsAppCampaignPage() {
     () => templates.find((t) => t._id === templateId) || null,
     [templates, templateId],
   );
-  const bodySlotCount = useMemo(
-    () => (selectedTemplate ? extractSlots(selectedTemplate).filter((s) => s.componentType === "BODY").length : 0),
+
+  const allSlots = useMemo(
+    () => (selectedTemplate ? extractSlots(selectedTemplate) : []),
     [selectedTemplate],
   );
-  const bodySlots = useMemo(() => {
-    if (!selectedTemplate) return [];
-    return extractSlots(selectedTemplate).filter((s) => s.componentType === "BODY");
-  }, [selectedTemplate]);
-  const bodyText = useMemo(() => {
-    if (!selectedTemplate) return "";
-    const body = selectedTemplate.components?.find(
-      (c) => String(c.type).toUpperCase() === "BODY"
-    );
-    return body?.text || "";
-  }, [selectedTemplate]);
+  const slotCount = allSlots.length;
+
   const hasMediaHeader = useMemo(() => {
     if (!selectedTemplate) return false;
     const header = selectedTemplate.components?.find(
@@ -88,6 +83,144 @@ export default function NewWhatsAppCampaignPage() {
     );
     return header ? ["IMAGE", "VIDEO", "DOCUMENT"].includes(String(header.format).toUpperCase()) : false;
   }, [selectedTemplate]);
+
+  const templateButtons = useMemo(() => {
+    if (!selectedTemplate) return [];
+    const btnComp = selectedTemplate.components?.find(
+      (c) => String(c.type).toUpperCase() === "BUTTONS"
+    );
+    if (Array.isArray(btnComp?.buttons) && btnComp.buttons.length > 0) {
+      return btnComp.buttons;
+    }
+    const body = selectedTemplate.components?.find(
+      (c) => String(c.type).toUpperCase() === "BODY"
+    );
+    if (body?.text && body.text.includes("| [")) {
+      const buttonRegex = /\|\s*\[([^\]]+)\]/g;
+      const buttons: any[] = [];
+      let match: RegExpExecArray | null;
+      while ((match = buttonRegex.exec(body.text)) !== null) {
+        const content = match[1];
+        if (content.includes(",")) {
+          const parts = content.split(",");
+          buttons.push({ text: parts[0].trim(), type: "URL" });
+        } else {
+          buttons.push({ text: content.trim(), type: "QUICK_REPLY" });
+        }
+      }
+      return buttons;
+    }
+    return [];
+  }, [selectedTemplate]);
+
+  // Resolves recipient parameters array using current values and recipient's name
+  const resolveRecipientParams = (
+    recipientName: string,
+    currentValues: Record<string, string>,
+  ): string[] => {
+    return allSlots.map((slot, i) => {
+      const val = currentValues[slot.key] ?? "";
+      if (/\{\{\s*name\s*\}\}/i.test(val) || /\{\s*name\s*\}/i.test(val)) {
+        return val.replace(/\{\{\s*name\s*\}\}/gi, recipientName).replace(/\{\s*name\s*\}/gi, recipientName);
+      }
+      if (!val && slot.componentType === "BODY" && i === 0) {
+        return recipientName;
+      }
+      return val || slot.example || "";
+    });
+  };
+
+  // When selectedTemplate changes, re-initialize templateParamValues
+  useEffect(() => {
+    if (!selectedTemplate) {
+      setTemplateParamValues({});
+      return;
+    }
+    const initial: Record<string, string> = {};
+    allSlots.forEach((slot, i) => {
+      if (slot.componentType === "BODY" && i === 0) {
+        initial[slot.key] = "{{name}}";
+      } else {
+        initial[slot.key] = slot.example || "";
+      }
+    });
+    setTemplateParamValues(initial);
+
+    // Sync any existing recipients
+    setRecipients((prev) =>
+      prev.map((r) => ({
+        ...r,
+        templateParams: resolveRecipientParams(r.name, initial),
+      })),
+    );
+  }, [selectedTemplate, allSlots]);
+
+  const handleTemplateParamChange = (slotKey: string, val: string) => {
+    setTemplateParamValues((prev) => {
+      const updated = { ...prev, [slotKey]: val };
+      // Also propagate to existing recipients
+      setRecipients((prevRecipients) =>
+        prevRecipients.map((r) => ({
+          ...r,
+          templateParams: resolveRecipientParams(r.name, updated),
+        }))
+      );
+      return updated;
+    });
+  };
+
+  const applyDefaultsToAllRecipients = () => {
+    setRecipients((prev) =>
+      prev.map((r) => ({
+        ...r,
+        templateParams: resolveRecipientParams(r.name, templateParamValues),
+      }))
+    );
+    toast.success("Applied template variables to all recipients");
+  };
+
+  // Dynamic preview text replacing variables with entered values or placeholders
+  const previewBodyText = useMemo(() => {
+    if (!selectedTemplate) return "";
+    const body = selectedTemplate.components?.find(
+      (c) => String(c.type).toUpperCase() === "BODY"
+    );
+    let rawText = body?.text || "";
+    let text = rawText.replace(/(\s*\|\s*\[[^\]]+\])+$/g, "").trim();
+    allSlots
+      .filter((s) => s.componentType === "BODY")
+      .forEach((slot) => {
+        let val = templateParamValues[slot.key]?.trim();
+        if (val && (/\{\{\s*name\s*\}\}/i.test(val) || /\{\s*name\s*\}/i.test(val))) {
+          val = val.replace(/\{\{\s*name\s*\}\}/gi, "[Lead Name]").replace(/\{\s*name\s*\}/gi, "[Lead Name]");
+        }
+        const placeholderNum = slot.key.startsWith("body_") ? slot.key.replace("body_", "") : String(slot.index + 1);
+        const displayVal = val || (slot.example ? `[${slot.example}]` : `{{${placeholderNum}}}`);
+        text = text.replace(new RegExp(`\\{\\{\\s*${placeholderNum}\\s*\\}\\}`, "g"), displayVal);
+      });
+    return text;
+  }, [selectedTemplate, allSlots, templateParamValues]);
+
+  const previewHeaderText = useMemo(() => {
+    if (!selectedTemplate) return "";
+    const header = selectedTemplate.components?.find(
+      (c) => String(c.type).toUpperCase() === "HEADER" && String(c.format || "TEXT").toUpperCase() === "TEXT"
+    );
+    if (!header?.text) return "";
+    let text = header.text;
+    allSlots
+      .filter((s) => s.componentType === "HEADER")
+      .forEach((slot) => {
+        let val = templateParamValues[slot.key]?.trim();
+        if (val && (/\{\{\s*name\s*\}\}/i.test(val) || /\{\s*name\s*\}/i.test(val))) {
+          val = val.replace(/\{\{\s*name\s*\}\}/gi, "[Lead Name]").replace(/\{\s*name\s*\}/gi, "[Lead Name]");
+        }
+        const placeholderNum = slot.key.startsWith("header_") ? slot.key.replace("header_", "") : String(slot.index + 1);
+        const displayVal = val || (slot.example ? `[${slot.example}]` : `{{${placeholderNum}}}`);
+        text = text.replace(new RegExp(`\\{\\{\\s*${placeholderNum}\\s*\\}\\}`, "g"), displayVal);
+      });
+    return text;
+  }, [selectedTemplate, allSlots, templateParamValues]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -189,32 +322,6 @@ export default function NewWhatsAppCampaignPage() {
   }, [properties, selectedPropertyId]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch(`${CRM_API_URL}/crm/whatsapp-templates`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: WhatsAppTemplateRecord[]) => {
-        const mapped = Array.isArray(data) ? data.filter((t) => !!t.aisensyCampaignName) : [];
-        setTemplates(mapped);
-        if (mapped.length) setTemplateId(mapped[0]._id);
-      })
-      .catch(() => toast.error("Failed to load templates"))
-      .finally(() => setLoadingTemplates(false));
-  }, []);
-
-  // Recipients' templateParams length should track the selected template's
-  // variable count — pad/trim in place so the input row stays in sync.
-  useEffect(() => {
-    setRecipients((prev) =>
-      prev.map((r) => ({
-        ...r,
-        templateParams: Array.from({ length: bodySlotCount }, (_, i) => r.templateParams[i] || ""),
-      })),
-    );
-  }, [bodySlotCount]);
-
-  useEffect(() => {
     const term = leadSearch.trim();
     const token = localStorage.getItem("token");
     const timeout = setTimeout(() => {
@@ -242,9 +349,10 @@ export default function NewWhatsAppCampaignPage() {
       return;
     }
     const name = `${lead.firstName || ""} ${lead.lastName || ""}`.trim() || "Lead";
+    const params = resolveRecipientParams(name, templateParamValues);
     setRecipients((prev) => [
       ...prev,
-      { leadId: lead._id, name, waId, templateParams: Array.from({ length: bodySlotCount }, () => name) },
+      { leadId: lead._id, name, waId, templateParams: params },
     ]);
   };
 
@@ -259,9 +367,10 @@ export default function NewWhatsAppCampaignPage() {
       return;
     }
     const name = `Custom Recipient (+${waId})`;
+    const params = resolveRecipientParams(name, templateParamValues);
     setRecipients((prev) => [
       ...prev,
-      { leadId: "", name, waId, templateParams: Array.from({ length: bodySlotCount }, () => "") },
+      { leadId: "", name, waId, templateParams: params },
     ]);
     setLeadSearch("");
   };
@@ -294,7 +403,6 @@ export default function NewWhatsAppCampaignPage() {
       return;
     }
     if (hasMediaHeader && !attachBrochure) {
-      // WhatsApp fetches this link itself, so it must be a public file URL (not this app's own page / localhost).
       let host = "";
       try {
         const u = new URL(mediaUrl.trim());
@@ -404,32 +512,34 @@ export default function NewWhatsAppCampaignPage() {
           />
         </div>
 
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            Template
-          </label>
-          {loadingTemplates ? (
-            <div className="flex items-center gap-2 text-xs text-text-muted">
-              <Loader2 size={14} className="animate-spin" /> Loading templates…
-            </div>
-          ) : templates.length === 0 ? (
-            <p className="text-xs text-rose-600">
-              No templates are mapped to an AiSensy campaign yet — open a template under WhatsApp →
-              Templates and set its AiSensy campaign mapping first.
-            </p>
-          ) : (
-            <select
-              value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
-              className="h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-            >
-              {templates.map((t) => (
-                <option key={t._id} value={t._id}>
-                  {t.name} ({t.aisensyCampaignName})
-                </option>
-              ))}
-            </select>
-          )}
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+              Template
+            </label>
+            {loadingTemplates ? (
+              <div className="flex items-center gap-2 text-xs text-text-muted">
+                <Loader2 size={14} className="animate-spin" /> Loading templates…
+              </div>
+            ) : templates.length === 0 ? (
+              <p className="text-xs text-rose-600">
+                No templates are mapped to an AiSensy campaign yet — open a template under WhatsApp →
+                Templates and set its AiSensy campaign mapping first.
+              </p>
+            ) : (
+              <select
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
+                className="h-10 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+              >
+                {templates.map((t) => (
+                  <option key={t._id} value={t._id}>
+                    {t.name} ({t.aisensyCampaignName})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
           {/* Attach Project Brochure PDF Section */}
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/30 p-4 space-y-3">
@@ -547,6 +657,7 @@ export default function NewWhatsAppCampaignPage() {
             )}
           </div>
 
+          {/* Header Media URL / File Name Inputs */}
           {hasMediaHeader && !attachBrochure && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5">
               <div className="space-y-1.5">
@@ -578,24 +689,95 @@ export default function NewWhatsAppCampaignPage() {
             </div>
           )}
 
-          {bodySlotCount > 0 && (
-            <p className="text-[11px] text-text-muted">
-              This template has {bodySlotCount} variable{bodySlotCount === 1 ? "" : "s"} — fill them in
-              per recipient below.
-            </p>
+          {/* Template Variables / Parameters Section */}
+          {slotCount > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-slate-800 flex items-center gap-2">
+                    <span>Template Variables / Parameters</span>
+                    <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">
+                      {slotCount} variable{slotCount === 1 ? "" : "s"}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Configure default values for all recipients. Use <code className="bg-slate-200/80 px-1 py-0.5 rounded text-[10px] font-mono text-emerald-700 font-bold">&#123;&#123;name&#125;&#125;</code> to automatically insert each recipient&apos;s name.
+                  </p>
+                </div>
+                {recipients.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={applyDefaultsToAllRecipients}
+                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline shrink-0"
+                  >
+                    Apply to all ({recipients.length})
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                {allSlots.map((slot) => (
+                  <div key={slot.key} className="space-y-1 bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-bold text-slate-700 truncate" title={slot.label}>
+                        {slot.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleTemplateParamChange(slot.key, (templateParamValues[slot.key] || '') + '{{name}}')}
+                        className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60"
+                        title="Insert recipient name tag"
+                      >
+                        + &#123;&#123;name&#125;&#125;
+                      </button>
+                    </div>
+                    <input
+                      value={templateParamValues[slot.key] || ""}
+                      onChange={(e) => handleTemplateParamChange(slot.key, e.target.value)}
+                      placeholder={slot.example ? `e.g. ${slot.example}` : `Enter value for ${slot.label}`}
+                      className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-xs outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
-          {selectedTemplate && bodyText && (
-            <div className="rounded-[var(--radius-md)] border border-border bg-slate-50 p-3.5 text-xs leading-relaxed text-text-main whitespace-pre-wrap mt-2">
-              <span className="block text-[10px] font-bold uppercase tracking-wide text-text-muted mb-1">
-                Template Preview
+          {/* Live Template Preview */}
+          {selectedTemplate && (previewBodyText || previewHeaderText) && (
+            <div className="rounded-[var(--radius-md)] border border-border bg-slate-50 p-4 space-y-2 mt-2">
+              <span className="block text-[10px] font-bold uppercase tracking-wide text-text-muted">
+                Template Preview (Live)
               </span>
-              {bodyText}
+              {previewHeaderText && (
+                <p className="text-xs font-bold text-slate-900 border-b border-slate-200/80 pb-1.5">
+                  {previewHeaderText}
+                </p>
+              )}
+              {previewBodyText && (
+                <div className="text-xs leading-relaxed text-text-main whitespace-pre-wrap">
+                  {previewBodyText}
+                </div>
+              )}
+              {templateButtons.length > 0 && (
+                <div className="pt-2 border-t border-slate-200/80 flex flex-wrap gap-2">
+                  {templateButtons.map((btn, bi) => (
+                    <span
+                      key={bi}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 shadow-2xs"
+                    >
+                      {btn.text || btn.button_title || `Button ${bi + 1}`}
+                      {btn.type === "URL" && <ExternalLink size={10} className="text-slate-400" />}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
+      {/* Recipients Section */}
       <div className="space-y-3 rounded-[var(--radius-md)] border border-border bg-white p-5">
         <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
           Recipients ({recipients.length})
@@ -662,9 +844,9 @@ export default function NewWhatsAppCampaignPage() {
         )}
 
         {recipients.length > 0 && (
-          <div className="space-y-2 pt-2">
+          <div className="space-y-3 pt-2">
             {recipients.map((r) => (
-              <div key={r.waId} className="rounded-[var(--radius-md)] border border-border/60 p-3">
+              <div key={r.waId} className="rounded-[var(--radius-md)] border border-border/70 p-3.5 bg-slate-50/30">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-text-main">{r.name}</p>
@@ -674,21 +856,32 @@ export default function NewWhatsAppCampaignPage() {
                     type="button"
                     onClick={() => removeRecipient(r.waId)}
                     className="shrink-0 rounded-full p-1.5 text-text-muted hover:bg-rose-50 hover:text-rose-600"
+                    title="Remove recipient"
                   >
                     <X size={14} />
                   </button>
                 </div>
-                {bodySlotCount > 0 && (
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {r.templateParams.map((val, i) => (
-                      <input
-                        key={i}
-                        value={val}
-                        onChange={(e) => updateParam(r.waId, i, e.target.value)}
-                        placeholder={bodySlots[i]?.example ? `e.g. ${bodySlots[i].example}` : `{{${i + 1}}}`}
-                        className="h-8 rounded-[var(--radius-md)] border border-border px-2 text-xs outline-none focus:ring-2 focus:ring-emerald-500/20"
-                      />
-                    ))}
+
+                {slotCount > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-slate-200/60">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+                      Recipient Variables
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {allSlots.map((slot, i) => (
+                        <div key={slot.key} className="space-y-0.5">
+                          <label className="text-[10px] font-medium text-slate-500 truncate block" title={slot.label}>
+                            {slot.label}
+                          </label>
+                          <input
+                            value={r.templateParams[i] ?? ""}
+                            onChange={(e) => updateParam(r.waId, i, e.target.value)}
+                            placeholder={templateParamValues[slot.key] || slot.example || `{{${slot.index + 1}}}`}
+                            className="h-8 w-full rounded-md border border-border px-2.5 text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

@@ -3,8 +3,9 @@
  * components (HEADER/BODY text, BUTTON URL params).
  *
  * Shared by `WhatsAppTemplatePicker` (fills+sends an approved template from
- * Inbox / the dedicated WhatsApp chat) and `TemplateComponentsBuilder` (the
- * new template authoring form) so both agree on Meta's placeholder rules.
+ * Inbox / the dedicated WhatsApp chat), `NewWhatsAppCampaignPage` (campaigns),
+ * and `TemplateComponentsBuilder` (the new template authoring form) so all
+ * agree on Meta's placeholder rules.
  */
 
 export type WhatsAppTemplateComponent = {
@@ -17,6 +18,7 @@ export type WhatsAppTemplateComponent = {
 
 export type WhatsAppCachedTemplate = {
   id?: string;
+  _id?: string;
   name: string;
   status: string;
   language: string;
@@ -36,7 +38,7 @@ export type VariableSlot = {
 
 export function countPlaceholders(text?: string): number {
   if (!text) return 0;
-  const matches = text.match(/\{\{\d+\}\}/g);
+  const matches = text.match(/\{\{\s*\d+\s*\}\}/g);
   return matches ? matches.length : 0;
 }
 
@@ -56,42 +58,75 @@ export function extractSlots(template: {
   for (const comp of components) {
     const type = String(comp.type || "").toUpperCase();
     if (type === "HEADER" && String(comp.format || "TEXT").toUpperCase() === "TEXT") {
-      const count = countPlaceholders(comp.text);
+      const nums = extractPlaceholderNumbers(comp.text);
       const examples = comp.example?.header_text;
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < nums.length; i++) {
+        const num = nums[i];
         slots.push({
-          key: `header_${i + 1}`,
+          key: `header_${num}`,
           componentType: "HEADER",
           index: i,
-          label: `Header {{${i + 1}}}`,
+          label: `Header {{${num}}}`,
           example: Array.isArray(examples) ? String(examples[i] || "") : undefined,
         });
       }
     }
     if (type === "BODY") {
-      const count = countPlaceholders(comp.text);
+      // Clean body text by stripping trailing button markup like " | [Button Title, URL]"
+      const cleanBodyText = (comp.text || "").replace(/(\s*\|\s*\[[^\]]+\])+$/g, "").trim();
+      const nums = extractPlaceholderNumbers(cleanBodyText);
       const examples = comp.example?.body_text?.[0];
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < nums.length; i++) {
+        const num = nums[i];
         slots.push({
-          key: `body_${i + 1}`,
+          key: `body_${num}`,
           componentType: "BODY",
           index: i,
-          label: `Body {{${i + 1}}}`,
+          label: `Body {{${num}}}`,
           example: Array.isArray(examples) ? String(examples[i] || "") : undefined,
         });
+      }
+
+      // If trailing button markup exists in comp.text and no separate BUTTONS component was created
+      const hasSeparateButtons = components.some((c) => String(c.type || "").toUpperCase() === "BUTTONS");
+      if (!hasSeparateButtons && (comp.text || "").includes("| [")) {
+        const buttonRegex = /\|\s*\[([^\]]+)\]/g;
+        let match: RegExpExecArray | null;
+        let btnIdx = 0;
+        while ((match = buttonRegex.exec(comp.text || "")) !== null) {
+          const content = match[1];
+          if (content.includes(",")) {
+            const parts = content.split(",");
+            const title = parts[0].trim();
+            const urlOrVal = parts.slice(1).join(",").trim();
+            const btnNums = extractPlaceholderNumbers(urlOrVal);
+            for (let bi = 0; bi < btnNums.length; bi++) {
+              const num = btnNums[bi];
+              slots.push({
+                key: `button_${btnIdx}_${num}`,
+                componentType: "BUTTON",
+                index: bi,
+                buttonIndex: btnIdx,
+                label: `Button ${btnIdx + 1} (${title}) URL {{${num}}}`,
+              });
+            }
+          }
+          btnIdx++;
+        }
       }
     }
     if (type === "BUTTONS" && Array.isArray(comp.buttons)) {
       comp.buttons.forEach((btn, buttonIndex) => {
         if (String(btn.type || "").toUpperCase() !== "URL") return;
-        const count = countPlaceholders(btn.url);
-        for (let i = 0; i < count; i++) {
+        const nums = extractPlaceholderNumbers(btn.url);
+        for (let i = 0; i < nums.length; i++) {
+          const num = nums[i];
           slots.push({
-            key: `button_${buttonIndex}_${i + 1}`,
+            key: `button_${buttonIndex}_${num}`,
             componentType: "BUTTON",
             index: i,
             buttonIndex,
-            label: `Button ${buttonIndex + 1} URL {{${i + 1}}}`,
+            label: `Button ${buttonIndex + 1}${btn.text ? ` (${btn.text})` : ""} URL {{${num}}}`,
           });
         }
       });
@@ -108,11 +143,14 @@ export function bodyPreview(
   const body = (template.components || []).find(
     (c) => String(c.type || "").toUpperCase() === "BODY",
   );
-  let text = body?.text || `[Template] ${template.name}`;
+  let rawText = body?.text || `[Template] ${template.name}`;
+  // Strip trailing inline buttons from preview text
+  let text = rawText.replace(/(\s*\|\s*\[[^\]]+\])+$/g, "").trim();
   const bodySlots = extractSlots(template).filter((s) => s.componentType === "BODY");
   bodySlots.forEach((slot) => {
     const val = values[slot.key]?.trim() || slot.example || `{{${slot.index + 1}}}`;
-    text = text.replace(`{{${slot.index + 1}}}`, val);
+    const placeholderNum = slot.key.startsWith("body_") ? slot.key.replace("body_", "") : String(slot.index + 1);
+    text = text.replace(new RegExp(`\\{\\{\\s*${placeholderNum}\\s*\\}\\}`, "g"), val);
   });
   return text;
 }

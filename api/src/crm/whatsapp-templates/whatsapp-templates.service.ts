@@ -656,10 +656,14 @@ export class WhatsAppTemplatesService {
             const status = String(row.status || 'PENDING');
             const metaId = row.template_id ? String(row.template_id) : undefined;
 
+            // Clean inline trailing buttons like " | [View Listing, https://...]" from body text
+            const rawBodyText = String(row.text || '');
+            const cleanBodyText = rawBodyText.replace(/(\s*\|\s*\[[^\]]+\])+$/g, '').trim();
+
             const components: any[] = [];
             components.push({
               type: 'BODY',
-              text: row.text || '',
+              text: cleanBodyText,
               example: row.sample_text && row.sample_text !== row.text ? {
                 body_text: [
                   (row.sample_text.match(/\[(.*?)\]/g) || []).map((v: string) => v.slice(1, -1))
@@ -667,24 +671,58 @@ export class WhatsAppTemplatesService {
               } : undefined
             });
 
-            if (row.footer_text) {
-              components.push({ type: 'FOOTER', text: row.footer_text });
+            const footerText = row.footer_text || row.footer;
+            if (footerText) {
+              components.push({ type: 'FOOTER', text: footerText });
             }
 
-            if (row.header_text) {
-              components.push({ type: 'HEADER', format: 'TEXT', text: row.header_text });
+            const headerText = row.header_text || (row.header && row.header.type === 'TEXT' ? row.header.text : undefined);
+            if (headerText) {
+              components.push({ type: 'HEADER', format: 'TEXT', text: headerText });
             } else if (['IMAGE', 'VIDEO', 'FILE', 'LOCATION'].includes(row.type)) {
               components.push({ type: 'HEADER', format: row.type === 'FILE' ? 'DOCUMENT' : row.type });
             }
 
-            if (Array.isArray(row.buttons) && row.buttons.length > 0) {
+            // Collect all button formats from AiSensy (buttons, call_to_action, quick_replies, or parsed from text)
+            const allRawButtons: any[] = [];
+            if (Array.isArray(row.buttons) && row.buttons.length > 0) allRawButtons.push(...row.buttons);
+            if (Array.isArray(row.call_to_action) && row.call_to_action.length > 0) allRawButtons.push(...row.call_to_action);
+            if (Array.isArray(row.quick_replies) && row.quick_replies.length > 0) allRawButtons.push(...row.quick_replies);
+
+            if (allRawButtons.length === 0 && rawBodyText.includes('| [')) {
+              const buttonRegex = /\|\s*\[([^\]]+)\]/g;
+              let match: RegExpExecArray | null;
+              while ((match = buttonRegex.exec(rawBodyText)) !== null) {
+                const content = match[1].trim();
+                if (content.includes(',')) {
+                  const parts = content.split(',');
+                  const title = parts[0].trim();
+                  const val = parts.slice(1).join(',').trim();
+                  if (/^https?:\/\//i.test(val) || val.includes('{{')) {
+                    allRawButtons.push({ type: 'URL', text: title, url: val });
+                  } else if (/^\+?\d+$/.test(val.replace(/\s/g, ''))) {
+                    allRawButtons.push({ type: 'PHONE_NUMBER', text: title, phone_number: val });
+                  } else {
+                    allRawButtons.push({ type: 'URL', text: title, url: val });
+                  }
+                } else {
+                  allRawButtons.push({ type: 'QUICK_REPLY', text: content });
+                }
+              }
+            }
+
+            if (allRawButtons.length > 0) {
               components.push({
                 type: 'BUTTONS',
-                buttons: row.buttons.map((b: any) => ({
-                  type: b.type === 'Phone Number' ? 'PHONE_NUMBER' : (b.type === 'URL' ? 'URL' : 'QUICK_REPLY'),
+                buttons: allRawButtons.map((b: any) => ({
+                  type: b.type === 'Phone Number' || b.type === 'PHONE_NUMBER'
+                    ? 'PHONE_NUMBER'
+                    : (b.type === 'URL' || b.button_value?.includes('http') || b.button_value?.includes('{{') || b.url
+                      ? 'URL'
+                      : 'QUICK_REPLY'),
                   text: b.button_title || b.text || '',
-                  url: b.type === 'URL' ? b.button_value : undefined,
-                  phone_number: b.type === 'Phone Number' ? b.button_value : undefined,
+                  url: b.button_value || b.url || undefined,
+                  phone_number: b.phone_number || (b.type === 'Phone Number' ? b.button_value : undefined),
                 }))
               });
             }
