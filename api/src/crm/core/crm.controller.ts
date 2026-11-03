@@ -28,6 +28,7 @@ import { RoleDashboardService } from '../reporting/role-dashboard.service';
 import { PerformanceReportsService } from '../reporting/performance-reports.service';
 import { CrmEmailEngagementBatchService } from '../email/crm-email-engagement-batch.service';
 import { CrmCalendarSyncService } from '../calendar/crm-calendar-sync.service';
+import { TaskAutoEscalationService } from '../tasks/task-auto-escalation.service';
 import { InboxOAuthService } from '../inbox/inbox-oauth.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RbacGuard } from '../crm-users/rbac.guard';
@@ -57,6 +58,7 @@ export class CRMController {
     private readonly roleDashboardService: RoleDashboardService,
     private readonly performanceReports: PerformanceReportsService,
     private readonly assignmentPolicy: CrmAssignmentPolicyService,
+    private readonly taskAutoEscalation: TaskAutoEscalationService,
   ) {}
 
   @Get('distinct-values')
@@ -389,13 +391,27 @@ export class CRMController {
   @Post('activities')
   @Permissions('activities:write')
   createActivity(@Body() dto: any, @Request() req: any) {
-    return this.crmService.createActivity(dto, req.user);
+    return this.crmService.createActivity(dto, req.user, { enforceRecordTaskRules: true });
+  }
+
+  /**
+   * Create-task-from-lead/client form: the record's owner, whether the caller may create a
+   * task on it, and who they may assign it to (picking someone else reassigns the record).
+   */
+  @Get('activities/record-task-context')
+  @Permissions('activities:write')
+  recordTaskContext(
+    @Query('relatedType') relatedType: string,
+    @Query('relatedTo') relatedTo: string,
+    @Request() req: any,
+  ) {
+    return this.crmService.getRecordTaskContext(relatedType, relatedTo, req.user);
   }
 
   @Patch('activities/:id')
   @Permissions('activities:write')
   patchActivity(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
-    return this.crmService.updateActivity(id, dto, req.user);
+    return this.crmService.updateActivity(id, dto, req.user, { enforceRecordTaskRules: true });
   }
 
   @Delete('activities/:id')
@@ -457,8 +473,20 @@ export class CRMController {
     @Query('start') start?: string,
     @Query('end') end?: string,
     @Query('owner') owner?: string,
+    @Request() req?: any,
   ) {
-    return this.crmService.getCalendarEvents(start, end, owner);
+    return this.crmService.getCalendarEvents(start, end, owner, req?.user);
+  }
+
+  /** Per-day counts of escalated / scheduled-to-escalate tasks for the calendar. */
+  @Get('calendar-events/escalations')
+  @Permissions('dashboard:read', 'activities:read')
+  getCalendarEscalations(
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+    @Query('owner') owner?: string,
+  ) {
+    return this.taskAutoEscalation.calendarSummary(start, end, owner);
   }
 
   @Post('calendar-events')

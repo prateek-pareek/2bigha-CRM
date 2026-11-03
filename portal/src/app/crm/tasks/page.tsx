@@ -14,6 +14,7 @@ import {
     ArrowUpRight,
     User,
     Search,
+    RefreshCw,
 } from 'lucide-react';
 import CrmSlidePanelShell from '@/components/crm/shell/CrmSlidePanelShell';
 import { CRM_API_URL } from '@/lib/crm/config';
@@ -428,7 +429,11 @@ function TaskBoardSkeleton() {
 }
 
 export default function TasksPage() {
-    const { user, isAdmin } = usePermissions();
+    const { user, isAdmin, hasAccess } = usePermissions();
+    // Mirrors the API's canManageTaskEscalation(); the server stays the source of truth.
+    const canEditEscalation = Boolean(
+        isAdmin || hasAccess('workspace-team:read') || hasAccess('leads:read:team') || hasAccess('contacts:read:team'),
+    );
     const defaultReporterId = useMemo(
         () => String(user?._id || user?.id || ''),
         [user?._id, user?.id],
@@ -436,6 +441,7 @@ export default function TasksPage() {
     const [crmUsers, setCrmUsers] = useState<CrmPortalUserOption[]>([]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [isEditingForm, setIsEditingForm] = useState(false);
@@ -481,6 +487,32 @@ export default function TasksPage() {
             console.error('Failed to fetch tasks', err);
         } finally {
             if (!opts?.silent) setLoading(false);
+        }
+    };
+
+    // Deep link from the calendar: /crm/tasks?task=<id> opens that task once the list has loaded.
+    const deepLinkedTaskRef = useRef<string | null>(
+        typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('task') : null,
+    );
+    useEffect(() => {
+        const id = deepLinkedTaskRef.current;
+        if (!id || tasks.length === 0) return;
+        const hit = tasks.find((t) => t._id === id);
+        if (hit) {
+            setEditingTask(hit);
+            setIsEditingForm(false);
+        } else {
+            toast.error('That task is not in your current view (try Team view)');
+        }
+        deepLinkedTaskRef.current = null;
+    }, [tasks]);
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try {
+            await fetchTasks({ silent: true });
+        } finally {
+            setRefreshing(false);
         }
     };
 
@@ -631,6 +663,16 @@ export default function TasksPage() {
     const overdueTasks = filteredTasks.filter((t) => isTaskOverdue(t) && !isTaskEscalated(t));
     const escalatedTasks = filteredTasks.filter(isTaskEscalated);
 
+    const apiErrorMessage = async (res: Response, fallback: string) => {
+        try {
+            const body = await res.json();
+            const msg = Array.isArray(body?.message) ? body.message.join(', ') : body?.message;
+            return typeof msg === 'string' && msg ? msg : fallback;
+        } catch {
+            return fallback;
+        }
+    };
+
     const handleSaveActivity = async (payload: any) => {
         const token = localStorage.getItem('token');
         const listing = pmListings.find((p) => p._id === relatedListingId);
@@ -661,6 +703,8 @@ export default function TasksPage() {
             setIsCreating(false);
             setRelatedLeadId('');
             setRelatedListingId('');
+        } else {
+            toast.error(await apiErrorMessage(res, 'Could not create task'));
         }
     };
 
@@ -676,6 +720,9 @@ export default function TasksPage() {
             fetchTasks();
             setEditingTask(null);
             setIsEditingForm(false);
+        } else {
+            const err = await res.json().catch(() => null);
+            toast.error(err?.message || 'Could not update task');
         }
     };
 
@@ -688,7 +735,8 @@ export default function TasksPage() {
             body: JSON.stringify(payload)
         });
         if (!res.ok) {
-            toast.error('Could not update task');
+            const err = await res.json().catch(() => null);
+            toast.error(err?.message || 'Could not update task');
             throw new Error('patch failed');
         }
         const data = await res.json();
@@ -700,7 +748,13 @@ export default function TasksPage() {
         if (payload.escalate || payload.escalateTo) {
             toast.success('Task escalated');
         } else if ('assignee' in payload) {
-            toast.success(payload.assignee ? 'Assignee updated' : 'Task unassigned');
+            toast.success(
+                payload.assignee
+                    ? data?.metadata?.linkedRecord
+                        ? `Assignee updated — ${String(data.metadata.linkedRecord.type).toLowerCase()} owner synced`
+                        : 'Assignee updated'
+                    : 'Task unassigned',
+            );
         } else if (payload.comment) {
             toast.success('Comment posted');
         } else if (payload.metadata && typeof payload.metadata === 'object' && 'checklist' in (payload.metadata as object)) {
@@ -999,6 +1053,16 @@ export default function TasksPage() {
                 actions={
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
                         <CrmViewToggle value={viewMode} onChange={setViewMode} modes={['list', 'kanban', 'calendar']} />
+                        <button
+                            type="button"
+                            onClick={() => void handleRefresh()}
+                            disabled={refreshing}
+                            title="Refresh tasks"
+                            aria-label="Refresh tasks"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-main)] disabled:opacity-60"
+                        >
+                            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+                        </button>
                         <label className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-main)]" title="Show only your assigned tasks">
                             <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} className="cursor-pointer" />
                             My tasks
@@ -1073,7 +1137,7 @@ export default function TasksPage() {
                         onClear={() => setFilters([])}
                         onPropertiesReady={setFilterProperties}
                     />
-                    <div className="relative h-[38px] flex-1 min-w-[140px] max-w-[260px]">
+                    <div className="relative h-[38px] w-full basis-full min-w-[140px] sm:w-auto sm:basis-auto sm:flex-1 sm:max-w-[260px]">
                         <Search
                             size={14}
                             className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
@@ -1415,6 +1479,7 @@ export default function TasksPage() {
                                         : normalizeTaskStatus(editingTask.status),
                             }}
                             statuses={statusOptions}
+                            canEditEscalation={canEditEscalation}
                             submitLabel="Save changes"
                             crmUsers={crmUsers}
                             variant="hubspot"
@@ -1443,6 +1508,7 @@ export default function TasksPage() {
                                 crmUsers={crmUsers}
                                 onPatch={handlePatchKeepOpen}
                                 canManageTeam={Boolean(isAdmin || teamScope)}
+                                canEditEscalation={canEditEscalation}
                             />
                         </div>
                     )}

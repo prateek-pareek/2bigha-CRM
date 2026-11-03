@@ -59,7 +59,30 @@ export type KitCalendarEvent = {
   reminderAt?: string;
   reminderType?: "follow_up" | "custom";
   reminderMessage?: string;
+  /** Task already moved to the Escalated lane. */
+  escalated?: boolean;
+  /** ISO datetime the task auto-escalates (or did). */
+  escalateAt?: string;
+  /** Deep links shown in the detail dialog (open task, open lead / client, …). */
+  links?: EventCalendarLink[];
 };
+
+export type EventCalendarLink = { label: string; href: string };
+
+export type EventCalendarDayItem = {
+  id: string;
+  title: string;
+  kind: "escalated" | "scheduled";
+  /** ISO datetime the task escalated / will escalate. */
+  at: string;
+  links?: EventCalendarLink[];
+};
+
+/** Per-day escalation counts keyed by yyyy-MM-dd. */
+export type EventCalendarDayBadges = Record<
+  string,
+  { escalated: number; scheduled: number; items?: EventCalendarDayItem[] }
+>;
 
 export type EventCalendarCreatePayload = {
   title: string;
@@ -94,6 +117,8 @@ export type EventCalendarProps = {
   /** Banner / alert content above the toolbar (OAuth notices, sync errors, …) */
   notices?: ReactNode;
   sync?: EventCalendarSyncProps;
+  /** Tasks escalated / due to auto-escalate on each date. */
+  dayBadges?: EventCalendarDayBadges;
   onCreateEvent?: (payload: EventCalendarCreatePayload) => void | Promise<void>;
   /** Remove the reminder from an internal (non-synced) event. */
   onClearReminder?: (eventId: string) => void | Promise<void>;
@@ -103,8 +128,12 @@ export type EventCalendarProps = {
 const EXTERNAL_CHIP =
   "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-200";
 
+const ESCALATED_CHIP =
+  "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/50 dark:bg-rose-500/15 dark:text-rose-200";
+
 function eventChipClass(ev: KitCalendarEvent) {
   if (ev.externalSource) return EXTERNAL_CHIP;
+  if (ev.escalated) return ESCALATED_CHIP;
   return eventCalendarCategoryMeta(normalizeEventCalendarCategory(ev.category)).chipClass;
 }
 
@@ -120,6 +149,7 @@ export function EventCalendar({
   description = "Meetings, follow-ups, and synced external events",
   notices,
   sync,
+  dayBadges,
   onCreateEvent,
   onClearReminder,
   className,
@@ -134,6 +164,7 @@ export function EventCalendar({
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedEvent, setSelectedEvent] = useState<KitCalendarEvent | null>(null);
+  const [escalationDay, setEscalationDay] = useState<string | null>(null);
 
   const [newEventTitle, setNewEventTitle] = useState("");
   const [newEventTime, setNewEventTime] = useState("12:00");
@@ -572,6 +603,36 @@ export function EventCalendar({
                     >
                       {format(day, "d")}
                     </span>
+                    {dayBadges?.[dateStr] ? (
+                      <div className="mb-1 flex flex-wrap gap-1">
+                        {dayBadges[dateStr].escalated > 0 ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEscalationDay(dateStr);
+                            }}
+                            className="rounded-full bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold leading-none text-white hover:bg-rose-700"
+                            title={`${dayBadges[dateStr].escalated} task(s) escalated — click to view`}
+                          >
+                            {dayBadges[dateStr].escalated} escalated
+                          </button>
+                        ) : null}
+                        {dayBadges[dateStr].scheduled > 0 ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEscalationDay(dateStr);
+                            }}
+                            className="rounded-full border border-amber-400 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold leading-none text-amber-800 hover:bg-amber-100"
+                            title={`${dayBadges[dateStr].scheduled} task(s) will auto-escalate — click to view`}
+                          >
+                            {dayBadges[dateStr].scheduled} to escalate
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="flex flex-col gap-1 overflow-hidden">
                       {dayEvents.slice(0, 3).map((ev, idx) => (
                         <button
@@ -582,12 +643,12 @@ export function EventCalendar({
                             setSelectedEvent(ev);
                           }}
                           className={cn(
-                            "truncate rounded-[4px] border px-1.5 py-0.5 text-left text-[11px] font-semibold leading-tight",
+                            "rounded-[4px] border px-1.5 py-0.5 text-left text-[11px] font-semibold leading-tight",
                             eventChipClass(ev),
                           )}
                           title={ev.title}
                         >
-                          <span className="block truncate">{ev.title}</span>
+                          <span className="line-clamp-2 break-words">{ev.title}</span>
                           <span className="mt-0.5 block truncate text-[9px] font-medium opacity-80">
                             {format(new Date(ev.dueDate), "h:mm a")}
                           </span>
@@ -758,6 +819,20 @@ export function EventCalendar({
                     {format(new Date(selectedEvent.dueDate), "h:mm a")}
                   </p>
                 </div>
+                {selectedEvent.escalated || selectedEvent.escalateAt ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                      Escalation
+                    </p>
+                    <p className="mt-1 text-[var(--text-main)]">
+                      {selectedEvent.escalated
+                        ? "Escalated"
+                        : selectedEvent.escalateAt
+                          ? `Auto-escalates ${format(new Date(selectedEvent.escalateAt), "EEE, MMM d, yyyy h:mm a")}`
+                          : ""}
+                    </p>
+                  </div>
+                ) : null}
                 {selectedEvent.externalSource ? (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
@@ -836,8 +911,74 @@ export function EventCalendar({
                   </div>
                 ) : null}
               </div>
-              <DialogFooter>
+              <DialogFooter className="flex-wrap gap-2">
+                {selectedEvent.links?.map((l) => (
+                  <a
+                    key={l.href + l.label}
+                    href={l.href}
+                    className="inline-flex h-9 items-center rounded-md border border-[var(--border-color)] px-3 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--surface-dim)]"
+                  >
+                    {l.label}
+                  </a>
+                ))}
                 <KitButton variant="secondary" onClick={() => setSelectedEvent(null)}>
+                  Close
+                </KitButton>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(escalationDay)} onOpenChange={(open) => !open && setEscalationDay(null)}>
+        <DialogContent className="sm:max-w-[520px]">
+          {escalationDay ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  Task escalations · {format(parseISO(escalationDay), "EEE, MMM d, yyyy")}
+                </DialogTitle>
+              </DialogHeader>
+              <ul className="max-h-[50vh] space-y-2 overflow-y-auto text-sm">
+                {(dayBadges?.[escalationDay]?.items ?? []).map((it) => (
+                  <li
+                    key={it.id + it.kind}
+                    className="rounded-md border border-[var(--border-color)] p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-[var(--text-main)]">{it.title}</p>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase",
+                          it.kind === "escalated"
+                            ? "bg-rose-600 text-white"
+                            : "border border-amber-400 bg-amber-50 text-amber-800",
+                        )}
+                      >
+                        {it.kind === "escalated" ? "Escalated" : "Will escalate"}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                      {format(new Date(it.at), "h:mm a")}
+                    </p>
+                    {it.links?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {it.links.map((l) => (
+                          <a
+                            key={l.href + l.label}
+                            href={l.href}
+                            className="inline-flex h-8 items-center rounded-md border border-[var(--border-color)] px-2.5 text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--surface-dim)]"
+                          >
+                            {l.label}
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              <DialogFooter>
+                <KitButton variant="secondary" onClick={() => setEscalationDay(null)}>
                   Close
                 </KitButton>
               </DialogFooter>

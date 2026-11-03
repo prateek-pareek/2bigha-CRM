@@ -47,6 +47,7 @@ import CrmRecordDetailTabs from '@/components/crm/records/detail/CrmRecordDetail
 import CrmRecordDetailSkeleton from '@/components/crm/records/detail/CrmRecordDetailSkeleton';
 import CrmRecordSidebarGroup from '@/components/crm/records/detail/CrmRecordSidebarGroup';
 import CrmRecordRemindersPanel from '@/components/crm/records/detail/CrmRecordRemindersPanel';
+import CrmClientOwnerCard from '@/components/crm/records/detail/CrmClientOwnerCard';
 import { buildEmailTrackingLookup, fetchCrmEmailTrackingForEntity, type CrmEmailTrackingRow } from '@/lib/crm/crm-email-tracking';
 import { useCrmEmailTrackingRealtimeRefresh } from '@/lib/crm/email/useCrmEmailTrackingRealtimeRefresh';
 import { crmRecordIdFromParams } from '@/lib/crm/crm-route-params';
@@ -69,6 +70,8 @@ export default function ClientDetailPage() {
   const recordId = useMemo(() => crmRecordIdFromParams(id as string | string[]), [id]);
   const router = useRouter();
   const { hasAccess, isAdmin, isLoaded } = usePermissions();
+  // Admins always; anyone else with the Clients "View" permission (role-wise or person-wise).
+  const canViewClient = isAdmin || hasAccess('clients:read');
   const [client, setClient] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,10 +105,10 @@ export default function ClientDetailPage() {
 
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isAdmin) {
+    if (!canViewClient) {
       router.replace('/unauthorized?module=crm-clients');
     }
-  }, [isLoaded, isAdmin, router]);
+  }, [isLoaded, canViewClient, router]);
 
   const fetchData = async () => {
     const token = localStorage.getItem('token');
@@ -155,9 +158,9 @@ export default function ClientDetailPage() {
   }, [recordId, recordMetaLoaded]);
 
   useEffect(() => {
-    if (!isLoaded || !isAdmin) return;
+    if (!isLoaded || !canViewClient) return;
     fetchData();
-  }, [recordId, isLoaded, isAdmin]);
+  }, [recordId, isLoaded, canViewClient]);
 
   useEffect(() => {
     setRecordMetaLoaded(false);
@@ -186,7 +189,7 @@ export default function ClientDetailPage() {
     { enabled: activeTab === 'Activity' },
   );
 
-  if (!isLoaded || !isAdmin) return null;
+  if (!isLoaded || !canViewClient) return null;
 
   if (loading || !client) {
     return <CrmRecordDetailSkeleton />;
@@ -510,6 +513,7 @@ export default function ClientDetailPage() {
         </div>
 
         <aside className={crmRecordChrome.sidebar}>
+          {recordId ? <CrmClientOwnerCard clientId={String(recordId)} /> : null}
           <CrmRecordSidebarGroup title="Engagement" defaultOpen>
             <EmailEngagementPanel rows={emailTracking} />
             <CrmRecordRemindersPanel relatedType="Client" relatedTo={recordId} />

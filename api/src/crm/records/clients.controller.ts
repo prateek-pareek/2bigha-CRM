@@ -170,6 +170,13 @@ export class ClientsController {
     return this.clientsService.getClientManagedProperties(id, query);
   }
 
+  /** Bulk soft-delete. Admin / Super Admin by default; grantable per role or per person. */
+  @Post('clients/bulk-delete')
+  @Permissions('clients:bulk_delete')
+  bulkDelete(@Body('ids') ids: string[], @Request() req: any) {
+    return this.clientsService.bulkDelete(ids, req.user?.userId);
+  }
+
   @Get('clients/:id')
   @Permissions('clients:read')
   findOne(@Param('id') id: string, @Request() req: any) {
@@ -186,6 +193,17 @@ export class ClientsController {
   @Permissions('clients:edit')
   async patchClient(@Param('id') id: string, @Body() data: any, @Request() req: any) {
     return this.clientsService.update(id, data, req.user);
+  }
+
+  /** Reassign a client's owner (admin: anyone, Team Lead / Manager: own team). Open tasks follow. */
+  @Patch('clients/:id/assign')
+  @Permissions('leads:assign', 'pm-leads:assign')
+  assignClient(
+    @Param('id') id: string,
+    @Body('assignee') assignee: string,
+    @Request() req: any,
+  ) {
+    return this.crmService.reassignClient(id, assignee, req.user);
   }
 
   @Delete('clients/:id')

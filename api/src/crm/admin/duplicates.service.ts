@@ -5,6 +5,13 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { Client, ClientDocument } from '../schemas/client.schema';
+import { LegalCase, LegalCaseDocument } from '../records/schemas/legal-case.schema';
+import {
+  CrmAssociation,
+  CrmAssociationDocument,
+} from '../associations/schemas/crm-association.schema';
+import { softDeleteUpdate } from '../shared/crm-soft-delete.util';
 import { Lead, LeadDocument } from '../schemas/lead.schema';
 import { Contact, ContactDocument } from '../schemas/contact.schema';
 import { Activity, ActivityDocument } from '../schemas/activity.schema';
@@ -97,6 +104,12 @@ export class DuplicatesService {
     private readonly whatsAppMessageModel: Model<WhatsAppMessageDocument>,
     @InjectModel(Organization.name, 'crmConnection')
     private readonly organizationModel: Model<OrganizationDocument>,
+    @InjectModel(Client.name, 'crmConnection')
+    private readonly clientModel: Model<ClientDocument>,
+    @InjectModel(LegalCase.name, 'crmConnection')
+    private readonly legalCaseModel: Model<LegalCaseDocument>,
+    @InjectModel(CrmAssociation.name, 'crmConnection')
+    private readonly associationModel: Model<CrmAssociationDocument>,
   ) {}
 
   getMergeRules() {
@@ -364,7 +377,13 @@ export class DuplicatesService {
     };
   }
 
-  async mergeContacts(masterId: string, duplicateIds: string[], _user?: unknown) {
+  /**
+   * Merge `duplicateIds` into `masterId`. Empty master fields are back-filled,
+   * emails / associations / custom fields are unioned, every reference is
+   * re-pointed at the master, and the duplicates are soft-deleted (restorable
+   * from trash) rather than destroyed.
+   */
+  async mergeContacts(masterId: string, duplicateIds: string[], actor?: any) {
     if (!Types.ObjectId.isValid(masterId)) {
       throw new BadRequestException('Invalid master id');
     }
@@ -402,18 +421,81 @@ export class DuplicatesService {
       dups as unknown as Record<string, unknown>[],
     );
 
+    const actorId = this.actorId(actor);
+
+    // recordId is a unique index: free the duplicates' ids before the master adopts one.
+    await this.contactModel.updateMany(
+      { _id: { $in: dupOids } },
+      { ...softDeleteUpdate(actorId || undefined), $unset: { recordId: '' } },
+    );
+    await this.contactModel.updateOne({ _id: masterOid }, { $set: mergedPatch });
+
     for (const dupOid of dupOids) {
       await this.rewireContactReferences(dupOid, masterOid);
     }
+    await this.rewireContactEdges(dupOids, masterOid);
 
-    await this.contactModel.deleteMany({ _id: { $in: dupOids } });
-    await this.contactModel.updateOne({ _id: masterOid }, { $set: mergedPatch });
+    if (actorId) {
+      const names = (dups as any[])
+        .map((d) => [d.firstName, d.lastName].filter(Boolean).join(' ') || String(d._id))
+        .join(', ');
+      await new this.activityModel({
+        type: 'Note',
+        title: 'Contacts Merged',
+        content: `${dups.length} duplicate contact record(s) merged into this contact: ${names}`,
+        relatedTo: masterOid,
+        relatedType: 'Contact',
+        author: new Types.ObjectId(actorId),
+      }).save();
+    }
 
     return {
       ok: true,
       masterId,
       removedIds: dupOids.map(String),
     };
+  }
+
+  private actorId(actor?: any): string | null {
+    const id = String(actor?.userId ?? actor?._id ?? actor?.id ?? '');
+    return Types.ObjectId.isValid(id) ? id : null;
+  }
+
+  /** Re-point crm_associations edges from merged contacts, dropping edges the master already has. */
+  private async rewireContactEdges(
+    dupOids: Types.ObjectId[],
+    masterOid: Types.ObjectId,
+  ) {
+    for (const side of ['from', 'to'] as const) {
+      const other = side === 'from' ? 'to' : 'from';
+      const edges = await this.associationModel
+        .find({ [`${side}Type`]: 'contacts', [`${side}Id`]: { $in: dupOids } })
+        .lean()
+        .exec();
+      for (const e of edges as any[]) {
+        const clash = await this.associationModel
+          .findOne({
+            [`${side}Type`]: 'contacts',
+            [`${side}Id`]: masterOid,
+            [`${other}Type`]: e[`${other}Type`],
+            [`${other}Id`]: e[`${other}Id`],
+            associationType: e.associationType,
+          })
+          .lean()
+          .exec();
+        const selfLoop =
+          e[`${other}Type`] === 'contacts' &&
+          String(e[`${other}Id`]) === String(masterOid);
+        if (clash || selfLoop) {
+          await this.associationModel.deleteOne({ _id: e._id });
+        } else {
+          await this.associationModel.updateOne(
+            { _id: e._id },
+            { $set: { [`${side}Id`]: masterOid } },
+          );
+        }
+      }
+    }
   }
 
   private buildLeadMergePatch(
@@ -668,6 +750,14 @@ export class DuplicatesService {
       dupOid,
       masterOid,
     );
+    for (const model of [this.leadModel, this.clientModel, this.legalCaseModel]) {
+      await this.rewirePersonAssocArrays(
+        model as Model<any>,
+        'associatedContacts',
+        dupOid,
+        masterOid,
+      );
+    }
 
     await this.workflowExecutionModel.updateMany(
       { entityType: 'Contact', entityId: dupOid },

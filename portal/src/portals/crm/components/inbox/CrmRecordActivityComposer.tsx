@@ -25,6 +25,27 @@ export type CrmActivityRelatedType =
 
 const BASE_TYPES = ["Activity", "Note", "Call", "Task", "Meeting", "Email"] as const;
 
+type RecordTaskContext = {
+  record: { type: string; id: string; name: string; link: string };
+  owner: { id: string; label: string } | null;
+  unassigned: boolean;
+  canCreate: boolean;
+  reason?: string;
+  canReassign: boolean;
+  defaultAssigneeId: string | null;
+  assignees: Array<{ _id: string; label: string; email?: string; roleName?: string }>;
+};
+
+async function readApiError(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = await res.json();
+    const msg = Array.isArray(body?.message) ? body.message.join(", ") : body?.message;
+    return typeof msg === "string" && msg ? msg : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 const DM_CHANNEL_OPTIONS = [
   { value: "", label: "Platform (optional)" },
   { value: "linkedin", label: "LinkedIn" },
@@ -60,6 +81,7 @@ export default function CrmRecordActivityComposer({
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskPriority, setTaskPriority] = useState("Medium");
+  const [taskStatus, setTaskStatus] = useState("Open");
   const [crmUsers, setCrmUsers] = useState<CrmPortalUserOption[]>([]);
   const [taskReporterId, setTaskReporterId] = useState("");
   const [taskAssigneeId, setTaskAssigneeId] = useState("");
@@ -67,6 +89,13 @@ export default function CrmRecordActivityComposer({
   const [noteAttachments, setNoteAttachments] = useState<MediaAttachment[]>([]);
   const [fetchedMetadata, setFetchedMetadata] = useState<Record<string, unknown> | null>(null);
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
+
+  /** Tasks from a Lead / Client: assignee rules + picker come from the server (record-task-context). */
+  const isRecordTask = relatedType === "Lead" || relatedType === "Client";
+  const [recordCtx, setRecordCtx] = useState<RecordTaskContext | null>(null);
+  const [recordCtxError, setRecordCtxError] = useState("");
+  const [savingTask, setSavingTask] = useState(false);
+  const recordEntityId = crmRecordIdFromParams(relatedTo);
 
   const reporterOptions = useMemo(
     () => buildCrmUserSearchOptions(crmUsers, { taskAssigneeValues: false }),
@@ -157,6 +186,51 @@ export default function CrmRecordActivityComposer({
   }, []);
 
   useEffect(() => {
+    if (!isRecordTask || activityType !== "Task" || !recordEntityId) return;
+    const token = getCrmAuthToken();
+    if (!token) return;
+    let cancelled = false;
+    setRecordCtxError("");
+    void fetch(
+      `${CRM_API_URL}/crm/activities/record-task-context?relatedType=${relatedType}&relatedTo=${encodeURIComponent(recordEntityId)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await readApiError(r, "Could not load assignee options"));
+        return r.json() as Promise<RecordTaskContext>;
+      })
+      .then((ctx) => {
+        if (cancelled) return;
+        setRecordCtx(ctx);
+        // The task belongs to the record owner unless the caller picks someone else.
+        setTaskAssigneeId((prev) => prev || ctx.defaultAssigneeId || "");
+      })
+      .catch((e) => {
+        if (!cancelled) setRecordCtxError(e instanceof Error ? e.message : "Could not load assignee options");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRecordTask, activityType, relatedType, recordEntityId]);
+
+  const recordAssigneeOptions = useMemo(
+    () =>
+      (recordCtx?.assignees || []).map((a) => ({
+        value: a._id,
+        label: a.roleName ? `${a.label} · ${a.roleName}` : a.label,
+        keywords: a.email,
+      })),
+    [recordCtx],
+  );
+  const pickedRecordAssignee = recordCtx?.assignees.find((a) => a._id === taskAssigneeId);
+  const reassigningRecord =
+    !!recordCtx &&
+    !!taskAssigneeId &&
+    taskAssigneeId !== recordCtx.owner?.id &&
+    !!recordCtx.owner;
+  const claimingFreshRecord = !!recordCtx && recordCtx.unassigned && !!taskAssigneeId;
+
+  useEffect(() => {
     if (activityType !== "Task") {
       setTaskTitle("");
       setTaskDueDate("");
@@ -207,41 +281,81 @@ export default function CrmRecordActivityComposer({
           dueDate: taskDueDate || undefined,
           priority: taskPriority,
         },
-        status: "Open",
+        // Overdue / Escalated are lanes on the board stored as flags; the stored status stays Open.
+        status: taskStatus === "Overdue" || taskStatus === "Escalated" ? "Open" : taskStatus,
       };
-      if (taskReporterId) body.author = taskReporterId;
-      if (taskAssigneeId) {
-        body.assignee = taskAssigneeId;
-        const picked = crmUsers.find(
-          (u) => taskAssigneeOptionValue(u) === taskAssigneeId || u._id === taskAssigneeId,
-        );
-        if (picked) {
-          body.metadata = {
-            ...(body.metadata as Record<string, unknown>),
-            assigneeSource: picked.source || "crm",
-            assigneeName: formatCrmUserLabel(picked),
-            assigneeEmail: picked.email,
-            twobighaAdminId: picked.twobighaAdminId,
-            assigneeRole: picked.roleLabel,
-          };
+      if (taskStatus === "Overdue") {
+        body.metadata = { ...(body.metadata as Record<string, unknown>), markedOverdue: true };
+      } else if (taskStatus === "Escalated") {
+        body.metadata = {
+          ...(body.metadata as Record<string, unknown>),
+          escalated: true,
+          escalatedAt: new Date().toISOString(),
+        };
+      }
+      if (isRecordTask) {
+        // Server validates who may be assigned and keeps the record owner in sync; the reporter is
+        // always the signed-in user so a task cannot be filed under someone else's name.
+        body.assignee = taskAssigneeId || "";
+      } else {
+        if (taskReporterId) body.author = taskReporterId;
+        if (taskAssigneeId) {
+          body.assignee = taskAssigneeId;
+          const picked = crmUsers.find(
+            (u) => taskAssigneeOptionValue(u) === taskAssigneeId || u._id === taskAssigneeId,
+          );
+          if (picked) {
+            body.metadata = {
+              ...(body.metadata as Record<string, unknown>),
+              assigneeSource: picked.source || "crm",
+              assigneeName: formatCrmUserLabel(picked),
+              assigneeEmail: picked.email,
+              twobighaAdminId: picked.twobighaAdminId,
+              assigneeRole: picked.roleLabel,
+            };
+          }
         }
       }
-      const res = await fetch(`${CRM_API_URL}/crm/activities`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(body),
-      });
+      setSavingTask(true);
+      let res: Response;
+      try {
+        res = await fetch(`${CRM_API_URL}/crm/activities`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        });
+      } finally {
+        setSavingTask(false);
+      }
       if (!res.ok) {
-        toast.error("Could not create task");
+        toast.error(await readApiError(res, "Could not create task"));
         return;
       }
       const data = await res.json();
+      if (isRecordTask) {
+        const who = pickedRecordAssignee?.label || recordCtx?.owner?.label;
+        toast.success(
+          reassigningRecord || claimingFreshRecord
+            ? `Task created — ${relatedType.toLowerCase()} assigned to ${who}`
+            : who
+              ? `Task created for ${who}`
+              : "Task created",
+        );
+        // The record owner may have changed with the task — let the page refresh its owner card.
+        window.dispatchEvent(
+          new CustomEvent("crm:record-owner-changed", {
+            detail: { relatedType, relatedTo: recordEntityId },
+          }),
+        );
+      }
       onActivityPosted(data);
       setNewComment("");
       setTaskTitle("");
       setTaskDueDate("");
       setTaskPriority("Medium");
+      setTaskStatus("Open");
       setTaskAssigneeId("");
+      setRecordCtx(null);
       setNoteAttachments([]);
       const uid = String(user?._id || user?.id || "");
       setTaskReporterId(uid && crmUsers.some((u) => u._id === uid) ? uid : "");
@@ -387,7 +501,21 @@ export default function CrmRecordActivityComposer({
               onChange={(e) => setNewComment(e.target.value)}
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-black text-text-muted px-1">Status</label>
+              <select
+                value={taskStatus}
+                onChange={(e) => setTaskStatus(e.target.value)}
+                className="w-full rounded-[var(--radius-md)] border border-border/60 bg-surface-dim/30 px-3 py-2.5 text-xs font-semibold text-text-main outline-none"
+              >
+                <option value="Open">Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Done">Done</option>
+                <option value="Overdue">Overdue</option>
+                <option value="Escalated">Escalated</option>
+              </select>
+            </div>
             <div className="space-y-1.5 max-w-xs">
             <label className="block text-xs font-black text-text-muted px-1">
               Due date
@@ -412,7 +540,50 @@ export default function CrmRecordActivityComposer({
               </select>
             </div>
           </div>
-          {crmUsers.length > 0 ? (
+          {isRecordTask ? (
+            <div className="space-y-2">
+              <label className="block text-xs font-black text-text-muted px-1">Assignee</label>
+              {recordCtxError ? (
+                <p className="rounded-[var(--radius-md)] border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200">
+                  {recordCtxError}
+                </p>
+              ) : !recordCtx ? (
+                <p className="text-xs text-text-muted px-1">Loading assignee options…</p>
+              ) : !recordCtx.canCreate ? (
+                <p className="rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100">
+                  {recordCtx.reason ||
+                    `You cannot create tasks on this ${relatedType.toLowerCase()}.`}
+                </p>
+              ) : (
+                <>
+                  <CrmPersonSearchSelect
+                    value={taskAssigneeId}
+                    onChange={setTaskAssigneeId}
+                    options={recordAssigneeOptions}
+                    emptyLabel={recordCtx.unassigned ? "Leave unassigned" : "Unassigned"}
+                    placeholder="Type a name to search…"
+                    triggerClassName="bg-surface-dim/30"
+                    disabled={!recordCtx.canReassign && recordAssigneeOptions.length <= 1}
+                    allowClear={recordCtx.unassigned}
+                  />
+                  <p className="text-[11px] leading-relaxed text-text-muted px-1">
+                    {recordCtx.unassigned
+                      ? `This ${relatedType.toLowerCase()} has no owner yet. ${
+                          taskAssigneeId
+                            ? `Saving will also assign the ${relatedType.toLowerCase()} to ${pickedRecordAssignee?.label || "this person"}.`
+                            : "Pick someone to assign both the task and the " + relatedType.toLowerCase() + "."
+                        }`
+                      : reassigningRecord
+                        ? `Heads up: this ${relatedType.toLowerCase()} belongs to ${recordCtx.owner?.label}. Saving will reassign the ${relatedType.toLowerCase()} and its open tasks to ${pickedRecordAssignee?.label || "this person"}.`
+                        : recordCtx.canReassign
+                          ? `Defaults to the ${relatedType.toLowerCase()} owner (${recordCtx.owner?.label}). Pick someone else to reassign the ${relatedType.toLowerCase()} too.`
+                          : `Tasks on this ${relatedType.toLowerCase()} go to its owner (${recordCtx.owner?.label}).`}
+                  </p>
+                </>
+              )}
+            </div>
+          ) : null}
+          {!isRecordTask && crmUsers.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="block text-xs font-black text-text-muted px-1">
@@ -446,11 +617,15 @@ export default function CrmRecordActivityComposer({
             <button
               type="button"
               onClick={handlePostActivity}
-              disabled={!taskTitle.trim()}
+              disabled={
+                !taskTitle.trim() ||
+                savingTask ||
+                (isRecordTask && !!recordCtx && !recordCtx.canCreate)
+              }
               className="inline-flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-[var(--radius-md)] hover:bg-primary-dark transition-all shadow-md active:scale-95 text-xs font-semibold disabled:opacity-45 disabled:pointer-events-none"
             >
               <CheckSquare size={15} strokeWidth={2.5} />
-              Save task
+              {savingTask ? "Saving…" : "Save task"}
             </button>
           </div>
         </div>

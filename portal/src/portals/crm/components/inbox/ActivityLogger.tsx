@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
   FileText,
@@ -65,6 +66,17 @@ interface ActivityLoggerProps {
   defaultReporterId?: string;
   /** UI style variant for inputs/buttons */
   variant?: 'hubspot' | 'default';
+  /** Seniors (admin / team lead / manager) may change an existing task's auto-escalation time. */
+  canEditEscalation?: boolean;
+}
+
+/** ISO -> value for <input type="datetime-local"> in the viewer's local time. */
+function toLocalDateTimeInput(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export default function ActivityLogger({
@@ -79,6 +91,7 @@ export default function ActivityLogger({
   crmUsers,
   defaultReporterId,
   variant = 'default',
+  canEditEscalation = false,
 }: ActivityLoggerProps) {
   const [activeTab, setActiveTab] = useState<'Note' | 'Task' | 'Call'>(fixedType || initialData?.type || 'Note');
   const [content, setContent] = useState(initialData?.content || '');
@@ -91,6 +104,9 @@ export default function ActivityLogger({
       ? new Date(initialData.metadata.dueDate).toISOString().split('T')[0]
       : ''
   );
+  const [autoEscalate, setAutoEscalate] = useState(Boolean(initialData?.metadata?.autoEscalate));
+  const [escalateAt, setEscalateAt] = useState(toLocalDateTimeInput(initialData?.metadata?.escalateAt));
+  const escalationLocked = Boolean(initialData?._id) && !canEditEscalation;
   const [status, setStatus] = useState(
     initialData?.status || initialData?.metadata?.status || (statuses && statuses.length > 0 ? statuses[0] : 'Open')
   );
@@ -162,6 +178,19 @@ export default function ActivityLogger({
         markedOverdue: markOverdue,
         escalated: markEscalated,
       };
+      if (!escalationLocked) {
+        if (autoEscalate && escalateAt) {
+          payload.metadata.autoEscalate = true;
+          payload.metadata.escalateAt = new Date(escalateAt).toISOString();
+        } else if (autoEscalate) {
+          toast.error('Pick the date and time when this task should auto-escalate');
+          setLoading(false);
+          return;
+        } else if (initialData?._id) {
+          payload.metadata.autoEscalate = false;
+          payload.metadata.escalateAt = null;
+        }
+      }
       if (markEscalated) {
         payload.escalate = true;
         payload.metadata.escalatedAt = new Date().toISOString();
@@ -376,6 +405,34 @@ export default function ActivityLogger({
                   )}
                 </select>
               </div>
+            </div>
+            <div className="rounded-md border border-[var(--border-color)] p-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-[var(--text-main)]">
+                <input
+                  type="checkbox"
+                  checked={autoEscalate}
+                  disabled={escalationLocked}
+                  onChange={(e) => setAutoEscalate(e.target.checked)}
+                />
+                Auto-escalate to manager at a set date &amp; time
+              </label>
+              {autoEscalate ? (
+                <div className="mt-2">
+                  <input
+                    type="datetime-local"
+                    className={selectClass}
+                    value={escalateAt}
+                    min={initialData?._id ? undefined : toLocalDateTimeInput(new Date().toISOString())}
+                    disabled={escalationLocked}
+                    onChange={(e) => setEscalateAt(e.target.value)}
+                  />
+                </div>
+              ) : null}
+              {escalationLocked ? (
+                <p className="mt-1.5 text-xs text-[var(--text-muted)]">
+                  Only a team lead, manager or admin can change the escalation time.
+                </p>
+              ) : null}
             </div>
             {crmUsers && (
               <div className="grid grid-cols-2 gap-4">

@@ -154,6 +154,8 @@ import { LeadEngagementAutomationService } from './automation/lead-engagement-au
 import { LeadEngagementAutomationController } from './automation/lead-engagement-automation.controller';
 import { DuplicatesService } from './admin/duplicates.service';
 import { DuplicatesController } from './admin/duplicates.controller';
+import { ContactDuplicatesService } from './admin/contact-duplicates.service';
+import { ContactDuplicatesController } from './admin/contact-duplicates.controller';
 import { UsersModule } from '../users/users.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { CrmProposal, CrmProposalSchema } from './schemas/proposal.schema';
@@ -311,6 +313,8 @@ import { SubscriptionsController } from './subscriptions/subscriptions.controlle
 import { TwoBighaSubscriptionsService } from './subscriptions/twobigha-subscriptions.service';
 import { PmActivityLogService } from './subscriptions/pm-activity-log.service';
 import { PmTaskBridgeService } from './tasks/pm-task-bridge.service';
+import { CrmRecordTasksService } from './tasks/crm-record-tasks.service';
+import { TaskAutoEscalationService } from './tasks/task-auto-escalation.service';
 import {
   SubscriptionNotificationTracker,
   SubscriptionNotificationTrackerSchema,
@@ -440,6 +444,7 @@ import {
     WorkflowsController,
     LeadEngagementAutomationController,
     DuplicatesController,
+    ContactDuplicatesController,
     ProposalsController,
     ProposalBlocksController,
     ProposalBrandingController,
@@ -464,6 +469,7 @@ import {
     LeadEngagementAutomationService,
     WorkflowsService,
     DuplicatesService,
+    ContactDuplicatesService,
     ProposalsService,
     ProposalExportService,
     ProposalBlocksService,
@@ -547,6 +553,8 @@ import {
     TwoBighaSubscriptionsService,
     PmActivityLogService,
     PmTaskBridgeService,
+    CrmRecordTasksService,
+    TaskAutoEscalationService,
     TwoBighaPmWorkflowService,
     {
       provide: APP_INTERCEPTOR,

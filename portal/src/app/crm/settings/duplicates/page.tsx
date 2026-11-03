@@ -113,7 +113,7 @@ export default function CrmDuplicatesSettingsPage() {
     }
     if (
       !confirm(
-        `Merge ${dupIds.length} duplicate ${entityType}(s) into the master? This cannot be undone.`,
+        `Merge ${dupIds.length} duplicate ${entityType}(s) into the master?${entityType === "contact" ? " The duplicates are moved to trash." : " This cannot be undone."}`,
       )
     ) {
       return;

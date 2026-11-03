@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../../packages/ui/src";
 
 /* Class-based dark mode (next-themes sets `class="dark"` on <html>). Default Tailwind v4 uses prefers-color-scheme only. */
 @custom-variant dark (&:where(.dark, .dark *));

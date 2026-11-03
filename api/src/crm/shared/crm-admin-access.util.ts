@@ -227,3 +227,37 @@ export function isCrmTopAdmin(user?: any, crmDbUser?: any): boolean {
   const jwtRoleKey = normalizeCrmRoleKey(user?.role);
   return CRM_TOP_ADMIN_ROLE_KEYS.has(jwtRoleKey);
 }
+
+const CRM_TASK_ESCALATION_ROLE_KEYS = new Set([
+  'MANAGER',
+  'TEAMLEAD',
+  'TEAMLEADMANAGER',
+  'SENIORMEMBER',
+]);
+
+/**
+ * Who may change a task's auto-escalation deadline: workspace admins plus the
+ * Team Lead / Manager tier (`:read:team` scope). Creators and assignees without
+ * that seniority (agents, team members) never qualify just by owning the task.
+ */
+export function canManageTaskEscalation(user?: any): boolean {
+  if (!user) return false;
+  if (hasCrmFullDataAccess(user)) return true;
+  const perms = jwtCrmPermissionSet(user);
+  const dbPerms = permissionNamesFromDbUser(user.crmDbUser);
+  if (
+    [...perms, ...dbPerms].some(
+      (p) =>
+        p === 'workspace-team:read' ||
+        p === 'leads:read:team' ||
+        p === 'contacts:read:team' ||
+        p === 'clients:read:team',
+    )
+  ) {
+    return true;
+  }
+  const db = user.crmDbUser as { roleId?: unknown; role?: unknown } | undefined;
+  return [user.role, db?.roleId, db?.role].some((r) =>
+    CRM_TASK_ESCALATION_ROLE_KEYS.has(normalizeCrmRoleKey(r).replace(/[^A-Z0-9]/g, '')),
+  );
+}

@@ -14,6 +14,8 @@ type Props = {
   embedded?: boolean;
   /** When provided together with `canReassign`, shows a "Reassign" control that PATCHes `leadOwner` on this lead. Backend enforces the same ownership rule as bulk-assign (owners reassign their own leads; admins reassign any). */
   leadId?: string;
+  /** Client twin of `leadId`: reassigns through PATCH /crm/clients/:id/assign. */
+  clientId?: string;
   canReassign?: boolean;
   onReassigned?: (newOwner: string) => void;
 };
@@ -23,9 +25,11 @@ export default function CrmRecordOwnerCard({
   title = "Owner",
   embedded = false,
   leadId,
+  clientId,
   canReassign = false,
   onReassigned,
 }: Props) {
+  const recordId = leadId || clientId;
   const owner = String(ownerLabel || "").trim() || "Unassigned";
   const initial = owner.charAt(0).toUpperCase();
 
@@ -34,21 +38,30 @@ export default function CrmRecordOwnerCard({
   const [saving, setSaving] = useState(false);
 
   const saveReassign = async () => {
-    if (!leadId || !picked) return;
+    if (!recordId || !picked) return;
     setSaving(true);
     try {
-      // Send the user id — the server resolves it to the owner label and re-checks the team scope.
-      const res = await fetch(`${CRM_API_URL}/crm/leads/${leadId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getCrmAuthToken() || ""}`,
+      // Send the user id — the server resolves it and re-checks the team scope.
+      // Open tasks on the record follow the new owner (server side).
+      const res = await fetch(
+        clientId ? `${CRM_API_URL}/crm/clients/${clientId}/assign` : `${CRM_API_URL}/crm/leads/${leadId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getCrmAuthToken() || ""}`,
+          },
+          body: JSON.stringify(clientId ? { assignee: picked._id } : { leadOwner: picked._id }),
         },
-        body: JSON.stringify({ leadOwner: picked._id }),
-      });
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Failed to reassign");
-      toast.success(`Reassigned to ${picked.label}`);
+      toast.success(`Reassigned to ${picked.label} — open tasks moved with it`);
+      window.dispatchEvent(
+        new CustomEvent("crm:record-owner-changed", {
+          detail: { relatedType: clientId ? "Client" : "Lead", relatedTo: recordId },
+        }),
+      );
       setOpen(false);
       onReassigned?.(picked.label);
     } catch (err) {
@@ -70,7 +83,7 @@ export default function CrmRecordOwnerCard({
         >
           {title}
         </h3>
-        {canReassign && leadId ? (
+        {canReassign && recordId ? (
           <button
             type="button"
             onClick={() => {

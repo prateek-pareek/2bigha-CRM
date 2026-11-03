@@ -408,7 +408,7 @@ const crmGroups = [
             { name: 'Contacts', href: '/crm/contacts', icon: CrmNavIcon.Contacts, permission: 'contacts:read' },
             // Hidden for now — do not remove. Re-enable by uncommenting.
             // { name: 'Companies', href: '/crm/organizations', icon: CrmNavIcon.Companies, permission: 'organizations:read' },
-            { name: 'Clients', href: '/crm/clients', icon: CrmNavIcon.UserCheck, permission: 'clients:read', adminOnly: true },
+            { name: 'Clients', href: '/crm/clients', icon: CrmNavIcon.UserCheck, permission: 'clients:read' },
             { name: 'Segments', href: '/crm/segments', icon: CrmNavIcon.Layers, permission: 'leads:read' },
         ],
     },
