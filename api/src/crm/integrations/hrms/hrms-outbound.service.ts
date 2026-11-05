@@ -1,4 +1,10 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import axios, { AxiosInstance } from 'axios';
@@ -185,6 +191,31 @@ export class HrmsOutboundService {
       const msg = err?.response?.data?.message || err?.message || 'HRMS webhook failed';
       this.logger.warn(`HRMS push ${eventType} failed: ${msg}`);
       return { ok: false, detail: msg };
+    }
+  }
+
+  /** "Sync from HRMS": ask HRMS to push every CRM-mirrored HRMS role to this CRM. */
+  async requestHrmsRolePush(): Promise<{ total: number; synced: number; failed: number }> {
+    if (!this.isConfigured()) {
+      throw new ServiceUnavailableException('HRMS integration is not configured (HRMS_API_URL / HRMS_WEBHOOK_SECRET).');
+    }
+    const secret = this.secret();
+    try {
+      const { data } = await this.http.post('/api/webhooks/crm/roles/push-all', {}, {
+        headers: { 'x-crm-secret': secret },
+        timeout: 60000,
+      });
+      return { total: data?.total ?? 0, synced: data?.synced ?? 0, failed: data?.failed ?? 0 };
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const base = String(this.http.defaults.baseURL || '');
+      const hint =
+        status === 401 ? 'HRMS rejected the shared secret (HRMS_WEBHOOK_SECRET must equal HRMS HRMS_TO_CRM_WEBHOOK_SECRET)'
+        : status === 404 ? 'HRMS has no roles/push-all route yet (deploy the latest HRMS build)'
+        : status ? `HRMS answered HTTP ${status}`
+        : `HRMS unreachable (${err?.code || err?.message || 'network error'}) - check HRMS_API_URL`;
+      this.logger.warn(`Sync from HRMS failed at ${base}: ${hint}`);
+      throw new BadGatewayException(`${hint}. HRMS_API_URL=${base}`);
     }
   }
 
