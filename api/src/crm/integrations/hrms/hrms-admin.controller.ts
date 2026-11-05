@@ -64,8 +64,8 @@ export class HrmsAdminController {
   /** "Sync from HRMS": HRMS pushes its CRM-mirrored roles into this CRM. */
   @Post('sync-roles')
   @Permissions('settings:admin')
-  syncRolesFromHrms() {
-    return this.hrmsOutbound.requestHrmsRolePush();
+  syncRolesFromHrms(@Body() body: { includeAll?: boolean }) {
+    return this.hrmsOutbound.requestHrmsRolePush(!!body?.includeAll);
   }
 
   @Post('availability/revert-stale')

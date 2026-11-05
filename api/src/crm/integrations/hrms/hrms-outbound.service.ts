@@ -195,13 +195,13 @@ export class HrmsOutboundService {
   }
 
   /** "Sync from HRMS": ask HRMS to push every CRM-mirrored HRMS role to this CRM. */
-  async requestHrmsRolePush(): Promise<{ total: number; synced: number; failed: number }> {
+  async requestHrmsRolePush(includeAll = false): Promise<{ total: number; synced: number; failed: number }> {
     if (!this.isConfigured()) {
       throw new ServiceUnavailableException('HRMS integration is not configured (HRMS_API_URL / HRMS_WEBHOOK_SECRET).');
     }
     const secret = this.secret();
     try {
-      const { data } = await this.http.post('/api/webhooks/crm/roles/push-all', {}, {
+      const { data } = await this.http.post('/api/webhooks/crm/roles/push-all', { includeAll }, {
         headers: { 'x-crm-secret': secret },
         timeout: 60000,
       });

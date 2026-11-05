@@ -2166,6 +2166,99 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
     }
   }, []);
 
+  /** Shared hot/warm/cold picker so card, board and list views stay consistent. */
+  const renderLeadTemperature = (lead: Lead) => (
+    <CrmLeadTemperatureCell
+      value={lead.leadTemperature}
+      editable={canWrite}
+      onChange={(next) => handleTemperatureChange(lead._id, next)}
+    />
+  );
+
+  /** Call / WhatsApp / Property / Farm icons — same set as the list-row hover bar. */
+  const renderLeadQuickIcons = (lead: Lead) => (
+    <>
+      {(lead.mobileNo || lead.phone) ? (
+        <CrmHoverActionIcon
+          icon={<CrmIcon.PhoneCall size={14} />}
+          label="Call"
+          value={(lead.mobileNo || lead.phone)!}
+          tone="primary"
+          onClick={() => setCallLead(lead)}
+          className="h-7 w-7 shrink-0"
+        />
+      ) : null}
+      {contactWhatsappUrl(lead) ? (
+        <CrmHoverActionIcon
+          icon={<CrmNavIcon.WhatsApp size={14} />}
+          label="WhatsApp"
+          value={(lead.mobileNo || lead.phone)!}
+          tone="whatsapp"
+          onClick={() => openLeadWhatsApp(lead)}
+          className="h-7 w-7 shrink-0"
+        />
+      ) : null}
+      <CrmHoverActionIcon
+        icon={<Building2 size={12} />}
+        label="Add Property"
+        value={
+          leadListingCounts[lead._id]?.propertyCount
+            ? `${leadListingCounts[lead._id].propertyCount} listed`
+            : 'Add property'
+        }
+        tone="primary"
+        onClick={() => setPropertyLead(lead)}
+        className="h-7 w-7 shrink-0"
+      />
+      <CrmHoverActionIcon
+        icon={<MapPin size={12} />}
+        label="Add Farm"
+        value={
+          leadListingCounts[lead._id]?.farmCount
+            ? `${leadListingCounts[lead._id].farmCount} listed`
+            : 'Add farm'
+        }
+        tone="primary"
+        onClick={() => setFarmLead(lead)}
+        className="h-7 w-7 shrink-0"
+      />
+    </>
+  );
+
+  /** Full ⋮ menu (identical to the list view) for cards and board cards. */
+  const renderLeadActionMenu = (lead: Lead) => (
+    <CrmTableActionMenu
+      menuAlign="right"
+      className="shrink-0"
+      onView={() => router.push(getLeadUrl(lead._id, { readonly: true }))}
+      onEdit={() => router.push(getLeadUrl(lead._id, { edit: true }))}
+      onNotes={() => setActivityLead(lead)}
+      onSetActivity={() => setCallActivityLead(lead)}
+      onCallHistory={() => setCallHistoryLead(lead)}
+      onUpdateHistory={() => setUpdateHistoryLead(lead)}
+      onAddProperty={() => setPropertyLead(lead)}
+      onAddFarm={() => setFarmLead(lead)}
+      onReassign={
+        canAssign
+          ? () => {
+              setSelectedIds(new Set([lead._id]));
+              setAssignOwner(null);
+              setAssignOpen(true);
+            }
+          : undefined
+      }
+      onTransfer={
+        canAssign
+          ? () => {
+              setTransferOwnerName('');
+              setTransferLeadTarget(lead);
+            }
+          : undefined
+      }
+      onDelete={canDelete ? () => handleDelete(lead._id) : undefined}
+    />
+  );
+
   const renderCell = useCallback((lead: Lead, key: string) => {
     switch (key) {
       case 'leadTemperature':
@@ -2846,58 +2939,10 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                                   >
                                     <Check size={10} strokeWidth={4} className={selectedIds.has(lead._id) ? 'opacity-100' : 'opacity-40 text-[var(--text-muted)]'} />
                                   </button>
-                                  {(lead.mobileNo || lead.phone) ? (
-                                    <CrmHoverActionIcon
-                                      icon={<CrmIcon.PhoneCall size={14} />}
-                                      label="Call"
-                                      value={(lead.mobileNo || lead.phone)!}
-                                      tone="primary"
-                                      onClick={() => setCallLead(lead)}
-                                      className="h-7 w-7 border-transparent shadow-none hover:bg-emerald-50 hover:text-emerald-600 flex-shrink-0"
-                                    />
-                                  ) : null}
-                                  {contactWhatsappUrl(lead) ? (
-                                    <CrmHoverActionIcon
-                                      icon={<CrmNavIcon.WhatsApp size={14} />}
-                                      label="WhatsApp"
-                                      value={(lead.mobileNo || lead.phone)!}
-                                      tone="whatsapp"
-                                      onClick={() => openLeadWhatsApp(lead)}
-                                      className="h-7 w-7 border-transparent shadow-none hover:bg-green-50 hover:text-green-600 flex-shrink-0"
-                                    />
-                                  ) : null}
-                                  <CrmTableActionMenu
-                                    menuAlign="right"
-                                    onView={() => router.push(getLeadUrl(lead._id, { readonly: true }))}
-                                    onNotes={() => setActivityLead(lead)}
-                                    onSetActivity={() => setCallActivityLead(lead)}
-                                    onCallHistory={() => setCallHistoryLead(lead)}
-                                    onUpdateHistory={() => setUpdateHistoryLead(lead)}
-                                    onAddProperty={() => setPropertyLead(lead)}
-                                    onAddFarm={() => setFarmLead(lead)}
-                                    onReassign={
-                                      canAssign
-                                        ? () => {
-                                            setSelectedIds(new Set([lead._id]));
-                                            setAssignOwner(null);
-                                            setAssignOpen(true);
-                                          }
-                                        : undefined
-                                    }
-                                    onTransfer={
-                                      canAssign
-                                        ? () => {
-                                            setTransferOwnerName('');
-                                            setTransferLeadTarget(lead);
-                                          }
-                                        : undefined
-                                    }
-                                    onDelete={
-                                      canDelete
-                                        ? () => handleDelete(lead._id)
-                                        : undefined
-                                    }
-                                  />
+                                  <div className="ml-1 flex items-center gap-1 rounded-md bg-white px-1 py-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.12)]">
+                                    {renderLeadQuickIcons(lead)}
+                                    {renderLeadActionMenu(lead)}
+                                  </div>
                                 </div>
                               }
                             />
@@ -2920,9 +2965,12 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                             </CrmKanbanMetaList>
                             <CrmKanbanCardFooter
                               left={
-                                <CrmKanbanAvatar size="sm">
-                                  {(lead.firstName?.[0] || '?').toUpperCase()}
-                                </CrmKanbanAvatar>
+                                <>
+                                  <CrmKanbanAvatar size="sm">
+                                    {(lead.firstName?.[0] || '?').toUpperCase()}
+                                  </CrmKanbanAvatar>
+                                  {renderLeadTemperature(lead)}
+                                </>
                               }
                               actions
                             />
@@ -2988,27 +3036,20 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                           }}
                           onClick={() => router.push(getLeadUrl(lead._id))}
                           actions={
-                            <CrmTableActionMenu
-                              onEdit={() => router.push(getLeadUrl(lead._id, { edit: true }))}
-                              onEmail={lead.email ? () => setEmailLead(lead) : undefined}
-                              onCall={
-                                (lead.mobileNo || lead.phone)
-                                  ? () => setCallLead(lead)
-                                  : undefined
-                              }
-                              onWhatsApp={
-                                contactWhatsappUrl(lead)
-                                  ? () => openLeadWhatsApp(lead)
-                                  : undefined
-                              }
-                              onDelete={
-                                canDelete
-                                  ? () => handleDelete(lead._id)
-                                  : undefined
-                              }
-                            />
+                            <div className="flex items-center">
+                              {/* Floats over the card header on hover so the title keeps its width. */}
+                              <div className="pointer-events-none absolute right-[52px] top-4 z-10 flex items-center gap-1 rounded-md bg-white px-1 py-0.5 opacity-0 shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                                {renderLeadQuickIcons(lead)}
+                              </div>
+                              {renderLeadActionMenu(lead)}
+                            </div>
                           }
-                          headTrailing={<CrmListStatusBadge label={stageLabel} />}
+                          headTrailing={
+                            <>
+                              <CrmListStatusBadge label={stageLabel} />
+                              {renderLeadTemperature(lead)}
+                            </>
+                          }
                           meta={[
                             { key: 'email', icon: <CrmIcon.Mail size={15} />, label: lead.email || '—' },
                             {

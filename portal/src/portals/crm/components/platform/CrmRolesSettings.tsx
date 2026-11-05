@@ -305,7 +305,7 @@ export function CrmRolesSettings() {
   const syncFromHrms = async () => {
     setSyncing(true);
     try {
-      const { data } = await api.post("/integrations/hrms/sync-roles");
+      const { data } = await api.post("/integrations/hrms/sync-roles", { includeAll: true });
       await load();
       if (data?.failed) toast.warning(`Synced ${data.synced}/${data.total} HRMS roles (${data.failed} failed)`);
       else toast.success(`Synced ${data?.synced ?? 0}/${data?.total ?? 0} roles from HRMS`);
@@ -319,8 +319,9 @@ export function CrmRolesSettings() {
   if (!canManage) return null;
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5 pb-8 md:pb-10">
-      <div>
+    <div className="mx-auto w-full max-w-[1600px] space-y-5 pb-8 md:pb-10">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
         <h1 className="text-xl font-medium text-text-main tracking-tight">CRM Role Templates</h1>
         <p className="text-sm text-text-muted mt-0.5">
           Each role is scoped to one workspace (2Bigha, PM or Legal) and sees only its own
@@ -328,34 +329,32 @@ export function CrmRolesSettings() {
           workspace. System roles come from the requirement doc and can be tuned but not
           renamed or deleted. Role changes here are mirrored to the HRMS Role Manager.
         </p>
+        </div>
+        <Button
+          size="sm"
+          onClick={syncFromHrms}
+          disabled={syncing}
+          title="Import roles from the HRMS Role Manager into this CRM"
+          className="shrink-0 gap-2 self-start"
+        >
+          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "Syncing…" : "Sync from HRMS"}
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] gap-4 items-start">
         <div className="rounded-[3px] border border-border bg-white p-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Roles</p>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={syncFromHrms}
-                disabled={syncing}
-                title="Pull roles mirrored from HRMS Role Manager"
-                className="gap-1.5"
-              >
-                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                Sync from HRMS
-              </Button>
-              <Button size="sm" variant="outline" onClick={resetForm} className="gap-1.5">
-                <Plus className="h-3.5 w-3.5" />
-                New
-              </Button>
-            </div>
+            <Button size="sm" variant="outline" onClick={resetForm} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              New
+            </Button>
           </div>
           {loading ? (
             <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-text-muted" /></div>
           ) : (
-            <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-1">
               {roles.map((r) => (
                 <button
                   key={r._id}
@@ -397,7 +396,7 @@ export function CrmRolesSettings() {
           )}
         </div>
 
-        <div className="rounded-[3px] border border-border bg-white p-4 lg:col-span-2 space-y-4">
+        <div className="rounded-[3px] border border-border bg-white p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <input
               value={form.name}
