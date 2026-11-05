@@ -110,7 +110,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           # GITHUB_TOKEN is only valid for this run - fine here since the pull
           # happens synchronously, right after the push, in the same run.
-          envs: GHCR_TOKEN,GHCR_ACTOR,HRMS_API_URL,HRMS_PORTAL_URL,HRMS_WEBHOOK_SECRET,HRMS_SYNC_PLACEHOLDER_PASSWORD
+          envs: GHCR_TOKEN,GHCR_ACTOR,HRMS_API_URL,HRMS_WEBHOOK_SECRET,HRMS_PORTAL_URL,HRMS_SYNC_PLACEHOLDER_PASSWORD
           script: |
             set -e
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
@@ -121,6 +121,23 @@ jobs:
               exit 1
             fi
             cd "$DEPLOY_PATH"
+            # Persist HRMS sync settings into the VPS .env (docker-compose reads it). Only set when
+            # provided; a trailing "/api" is stripped (the backend adds /api/... itself).
+            upsert_env() {
+              key="$1"; val="$2"
+              [ -z "$val" ] && return 0
+              touch .env
+              tmp="$(mktemp)"
+              grep -v "^${key}=" .env > "$tmp" || true
+              printf '%s=%s\n' "$key" "$val" >> "$tmp"
+              cat "$tmp" > .env
+              rm -f "$tmp"
+            }
+            hrms_url="${HRMS_API_URL%/}"; hrms_url="${hrms_url%/api}"
+            upsert_env HRMS_API_URL "$hrms_url"
+            upsert_env HRMS_WEBHOOK_SECRET "$HRMS_WEBHOOK_SECRET"
+            upsert_env HRMS_PORTAL_URL "${HRMS_PORTAL_URL%/}"
+            upsert_env HRMS_SYNC_PLACEHOLDER_PASSWORD "$HRMS_SYNC_PLACEHOLDER_PASSWORD"
             echo "Deploying in directory: $(pwd)"
             git fetch origin main && git reset --hard origin/main
             # This VPS already runs a shared Traefik (traefik-traefik-1, network
@@ -171,8 +188,8 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_ACTOR: ${{ github.actor }}
-          # HRMS <-> CRM sync (repository or "production" environment settings).
+          # HRMS <-> CRM sync. Secret or Variable both work; written into the VPS .env below.
           HRMS_API_URL: ${{ vars.HRMS_API_URL }}
+          HRMS_WEBHOOK_SECRET: ${{ secrets.HRMS_WEBHOOK_SECRET || vars.HRMS_WEBHOOK_SECRET }}
           HRMS_PORTAL_URL: ${{ vars.HRMS_PORTAL_URL }}
-          HRMS_WEBHOOK_SECRET: ${{ secrets.HRMS_WEBHOOK_SECRET }}
-          HRMS_SYNC_PLACEHOLDER_PASSWORD: ${{ vars.HRMS_SYNC_PLACEHOLDER_PASSWORD }}
+          HRMS_SYNC_PLACEHOLDER_PASSWORD: ${{ secrets.HRMS_SYNC_PLACEHOLDER_PASSWORD || vars.HRMS_SYNC_PLACEHOLDER_PASSWORD }}

@@ -34,7 +34,11 @@ export class HrmsOutboundService {
     private readonly platformUserModel: Model<UserDocument>,
   ) {
     const baseURL = process.env.HRMS_API_URL || 'http://127.0.0.1:4000';
-    this.http = axios.create({ baseURL: baseURL.replace(/\/$/, ''), timeout: 15000 });
+    // Paths already start with /api, so tolerate HRMS_API_URL set with a trailing /api.
+    this.http = axios.create({
+      baseURL: baseURL.trim().replace(/\/+$/, '').replace(/\/api$/i, ''),
+      timeout: 15000,
+    });
   }
 
   private secret(): string {
