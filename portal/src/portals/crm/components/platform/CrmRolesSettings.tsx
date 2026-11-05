@@ -2,7 +2,8 @@
 
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Save, Trash2, Loader2 } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import api from "@/lib/crm/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -84,6 +85,7 @@ export function CrmRolesSettings() {
   const [roles, setRoles] = useState<RoleDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("crm");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -300,6 +302,20 @@ export function CrmRolesSettings() {
     }
   };
 
+  const syncFromHrms = async () => {
+    setSyncing(true);
+    try {
+      const { data } = await api.post("/integrations/hrms/sync-roles");
+      await load();
+      if (data?.failed) toast.warning(`Synced ${data.synced}/${data.total} HRMS roles (${data.failed} failed)`);
+      else toast.success(`Synced ${data?.synced ?? 0}/${data?.total ?? 0} roles from HRMS`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to sync roles from HRMS");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (!canManage) return null;
 
   return (
@@ -318,10 +334,23 @@ export function CrmRolesSettings() {
         <div className="rounded-[3px] border border-border bg-white p-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Roles</p>
-            <Button size="sm" variant="outline" onClick={resetForm} className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              New
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={syncFromHrms}
+                disabled={syncing}
+                title="Pull roles mirrored from HRMS Role Manager"
+                className="gap-1.5"
+              >
+                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Sync from HRMS
+              </Button>
+              <Button size="sm" variant="outline" onClick={resetForm} className="gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                New
+              </Button>
+            </div>
           </div>
           {loading ? (
             <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-text-muted" /></div>
