@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
-import CrmTeammatePicker, { type CrmAssignableUser } from "./CrmTeammatePicker";
+import CrmTeammatePicker, { type CrmAssignableUser, type CrmLeadWorkspace } from "./CrmTeammatePicker";
 import AssignmentResultBanner, {
   assignmentErrorResult,
   type AssignmentResult,
@@ -22,6 +22,8 @@ type Props = {
   clientId?: string;
   canReassign?: boolean;
   onReassigned?: (newOwner: string) => void;
+  /** Lead's workspace — the Reassign picker lists only people who can open it. */
+  leadWorkspace?: CrmLeadWorkspace;
 };
 
 export default function CrmRecordOwnerCard({
@@ -32,6 +34,7 @@ export default function CrmRecordOwnerCard({
   clientId,
   canReassign = false,
   onReassigned,
+  leadWorkspace,
 }: Props) {
   const recordId = leadId || clientId;
   const owner = String(ownerLabel || "").trim() || "Unassigned";
@@ -145,6 +148,8 @@ export default function CrmRecordOwnerCard({
               if (result?.status === "error") setResult(null);
             }}
             currentOwnerLabel={ownerLabel}
+            requireLeadAccess={!clientId}
+            leadWorkspace={clientId ? undefined : leadWorkspace}
           />
           {result?.status === "error" ? (
             <AssignmentResultBanner result={result} compact />

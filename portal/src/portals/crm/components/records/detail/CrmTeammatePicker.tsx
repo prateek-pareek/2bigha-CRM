@@ -28,9 +28,32 @@ type Props = {
   onChange: (user: CrmAssignableUser | null) => void;
   /** Marks the record's current owner in the list. */
   currentOwnerLabel?: string | null;
+  /**
+   * Lead workspace being assigned (2Bigha / PROPERTY_MGMT / LEGAL): only people whose role
+   * sees leads of that workspace are listed. Omit when the selection may span workspaces.
+   */
+  leadWorkspace?: CrmLeadWorkspace;
+  /**
+   * Default true: list only people who can open Leads (a lead can't go to someone who
+   * can't see it). Pass false for non-lead records that reuse this picker (clients).
+   */
+  requireLeadAccess?: boolean;
   pageSize?: number;
   className?: string;
 };
+
+export type CrmLeadWorkspace = "2Bigha" | "PROPERTY_MGMT" | "LEGAL";
+
+/** Workspace a lead belongs to — mirror of the API's `leadWorkspace()`. */
+export function crmLeadWorkspaceOf(
+  lead?: { module?: unknown; leadVertical?: unknown } | null,
+): CrmLeadWorkspace {
+  if (lead?.module === "PROPERTY_MGMT" || lead?.leadVertical === "property_management") {
+    return "PROPERTY_MGMT";
+  }
+  if (lead?.module === "LEGAL") return "LEGAL";
+  return "2Bigha";
+}
 
 const SEARCH_DEBOUNCE_MS = 250;
 /** Teammates per page — the pager only appears once there are more than this many. */
@@ -45,6 +68,8 @@ export default function CrmTeammatePicker({
   value,
   onChange,
   currentOwnerLabel,
+  leadWorkspace,
+  requireLeadAccess = true,
   pageSize = TEAMMATES_PER_PAGE,
   className,
 }: Props) {
@@ -69,6 +94,8 @@ export default function CrmTeammatePicker({
     setError(null);
     const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
     if (query) params.set("search", query);
+    if (!requireLeadAccess) params.set("leadAccess", "0");
+    else if (leadWorkspace) params.set("workspace", leadWorkspace);
     void fetch(`${CRM_API_URL}/crm/leads/assignable-users?${params}`, {
       headers: { Authorization: `Bearer ${getCrmAuthToken() || ""}` },
     })
@@ -89,7 +116,7 @@ export default function CrmTeammatePicker({
     return () => {
       cancelled = true;
     };
-  }, [query, page, pageSize]);
+  }, [query, page, pageSize, leadWorkspace, requireLeadAccess]);
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -104,7 +131,9 @@ export default function CrmTeammatePicker({
     ? `No teammates match "${query}".`
     : data?.tier === "team"
       ? "No one reports to you yet — ask an admin to set your team."
-      : "No teammates available.";
+      : requireLeadAccess
+        ? "No teammates with access to these leads."
+        : "No teammates available.";
 
   return (
     <div className={cn("space-y-2", className)}>

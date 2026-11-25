@@ -338,27 +338,40 @@ export class CrmSegmentsService {
     const filter: Record<string, unknown> =
       clauses.length === 1 ? clauses[0] : { $and: clauses };
 
-    // Owners losing leads to this assignment (read before the write) — for their notice.
-    const previousOwners = (await this.leadModel
-      .distinct('leadOwner', {
-        $and: [filter, { leadOwner: { $ne: ownerName } }],
-      } as Record<string, any>)
-      .exec()
-      .catch(() => [])) as Array<string | null | undefined>;
+    // Leads about to change hands (read before the write): their workspaces decide who may
+    // own them, and their current owners get a "reassigned" notice.
+    const targets = (await this.leadModel
+      .find(filter as Record<string, any>)
+      .select('leadOwner module leadVertical')
+      .lean()
+      .exec()) as Array<{
+      leadOwner?: unknown;
+      module?: unknown;
+      leadVertical?: unknown;
+    }>;
+
+    // Same rule as every other lead hand-off: the owner must be a real user who can open
+    // Leads in these workspaces (tier / team scope too when the actor holds `leads:assign`).
+    const assignee = await this.crmService.assertLeadAssignee(
+      user,
+      ownerName,
+      targets,
+    );
+    const ownerLabel = assignee.label || ownerName;
 
     const result = await this.leadModel
       .updateMany(filter as Record<string, any>, {
-        $set: { leadOwner: ownerName },
+        $set: { leadOwner: ownerLabel },
       })
       .exec();
 
     const modified = result.modifiedCount ?? 0;
     if (modified > 0) {
       this.crmService.notifyLeadsBulkAssigned({
-        ownerLabel: ownerName,
+        ownerLabel,
         count: modified,
-        previousOwners: previousOwners.map((p) =>
-          typeof p === 'string' ? p : '',
+        previousOwners: targets.map((t) =>
+          typeof t.leadOwner === 'string' ? t.leadOwner : '',
         ),
         user,
         action: 'segment_assign',
@@ -367,7 +380,7 @@ export class CrmSegmentsService {
 
     return {
       segmentId: id,
-      ownerName,
+      ownerName: ownerLabel,
       scope,
       requested: targetIds.length,
       matched: result.matchedCount ?? 0,

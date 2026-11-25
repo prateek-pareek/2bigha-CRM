@@ -8,7 +8,16 @@ import {
   hasCrmFullDataAccess,
   jwtCrmPermissionSet,
 } from './crm-admin-access.util';
-import { CRM_ROLE_MODULE_ALL, resolveRoleModule } from './crm-workspace-module.util';
+import {
+  CRM_ROLE_MODULE_ALL,
+  type CrmWorkspaceModule,
+  resolveRoleModule,
+} from './crm-workspace-module.util';
+import {
+  crmLeadAccessFor,
+  type CrmLeadAccess,
+  workspaceSeesLeads,
+} from './crm-effective-access.util';
 
 export type CrmAssignModuleKey = 'leads' | 'legal';
 
@@ -44,6 +53,27 @@ export type AssignableUsersPage = {
   page: number;
   limit: number;
   tier: CrmAssignTier;
+};
+
+/** Workspace names for assignment error messages. */
+const WORKSPACE_LABEL: Record<string, string> = {
+  '2Bigha': '2Bigha',
+  PROPERTY_MGMT: 'Property Management',
+  LEGAL: 'Legal',
+};
+
+/** HRMS fields the lead-access check needs (mirrors what JwtStrategy reads). */
+const HRMS_ACCESS_FIELDS =
+  '_id firstName lastName email role roleId useRoleOverrides permissions permittedTools crmPermissions isActive';
+
+export type AssertAssigneeOptions = {
+  /**
+   * Leads only: the assignee must be able to open the Leads module (same check as
+   * RbacGuard for `leads:read` / `pm-leads:read`) ...
+   */
+  requireLeadAccess?: boolean;
+  /** ... and their role's workspace must see leads of every one of these workspaces. */
+  leadWorkspaces?: CrmWorkspaceModule[];
 };
 
 /** Page-size ceiling of the Super Admin assignee picker. */
@@ -150,7 +180,14 @@ export class CrmAssignmentPolicyService {
   async assignableUsers(
     moduleKey: CrmAssignModuleKey,
     actor: any,
-    opts: { search?: string; page?: unknown; limit?: unknown } = {},
+    opts: {
+      search?: string;
+      page?: unknown;
+      limit?: unknown;
+      /** Only people who can open Leads (lead pickers) — optionally of one lead workspace. */
+      requireLeadAccess?: boolean;
+      leadWorkspace?: CrmWorkspaceModule;
+    } = {},
   ): Promise<AssignableUsersPage> {
     const tier = this.assignTier(moduleKey, actor);
     const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
@@ -181,6 +218,36 @@ export class CrmAssignmentPolicyService {
     }
 
     const filter = and.length === 1 ? and[0] : { $and: and };
+    if (opts.requireLeadAccess) {
+      // Lead access lives in CRM roles (another DB), so it can't be a Mongo filter on
+      // `users`: load the candidates, keep those who can open Leads, then page in memory.
+      const candidates = (await this.hrmsUserModel
+        .find(filter)
+        .select(HRMS_ACCESS_FIELDS)
+        .populate('roleId')
+        .sort({ firstName: 1, lastName: 1, _id: 1 })
+        .lean()
+        .exec()) as any[];
+      const access = await this.leadAccessByHrmsDocs(candidates);
+      const allowed = candidates.filter((u) => {
+        const a = access.get(String(u._id));
+        if (!a?.canAccess) return false;
+        return (
+          !opts.leadWorkspace ||
+          workspaceSeesLeads(a.workspace, opts.leadWorkspace)
+        );
+      });
+      const pageRows = allowed.slice((page - 1) * limit, page * limit);
+      const roles =
+        tier === 'all' ? await this.roleNamesByEmail(pageRows) : null;
+      return {
+        items: pageRows.map((u: any) => this.toAssignable(u, roles)),
+        total: allowed.length,
+        page,
+        limit,
+        tier,
+      };
+    }
     const [total, rows] = await Promise.all([
       this.hrmsUserModel.countDocuments(filter).exec(),
       this.hrmsUserModel
@@ -194,21 +261,131 @@ export class CrmAssignmentPolicyService {
     ]);
     const roleByEmail = tier === 'all' ? await this.roleNamesByEmail(rows as any[]) : null;
     return {
-      items: rows.map((u: any) => ({
-        _id: String(u._id),
-        firstName: u.firstName || '',
-        lastName: u.lastName || '',
-        email: u.email,
-        label: this.label(u),
-        ...(roleByEmail
-          ? { roleName: roleByEmail.get(String(u.email || '').toLowerCase()) || undefined }
-          : {}),
-      })),
+      items: rows.map((u: any) => this.toAssignable(u, roleByEmail)),
       total,
       page,
       limit,
       tier,
     };
+  }
+
+  private toAssignable(
+    u: any,
+    roleByEmail: Map<string, string> | null,
+  ): AssignableUser {
+    return {
+      _id: String(u._id),
+      firstName: u.firstName || '',
+      lastName: u.lastName || '',
+      email: u.email,
+      label: this.label(u),
+      ...(roleByEmail
+        ? {
+            roleName:
+              roleByEmail.get(String(u.email || '').toLowerCase()) || undefined,
+          }
+        : {}),
+    };
+  }
+
+  /**
+   * Lead access per HRMS user id for a batch of HRMS docs (roleId populated):
+   * one CRM-users query for the whole batch.
+   */
+  private async leadAccessByHrmsDocs(
+    hrmsDocs: any[],
+  ): Promise<Map<string, CrmLeadAccess>> {
+    const out = new Map<string, CrmLeadAccess>();
+    if (!hrmsDocs.length) return out;
+    const emails = [
+      ...new Set(
+        hrmsDocs
+          .map((u) =>
+            String(u?.email || '')
+              .trim()
+              .toLowerCase(),
+          )
+          .filter(Boolean),
+      ),
+    ];
+    const crmUsers = emails.length
+      ? ((await this.crmUserModel
+          .find({
+            email: {
+              $in: emails.map((e) => new RegExp(`^${escapeRegex(e)}$`, 'i')),
+            },
+          })
+          .populate({ path: 'roleId', populate: { path: 'permissions' } })
+          .lean()
+          .exec()) as any[])
+      : [];
+    const crmByEmail = new Map<string, any>();
+    for (const c of crmUsers) {
+      const key = String(c?.email || '').toLowerCase();
+      // Prefer an active record when an email has duplicates.
+      if (
+        !crmByEmail.has(key) ||
+        (c?.isActive && !crmByEmail.get(key)?.isActive)
+      ) {
+        crmByEmail.set(key, c);
+      }
+    }
+    for (const u of hrmsDocs) {
+      out.set(
+        String(u._id),
+        crmLeadAccessFor(
+          u,
+          crmByEmail.get(String(u?.email || '').toLowerCase()) || null,
+        ),
+      );
+    }
+    return out;
+  }
+
+  /** Can this HRMS user open Leads (and which workspace do they work in)? */
+  async leadAccessOf(hrmsId: Types.ObjectId | string): Promise<CrmLeadAccess> {
+    const doc = Types.ObjectId.isValid(String(hrmsId))
+      ? await this.hrmsUserModel
+          .findById(String(hrmsId))
+          .select(HRMS_ACCESS_FIELDS)
+          .populate('roleId')
+          .lean()
+          .exec()
+      : null;
+    if (!doc) {
+      return {
+        canAccess: false,
+        workspace: CRM_ROLE_MODULE_ALL,
+        reason: 'is not an active employee',
+      };
+    }
+    const access = await this.leadAccessByHrmsDocs([doc]);
+    return access.get(String((doc as any)._id))!;
+  }
+
+  /** Throws a clear 403 unless `assignee` may work the leads being handed to them. */
+  async assertLeadAccess(
+    assignee: ResolvedAssignee,
+    leadWorkspaces: CrmWorkspaceModule[] = [],
+  ): Promise<void> {
+    if (!assignee.hrmsId) return;
+    const who = assignee.label || assignee.email || 'This user';
+    const access = await this.leadAccessOf(assignee.hrmsId);
+    if (!access.canAccess) {
+      throw new ForbiddenException(
+        `${who} ${access.reason || 'does not have access to Leads'} — leads can't be assigned to them. Ask a CRM Admin to grant a role with Leads access.`,
+      );
+    }
+    const blocked = [...new Set(leadWorkspaces)].filter(
+      (ws) => !workspaceSeesLeads(access.workspace, ws),
+    );
+    if (blocked.length) {
+      const names = blocked.map((ws) => WORKSPACE_LABEL[ws] || ws).join(' / ');
+      const own = WORKSPACE_LABEL[access.workspace] || access.workspace;
+      throw new ForbiddenException(
+        `${who} works in the ${own} workspace and can't see ${names} leads — pick someone from that workspace.`,
+      );
+    }
   }
 
   /** CRM role display name per (lower-cased) email, so the admin picker can show Team Lead / Agent badges. */
@@ -260,10 +437,24 @@ export class CrmAssignmentPolicyService {
     tier: Exclude<CrmAssignTier, null>,
     actor: any,
     assigneeRef: string,
+    opts: AssertAssigneeOptions = {},
+  ): Promise<ResolvedAssignee> {
+    const assignee = await this.checkAssigneeTier(tier, actor, assigneeRef);
+    if (opts.requireLeadAccess) {
+      await this.assertLeadAccess(assignee, opts.leadWorkspaces);
+    }
+    return assignee;
+  }
+
+  private async checkAssigneeTier(
+    tier: Exclude<CrmAssignTier, null>,
+    actor: any,
+    assigneeRef: string,
   ): Promise<ResolvedAssignee> {
     const assignee = await this.resolveAssignee(assigneeRef);
     if (tier === 'all') {
-      // Super Admin may also assign to a free-text owner label (legacy imports).
+      // Super Admin may also assign to a free-text owner label (legacy imports) — no
+      // user behind it, so there is no access to check.
       return assignee || { hrmsId: null, label: String(assigneeRef || '').trim() };
     }
     if (!assignee?.hrmsId) {

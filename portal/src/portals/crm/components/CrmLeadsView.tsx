@@ -3461,7 +3461,11 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                 </p>
                 <div className="space-y-1.5">
                   <span className="text-xs font-medium text-[var(--text-muted)]">New owner</span>
-                  <CrmTeammatePicker value={assignOwner} onChange={setAssignOwner} />
+                  <CrmTeammatePicker
+                    value={assignOwner}
+                    onChange={setAssignOwner}
+                    leadWorkspace={isPm ? 'PROPERTY_MGMT' : undefined}
+                  />
                 </div>
                 {assignResult?.status === 'error' ? (
                   <AssignmentResultBanner result={assignResult} />

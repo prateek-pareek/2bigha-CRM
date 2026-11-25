@@ -238,7 +238,9 @@ export default function CrmSegmentDetailPage() {
     if (!assignOpen) return;
     let cancelled = false;
     setOwnersLoading(true);
-    void fetch(`${CRM_API_URL}/crm-users/list/crm-portal`, {
+    // Same list as every Reassign picker: only people this user may hand leads to who
+    // can actually open Leads (the server re-checks on save).
+    void fetch(`${CRM_API_URL}/crm/leads/assignable-users?limit=200`, {
       headers: {
         Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") || "" : ""}`,
       },
@@ -246,7 +248,7 @@ export default function CrmSegmentDetailPage() {
       .then(async (res) => {
         if (!res.ok) return [];
         const data = await res.json();
-        return Array.isArray(data) ? data : [];
+        return Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
       })
       .then((users: Array<{ firstName?: string; lastName?: string; email?: string }>) => {
         if (cancelled) return;
@@ -1193,7 +1195,7 @@ export default function CrmSegmentDetailPage() {
             </label>
             {!ownersLoading && ownerOptions.length === 0 ? (
               <p className="text-xs text-amber-700">
-                No CRM users found. You can still type an owner name below.
+                No teammates with Leads access found. Only people who can open Leads can be assigned.
               </p>
             ) : null}
             <label className="block space-y-1.5">

@@ -95,6 +95,7 @@ import {
 } from '../shared/lead-import-assignment.util';
 import {
   leadModuleFilter,
+  leadWorkspace,
   roleAllowsLead,
   workspaceForNewLead,
   roleAllowsModule,
@@ -554,6 +555,41 @@ export class CRMService {
           ),
         );
     }
+  }
+
+  /**
+   * Validates the owner for a lead hand-off made outside `bulkAssignLeads` (Segments →
+   * Assign): tier rules when the actor holds `leads:assign`, and in every case the owner
+   * must be a real user who can open Leads in each of `leadWorkspaces`.
+   */
+  async assertLeadAssignee(
+    user: any,
+    ownerRef: string,
+    leadWorkspaces: Array<{ module?: unknown; leadVertical?: unknown }> = [],
+  ): Promise<{ label: string; hrmsId: string | null }> {
+    const workspaces = leadWorkspaces.map((l) => leadWorkspace(l));
+    const tier = this.assignmentPolicy.assignTier('leads', user);
+    if (tier) {
+      const a = await this.assignmentPolicy.assertAssignee(
+        tier,
+        user,
+        ownerRef,
+        {
+          requireLeadAccess: true,
+          leadWorkspaces: workspaces,
+        },
+      );
+      return {
+        label: a.label || ownerRef,
+        hrmsId: a.hrmsId ? String(a.hrmsId) : null,
+      };
+    }
+    const a = await this.assignmentPolicy.resolveAssignee(ownerRef);
+    if (!a?.hrmsId) {
+      throw new ForbiddenException('Pick an assignee from the user list.');
+    }
+    await this.assignmentPolicy.assertLeadAccess(a, workspaces);
+    return { label: a.label || ownerRef, hrmsId: String(a.hrmsId) };
   }
 
   /**
@@ -2789,6 +2825,15 @@ export class CRMService {
       const isFullAdmin = this.isCrmWorkspaceAdmin(user);
       if (!isFullAdmin || !dto.leadOwner) {
         dto.leadOwner = this.repOwnerLabelFromUser(user);
+      } else if (!this.leadOwnerMatchesUser(dto.leadOwner, user)) {
+        // Admin handing the new lead to someone else: they must be able to open it.
+        const assignee = await this.assignmentPolicy.assertAssignee(
+          'all',
+          user,
+          String(dto.leadOwner),
+          { requireLeadAccess: true, leadWorkspaces: [leadWorkspace(dto)] },
+        );
+        dto.leadOwner = assignee.label || dto.leadOwner;
       }
       const rawId = user.userId ?? user._id;
       if (rawId && Types.ObjectId.isValid(String(rawId))) {
@@ -3551,7 +3596,16 @@ export class CRMService {
       String(dto.leadOwner || '').trim() !== String((oldLead as any).leadOwner || '').trim()
     ) {
       const tier = this.assignmentPolicy.requireTier('leads', user);
-      const assignee = await this.assignmentPolicy.assertAssignee(tier, user, String(dto.leadOwner || ''));
+      // The new owner must be able to open Leads — and this lead's workspace (2Bigha / PM).
+      const assignee = await this.assignmentPolicy.assertAssignee(
+        tier,
+        user,
+        String(dto.leadOwner || ''),
+        {
+          requireLeadAccess: true,
+          leadWorkspaces: [leadWorkspace(oldLead as any)],
+        },
+      );
       dto.leadOwner = assignee.label || dto.leadOwner;
       if (assignee.hrmsId) resolvedOwnerHrmsId = String(assignee.hrmsId);
     }
@@ -6314,7 +6368,14 @@ export class CRMService {
     // RBAC: only roles with `leads:assign` reassign; Team Leads only within their team,
     // own-tier assigners (Social Media) only their own leads to their own workspace.
     const tier = this.assignmentPolicy.requireTier('leads', user);
-    const assignee = await this.assignmentPolicy.assertAssignee(tier, user, ownerName);
+    const assignee = await this.assignmentPolicy.assertAssignee(
+      tier,
+      user,
+      ownerName,
+      {
+        requireLeadAccess: true,
+      },
+    );
     const ownerLabel = assignee.label || ownerName;
 
     // A whole import batch ("assign everything I just imported") or an explicit id selection.
@@ -6331,9 +6392,14 @@ export class CRMService {
 
     const previousOwners = await this.leadModel
       .find(filter as Record<string, any>)
-      .select('_id leadOwner')
+      .select('_id leadOwner module leadVertical')
       .lean()
       .exec();
+    // Every lead handed over must be in a workspace the new owner can see.
+    await this.assignmentPolicy.assertLeadAccess(
+      assignee,
+      previousOwners.map((l: any) => leadWorkspace(l)),
+    );
 
     const result = await this.leadModel
       .updateMany(filter as Record<string, any>, {
@@ -7050,7 +7116,9 @@ export class CRMService {
           if (!ownerChecks.has(key)) {
             ownerChecks.set(
               key,
-              this.assignmentPolicy.assertAssignee(tier!, user, raw).then((a) => a.label || raw),
+              this.assignmentPolicy
+                .assertAssignee(tier!, user, raw, { requireLeadAccess: true })
+                .then((a) => a.label || raw),
             );
           }
           try {
@@ -7246,7 +7314,9 @@ export class CRMService {
     if (assignment.mode === 'file') return [];
     const labels: string[] = [];
     for (const ref of assignment.assignees) {
-      const a = await this.assignmentPolicy.assertAssignee(tier, user, ref);
+      const a = await this.assignmentPolicy.assertAssignee(tier, user, ref, {
+        requireLeadAccess: true,
+      });
       if (!labels.includes(a.label || ref)) labels.push(a.label || ref);
     }
     return labels;
@@ -7434,7 +7504,9 @@ export class CRMService {
             fileOwnerCache.set(
               key,
               this.assignmentPolicy
-                .assertAssignee(assignTier!, user, raw)
+                .assertAssignee(assignTier!, user, raw, {
+                  requireLeadAccess: true,
+                })
                 .then((a) => a.label || raw),
             );
           }

@@ -65,6 +65,10 @@ function makeService(existing: Record<string, any> = {}, visibleIds: Set<string>
     const p = byRef(ref);
     return p ? { hrmsId: p.id, label: p.label, email: p.email } : null;
   });
+  // Everyone in these fixtures can open Leads — lead-access rules have their own spec.
+  jest
+    .spyOn(policy, 'leadAccessOf')
+    .mockResolvedValue({ canAccess: true, workspace: 'ALL' });
   jest.spyOn(policy, 'teamOf').mockResolvedValue({
     ids: [String(PEOPLE.tina.id), String(PEOPLE.tom.id), String(PEOPLE.tara.id)],
     labels: [],
