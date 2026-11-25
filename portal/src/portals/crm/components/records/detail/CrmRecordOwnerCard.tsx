@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { getCrmAuthToken } from "@/lib/crm/api";
 import CrmTeammatePicker, { type CrmAssignableUser } from "./CrmTeammatePicker";
+import AssignmentResultBanner, {
+  assignmentErrorResult,
+  type AssignmentResult,
+} from "../assignment/AssignmentResultBanner";
 
 type Props = {
   ownerLabel?: string | null;
@@ -36,10 +40,22 @@ export default function CrmRecordOwnerCard({
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<CrmAssignableUser | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Inline assignment indicator: success fades after a few seconds, failure stays in the picker. */
+  const [result, setResult] = useState<AssignmentResult | null>(null);
+  const resultTimerRef = useRef<number | null>(null);
+  const clearResultTimer = () => {
+    if (resultTimerRef.current != null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+  };
+  useEffect(() => clearResultTimer, []);
 
   const saveReassign = async () => {
     if (!recordId || !picked) return;
     setSaving(true);
+    clearResultTimer();
+    setResult(null);
     try {
       // Send the user id — the server resolves it and re-checks the team scope.
       // Open tasks on the record follow the new owner (server side).
@@ -57,6 +73,15 @@ export default function CrmRecordOwnerCard({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Failed to reassign");
       toast.success(`Reassigned to ${picked.label} — open tasks moved with it`);
+      setResult({
+        status: "success",
+        title: `Assigned to ${picked.label}`,
+        detail: "Open tasks moved with it.",
+      });
+      resultTimerRef.current = window.setTimeout(() => {
+        setResult(null);
+        resultTimerRef.current = null;
+      }, 5000);
       window.dispatchEvent(
         new CustomEvent("crm:record-owner-changed", {
           detail: { relatedType: clientId ? "Client" : "Lead", relatedTo: recordId },
@@ -66,6 +91,7 @@ export default function CrmRecordOwnerCard({
       onReassigned?.(picked.label);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to reassign");
+      setResult(assignmentErrorResult(err, "Reassignment failed"));
     } finally {
       setSaving(false);
     }
@@ -88,6 +114,8 @@ export default function CrmRecordOwnerCard({
             type="button"
             onClick={() => {
               setPicked(null);
+              clearResultTimer();
+              setResult(null);
               setOpen((v) => !v);
             }}
             className="text-[11px] font-semibold text-[var(--hs-link)] hover:underline"
@@ -105,9 +133,22 @@ export default function CrmRecordOwnerCard({
           <p className="text-xs font-medium text-text-muted">Record owner</p>
         </div>
       </div>
+      {!open && result?.status === "success" ? (
+        <AssignmentResultBanner result={result} compact className="mt-3" />
+      ) : null}
       {open ? (
         <div className="mt-3 space-y-2 rounded-lg border border-border bg-surface-dim/40 p-3">
-          <CrmTeammatePicker value={picked} onChange={setPicked} currentOwnerLabel={ownerLabel} />
+          <CrmTeammatePicker
+            value={picked}
+            onChange={(u) => {
+              setPicked(u);
+              if (result?.status === "error") setResult(null);
+            }}
+            currentOwnerLabel={ownerLabel}
+          />
+          {result?.status === "error" ? (
+            <AssignmentResultBanner result={result} compact />
+          ) : null}
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -122,7 +163,7 @@ export default function CrmRecordOwnerCard({
               onClick={() => void saveReassign()}
               className="rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : result?.status === "error" ? "Try again" : "Save"}
             </button>
           </div>
         </div>

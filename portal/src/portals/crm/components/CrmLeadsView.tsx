@@ -104,6 +104,11 @@ import DeleteCustomFieldMergeDialog from '@/components/crm/records/detail/Delete
 import { CrmPropertyManagerModal } from '@/components/crm/records/detail/CrmPropertyManagerModal';
 import { CrmBulkDeleteConfirmModal } from '@/components/crm/records/detail/CrmBulkDeleteConfirmModal';
 import CrmTeammatePicker, { type CrmAssignableUser } from '@/components/crm/records/detail/CrmTeammatePicker';
+import AssignmentResultBanner, {
+  assignmentErrorResult,
+  summarizeBulkAssignResult,
+  type AssignmentResult,
+} from '@/components/crm/records/assignment/AssignmentResultBanner';
 import {
   CrmPageHeader,
   CrmCountBadge,
@@ -599,6 +604,11 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
   const [transferLeadTarget, setTransferLeadTarget] = useState<Lead | null>(null);
   const [transferOwnerName, setTransferOwnerName] = useState('');
   const [transferring, setTransferring] = useState(false);
+  /** Inline failure for the PM Transfer dialog (success closes it + highlights the row). */
+  const [transferError, setTransferError] = useState<AssignmentResult | null>(null);
+  useEffect(() => {
+    setTransferError(null);
+  }, [transferLeadTarget]);
   const [leadListingCounts, setLeadListingCounts] = useState<Record<string, { propertyCount: number; farmCount: number }>>({});
   const [showWebsiteLeads, setShowWebsiteLeads] = useState(false);
   const [isBulkEmailOpen, setIsBulkEmailOpen] = useState(false);
@@ -647,6 +657,11 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignOwner, setAssignOwner] = useState<CrmAssignableUser | null>(null);
   const [assigning, setAssigning] = useState(false);
+  /** Inline success / partial / failure shown in the Assign dialog after submit. */
+  const [assignResult, setAssignResult] = useState<AssignmentResult | null>(null);
+  /** Rows just reassigned — briefly highlighted in the table so the change is visible. */
+  const [recentlyAssignedIds, setRecentlyAssignedIds] = useState<Set<string>>(new Set());
+  const recentlyAssignedTimerRef = useRef<number | null>(null);
   const [stageRulesPanelOpen, setStageRulesPanelOpen] = useState(false);
 
   const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
@@ -1224,8 +1239,29 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       return;
     }
     setAssignOwner(null);
+    setAssignResult(null);
     setAssignOpen(true);
   };
+
+  const flashRecentlyAssigned = (ids: string[]) => {
+    if (recentlyAssignedTimerRef.current != null) {
+      window.clearTimeout(recentlyAssignedTimerRef.current);
+    }
+    setRecentlyAssignedIds(new Set(ids));
+    recentlyAssignedTimerRef.current = window.setTimeout(() => {
+      setRecentlyAssignedIds(new Set());
+      recentlyAssignedTimerRef.current = null;
+    }, 4000);
+  };
+
+  useEffect(
+    () => () => {
+      if (recentlyAssignedTimerRef.current != null) {
+        window.clearTimeout(recentlyAssignedTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const handleBulkAssign = async () => {
     if (!assignOwner) {
@@ -1237,6 +1273,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       return;
     }
     setAssigning(true);
+    setAssignResult(null);
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`${CRM_API_URL}/crm/leads/bulk-assign`, {
@@ -1255,20 +1292,36 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       if (!res.ok) {
         throw new Error(data?.message || 'Failed to assign leads');
       }
-      const modified = Number(data?.modified ?? 0);
-      toast.success(
-        `Assigned ${modified} lead${modified === 1 ? '' : 's'} to ${assignOwner.label}`,
+      const ownerLabel = String(data?.ownerName || assignOwner.label);
+      const result = summarizeBulkAssignResult(
+        { requested: data?.requested ?? selectedIds.size, matched: data?.matched, modified: data?.modified },
+        ownerLabel,
       );
-      setLeads((prev) =>
-        prev.map((l) =>
-          selectedIds.has(l._id) ? { ...l, leadOwner: assignOwner.label } : l,
-        ),
-      );
-      setAssignOpen(false);
+      setAssignResult(result);
+      if (result.status === 'error') {
+        toast.error(result.title);
+        return;
+      }
+      if (result.status === 'partial') toast.warning(result.title);
+      else toast.success(result.title);
+      // Optimistic owner only when every selected lead went through; otherwise refetch
+      // so rows the user couldn't reassign keep their real owner.
+      if (result.status === 'success') {
+        setLeads((prev) =>
+          prev.map((l) =>
+            selectedIds.has(l._id) ? { ...l, leadOwner: ownerLabel } : l,
+          ),
+        );
+      } else {
+        void fetchLeadsList(selectedPipelineId || null);
+      }
+      flashRecentlyAssigned(Array.from(selectedIds));
       setSelectedIds(new Set());
       invalidateCrmAfterMutation('leads', 'workspace', 'attention');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to assign leads');
+      const result = assignmentErrorResult(e, 'Failed to assign leads');
+      setAssignResult(result);
+      toast.error(result.detail || result.title);
     } finally {
       setAssigning(false);
     }
@@ -3171,6 +3224,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                             className={cn(
                               'group cursor-pointer transition-colors',
                               selectedIds.has(lead._id) && 'crm-table-row-selected',
+                              recentlyAssignedIds.has(lead._id) && 'crm-table-row-just-assigned',
                             )}
                             onMouseEnter={() => revealLeadActions(lead._id)}
                             onMouseLeave={(e) => {
@@ -3397,16 +3451,35 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
             <DialogTitle>Assign leads to owner</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-1">
-            <p className="text-sm text-[var(--text-muted)]">
-              Reassign {selectedIds.size} selected lead
-              {selectedIds.size === 1 ? '' : 's'} to another CRM user.
-            </p>
-            <div className="space-y-1.5">
-              <span className="text-xs font-medium text-[var(--text-muted)]">New owner</span>
-              <CrmTeammatePicker value={assignOwner} onChange={setAssignOwner} />
-            </div>
+            {assignResult && assignResult.status !== 'error' ? (
+              <AssignmentResultBanner result={assignResult} />
+            ) : (
+              <>
+                <p className="text-sm text-[var(--text-muted)]">
+                  Reassign {selectedIds.size} selected lead
+                  {selectedIds.size === 1 ? '' : 's'} to another CRM user.
+                </p>
+                <div className="space-y-1.5">
+                  <span className="text-xs font-medium text-[var(--text-muted)]">New owner</span>
+                  <CrmTeammatePicker value={assignOwner} onChange={setAssignOwner} />
+                </div>
+                {assignResult?.status === 'error' ? (
+                  <AssignmentResultBanner result={assignResult} />
+                ) : null}
+              </>
+            )}
           </div>
           <DialogFooter>
+            {assignResult && assignResult.status !== 'error' ? (
+              <button
+                type="button"
+                onClick={() => setAssignOpen(false)}
+                className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Done
+              </button>
+            ) : (
+              <>
             <button
               type="button"
               onClick={() => setAssignOpen(false)}
@@ -3425,8 +3498,10 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
               ) : (
                 <Users className="h-4 w-4" aria-hidden />
               )}
-              Assign
+              {assignResult?.status === 'error' ? 'Try again' : 'Assign'}
             </button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -3550,10 +3625,16 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
             <input
               type="text"
               value={transferOwnerName}
-              onChange={(e) => setTransferOwnerName(e.target.value)}
+              onChange={(e) => {
+                setTransferOwnerName(e.target.value);
+                setTransferError(null);
+              }}
               placeholder="Owner name"
               className="mb-4 h-9 w-full rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--card-bg)] px-2 text-sm text-[var(--text-main)] outline-none focus:border-[var(--primary)]"
             />
+            {transferError ? (
+              <AssignmentResultBanner result={transferError} compact className="mb-4" />
+            ) : null}
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -3569,6 +3650,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                 onClick={async () => {
                   if (!transferLeadTarget) return;
                   setTransferring(true);
+                  setTransferError(null);
                   try {
                     const token = localStorage.getItem('token');
                     const res = await fetch(
@@ -3581,13 +3663,22 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                     );
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) {
-                      toast.error(data?.message || 'Could not transfer this lead');
+                      const msg = data?.message || 'Could not transfer this lead';
+                      setTransferError({ status: 'error', title: 'Transfer failed', detail: msg });
+                      toast.error(msg);
                       return;
                     }
-                    toast.success('Lead transferred');
+                    const newOwner = String(data?.ownerName || transferOwnerName.trim());
+                    toast.success(`Lead transferred to ${newOwner}`);
+                    flashRecentlyAssigned([transferLeadTarget._id]);
                     setTransferLeadTarget(null);
                     void fetchLeadsList(selectedPipelineId || null);
                   } catch {
+                    setTransferError({
+                      status: 'error',
+                      title: 'Transfer failed',
+                      detail: 'Network error — check your connection and try again.',
+                    });
                     toast.error('Network error');
                   } finally {
                     setTransferring(false);

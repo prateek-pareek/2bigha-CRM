@@ -2731,6 +2731,32 @@ html:not(.dark) [data-crm-app][data-crm-accent="indigo"] .theme-crm-hubspot {
   box-shadow: inset 3px 0 0 #f59e0b;
 }
 
+/* Just-assigned lead rows — green tint + left marker that fades out (~4s, set in JS). */
+@keyframes crm-row-just-assigned {
+  0%,
+  60% {
+    background-color: var(--success-light, #e0f8ea);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+tr.crm-table-row-just-assigned td {
+  animation: crm-row-just-assigned 4s ease-out forwards;
+}
+
+tr.crm-table-row-just-assigned td:first-child {
+  box-shadow: inset 3px 0 0 var(--success, #28c76f);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  tr.crm-table-row-just-assigned td {
+    animation: none;
+    background-color: var(--success-light, #e0f8ea);
+  }
+}
+
 [data-theme="dark"] .crm-table tbody tr.crm-table-row-duplicate td,
 [data-theme="dark"] .crm-list-page table tbody tr.crm-table-row-duplicate td {
   background: color-mix(in srgb, #f59e0b 12%, var(--card-bg, #1a1a1a)) !important;
