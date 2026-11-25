@@ -338,11 +338,32 @@ export class CrmSegmentsService {
     const filter: Record<string, unknown> =
       clauses.length === 1 ? clauses[0] : { $and: clauses };
 
+    // Owners losing leads to this assignment (read before the write) — for their notice.
+    const previousOwners = (await this.leadModel
+      .distinct('leadOwner', {
+        $and: [filter, { leadOwner: { $ne: ownerName } }],
+      } as Record<string, any>)
+      .exec()
+      .catch(() => [])) as Array<string | null | undefined>;
+
     const result = await this.leadModel
       .updateMany(filter as Record<string, any>, {
         $set: { leadOwner: ownerName },
       })
       .exec();
+
+    const modified = result.modifiedCount ?? 0;
+    if (modified > 0) {
+      this.crmService.notifyLeadsBulkAssigned({
+        ownerLabel: ownerName,
+        count: modified,
+        previousOwners: previousOwners.map((p) =>
+          typeof p === 'string' ? p : '',
+        ),
+        user,
+        action: 'segment_assign',
+      });
+    }
 
     return {
       segmentId: id,

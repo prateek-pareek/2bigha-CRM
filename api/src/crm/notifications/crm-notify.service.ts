@@ -35,6 +35,11 @@ export type CrmNotifyPayload = {
   recipient: CrmNotifyRecipientHint;
   /** Extra recipients (e.g. previous owner on transfer) — each gets own prefs check */
   alsoNotify?: CrmNotifyRecipientHint[];
+  /**
+   * Resolved HRMS user ids that must not receive this notification — typically
+   * the actor, so nobody is told about an assignment they just made to themselves.
+   */
+  skipUserIds?: Array<string | Types.ObjectId | null | undefined>;
   link?: string;
   metadata?: Record<string, unknown>;
   type?: string;
@@ -262,7 +267,11 @@ export class CrmNotifyService {
       Boolean,
     ) as CrmNotifyRecipientHint[];
     const delivered: ResolvedCrmRecipient[] = [];
-    const seen = new Set<string>();
+    const seen = new Set<string>(
+      (payload.skipUserIds || [])
+        .map((id) => (id != null ? String(id).trim() : ''))
+        .filter(Boolean),
+    );
 
     for (const hint of hints) {
       try {

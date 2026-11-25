@@ -466,6 +466,155 @@ export class CRMService {
     }
   }
 
+  /**
+   * Tell the owner a new lead landed on them — when someone else created it
+   * (admin picking an owner) or it arrived unattended (webhook / form / Meta)
+   * with an owner already set. Creating a lead for yourself never notifies.
+   */
+  /** JWT `sub` (HRMS user id) of the actor — what CrmNotifyService resolves recipients to. */
+  private notifyActorId(user?: any): string | null {
+    const raw = user?.userId ?? user?._id ?? user?.id;
+    return raw && Types.ObjectId.isValid(String(raw)) ? String(raw) : null;
+  }
+
+  private notifyOwnerOfNewLead(lead: any, user?: any): void {
+    const owner = String(lead?.leadOwner || '').trim();
+    if (!owner || owner === 'Unknown') return;
+    if (user && this.leadOwnerMatchesUser(owner, user)) return;
+    const actorId = this.notifyActorId(user);
+    const leadLabel =
+      `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'A new lead';
+    const source = String(lead.source || '').trim();
+    const link = `/crm/leads/${lead._id}`;
+    void this.crmNotify
+      .notify({
+        event: 'lead_assigned',
+        title: 'New lead assigned to you',
+        message: `${leadLabel} has been created and assigned to you${source ? ` (source: ${source})` : ''}.`,
+        recipient: { label: owner },
+        skipUserIds: actorId ? [actorId] : undefined,
+        link,
+        metadata: {
+          link,
+          entityId: String(lead._id),
+          relatedType: 'Lead',
+          action: 'lead_created_assigned',
+          source: source || undefined,
+        },
+        type: 'LEAD_ASSIGNED',
+      })
+      .catch((err) =>
+        console.error(
+          '[CRMService] New lead owner notify failed:',
+          err?.message || err,
+        ),
+      );
+  }
+
+  /**
+   * Notify users newly added to a client's `assignedTo` (create or update).
+   * Public so ClientsService can reuse the CRM notify pipeline without its own DI.
+   */
+  notifyClientAssignees(
+    client: any,
+    addedUserIds: string[],
+    user?: any,
+    opts: { created?: boolean } = {},
+  ): void {
+    const ids = [...new Set((addedUserIds || []).map(String).filter(Boolean))];
+    if (!client?._id || !ids.length) return;
+    const actorId = this.notifyActorId(user);
+    const name = String(client.name || '').trim() || 'A client';
+    const link = `/crm/clients/${client._id}`;
+    for (const id of ids) {
+      void this.crmNotify
+        .notify({
+          event: 'client_assigned',
+          title: 'Client assigned to you',
+          message: opts.created
+            ? `${name} has been created and assigned to you.`
+            : `${name} has been assigned to you.`,
+          recipient: { userId: id },
+          skipUserIds: actorId ? [actorId] : undefined,
+          link,
+          metadata: {
+            link,
+            entityId: String(client._id),
+            relatedType: 'Client',
+            action: opts.created
+              ? 'client_created_assigned'
+              : 'client_assigned',
+          },
+          type: 'CLIENT_ASSIGNED',
+        })
+        .catch((err) =>
+          console.error(
+            '[CRMService] Client assign notify failed:',
+            err?.message || err,
+          ),
+        );
+    }
+  }
+
+  /**
+   * Bulk owner change made outside `bulkAssignLeads` (e.g. Segments → Assign):
+   * one notice to the new owner, one to each previous owner who lost leads.
+   */
+  notifyLeadsBulkAssigned(opts: {
+    ownerLabel: string;
+    count: number;
+    previousOwners?: string[];
+    user?: any;
+    action: string;
+  }): void {
+    const owner = String(opts.ownerLabel || '').trim();
+    if (!owner || opts.count <= 0) return;
+    const actorId = this.notifyActorId(opts.user);
+    const skipUserIds = actorId ? [actorId] : undefined;
+    const link = '/crm/leads';
+    if (!(opts.user && this.leadOwnerMatchesUser(owner, opts.user))) {
+      void this.crmNotify
+        .notify({
+          event: 'lead_assigned',
+          title: 'Leads assigned to you',
+          message: `${opts.count} lead(s) were assigned to you.`,
+          recipient: { label: owner },
+          skipUserIds,
+          link,
+          metadata: { link, action: opts.action, count: opts.count },
+          type: 'LEAD_ASSIGNED',
+        })
+        .catch((err) =>
+          console.error(
+            '[CRMService] Bulk assign notify failed:',
+            err?.message || err,
+          ),
+        );
+    }
+    const norm = (v: string) => v.trim().replace(/\s+/g, ' ').toLowerCase();
+    const prevs = [
+      ...new Set(
+        (opts.previousOwners || [])
+          .map((p) => String(p || '').trim())
+          .filter((p) => p && norm(p) !== norm(owner)),
+      ),
+    ];
+    for (const prev of prevs) {
+      void this.crmNotify
+        .notify({
+          event: 'lead_reassigned',
+          title: 'Leads reassigned',
+          message: `One or more of your leads were reassigned to ${owner}.`,
+          recipient: { label: prev },
+          skipUserIds,
+          link,
+          metadata: { link, action: `${opts.action}_out` },
+          type: 'LEAD_ASSIGNED',
+        })
+        .catch(() => null);
+    }
+  }
+
   private notifySalesAgent(event: {
     trigger:
       | 'lead_created'
@@ -2877,6 +3026,7 @@ export class CRMService {
       user,
     });
     void this.leadEngagementAutomation.onLeadCreated(String(lead._id), user);
+    this.notifyOwnerOfNewLead(lead, user);
     this.notifySalesAgent({
       trigger: 'lead_created',
       recordType: 'Lead',
@@ -3593,7 +3743,10 @@ export class CRMService {
           event: assignEvent,
           title: 'Lead assigned to you',
           message: `${leadLabel} has been assigned to you${previousOwner ? ` (from ${previousOwner})` : ''}.`,
-          recipient: { label: String(dto.leadOwner || '') },
+          recipient: {
+            userId: resolvedOwnerHrmsId,
+            label: String(dto.leadOwner || ''),
+          },
           link,
           metadata: {
             link,
@@ -6215,7 +6368,10 @@ export class CRMService {
         event: hadPrevious ? 'lead_reassigned' : 'lead_assigned',
         title: 'Leads assigned to you',
         message: `${previousOwners.length} lead(s) were assigned to you.`,
-        recipient: { label: ownerLabel },
+        recipient: {
+          userId: assignee.hrmsId ? String(assignee.hrmsId) : undefined,
+          label: ownerLabel,
+        },
         link: '/crm/leads',
         metadata: {
           link: '/crm/leads',
