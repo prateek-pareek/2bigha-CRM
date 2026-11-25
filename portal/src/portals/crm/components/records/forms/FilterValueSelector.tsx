@@ -47,6 +47,8 @@ export function FilterValueSelector({
     mergeFilterValueOptions(knownOptions),
   );
   const [loading, setLoading] = useState(false);
+  /** What the user typed in the search box — offered as a value when it isn't listed. */
+  const [search, setSearch] = useState("");
 
   // Split the "||" joined string into an array
   const selectedValues = value ? value.split("||").filter(Boolean) : [];
@@ -100,6 +102,7 @@ export function FilterValueSelector({
   }, [fieldKey, module, pipelineId, knownOptions?.join("\0")]);
 
   const toggleOption = (opt: string) => {
+    setSearch("");
     if (!isMultiSelect) {
       onChange(opt);
       setOpen(false);
@@ -113,12 +116,24 @@ export function FilterValueSelector({
     }
   };
 
+  const typedValue = search.trim();
+  const typedIsListed =
+    !!typedValue &&
+    (options.some((o) => o.toLowerCase() === typedValue.toLowerCase()) ||
+      selectedValues.some((v) => v.toLowerCase() === typedValue.toLowerCase()));
+
   const removeOption = (opt: string) => {
     onChange(selectedValues.filter((v) => v !== opt).join("||"));
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setSearch("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -164,14 +179,35 @@ export function FilterValueSelector({
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0 rounded-[var(--radius-md)] shadow-lg border-[var(--border-color)]" align="start">
         <Command>
-          <CommandInput placeholder="Search value..." className="text-sm border-none" />
+          <CommandInput
+            placeholder="Search or type a value..."
+            className="text-sm border-none"
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList className="max-h-[220px] overflow-y-auto custom-scrollbar">
+            {typedValue && !typedIsListed ? (
+              <CommandGroup>
+                {/* Free-text value — so a filter never stays empty just because no
+                    record (or catalog) offered the value yet. */}
+                <CommandItem
+                  value={typedValue}
+                  onSelect={() => toggleOption(typedValue)}
+                  className="cursor-pointer text-sm font-medium text-text-main"
+                >
+                  <Check className="mr-2 h-4 w-4 opacity-0" aria-hidden />
+                  Use “{typedValue}”
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
             {loading && options.length === 0 ? (
               <div className="p-4 flex justify-center">
                 <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
               </div>
             ) : options.length === 0 ? (
-              <CommandEmpty>No values found.</CommandEmpty>
+              typedValue ? null : (
+                <CommandEmpty>No values yet — type one above.</CommandEmpty>
+              )
             ) : (
               <CommandGroup>
                 {options.map((opt) => {

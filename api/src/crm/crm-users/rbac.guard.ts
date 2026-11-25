@@ -13,7 +13,7 @@ import {
   hasCrmAdminJwtBypass,
 } from '../shared/crm-admin-access.util';
 import { roleBelongsToWorkspace } from '../shared/crm-workspace-module.util';
-import { crmPermissionNamesFromRole } from '../shared/crm-role-permissions.util';
+import { crmEffectivePermissions } from '../shared/crm-effective-access.util';
 
 /** Permission prefixes that belong to a single fixed workspace (see requirement doc's RBAC section). */
 const PERMISSION_PREFIX_WORKSPACE: Record<string, 'LEGAL'> = {
@@ -115,67 +115,16 @@ export class RbacGuard implements CanActivate {
     }
 
     // CRM role grants (Permission refs + plain crmPermissions; inactive role = none),
-    // the CRM user's direct grants, and the JWT grants.
-    const userRole = dbUser.roleId as any;
-    // Populated role doc (an unpopulated ObjectId has neither field).
-    const hasCrmRole = !!(
-      userRole && typeof userRole === 'object' && ('permissions' in userRole || 'name' in userRole)
-    );
-    const dbRolePermissions =
-      hasCrmRole && userRole.isActive !== false ? crmPermissionNamesFromRole(userRole) : [];
-    const dbDirectPermissions = dbUser.permissions || [];
-
-    const jwtCrm = Array.isArray(user.crmPermissions)
-      ? user.crmPermissions
-      : [];
-    const jwtHrms = Array.isArray(user.permissions) ? user.permissions : [];
-    const tokenPermissions = [...jwtHrms, ...jwtCrm];
-
-    // Legacy fallback for CRM users WITHOUT a CRM role only. A user holding a functional
-    // role (Team Lead, Legal Executive, …) gets exactly that role's grants — the old
-    // "everyone with the CRM tool is an agent" default also handed out leads/contacts
-    // export and lead access to Legal.
-    const isAgent = !hasCrmRole && (
-      String(user.role || '').toUpperCase() === 'AGENT' ||
-      String(user.role || '').toLowerCase().includes('agent') ||
-      String(dbUser?.role || '').toLowerCase().includes('agent') ||
-      String(userRole?.name || '').toLowerCase().includes('agent') ||
-      (Array.isArray(user.permittedTools) &&
-        user.permittedTools.map((t: string) => String(t || '').toUpperCase()).includes('CRM')));
-
-    const defaultAgentPerms = isAgent
-      ? [
-          'leads:read',
-          'leads:write',
-          'leads:import',
-          'leads:export',
-          'leads:move_pipeline',
-          'contacts:read',
-          'contacts:write',
-          'contacts:import',
-          'contacts:export',
-          'pm-leads:read',
-          'pm-leads:write',
-          'pm-leads:import',
-          'pm-leads:export',
-        ]
-      : [];
-
-    // Merge and unique
-    const userPermissions = Array.from(
-      new Set([
-        ...dbRolePermissions,
-        ...tokenPermissions,
-        ...dbDirectPermissions,
-        ...defaultAgentPerms,
-      ]),
+    // the CRM user's direct grants, the JWT grants and the legacy agent defaults —
+    // computed by the same helper the assignment policy uses for prospective assignees.
+    const { all: userPermissions, published } = crmEffectivePermissions(
+      user,
+      dbUser,
     );
     // Publish the effective CRM grants so services' tier checks (`leads:read:team`,
     // `leads:assign`, …) see the role template, not only the HRMS user's own list.
     if (request.user) {
-      request.user.crmPermissions = Array.from(
-        new Set([...jwtCrm, ...dbRolePermissions, ...dbDirectPermissions, ...defaultAgentPerms]),
-      );
+      request.user.crmPermissions = published;
     }
 
     // Action-implication model (see permission-actions.util.ts): `write` implies

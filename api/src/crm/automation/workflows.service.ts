@@ -73,6 +73,8 @@ import { LeadEngagementAutomationService } from './lead-engagement-automation.se
 import { CrmSegmentsService } from '../segments/crm-segments.service';
 import { CrmAiService } from '../ai/crm-ai.service';
 import { CrmNotifyService } from '../notifications/crm-notify.service';
+import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
+import { leadWorkspace } from '../shared/crm-workspace-module.util';
 import type { CrmNotifyEvent } from '../notifications/crm-notification-events';
 import {
   describeNextFollowUpSend,
@@ -397,6 +399,7 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
     @Inject(forwardRef(() => CrmSegmentsService))
     private readonly segmentsService: CrmSegmentsService,
     private readonly crmNotify: CrmNotifyService,
+    private readonly assignmentPolicy: CrmAssignmentPolicyService,
   ) {}
 
   /** CRM Settings → Workflows: delayed job runner on/off (default on when unset). */
@@ -5533,6 +5536,14 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
         if (entityType === 'Contact' || entityType === 'Organization') {
           return 'Assign owner skipped (use Set property for contacts/orgs)';
         }
+        if (entityType === 'Lead') {
+          // Never hand a lead to someone who can't open it (no Leads access / other workspace).
+          const blocked = await this.leadOwnerBlockReason(
+            entityId,
+            String(action.ownerName || ''),
+          );
+          if (blocked) return `Assign owner skipped — ${blocked}`;
+        }
         const patch: Record<string, unknown> = { leadOwner: action.ownerName };
         await this.patchEntity(entityType, entityId, patch);
         return `Owner → ${action.ownerName}`;
@@ -6502,6 +6513,34 @@ export class WorkflowsService implements OnModuleInit, OnModuleDestroy {
       patch.status = value;
     }
     return patch;
+  }
+
+  /**
+   * Why `ownerRef` must not own this lead (null = fine). Unresolvable free-text owner
+   * labels keep the legacy behaviour — there is no user behind them to check.
+   */
+  private async leadOwnerBlockReason(
+    leadId: Types.ObjectId,
+    ownerRef: string,
+  ): Promise<string | null> {
+    const assignee = await this.assignmentPolicy.resolveAssignee(ownerRef);
+    if (!assignee?.hrmsId) return null;
+    const lead = await this.leadModel
+      .findById(leadId)
+      .select('module leadVertical')
+      .lean()
+      .exec();
+    try {
+      await this.assignmentPolicy.assertLeadAccess(
+        assignee,
+        lead ? [leadWorkspace(lead as any)] : [],
+      );
+      return null;
+    } catch (err) {
+      return err instanceof Error
+        ? err.message
+        : 'owner cannot access this lead';
+    }
   }
 
   private async patchEntity(

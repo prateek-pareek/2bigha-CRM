@@ -95,6 +95,7 @@ import {
 } from '../shared/lead-import-assignment.util';
 import {
   leadModuleFilter,
+  leadWorkspace,
   roleAllowsLead,
   workspaceForNewLead,
   roleAllowsModule,
@@ -171,6 +172,7 @@ import {
   formatFollowUpRelativeWhen,
 } from '../notifications/crm-follow-up-notify.util';
 import { CRMUsersService } from '../crm-users/crm-users.service';
+import { INDIAN_STATES } from '../shared/indian-states';
 
 type ImportDuplicateStrategy = 'create' | 'skip' | 'merge' | 'replace';
 type ImportRowOutcome = 'created' | 'merged' | 'replaced' | 'skipped';
@@ -466,6 +468,190 @@ export class CRMService {
     }
   }
 
+  /**
+   * Tell the owner a new lead landed on them — when someone else created it
+   * (admin picking an owner) or it arrived unattended (webhook / form / Meta)
+   * with an owner already set. Creating a lead for yourself never notifies.
+   */
+  /** JWT `sub` (HRMS user id) of the actor — what CrmNotifyService resolves recipients to. */
+  private notifyActorId(user?: any): string | null {
+    const raw = user?.userId ?? user?._id ?? user?.id;
+    return raw && Types.ObjectId.isValid(String(raw)) ? String(raw) : null;
+  }
+
+  private notifyOwnerOfNewLead(lead: any, user?: any): void {
+    const owner = String(lead?.leadOwner || '').trim();
+    if (!owner || owner === 'Unknown') return;
+    if (user && this.leadOwnerMatchesUser(owner, user)) return;
+    const actorId = this.notifyActorId(user);
+    const leadLabel =
+      `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'A new lead';
+    const source = String(lead.source || '').trim();
+    const link = `/crm/leads/${lead._id}`;
+    void this.crmNotify
+      .notify({
+        event: 'lead_assigned',
+        title: 'New lead assigned to you',
+        message: `${leadLabel} has been created and assigned to you${source ? ` (source: ${source})` : ''}.`,
+        recipient: { label: owner },
+        skipUserIds: actorId ? [actorId] : undefined,
+        link,
+        metadata: {
+          link,
+          entityId: String(lead._id),
+          relatedType: 'Lead',
+          action: 'lead_created_assigned',
+          source: source || undefined,
+        },
+        type: 'LEAD_ASSIGNED',
+      })
+      .catch((err) =>
+        console.error(
+          '[CRMService] New lead owner notify failed:',
+          err?.message || err,
+        ),
+      );
+  }
+
+  /**
+   * Notify users newly added to a client's `assignedTo` (create or update).
+   * Public so ClientsService can reuse the CRM notify pipeline without its own DI.
+   */
+  notifyClientAssignees(
+    client: any,
+    addedUserIds: string[],
+    user?: any,
+    opts: { created?: boolean } = {},
+  ): void {
+    const ids = [...new Set((addedUserIds || []).map(String).filter(Boolean))];
+    if (!client?._id || !ids.length) return;
+    const actorId = this.notifyActorId(user);
+    const name = String(client.name || '').trim() || 'A client';
+    const link = `/crm/clients/${client._id}`;
+    for (const id of ids) {
+      void this.crmNotify
+        .notify({
+          event: 'client_assigned',
+          title: 'Client assigned to you',
+          message: opts.created
+            ? `${name} has been created and assigned to you.`
+            : `${name} has been assigned to you.`,
+          recipient: { userId: id },
+          skipUserIds: actorId ? [actorId] : undefined,
+          link,
+          metadata: {
+            link,
+            entityId: String(client._id),
+            relatedType: 'Client',
+            action: opts.created
+              ? 'client_created_assigned'
+              : 'client_assigned',
+          },
+          type: 'CLIENT_ASSIGNED',
+        })
+        .catch((err) =>
+          console.error(
+            '[CRMService] Client assign notify failed:',
+            err?.message || err,
+          ),
+        );
+    }
+  }
+
+  /**
+   * Validates the owner for a lead hand-off made outside `bulkAssignLeads` (Segments →
+   * Assign): tier rules when the actor holds `leads:assign`, and in every case the owner
+   * must be a real user who can open Leads in each of `leadWorkspaces`.
+   */
+  async assertLeadAssignee(
+    user: any,
+    ownerRef: string,
+    leadWorkspaces: Array<{ module?: unknown; leadVertical?: unknown }> = [],
+  ): Promise<{ label: string; hrmsId: string | null }> {
+    const workspaces = leadWorkspaces.map((l) => leadWorkspace(l));
+    const tier = this.assignmentPolicy.assignTier('leads', user);
+    if (tier) {
+      const a = await this.assignmentPolicy.assertAssignee(
+        tier,
+        user,
+        ownerRef,
+        {
+          requireLeadAccess: true,
+          leadWorkspaces: workspaces,
+        },
+      );
+      return {
+        label: a.label || ownerRef,
+        hrmsId: a.hrmsId ? String(a.hrmsId) : null,
+      };
+    }
+    const a = await this.assignmentPolicy.resolveAssignee(ownerRef);
+    if (!a?.hrmsId) {
+      throw new ForbiddenException('Pick an assignee from the user list.');
+    }
+    await this.assignmentPolicy.assertLeadAccess(a, workspaces);
+    return { label: a.label || ownerRef, hrmsId: String(a.hrmsId) };
+  }
+
+  /**
+   * Bulk owner change made outside `bulkAssignLeads` (e.g. Segments → Assign):
+   * one notice to the new owner, one to each previous owner who lost leads.
+   */
+  notifyLeadsBulkAssigned(opts: {
+    ownerLabel: string;
+    count: number;
+    previousOwners?: string[];
+    user?: any;
+    action: string;
+  }): void {
+    const owner = String(opts.ownerLabel || '').trim();
+    if (!owner || opts.count <= 0) return;
+    const actorId = this.notifyActorId(opts.user);
+    const skipUserIds = actorId ? [actorId] : undefined;
+    const link = '/crm/leads';
+    if (!(opts.user && this.leadOwnerMatchesUser(owner, opts.user))) {
+      void this.crmNotify
+        .notify({
+          event: 'lead_assigned',
+          title: 'Leads assigned to you',
+          message: `${opts.count} lead(s) were assigned to you.`,
+          recipient: { label: owner },
+          skipUserIds,
+          link,
+          metadata: { link, action: opts.action, count: opts.count },
+          type: 'LEAD_ASSIGNED',
+        })
+        .catch((err) =>
+          console.error(
+            '[CRMService] Bulk assign notify failed:',
+            err?.message || err,
+          ),
+        );
+    }
+    const norm = (v: string) => v.trim().replace(/\s+/g, ' ').toLowerCase();
+    const prevs = [
+      ...new Set(
+        (opts.previousOwners || [])
+          .map((p) => String(p || '').trim())
+          .filter((p) => p && norm(p) !== norm(owner)),
+      ),
+    ];
+    for (const prev of prevs) {
+      void this.crmNotify
+        .notify({
+          event: 'lead_reassigned',
+          title: 'Leads reassigned',
+          message: `One or more of your leads were reassigned to ${owner}.`,
+          recipient: { label: prev },
+          skipUserIds,
+          link,
+          metadata: { link, action: `${opts.action}_out` },
+          type: 'LEAD_ASSIGNED',
+        })
+        .catch(() => null);
+    }
+  }
+
   private notifySalesAgent(event: {
     trigger:
       | 'lead_created'
@@ -535,6 +721,8 @@ export class CRMService {
   private static readonly FILTER_BUILTIN_OPTIONS: Record<string, string[]> = {
     status: ['New', 'Open', 'Qualified', 'Unqualified', 'Won', 'Lost', 'Active', 'Inactive'],
     source: ['Website', 'Referral', 'Email', 'Call', 'LinkedIn', 'Campaign', 'Manual'],
+    // Every state/UT from the lead form, so a state is pickable before any lead has it.
+    state: [...INDIAN_STATES],
     gender: ['Male', 'Female', 'Other'],
     territory: ['North', 'South', 'East', 'West'],
     currency: ['USD', 'EUR', 'INR', 'GBP', 'AED'],
@@ -642,6 +830,16 @@ export class CRMService {
       'opportunitySourcePlatform', 'platformClientLabel', 'platformEngagementStatus',
       'opportunityListingUrl', 'ownerLabel', 'notes',
       'salutation', 'converted', 'callStatus',
+      // Lead fields offered by the Leads filter bar (crm-field-layout) — without these the
+      // value picker came back empty, so e.g. "State equals …" could never get a value.
+      'state',
+      'pincode',
+      'whatsappNumber',
+      'role',
+      'leadCategory',
+      'group',
+      'planningToBuyLand',
+      'leadVertical',
     ]);
     if (!isCustom && !allowed.has(rawKey)) {
       return this.getFilterCatalogOptions(moduleName, rawKey, pipelineId);
@@ -2640,6 +2838,15 @@ export class CRMService {
       const isFullAdmin = this.isCrmWorkspaceAdmin(user);
       if (!isFullAdmin || !dto.leadOwner) {
         dto.leadOwner = this.repOwnerLabelFromUser(user);
+      } else if (!this.leadOwnerMatchesUser(dto.leadOwner, user)) {
+        // Admin handing the new lead to someone else: they must be able to open it.
+        const assignee = await this.assignmentPolicy.assertAssignee(
+          'all',
+          user,
+          String(dto.leadOwner),
+          { requireLeadAccess: true, leadWorkspaces: [leadWorkspace(dto)] },
+        );
+        dto.leadOwner = assignee.label || dto.leadOwner;
       }
       const rawId = user.userId ?? user._id;
       if (rawId && Types.ObjectId.isValid(String(rawId))) {
@@ -2877,6 +3084,7 @@ export class CRMService {
       user,
     });
     void this.leadEngagementAutomation.onLeadCreated(String(lead._id), user);
+    this.notifyOwnerOfNewLead(lead, user);
     this.notifySalesAgent({
       trigger: 'lead_created',
       recordType: 'Lead',
@@ -3401,7 +3609,16 @@ export class CRMService {
       String(dto.leadOwner || '').trim() !== String((oldLead as any).leadOwner || '').trim()
     ) {
       const tier = this.assignmentPolicy.requireTier('leads', user);
-      const assignee = await this.assignmentPolicy.assertAssignee(tier, user, String(dto.leadOwner || ''));
+      // The new owner must be able to open Leads — and this lead's workspace (2Bigha / PM).
+      const assignee = await this.assignmentPolicy.assertAssignee(
+        tier,
+        user,
+        String(dto.leadOwner || ''),
+        {
+          requireLeadAccess: true,
+          leadWorkspaces: [leadWorkspace(oldLead as any)],
+        },
+      );
       dto.leadOwner = assignee.label || dto.leadOwner;
       if (assignee.hrmsId) resolvedOwnerHrmsId = String(assignee.hrmsId);
     }
@@ -3593,7 +3810,10 @@ export class CRMService {
           event: assignEvent,
           title: 'Lead assigned to you',
           message: `${leadLabel} has been assigned to you${previousOwner ? ` (from ${previousOwner})` : ''}.`,
-          recipient: { label: String(dto.leadOwner || '') },
+          recipient: {
+            userId: resolvedOwnerHrmsId,
+            label: String(dto.leadOwner || ''),
+          },
           link,
           metadata: {
             link,
@@ -6161,7 +6381,14 @@ export class CRMService {
     // RBAC: only roles with `leads:assign` reassign; Team Leads only within their team,
     // own-tier assigners (Social Media) only their own leads to their own workspace.
     const tier = this.assignmentPolicy.requireTier('leads', user);
-    const assignee = await this.assignmentPolicy.assertAssignee(tier, user, ownerName);
+    const assignee = await this.assignmentPolicy.assertAssignee(
+      tier,
+      user,
+      ownerName,
+      {
+        requireLeadAccess: true,
+      },
+    );
     const ownerLabel = assignee.label || ownerName;
 
     // A whole import batch ("assign everything I just imported") or an explicit id selection.
@@ -6178,9 +6405,14 @@ export class CRMService {
 
     const previousOwners = await this.leadModel
       .find(filter as Record<string, any>)
-      .select('_id leadOwner')
+      .select('_id leadOwner module leadVertical')
       .lean()
       .exec();
+    // Every lead handed over must be in a workspace the new owner can see.
+    await this.assignmentPolicy.assertLeadAccess(
+      assignee,
+      previousOwners.map((l: any) => leadWorkspace(l)),
+    );
 
     const result = await this.leadModel
       .updateMany(filter as Record<string, any>, {
@@ -6215,7 +6447,10 @@ export class CRMService {
         event: hadPrevious ? 'lead_reassigned' : 'lead_assigned',
         title: 'Leads assigned to you',
         message: `${previousOwners.length} lead(s) were assigned to you.`,
-        recipient: { label: ownerLabel },
+        recipient: {
+          userId: assignee.hrmsId ? String(assignee.hrmsId) : undefined,
+          label: ownerLabel,
+        },
         link: '/crm/leads',
         metadata: {
           link: '/crm/leads',
@@ -6894,7 +7129,9 @@ export class CRMService {
           if (!ownerChecks.has(key)) {
             ownerChecks.set(
               key,
-              this.assignmentPolicy.assertAssignee(tier!, user, raw).then((a) => a.label || raw),
+              this.assignmentPolicy
+                .assertAssignee(tier!, user, raw, { requireLeadAccess: true })
+                .then((a) => a.label || raw),
             );
           }
           try {
@@ -7090,7 +7327,9 @@ export class CRMService {
     if (assignment.mode === 'file') return [];
     const labels: string[] = [];
     for (const ref of assignment.assignees) {
-      const a = await this.assignmentPolicy.assertAssignee(tier, user, ref);
+      const a = await this.assignmentPolicy.assertAssignee(tier, user, ref, {
+        requireLeadAccess: true,
+      });
       if (!labels.includes(a.label || ref)) labels.push(a.label || ref);
     }
     return labels;
@@ -7278,7 +7517,9 @@ export class CRMService {
             fileOwnerCache.set(
               key,
               this.assignmentPolicy
-                .assertAssignee(assignTier!, user, raw)
+                .assertAssignee(assignTier!, user, raw, {
+                  requireLeadAccess: true,
+                })
                 .then((a) => a.label || raw),
             );
           }

@@ -1155,26 +1155,8 @@ export class PropertyListingsService {
     const updated: any = await this.crmService.updateLead(leadId, { leadOwner: trimmedOwner }, user);
     if (!updated) throw new NotFoundException('Lead not found');
 
-    const leadLabel =
-      `${(updated as any).firstName || ''} ${(updated as any).lastName || ''}`.trim() ||
-      'a lead';
-    const link = `/crm/leads/${leadId}`;
-    void this.crmNotify
-      .notify({
-        event: 'lead_transferred',
-        title: 'Lead assigned to you',
-        message: `${leadLabel} has been transferred to you.`,
-        recipient: { label: updated.leadOwner || trimmedOwner },
-        link,
-        metadata: {
-          link,
-          entityId: leadId,
-          relatedType: 'Lead',
-          action: 'transfer_lead',
-        },
-        type: 'LEAD_TRANSFERRED',
-      })
-      .catch(() => null);
+    // No extra notify here: updateLead() already tells the new owner ("Lead assigned
+    // to you") and the previous owner ("Lead reassigned") — a second one duplicated it.
 
     // `_id` here (not just `leadId`) so the global AuditLogInterceptor attributes this
     // action to the lead's entityId — surfaces in the lead's own Update History tab.

@@ -20,6 +20,7 @@ import {
 } from '../shared/crm-workspace-module.util';
 import { RoleAuditLogService } from '../../users/role-audit-log.service';
 import { CrmNotifyService } from '../notifications/crm-notify.service';
+import { CrmAssignmentPolicyService } from '../shared/crm-assignment-policy.service';
 
 export type OwnershipTransferEntityType = 'Lead' | 'LegalCase';
 
@@ -43,6 +44,7 @@ export class OwnershipTransferService {
     private readonly userModel: Model<UserDocument>,
     private readonly roleAuditLog: RoleAuditLogService,
     private readonly crmNotify: CrmNotifyService,
+    private readonly assignmentPolicy: CrmAssignmentPolicyService,
   ) {}
 
   private ownerLabel(u: any): string {
@@ -159,6 +161,19 @@ export class OwnershipTransferService {
       if (!withinTeam) {
         throw new ForbiddenException('You can only transfer ownership within your own team.');
       }
+    }
+
+    // 3b) A lead can only go to someone who can open it — Leads access and a role that
+    // sees the lead's (target) workspace. Same rule as every other lead assignment.
+    if (entityType === 'Lead') {
+      await this.assignmentPolicy.assertLeadAccess(
+        {
+          hrmsId: newOwner._id,
+          label: this.ownerLabel(newOwner),
+          email: newOwner.email,
+        },
+        [targetModule],
+      );
     }
 
     // 4) Rule-based blocks (e.g. 2Bigha lead with a listed property).

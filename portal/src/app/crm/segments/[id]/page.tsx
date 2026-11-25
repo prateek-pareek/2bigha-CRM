@@ -21,6 +21,11 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import AssignmentResultBanner, {
+  assignmentErrorResult,
+  summarizeBulkAssignResult,
+  type AssignmentResult,
+} from "@/components/crm/records/assignment/AssignmentResultBanner";
 import Pagination from "@/components/suite/shell/Pagination";
 import CRMFilterBar from "@/components/crm/segments/CRMFilterBar";
 import SegmentMemberPicker from "@/components/crm/segments/SegmentMemberPicker";
@@ -147,6 +152,19 @@ export default function CrmSegmentDetailPage() {
   const [assignScope, setAssignScope] = useState<"selected" | "all">("selected");
   const [assignOwner, setAssignOwner] = useState("");
   const [assigning, setAssigning] = useState(false);
+  /** Inline success / partial / failure shown in the Assign dialog after submit. */
+  const [assignResult, setAssignResult] = useState<AssignmentResult | null>(null);
+  /** Member rows just reassigned — briefly highlighted after the list reloads. */
+  const [recentlyAssignedIds, setRecentlyAssignedIds] = useState<Set<string>>(new Set());
+  const recentlyAssignedTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (recentlyAssignedTimerRef.current != null) {
+        window.clearTimeout(recentlyAssignedTimerRef.current);
+      }
+    },
+    [],
+  );
   const [ownerOptions, setOwnerOptions] = useState<string[]>([]);
   const [ownersLoading, setOwnersLoading] = useState(false);
 
@@ -220,7 +238,9 @@ export default function CrmSegmentDetailPage() {
     if (!assignOpen) return;
     let cancelled = false;
     setOwnersLoading(true);
-    void fetch(`${CRM_API_URL}/crm-users/list/crm-portal`, {
+    // Same list as every Reassign picker: only people this user may hand leads to who
+    // can actually open Leads (the server re-checks on save).
+    void fetch(`${CRM_API_URL}/crm/leads/assignable-users?limit=200`, {
       headers: {
         Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") || "" : ""}`,
       },
@@ -228,7 +248,7 @@ export default function CrmSegmentDetailPage() {
       .then(async (res) => {
         if (!res.ok) return [];
         const data = await res.json();
-        return Array.isArray(data) ? data : [];
+        return Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
       })
       .then((users: Array<{ firstName?: string; lastName?: string; email?: string }>) => {
         if (cancelled) return;
@@ -443,6 +463,7 @@ export default function CrmSegmentDetailPage() {
     }
     setAssignScope(scope);
     setAssignOwner("");
+    setAssignResult(null);
     setAssignOpen(true);
   };
 
@@ -454,6 +475,7 @@ export default function CrmSegmentDetailPage() {
       return;
     }
     setAssigning(true);
+    setAssignResult(null);
     try {
       const result = await assignCrmSegmentLeads(segment.id, {
         ownerName,
@@ -461,18 +483,33 @@ export default function CrmSegmentDetailPage() {
         leadIds:
           assignScope === "selected" ? Array.from(selectedLeadIds) : undefined,
       });
-      toast.success(
-        `Assigned ${result.modified} lead${result.modified === 1 ? "" : "s"} to ${ownerName}`,
-      );
-      if (result.truncated) {
-        toast.message("Assignment capped at 2,000 leads — run again for the rest.");
+      const summary = summarizeBulkAssignResult(result, result.ownerName || ownerName);
+      setAssignResult(summary);
+      if (summary.status === "error") {
+        toast.error(summary.title);
+        return;
       }
-      setAssignOpen(false);
+      if (summary.status === "partial") toast.warning(summary.title);
+      else toast.success(summary.title);
+      const flashed =
+        assignScope === "selected"
+          ? Array.from(selectedLeadIds)
+          : members.map((m) => m._id);
+      if (recentlyAssignedTimerRef.current != null) {
+        window.clearTimeout(recentlyAssignedTimerRef.current);
+      }
+      setRecentlyAssignedIds(new Set(flashed));
+      recentlyAssignedTimerRef.current = window.setTimeout(() => {
+        setRecentlyAssignedIds(new Set());
+        recentlyAssignedTimerRef.current = null;
+      }, 4000);
       setSelectedLeadIds(new Set());
       void loadMembers();
       void loadSegment();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to assign leads");
+      const summary = assignmentErrorResult(e, "Failed to assign leads");
+      setAssignResult(summary);
+      toast.error(summary.detail || summary.title);
     } finally {
       setAssigning(false);
     }
@@ -1018,7 +1055,12 @@ export default function CrmSegmentDetailPage() {
                       {members.map((row) => (
                         <tr
                           key={row._id}
-                          className="border-t border-[var(--border-color)] hover:bg-surface-dim/30 transition-colors"
+                          className={cn(
+                            "border-t border-[var(--border-color)] hover:bg-surface-dim/30 transition-colors",
+                            tab === "leads" &&
+                              recentlyAssignedIds.has(row._id) &&
+                              "crm-table-row-just-assigned",
+                          )}
                         >
                           {tab === "leads" ? (
                             <td className="px-2 py-2.5">
@@ -1118,6 +1160,11 @@ export default function CrmSegmentDetailPage() {
           <DialogHeader>
             <DialogTitle>Assign leads to owner</DialogTitle>
           </DialogHeader>
+          {assignResult && assignResult.status !== "error" ? (
+            <div className="py-1">
+              <AssignmentResultBanner result={assignResult} />
+            </div>
+          ) : (
           <div className="space-y-4 py-1">
             <p className="text-sm text-text-muted">
               {assignScope === "selected"
@@ -1148,7 +1195,7 @@ export default function CrmSegmentDetailPage() {
             </label>
             {!ownersLoading && ownerOptions.length === 0 ? (
               <p className="text-xs text-amber-700">
-                No CRM users found. You can still type an owner name below.
+                No teammates with Leads access found. Only people who can open Leads can be assigned.
               </p>
             ) : null}
             <label className="block space-y-1.5">
@@ -1162,8 +1209,22 @@ export default function CrmSegmentDetailPage() {
                 className="w-full rounded-md border border-[var(--border-color)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </label>
+            {assignResult?.status === "error" ? (
+              <AssignmentResultBanner result={assignResult} />
+            ) : null}
           </div>
+          )}
           <DialogFooter>
+            {assignResult && assignResult.status !== "error" ? (
+              <button
+                type="button"
+                onClick={() => setAssignOpen(false)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+              >
+                Done
+              </button>
+            ) : (
+              <>
             <button
               type="button"
               onClick={() => setAssignOpen(false)}
@@ -1178,8 +1239,10 @@ export default function CrmSegmentDetailPage() {
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
             >
               {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-              Assign
+              {assignResult?.status === "error" ? "Try again" : "Assign"}
             </button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

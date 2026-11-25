@@ -477,6 +477,15 @@ export class ClientsService {
         author: new Types.ObjectId(user.userId || user._id),
       }).save();
     }
+    // Assignees other than the creator hear about their new client.
+    this.crmService?.notifyClientAssignees?.(
+      client,
+      normalizeObjectIdArray((client as any).assignedTo)
+        .map(String)
+        .filter((id) => id !== actorId),
+      user,
+      { created: true },
+    );
     return client;
   }
 
@@ -832,6 +841,13 @@ export class ClientsService {
       if (after.length && (before.length !== after.length || before.some((b, i) => b !== after[i]))) {
         await this.crmService.syncRecordTasksToOwner('Client', [id], after[0], user);
       }
+      // Only people newly added to the client — not those who already had it.
+      const beforeSet = new Set(before);
+      this.crmService?.notifyClientAssignees?.(
+        updated,
+        after.filter((uid) => !beforeSet.has(uid) && uid !== actorId),
+        user,
+      );
     }
     if (updated) {
       const assocMap: Array<{

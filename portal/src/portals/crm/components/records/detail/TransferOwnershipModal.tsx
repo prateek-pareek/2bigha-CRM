@@ -6,6 +6,10 @@ import { toast } from "sonner";
 import { CRM_API_URL } from "@/lib/crm/config";
 import { CrmButton } from "@/components/crm/ui";
 import { usePermissions } from "@/hooks/usePermissions";
+import AssignmentResultBanner, {
+  assignmentErrorResult,
+  type AssignmentResult,
+} from "../assignment/AssignmentResultBanner";
 
 type CrmPortalUser = { _id: string; firstName?: string; lastName?: string; email?: string };
 
@@ -42,11 +46,14 @@ export default function TransferOwnershipModal({
   const [newModule, setNewModule] = useState<string>(currentModule || "2Bigha");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  /** Inline failure indicator — the modal stays open so the user can fix it and retry. */
+  const [transferError, setTransferError] = useState<AssignmentResult | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setNewOwnerUserId("");
     setReason("");
+    setTransferError(null);
     setNewModule(currentModule || "2Bigha");
     setUsersLoading(true);
     const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
@@ -82,6 +89,7 @@ export default function TransferOwnershipModal({
       return;
     }
     setSubmitting(true);
+    setTransferError(null);
     const token = localStorage.getItem("token");
     const path = entityType === "Lead" ? "leads" : "legal-cases";
     try {
@@ -106,6 +114,7 @@ export default function TransferOwnershipModal({
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Transfer failed");
+      setTransferError(assignmentErrorResult(err, "Transfer failed"));
     } finally {
       setSubmitting(false);
     }
@@ -184,6 +193,7 @@ export default function TransferOwnershipModal({
               className="h-10 w-full rounded-[var(--crm-radius-ui)] border border-[var(--border-color)] px-3 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-2 focus:ring-[var(--primary)]/10"
             />
           </div>
+          {transferError ? <AssignmentResultBanner result={transferError} compact /> : null}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-[var(--border-color)] px-4 py-3">
@@ -197,7 +207,7 @@ export default function TransferOwnershipModal({
             className="gap-2"
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
-            {submitting ? "Transferring…" : "Transfer"}
+            {submitting ? "Transferring…" : transferError ? "Try again" : "Transfer"}
           </CrmButton>
         </div>
       </div>

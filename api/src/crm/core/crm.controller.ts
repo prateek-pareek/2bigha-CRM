@@ -45,6 +45,10 @@ import {
   parseLeadImportAssignment,
 } from '../shared/lead-import-assignment.util';
 import type { LeadVertical } from '../shared/lead-import-normalize.util';
+import {
+  CRM_WORKSPACE_MODULES,
+  type CrmWorkspaceModule,
+} from '../shared/crm-workspace-module.util';
 
 @Controller('crm')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -170,7 +174,11 @@ export class CRMController {
     return this.crmEmailEngagementBatchService.getBatchForModule(body?.ids, 'leads');
   }
 
-  /** Reassign picker: only the people this user may hand leads to (Team Lead → own team), searchable + paged. */
+  /**
+   * Reassign picker: only the people this user may hand leads to (Team Lead → own team)
+   * who can actually open Leads (unless `?leadAccess=0`) — optionally narrowed to one lead workspace
+   * (`?workspace=2Bigha|PROPERTY_MGMT|LEGAL`, e.g. the lead being reassigned). Searchable + paged.
+   */
   @Get('leads/assignable-users')
   @Permissions('leads:read', 'pm-leads:read')
   leadAssignableUsers(
@@ -178,8 +186,22 @@ export class CRMController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('workspace') workspace?: string,
+    /** `0` = skip the Leads-access filter (non-lead records reusing the picker, e.g. clients). */
+    @Query('leadAccess') leadAccess?: string,
   ) {
-    return this.assignmentPolicy.assignableUsers('leads', req.user, { search, page, limit });
+    const leadWorkspace = (CRM_WORKSPACE_MODULES as readonly string[]).includes(
+      String(workspace),
+    )
+      ? (workspace as CrmWorkspaceModule)
+      : undefined;
+    return this.assignmentPolicy.assignableUsers('leads', req.user, {
+      search,
+      page,
+      limit,
+      requireLeadAccess: leadAccess !== '0',
+      leadWorkspace,
+    });
   }
 
   @Get('leads/:id')
