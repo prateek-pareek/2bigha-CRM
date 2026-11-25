@@ -94,7 +94,14 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
  * - requested: leads asked for · matched: ones the user may reassign · modified: actually changed.
  */
 export function summarizeBulkAssignResult(
-  res: { requested?: number; matched?: number; modified?: number; truncated?: boolean },
+  res: {
+    requested?: number;
+    matched?: number;
+    modified?: number;
+    truncated?: boolean;
+    /** Per-run limit behind `truncated` (default 2,000 — the bulk-assign endpoint's cap). */
+    cap?: number;
+  },
   ownerLabel: string,
 ): AssignmentResult {
   const requested = Math.max(0, Number(res.requested ?? 0));
@@ -116,7 +123,9 @@ export function summarizeBulkAssignResult(
   const notes: string[] = [];
   if (alreadyOwned) notes.push(`${plural(alreadyOwned, "lead")} already owned by ${ownerLabel}`);
   if (noAccess) notes.push(`${plural(noAccess, "lead")} skipped — no permission to reassign`);
-  if (res.truncated) notes.push("capped at 2,000 leads — run again for the rest");
+  if (res.truncated) {
+    notes.push(`capped at ${(res.cap ?? 2000).toLocaleString()} leads — run again for the rest`);
+  }
 
   if (noAccess || res.truncated) {
     return {

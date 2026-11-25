@@ -173,6 +173,7 @@ import {
 } from '../notifications/crm-follow-up-notify.util';
 import { CRMUsersService } from '../crm-users/crm-users.service';
 import { applyLeadSourceNormalization } from '../shared/lead-source.util';
+import { INDIAN_STATES } from '../shared/indian-states';
 
 type ImportDuplicateStrategy = 'create' | 'skip' | 'merge' | 'replace';
 type ImportRowOutcome = 'created' | 'merged' | 'replaced' | 'skipped';
@@ -721,6 +722,8 @@ export class CRMService {
   private static readonly FILTER_BUILTIN_OPTIONS: Record<string, string[]> = {
     status: ['New', 'Open', 'Qualified', 'Unqualified', 'Won', 'Lost', 'Active', 'Inactive'],
     source: ['Website', 'Referral', 'Email', 'Call', 'LinkedIn', 'Campaign', 'Manual'],
+    // Every state/UT from the lead form, so a state is pickable before any lead has it.
+    state: [...INDIAN_STATES],
     gender: ['Male', 'Female', 'Other'],
     territory: ['North', 'South', 'East', 'West'],
     currency: ['USD', 'EUR', 'INR', 'GBP', 'AED'],
@@ -828,6 +831,16 @@ export class CRMService {
       'opportunitySourcePlatform', 'platformClientLabel', 'platformEngagementStatus',
       'opportunityListingUrl', 'ownerLabel', 'notes',
       'salutation', 'converted', 'callStatus',
+      // Lead fields offered by the Leads filter bar (crm-field-layout) — without these the
+      // value picker came back empty, so e.g. "State equals …" could never get a value.
+      'state',
+      'pincode',
+      'whatsappNumber',
+      'role',
+      'leadCategory',
+      'group',
+      'planningToBuyLand',
+      'leadVertical',
     ]);
     if (!isCustom && !allowed.has(rawKey)) {
       return this.getFilterCatalogOptions(moduleName, rawKey, pipelineId);

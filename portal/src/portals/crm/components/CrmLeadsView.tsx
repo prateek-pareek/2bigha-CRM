@@ -662,6 +662,14 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
   /** Rows just reassigned — briefly highlighted in the table so the change is visible. */
   const [recentlyAssignedIds, setRecentlyAssignedIds] = useState<Set<string>>(new Set());
   const recentlyAssignedTimerRef = useRef<number | null>(null);
+  /**
+   * "Select all N matching leads" (list/grid, server-paged): the selection is every lead
+   * matching the current filters/search — not only the rows on this page. Only Assign and
+   * Export act on it; per-row actions (delete, move, email) stay page-scoped.
+   */
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
+  /** Progress text while collecting / assigning a matching selection. */
+  const [assignProgress, setAssignProgress] = useState<string | null>(null);
   const [stageRulesPanelOpen, setStageRulesPanelOpen] = useState(false);
 
   const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
@@ -1272,6 +1280,10 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       toast.error('Select at least one lead');
       return;
     }
+    if (selectAllMatching) {
+      await handleAssignAllMatching();
+      return;
+    }
     setAssigning(true);
     setAssignResult(null);
     const token = localStorage.getItem('token');
@@ -1323,6 +1335,85 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
       setAssignResult(result);
       toast.error(result.detail || result.title);
     } finally {
+      setAssigning(false);
+    }
+  };
+
+  /** Upper bound for one "all matching" assignment (the server takes 2,000 per request). */
+  const MATCHING_ASSIGN_MAX = 10000;
+  const BULK_ASSIGN_CHUNK = 2000;
+
+  /**
+   * Assign every lead matching the current filters: re-collect the ids at submit time
+   * (so it reflects the list right now), then send them through the normal bulk-assign
+   * endpoint in chunks — same RBAC, Leads-access, workspace checks and notifications.
+   */
+  const handleAssignAllMatching = async () => {
+    if (!assignOwner) return;
+    setAssigning(true);
+    setAssignResult(null);
+    const token = localStorage.getItem('token');
+    let requested = 0;
+    let matched = 0;
+    let modified = 0;
+    let ownerLabel = assignOwner.label;
+    try {
+      setAssignProgress('Collecting matching leads…');
+      const { ids, total } = await collectMatchingLeadIds(MATCHING_ASSIGN_MAX);
+      if (!ids.length) {
+        setAssignResult({ status: 'error', title: 'No leads match the current filters' });
+        return;
+      }
+      const truncated = total > ids.length;
+      for (let i = 0; i < ids.length; i += BULK_ASSIGN_CHUNK) {
+        const chunk = ids.slice(i, i + BULK_ASSIGN_CHUNK);
+        setAssignProgress(
+          `Assigning ${Math.min(i + chunk.length, ids.length).toLocaleString()} of ${ids.length.toLocaleString()}…`,
+        );
+        const res = await fetch(`${CRM_API_URL}/crm/leads/bulk-assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ownerName: assignOwner._id, ids: chunk }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = data?.message || 'Failed to assign leads';
+          if (modified === 0 && matched === 0) throw new Error(msg);
+          // Some chunks already went through — report what happened, don't hide it.
+          setAssignResult({
+            status: 'partial',
+            title: `Assigned ${modified.toLocaleString()} lead${modified === 1 ? '' : 's'} to ${ownerLabel}, then stopped`,
+            detail: `${msg} — ${(ids.length - i).toLocaleString()} lead(s) were not processed.`,
+          });
+          toast.warning(`Assignment stopped: ${msg}`);
+          return;
+        }
+        ownerLabel = String(data?.ownerName || ownerLabel);
+        requested += Number(data?.requested ?? chunk.length);
+        matched += Number(data?.matched ?? 0);
+        modified += Number(data?.modified ?? 0);
+      }
+      const result = summarizeBulkAssignResult(
+        { requested, matched, modified, truncated, cap: MATCHING_ASSIGN_MAX },
+        ownerLabel,
+      );
+      setAssignResult(result);
+      if (result.status === 'error') toast.error(result.title);
+      else if (result.status === 'partial') toast.warning(result.title);
+      else toast.success(result.title);
+      if (result.status !== 'error') {
+        flashRecentlyAssigned(paginated.map((l) => l._id));
+        setSelectedIds(new Set());
+        setSelectAllMatching(false);
+        void fetchLeadsList(selectedPipelineId || null);
+        invalidateCrmAfterMutation('leads', 'workspace', 'attention');
+      }
+    } catch (e) {
+      const result = assignmentErrorResult(e, 'Failed to assign leads');
+      setAssignResult(result);
+      toast.error(result.detail || result.title);
+    } finally {
+      setAssignProgress(null);
       setAssigning(false);
     }
   };
@@ -1575,7 +1666,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
 
       let exportLeads: Lead[] = [];
 
-      if (selectedIds.size > 0) {
+      if (selectedIds.size > 0 && !selectAllMatching) {
         const byId = new Map<string, Lead>();
         for (const lead of [...leads, ...filteredLeads]) {
           if (selectedIds.has(lead._id)) byId.set(lead._id, lead);
@@ -2192,6 +2283,72 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
     [paginated, selectedIds],
   );
 
+  /** Offer "select all matching" only when the list is server-paged and has more rows. */
+  const canSelectAllMatching =
+    !needsClientFullList &&
+    isAllPaginatedSelected &&
+    serverTotal > selectedIds.size &&
+    activeMetricFilter === 'all';
+
+  // A matching selection describes the current query — any change to it, or to the
+  // page selection, drops back to a normal (explicit) selection.
+  useEffect(() => {
+    setSelectAllMatching(false);
+  }, [apiFilters, debouncedSearch, selectedPipelineId, showMyLeadsOnly, followUpFilter, emailEngagement, viewMode]);
+  useEffect(() => {
+    if (selectAllMatching && (selectedIds.size === 0 || !isAllPaginatedSelected)) {
+      setSelectAllMatching(false);
+    }
+  }, [selectAllMatching, selectedIds, isAllPaginatedSelected]);
+
+  /** Same query the list uses (filters, search, pipeline, mine, follow-up) — every matching id. */
+  const collectMatchingLeadIds = async (max: number): Promise<{ ids: string[]; total: number }> => {
+    const token = localStorage.getItem('token');
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    let pageNum = 1;
+    let total = Number.POSITIVE_INFINITY;
+    while (ids.length < Math.min(total, max) && pageNum <= Math.ceil(max / CRM_BOARD_PAGE_SIZE) + 1) {
+      const params = buildCrmListSearchParams({
+        page: pageNum,
+        pageSize: CRM_BOARD_PAGE_SIZE,
+        search: debouncedSearch,
+        filters: apiFilters,
+        emailEngagement,
+        extra: {
+          pipeline: isMongoObjectIdString(selectedPipelineId)
+            ? String(selectedPipelineId).trim()
+            : undefined,
+          mine: showMyLeadsOnly ? '1' : undefined,
+          followUp: followUpFilter !== 'all' ? followUpFilter : undefined,
+        },
+      });
+      const res = await fetch(`${CRM_API_URL}/crm/leads?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.message || 'Could not load the matching leads');
+      }
+      const unwrapped = unwrapCrmListPayload<Lead>(await res.json());
+      total = unwrapped.total;
+      for (const l of unwrapped.data) {
+        if (l?._id && !seen.has(l._id)) {
+          seen.add(l._id);
+          ids.push(l._id);
+          if (ids.length >= max) break;
+        }
+      }
+      if (!unwrapped.data.length) break;
+      pageNum += 1;
+    }
+    return { ids, total: Number.isFinite(total) ? total : ids.length };
+  };
+
+  /** Leads the current selection stands for (matching total, or the explicit picks). */
+  const selectionCount = selectAllMatching ? serverTotal : selectedIds.size;
+
   const bulkRecipients = useMemo(
     () => buildBulkEmailRecipients(selectedIds, leads, "leads"),
     [selectedIds, leads],
@@ -2500,7 +2657,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                     <CrmButton
                       variant="icon"
                       onClick={handleBulkMovePipeline}
-                      disabled={!bulkMovePipelineId || isBulkMoving}
+                      disabled={!bulkMovePipelineId || isBulkMoving || selectAllMatching}
                       title={
                         bulkMovePipelineId
                           ? `Move ${selectedIds.size} selected lead(s) to the chosen pipeline`
@@ -2521,30 +2678,37 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                   <CrmButton
                     variant="secondary"
                     onClick={openAssignDialog}
-                    title={`Assign ${selectedIds.size} selected lead(s) to an owner`}
-                    aria-label={`Assign ${selectedIds.size} selected leads`}
+                    title={`Assign ${selectionCount} selected lead(s) to an owner`}
+                    aria-label={`Assign ${selectionCount} selected leads`}
                     leftIcon={<Users className="h-4 w-4" aria-hidden />}
                   >
-                    Assign {selectedIds.size}
+                    Assign {selectionCount.toLocaleString()}
                   </CrmButton>
                 )}
                 {selectedIds.size > 0 && canDelete && (
                   <CrmButton
                     variant="danger"
                     onClick={() => setShowConfirmDelete(true)}
-                    title={`Delete ${selectedIds.size} selected lead(s)`}
+                    disabled={selectAllMatching}
+                    title={
+                      selectAllMatching
+                        ? 'Delete works on the leads selected on this page — choose "Select only this page" first'
+                        : `Delete ${selectedIds.size} selected lead(s)`
+                    }
                     aria-label={`Delete ${selectedIds.size} selected leads`}
                     leftIcon={<CrmIcon.Trash size={16} aria-hidden />}
                   >
                     Delete {selectedIds.size}
                   </CrmButton>
                 )}
-                <BulkEmailToolbarButton
-                  selectedCount={selectedIds.size}
-                  recipientCount={bulkRecipients.length}
-                  entityLabel="lead"
-                  onClick={() => setIsBulkEmailOpen(true)}
-                />
+                {selectAllMatching ? null : (
+                  <BulkEmailToolbarButton
+                    selectedCount={selectedIds.size}
+                    recipientCount={bulkRecipients.length}
+                    entityLabel="lead"
+                    onClick={() => setIsBulkEmailOpen(true)}
+                  />
+                )}
                   </>
                 }
                 canExport={canExport}
@@ -2812,7 +2976,29 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
               <div className="flex flex-1 items-center gap-3">
                 <div className="flex items-center gap-2">
                   <Check size={18} className="text-[var(--primary)]" />
-                  <span className="text-sm font-semibold text-[var(--text-main)]">{selectedIds.size} selected</span>
+                  <span className="text-sm font-semibold text-[var(--text-main)]">
+                    {selectAllMatching
+                      ? `All ${serverTotal.toLocaleString()} matching leads selected`
+                      : `${selectedIds.size} selected`}
+                  </span>
+                  {selectAllMatching ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectAllMatching(false)}
+                      className="text-xs font-semibold text-[var(--hs-link)] hover:underline"
+                    >
+                      Select only this page
+                    </button>
+                  ) : canSelectAllMatching ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectAllMatching(true)}
+                      className="text-xs font-semibold text-[var(--hs-link)] hover:underline"
+                      title="Select every lead matching the current filters, across all pages"
+                    >
+                      Select all {serverTotal.toLocaleString()} matching leads
+                    </button>
+                  ) : null}
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -2834,7 +3020,7 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                     <CrmButton
                       variant="icon"
                       onClick={handleBulkMovePipeline}
-                      disabled={!bulkMovePipelineId || isBulkMoving}
+                      disabled={!bulkMovePipelineId || isBulkMoving || selectAllMatching}
                       title={
                         bulkMovePipelineId
                           ? `Move ${selectedIds.size} selected lead(s) to the chosen pipeline`
@@ -2855,8 +3041,8 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                   <CrmButton
                     variant="secondary"
                     onClick={openAssignDialog}
-                    title={`Assign ${selectedIds.size} selected lead(s) to an owner`}
-                    aria-label={`Assign ${selectedIds.size} selected leads`}
+                    title={`Assign ${selectionCount} selected lead(s) to an owner`}
+                    aria-label={`Assign ${selectionCount} selected leads`}
                     leftIcon={<Users className="h-3 w-3" aria-hidden />}
                   >
                     Assign
@@ -2866,7 +3052,12 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
                   <CrmButton
                     variant="danger"
                     onClick={() => setShowConfirmDelete(true)}
-                    title={`Delete ${selectedIds.size} selected lead(s)`}
+                    disabled={selectAllMatching}
+                    title={
+                      selectAllMatching
+                        ? 'Delete works on the leads selected on this page — choose "Select only this page" first'
+                        : `Delete ${selectedIds.size} selected lead(s)`
+                    }
                     aria-label={`Delete ${selectedIds.size} selected leads`}
                     leftIcon={<CrmIcon.Trash size={14} aria-hidden />}
                   >
@@ -3456,9 +3647,21 @@ export default function CrmLeadsView({ fixedVertical, pageTitle }: LeadsPageProp
             ) : (
               <>
                 <p className="text-sm text-[var(--text-muted)]">
-                  Reassign {selectedIds.size} selected lead
-                  {selectedIds.size === 1 ? '' : 's'} to another CRM user.
+                  {selectAllMatching
+                    ? `Reassign all ${serverTotal.toLocaleString()} leads matching the current filters to another CRM user.`
+                    : `Reassign ${selectedIds.size} selected lead${selectedIds.size === 1 ? '' : 's'} to another CRM user.`}
                 </p>
+                {selectAllMatching && serverTotal > MATCHING_ASSIGN_MAX ? (
+                  <p className="text-xs text-[var(--warning)]">
+                    Up to {MATCHING_ASSIGN_MAX.toLocaleString()} leads are assigned per run — run it again for the rest.
+                  </p>
+                ) : null}
+                {assignProgress ? (
+                  <p className="flex items-center gap-2 text-xs text-[var(--text-muted)]" role="status">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    {assignProgress}
+                  </p>
+                ) : null}
                 <div className="space-y-1.5">
                   <span className="text-xs font-medium text-[var(--text-muted)]">New owner</span>
                   <CrmTeammatePicker
