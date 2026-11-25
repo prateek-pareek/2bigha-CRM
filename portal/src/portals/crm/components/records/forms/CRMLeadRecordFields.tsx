@@ -240,8 +240,14 @@ export default function CRMLeadRecordFields({
         ) : '—';
       case 'source':
         return lead.source ? (
-          <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 border border-indigo-200">
+          <span
+            className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 border border-indigo-200"
+            title={lead.sourceDetail ? `${lead.source} · ${lead.sourceDetail}` : undefined}
+          >
             {lead.source}
+            {lead.sourceDetail ? (
+              <span className="font-normal text-indigo-500">· {lead.sourceDetail}</span>
+            ) : null}
           </span>
         ) : '—';
       case 'group':

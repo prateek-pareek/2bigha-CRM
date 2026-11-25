@@ -1,3 +1,4 @@
+import { applyLeadSourceNormalization } from './lead-source.util';
 /**
  * Pure helpers that coerce bulk-import (CSV/XLSX) cell values into the exact values the
  * Lead schema accepts. Spreadsheet cells arrive as free text ("not answered", "PM", "",
@@ -136,6 +137,9 @@ export function normalizeLeadImportRow(
   } else if (opts.defaultLeadVertical) {
     row.leadVertical = opts.defaultLeadVertical;
   }
+
+  // Standard source names ("facebook" → "Meta Ads"); unknown labels are kept as typed.
+  applyLeadSourceNormalization(row);
 
   let invalidRole = false;
   if (row.role !== undefined) {

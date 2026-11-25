@@ -29,6 +29,7 @@ import {
   CRM_HS_SELECT_CLASS,
 } from '@/components/crm/records/forms/crm-form-primitives';
 import { CRM_BTN_PRIMARY, CRM_BTN_SECONDARY, CRM_BTN_GHOST } from '@/lib/crm/ui';
+import { leadSourceOptionsWith } from '@/lib/crm/lead-sources';
 
 function pipelineIdEq(a: unknown, b: unknown): boolean {
   return String(a ?? '') === String(b ?? '');
@@ -47,15 +48,6 @@ const ROLE_OPTIONS = [
   { value: 'OWNER', label: 'Property Owner' },
 ];
 
-const LEAD_SOURCE_OPTIONS = [
-  'Website',
-  'Google Lead',
-  'Meta Ads',
-  'Referral',
-  'Walk In',
-  'Direct Call',
-  'Other',
-];
 
 const LEAD_VERTICAL_OPTIONS = [
   { value: 'property_listing', label: 'Property Listing' },
@@ -671,7 +663,7 @@ export default function EditModal({ isOpen, onClose, type, initialData, onSucces
                           label="Lead Source"
                           name="source"
                           type="select"
-                          options={LEAD_SOURCE_OPTIONS}
+                          options={leadSourceOptionsWith(initialData.source)}
                           defaultValue={initialData.source || 'Website'}
                           error={errors.source}
                         />

@@ -27,6 +27,7 @@
     "seed:pm-tasks-test": "ts-node --transpile-only scripts/seed-pm-tasks-test.ts",
     "resync:2bigha-agents": "ts-node --transpile-only scripts/resync-2bigha-agents.ts",
     "backfill:client-contact": "ts-node --transpile-only scripts/backfill-client-contact-info.ts",
+    "backfill:lead-sources": "ts-node --transpile-only scripts/backfill-lead-sources.ts",
     "seed:agents": "ts-node --transpile-only scripts/seed-agents.ts",
     "seed:workspace-roles": "ts-node --transpile-only scripts/seed-workspace-roles.ts",
     "seed:role-test-users": "ts-node --transpile-only scripts/seed-role-test-users.ts",
