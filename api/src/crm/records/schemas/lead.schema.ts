@@ -197,16 +197,9 @@ export class Lead {
   @Prop({ trim: true })
   pincode?: string;
 
-  /**
-   * Lead source — one of CRM_LEAD_SOURCES (shared/lead-source.util.ts), e.g. Website,
-   * Meta Ads, CRM Form. Older rows may still hold free text / "Meta Lead Ads — <form>".
-   */
+  /** Lead source (e.g. Website, Referral, Google Lead, Meta Ads) */
   @Prop({ trim: true, index: true })
   source?: string;
-
-  /** Which form / campaign / page within the source (e.g. the Meta lead form name). */
-  @Prop({ trim: true })
-  sourceDetail?: string;
 
   /** Planning to buy land timeframe */
   @Prop({ trim: true, index: true })

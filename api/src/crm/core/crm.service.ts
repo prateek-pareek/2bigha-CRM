@@ -172,7 +172,6 @@ import {
   formatFollowUpRelativeWhen,
 } from '../notifications/crm-follow-up-notify.util';
 import { CRMUsersService } from '../crm-users/crm-users.service';
-import { applyLeadSourceNormalization } from '../shared/lead-source.util';
 import { INDIAN_STATES } from '../shared/indian-states';
 
 type ImportDuplicateStrategy = 'create' | 'skip' | 'merge' | 'replace';
@@ -2905,8 +2904,7 @@ export class CRMService {
       dto.role = ['USER', 'AGENT', 'OWNER'].includes(r) ? r : 'USER';
     }
     if (typeof dto.source === 'string') {
-      // One source vocabulary everywhere ("meta" / "Meta Lead Ads — X" → "Meta Ads" + detail).
-      applyLeadSourceNormalization(dto);
+      dto.source = dto.source.trim() || undefined;
     }
     if (typeof dto.address === 'string') {
       dto.address = dto.address.trim() || undefined;
@@ -3467,8 +3465,6 @@ export class CRMService {
     return redactCrmRevenueForUser(user, plain) as any;
   }
   async updateLead(id: string, dto: any, user?: any): Promise<Lead | null> {
-    if (dto && typeof dto.source === 'string')
-      applyLeadSourceNormalization(dto);
     const leadPatchKeys = new Set(
       Object.keys(dto || {}).filter((k) => (dto as any)[k] !== undefined),
     );

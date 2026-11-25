@@ -16,7 +16,6 @@ import CrmMultiEmailListField from '@/components/crm/email/engagement/CrmMultiEm
 import { CrmFormSection, CrmFormGrid } from '@/components/crm/records/forms/crm-form-primitives';
 import { usePermissions } from '@/hooks/usePermissions';
 import { cn } from '@/lib/utils';
-import { CRM_MANUAL_LEAD_SOURCES } from '@/lib/crm/lead-sources';
 
 const STATUS_OPTIONS = ['New', 'Qualified', 'Replied', 'Opportunity'];
 const CALL_STATUS_OPTIONS = ['Not Called', 'Completed', 'Missed', 'Busy', 'Failed'];
@@ -431,11 +430,13 @@ export default function CRMLeadFormFields({
                 onChange={() => onClearError?.('source')}
                 className={fieldError ? SEL_ERR : SEL}
               >
-                {CRM_MANUAL_LEAD_SOURCES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
+                <option value="Website">Website</option>
+                <option value="Google Lead">Google Lead</option>
+                <option value="Meta Ads">Meta Ads</option>
+                <option value="Referral">Referral</option>
+                <option value="Walk In">Walk In</option>
+                <option value="Direct Call">Direct Call</option>
+                <option value="Other">Other</option>
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
             </div>

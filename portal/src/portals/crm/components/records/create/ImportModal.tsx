@@ -23,7 +23,6 @@ import { clientDuplicateWarning, validateClientImportMapped } from './clientImpo
 import * as XLSX from 'xlsx';
 import { useCrmImportStore } from '@/stores/crmImportStore';
 import type { CrmImportEntityType } from '@/stores/crmImportStore';
-import { matchCrmLeadSource } from '@/lib/crm/lead-sources';
 
 interface ImportModalProps {
  isOpen: boolean;
@@ -892,7 +891,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, type, leadVert
         // 7. Lead Source (Requirement 6.7)
         if (source) {
           const normSource = source.toUpperCase().replace(/[\s_-]+/g, ' ').trim();
-          if (!ALLOWED_LEAD_SOURCES.includes(normSource) && !matchCrmLeadSource(source)) {
+          if (!ALLOWED_LEAD_SOURCES.includes(normSource)) {
             errors.push(`Invalid Lead Source "${source}"`);
           }
         }

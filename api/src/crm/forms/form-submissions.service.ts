@@ -197,8 +197,7 @@ export class FormSubmissionsService {
       pipeline: form.leadDefaults?.pipeline,
       leadCategory: form.leadDefaults?.leadCategory,
       group: form.leadDefaults?.group,
-      source: 'CRM Form',
-      sourceDetail: form.name || undefined,
+      source: `Form — ${form.name}`,
       customFields: {
         ...customFields,
         leadSource: 'form',
